@@ -204,9 +204,7 @@ public class UAttack implements IMinecraft {
         if (mc.player == null)
             return true;
 
-        AttackAura aura = AttackAura.get();
-        boolean onlyCrits = aura != null && aura.others.getValue("Только криты");
-        if (onlyCrits && fallCheck) {
+        if (AttackAura.get().others.getValue("Только криты") && fallCheck) {
             return AttackUtil.isPlayerInCriticalState();
         }
 
@@ -216,9 +214,14 @@ public class UAttack implements IMinecraft {
 
         if (!fallCheck) return true;
 
+        if (AttackUtil.isPlayerInCriticalState()) return true;
+
         boolean isCritState = AttackUtil.isPlayerInCriticalState();
-        boolean isSmartCrit = aura != null && aura.others.getValue("Умные криты") && !mc.options.jumpKey.isPressed();
-        return isCritState || isSmartCrit || AttackUtil.hasMovementRestrictions();
+        boolean isSmartCrit = AttackAura.get().others.getValue("Умные криты") && !mc.options.jumpKey.isPressed();
+
+        final boolean skipFallCheck = isSmartCrit || isCritState || AttackUtil.hasMovementRestrictions();
+
+        return skipFallCheck ;
     }
 
     public static boolean useEntity(LivingEntity livingIn, Runnable preHit, Runnable postHit, Hand hand,
@@ -368,13 +371,12 @@ public class UAttack implements IMinecraft {
             antiMissesHittingReset();
 
         if (enabled && targetIn != null && UAttack.msCooldownHasMs(cpsBypassTrigger() ? 250 : 150)
-                && (mc.player.handSwinging || missDetected)) {
+                && mc.player.handSwinging) {
             if (!missDetected && counterTo0PostMissHits == 0 && targetIn.hurtTime == 0) {
                 missDetected = true;
                 counterTo0PostMissHits = maxHitsCountOnMiss();
             }
-            if (missDetected && counterTo0PostMissHits > 0 && targetIn != null
-                    && mc.player.getAttackCooldownProgress(1.0F) >= 1.0F) {
+            if (missDetected && counterTo0PostMissHits > 0 && targetIn != null) {
                 if ((!rayCastCheck || anyEntityOnRay(targetIn, 6.F)) && useEntity(targetIn, () -> {
                 }, () -> {
                 }, Hand.MAIN_HAND, cpsBypass))

@@ -154,17 +154,19 @@ public class AttackAura extends Module {
     }
 
     public void attackEntity() {
-        if (target == null || mc.player == null || mc.interactionManager == null || target.hurtTime > 0
-                || mc.player.getAttackCooldownProgress(1.0F) < 1.0F) {
-            return;
-        }
         if (AuraUtil.getStrictDistance(target) >= attackRange.getValue()) {
             return;
         }
         float[] ranges = getRanges();
         ranges = new float[]{ranges[0], ranges[1], ranges[0] + ranges[1]};
 
-        UAttack.antiMissesHittingUpdate(target, false, true, true);
+        if (target == null) {
+
+
+            return;
+        }
+
+        UAttack.antiMissesHittingUpdate(target, false, true, false);
 
 
         boolean canAttack = UAttack.shouldAttack(target, !typeRotation.is("HvH"), true, true, 0L, ranges);
