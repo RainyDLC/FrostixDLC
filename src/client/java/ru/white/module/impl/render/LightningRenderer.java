@@ -12,9 +12,9 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Util;
-import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +26,9 @@ import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_
 /**
  * Рендерер молний вокруг таргета. Адаптирован под пайплайны Nightix
  * (текстурное свечение как у ROMB_ESP + 3D-линии как у кольца).
+ * Матричные преобразования повторяют родной код проекта (translate(мир-камера) + локальные
+ * вершины для линий; multiply(camera.getRotation()) для билборда свечения), чтобы не было
+ * "полос" из-за рассинхрона матричного стека.
  */
 public class LightningRenderer implements IMinecraft {
 
@@ -40,7 +43,7 @@ public class LightningRenderer implements IMinecraft {
 
     public boolean redOnHit = true;
 
-    /** Настраивается из TargetEsp (слайдеры). */
+    /** Настраивается из TargetEsp / AttackAura (слайдеры). */
     public int maxBolts = 16;
     public long spawnIntervalMs = 42;
 
@@ -108,6 +111,7 @@ public class LightningRenderer implements IMinecraft {
         MatrixStack matrices = e.getMatrixStack();
         Vec3d basePos = target.getLerpedPos(e.getTickDelta());
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Quaternionf cameraRotation = mc.gameRenderer.getCamera().getRotation();
 
         long now = System.currentTimeMillis();
         if (now - lastSpawn > spawnIntervalMs && boltCount < maxBolts) {
@@ -128,6 +132,7 @@ public class LightningRenderer implements IMinecraft {
         int customColor = WHITE;
 
         VertexConsumer glowBuf = immediate.getBuffer(LIGHTNING_GLOW.apply(GLOW));
+        VertexConsumer lineBuf = immediate.getBuffer(LIGHTNING_LINE_LAYER);
 
         for (int i = 0; i < boltCount; i++) {
             Bolt bolt = bolts[i];
@@ -149,44 +154,39 @@ public class LightningRenderer implements IMinecraft {
             int glowColor = withAlpha(glowRgb, (int) (boltAlpha * 150));
             int coreColor = withAlpha(coreRgb, (int) (boltAlpha * 255));
 
+            // свечение: билборд у каждой точки (как drawCubeGlowSprite)
             for (Vec3d point : bolt.points) {
                 float blobScale = 0.16f + random.nextFloat() * 0.10f;
-                drawGlowBlob(matrices, glowBuf, point, cameraPos, blobScale, glowColor);
+                float h = blobScale / 2f;
+
+                matrices.push();
+                matrices.translate(point.x - cameraPos.x, point.y - cameraPos.y, point.z - cameraPos.z);
+                matrices.multiply(cameraRotation);
+                Matrix4f m = matrices.peek().getPositionMatrix();
+
+                glowBuf.vertex(m, -h, -h, 0.0f).color(glowColor).texture(0.0F, 1.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+                glowBuf.vertex(m,  h, -h, 0.0f).color(glowColor).texture(1.0F, 1.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+                glowBuf.vertex(m,  h,  h, 0.0f).color(glowColor).texture(1.0F, 0.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+                glowBuf.vertex(m, -h,  h, 0.0f).color(glowColor).texture(0.0F, 0.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+
+                matrices.pop();
             }
 
-            drawPath(matrices, immediate, bolt.points, cameraPos, coreColor);
+            // линии: translate(база-камера) + локальные вершины (как режим "Кольцо")
+            matrices.push();
+            matrices.translate(basePos.x - cameraPos.x, basePos.y - cameraPos.y, basePos.z - cameraPos.z);
+            Matrix4f lm = matrices.peek().getPositionMatrix();
+
+            List<Vec3d> points = bolt.points;
+            for (int s = 0; s < points.size() - 1; s++) {
+                Vec3d a = points.get(s).subtract(basePos);
+                Vec3d b = points.get(s + 1).subtract(basePos);
+                lineBuf.vertex(lm, (float) a.x, (float) a.y, (float) a.z).color(coreColor);
+                lineBuf.vertex(lm, (float) b.x, (float) b.y, (float) b.z).color(coreColor);
+            }
+
+            matrices.pop();
         }
-    }
-
-    private void drawPath(MatrixStack matrices, VertexConsumerProvider.Immediate immediate,
-                          List<Vec3d> points, Vec3d cameraPos, int color) {
-        VertexConsumer buf = immediate.getBuffer(LIGHTNING_LINE_LAYER);
-        Matrix4f matrix = matrices.peek().getPositionMatrix();
-        for (int i = 0; i < points.size() - 1; i++) {
-            Vec3d a = points.get(i).subtract(cameraPos);
-            Vec3d b = points.get(i + 1).subtract(cameraPos);
-            buf.vertex(matrix, (float) a.x, (float) a.y, (float) a.z).color(color);
-            buf.vertex(matrix, (float) b.x, (float) b.y, (float) b.z).color(color);
-        }
-    }
-
-    private void drawGlowBlob(MatrixStack matrices, VertexConsumer buf, Vec3d pos, Vec3d cameraPos,
-                              float scale, int color) {
-        Camera camera = mc.gameRenderer.getCamera();
-        Vec3d rel = pos.subtract(cameraPos);
-
-        matrices.push();
-        matrices.translate(rel.x, rel.y, rel.z);
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-camera.getYaw()));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
-
-        Matrix4f matrix = matrices.peek().getPositionMatrix();
-        float h = scale / 2f;
-        buf.vertex(matrix, -h, -h, 0.0f).color(color).texture(0.0F, 1.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-        buf.vertex(matrix,  h, -h, 0.0f).color(color).texture(1.0F, 1.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-        buf.vertex(matrix,  h,  h, 0.0f).color(color).texture(1.0F, 0.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-        buf.vertex(matrix, -h,  h, 0.0f).color(color).texture(0.0F, 0.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-        matrices.pop();
     }
 
     private Bolt spawnBolt(LivingEntity target, Vec3d basePos) {
