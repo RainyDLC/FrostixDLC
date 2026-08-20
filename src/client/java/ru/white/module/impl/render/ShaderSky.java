@@ -19,7 +19,7 @@ public class ShaderSky extends Module {
 
     private static ShaderSky instance;
 
-    public ModeSetting mode = new ModeSetting(this, "Режим",  "Aurora", "Night", "Snow", "Sky", "Star", "Glow");
+    public ModeSetting mode = new ModeSetting(this, "Режим",  "Aurora", "Night", "Snow", "Sky", "Star", "Glow", "Plasma");
     public SliderSetting intensity = new SliderSetting(this, "Сила",
             1.0f, 0.1f, 1.0f, 0.05f);
    // public SliderSetting blurRadius = new SliderSetting(this, "Сила размытия", 3.0f, 1.0f, 8.0f, 0.5f)

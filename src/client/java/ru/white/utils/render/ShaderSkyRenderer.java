@@ -239,6 +239,7 @@ public class ShaderSkyRenderer {
             case "Sky" -> 3;
             case "Star" -> 4;
             case "Glow" -> 5;
+            case "Plasma" -> 6;
             default -> 0;
         };
     }
