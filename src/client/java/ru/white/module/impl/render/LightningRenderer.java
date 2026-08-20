@@ -129,11 +129,8 @@ public class LightningRenderer implements IMinecraft {
             }
         }
 
-        int customColor = WHITE;
-
-        VertexConsumer glowBuf = immediate.getBuffer(LIGHTNING_GLOW.apply(GLOW));
-        VertexConsumer lineBuf = immediate.getBuffer(LIGHTNING_LINE_LAYER);
-
+        // чистка истёкших + предрасчёт цветов/альфы для кадра
+        int visible = 0;
         for (int i = 0; i < boltCount; i++) {
             Bolt bolt = bolts[i];
             if (now - bolt.spawnTime > bolt.lifetimeMs) {
@@ -146,15 +143,28 @@ public class LightningRenderer implements IMinecraft {
             float fade = 1.0f - life;
             float flicker = 0.65f + random.nextFloat() * 0.35f;
             float boltAlpha = anim * fade * flicker;
+            bolt.drawAlpha = boltAlpha;
             if (boltAlpha <= 0.02f) continue;
+            visible++;
 
-            int glowRgb = lerpRgb(customColor, RED, hitT);
+            int glowRgb = lerpRgb(WHITE, RED, hitT);
             int coreRgb = lerpRgb(WHITE, RED, hitT);
 
-            int glowColor = withAlpha(glowRgb, (int) (boltAlpha * 150));
-            int coreColor = withAlpha(coreRgb, (int) (boltAlpha * 255));
+            bolt.glowColor = withAlpha(glowRgb, (int) (boltAlpha * 150));
+            bolt.coreColor = withAlpha(coreRgb, (int) (boltAlpha * 255));
+        }
+        if (visible == 0) return;
 
-            // свечение: билборд у каждой точки (как drawCubeGlowSprite)
+        // ВАЖНО: у Immediate вызов getBuffer() для нового слоя сбрасывает текущий,
+        // поэтому glow и линии НЕЛЬЗЯ чередовать — только двумя фазами
+        // (как в режиме "Кольцо": сначала вся заливка, потом все линии).
+
+        // ФАЗА 1: свечение — билборд у каждой точки (как drawCubeGlowSprite)
+        VertexConsumer glowBuf = immediate.getBuffer(LIGHTNING_GLOW.apply(GLOW));
+        for (int i = 0; i < boltCount; i++) {
+            Bolt bolt = bolts[i];
+            if (bolt.drawAlpha <= 0.02f) continue;
+
             for (Vec3d point : bolt.points) {
                 float blobScale = 0.16f + random.nextFloat() * 0.10f;
                 float h = blobScale / 2f;
@@ -164,15 +174,21 @@ public class LightningRenderer implements IMinecraft {
                 matrices.multiply(cameraRotation);
                 Matrix4f m = matrices.peek().getPositionMatrix();
 
-                glowBuf.vertex(m, -h, -h, 0.0f).color(glowColor).texture(0.0F, 1.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-                glowBuf.vertex(m,  h, -h, 0.0f).color(glowColor).texture(1.0F, 1.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-                glowBuf.vertex(m,  h,  h, 0.0f).color(glowColor).texture(1.0F, 0.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-                glowBuf.vertex(m, -h,  h, 0.0f).color(glowColor).texture(0.0F, 0.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+                glowBuf.vertex(m, -h, -h, 0.0f).color(bolt.glowColor).texture(0.0F, 1.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+                glowBuf.vertex(m,  h, -h, 0.0f).color(bolt.glowColor).texture(1.0F, 1.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+                glowBuf.vertex(m,  h,  h, 0.0f).color(bolt.glowColor).texture(1.0F, 0.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+                glowBuf.vertex(m, -h,  h, 0.0f).color(bolt.glowColor).texture(0.0F, 0.0F).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
 
                 matrices.pop();
             }
+        }
 
-            // линии: translate(база-камера) + локальные вершины (как режим "Кольцо")
+        // ФАЗА 2: линии — translate(база-камера) + локальные вершины (как режим "Кольцо")
+        VertexConsumer lineBuf = immediate.getBuffer(LIGHTNING_LINE_LAYER);
+        for (int i = 0; i < boltCount; i++) {
+            Bolt bolt = bolts[i];
+            if (bolt.drawAlpha <= 0.02f) continue;
+
             matrices.push();
             matrices.translate(basePos.x - cameraPos.x, basePos.y - cameraPos.y, basePos.z - cameraPos.z);
             Matrix4f lm = matrices.peek().getPositionMatrix();
@@ -181,8 +197,8 @@ public class LightningRenderer implements IMinecraft {
             for (int s = 0; s < points.size() - 1; s++) {
                 Vec3d a = points.get(s).subtract(basePos);
                 Vec3d b = points.get(s + 1).subtract(basePos);
-                lineBuf.vertex(lm, (float) a.x, (float) a.y, (float) a.z).color(coreColor);
-                lineBuf.vertex(lm, (float) b.x, (float) b.y, (float) b.z).color(coreColor);
+                lineBuf.vertex(lm, (float) a.x, (float) a.y, (float) a.z).color(bolt.coreColor);
+                lineBuf.vertex(lm, (float) b.x, (float) b.y, (float) b.z).color(bolt.coreColor);
             }
 
             matrices.pop();
@@ -266,5 +282,9 @@ public class LightningRenderer implements IMinecraft {
         List<Vec3d> points;
         long spawnTime;
         long lifetimeMs;
+        /** Пересчитываются каждый кадр в render(). */
+        float drawAlpha = 0f;
+        int glowColor;
+        int coreColor;
     }
 }

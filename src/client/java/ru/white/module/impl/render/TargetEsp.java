@@ -785,7 +785,7 @@ public class TargetEsp extends Module implements ModulePreview {
 
         if (alphaPC > 0.001f && target != null && type.is("Молнии")) {
             lightningRenderer.maxBolts = lightningCount.getValue().intValue();
-            lightningRenderer.spawnIntervalMs = lightningSpeed.getValue().longValue();
+            lightningRenderer.spawnIntervalMs = Math.max(10L, 132L - lightningSpeed.getValue().longValue());
             lightningRenderer.redOnHit = lightningHit.getValue();
             lightningRenderer.render(e, immediate, target, alphaPC);
         }

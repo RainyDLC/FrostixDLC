@@ -1329,7 +1329,7 @@ public class RotationProcess extends Component {
 
         if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Молнии")) {
             lightningRenderer.maxBolts = aura.lightningCount.getValue().intValue();
-            lightningRenderer.spawnIntervalMs = aura.lightningSpeed.getValue().longValue();
+            lightningRenderer.spawnIntervalMs = Math.max(10L, 132L - aura.lightningSpeed.getValue().longValue());
             lightningRenderer.redOnHit = aura.lightningHit.getValue();
             lightningRenderer.render(e, immediate, target, alphaPC);
         }
