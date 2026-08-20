@@ -97,13 +97,17 @@ public class AttackAura extends Module {
     public ModeSetting typeSprint = new ModeSetting(this,"Тип спринта", "Packet","Silent","Legit");
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
 
-    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Не отображать");
+    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Не отображать");
 
     public SliderSetting cubeSize = new SliderSetting(this,"Размер куба",1.15F,0.6F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
     public SliderSetting cubeRotateSpeed = new SliderSetting(this,"Скорость вращения куба",1.2F,0.2F,4.0F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
     public SliderSetting cubeThickness = new SliderSetting(this,"Толщина куба",2.2F,0.6F,5.0F,0.1F).setVisible(() -> typeTargetESP.is("Куб"));
     public BooleanSetting cubeColorOnHit = new BooleanSetting(this,"Цвет куба при ударе",true).setVisible(() -> typeTargetESP.is("Куб"));
     public BooleanSetting cubeGlow = new BooleanSetting(this,"Свечение куба",true).setVisible(() -> typeTargetESP.is("Куб"));
+
+    public SliderSetting lightningCount = new SliderSetting(this,"Кол-во молний",16,4,48,1).setVisible(() -> typeTargetESP.is("Молнии"));
+    public SliderSetting lightningSpeed = new SliderSetting(this,"Скорость молний",42,10,120,1).setVisible(() -> typeTargetESP.is("Молнии"));
+    public BooleanSetting lightningHit = new BooleanSetting(this,"Красный при ударе", false).setVisible(() -> typeTargetESP.is("Молнии"));
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
             new BooleanSetting("Умные криты", false),

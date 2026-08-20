@@ -24,6 +24,7 @@ import ru.white.manager.event_impl.WorldLoadEvent;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.manager.events.orbit.EventPriority;
 import ru.white.module.impl.combat.AttackAura;
+import ru.white.module.impl.render.LightningRenderer;
 import ru.white.module.impl.combat.aura.rotation.FunTimeRotation;
 import ru.white.module.impl.player.ClickHelper;
 import ru.white.utils.animation.Animation;
@@ -191,6 +192,7 @@ public class RotationProcess extends Component {
     public LivingEntity target = null;
     public Animation alpha = new Animation();
     public Animation alpha_2 = new Animation();
+    private final LightningRenderer lightningRenderer = new LightningRenderer();
 
     public static final RenderPipeline ROMB_ESP_PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(TRANSFORMS_AND_PROJECTION_SNIPPET)
@@ -1323,6 +1325,13 @@ public class RotationProcess extends Component {
             if (alphaPC > 0.001f && target != null) {
                 aura.renderTargetCube(e, target, alphaPC, immediate);
             }
+        }
+
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Молнии")) {
+            lightningRenderer.maxBolts = aura.lightningCount.getValue().intValue();
+            lightningRenderer.spawnIntervalMs = aura.lightningSpeed.getValue().longValue();
+            lightningRenderer.redOnHit = aura.lightningHit.getValue();
+            lightningRenderer.render(e, immediate, target, alphaPC);
         }
 
 
