@@ -330,12 +330,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         String status = "SYSTEM ONLINE";
         Fonts.sf_regular.draw(status, x + w - 10 - Fonts.sf_regular.getWidth(status, 5), y + 29, 5,
                 ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * (0.5F + 0.4F * blink)));
-
-        // строка 3: полоска-индикатор нагрузки (декоративная)
-        Draw.rect(x + 10, y + 38.5F, w - 20, 1.5F, ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * 0.15F), 0.7F);
-        float load = 0.35F + 0.6F * (0.5F + 0.5F * (float) Math.sin(time * 0.9F));
-        Draw.rect(x + 10, y + 38.5F, (w - 20) * load, 1.5F,
-                ColorUtil.getColor(80, 255, 230, a * 0.55F), 0.7F);
     }
 
     // ── подпись автора со сияющей снежинкой (низ справа) ────────────────
