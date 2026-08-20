@@ -45,18 +45,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     private static final Identifier GLOW_TEX = Identifier.of("client", "textures/particles/glow.png");
     private static final Identifier SNOWFLAKE_TEX = Identifier.of("client", "textures/particles/snowflake.png");
 
-    /** Всполохи сияния: {смещение X от центра, множ. толщины, множ. длины, скорость, фаза}. */
-    private static final float[][] AURORA_BEAMS = {
-            {-0.85f, 0.6f, 0.30f, 0.60f, 0.0f},
-            {-0.55f, 1.2f, 0.42f, 0.45f, 1.7f},
-            {-0.28f, 0.5f, 0.26f, 0.72f, 3.1f},
-            {-0.08f, 1.8f, 0.55f, 0.38f, 0.9f},
-            { 0.12f, 0.8f, 0.34f, 0.55f, 2.4f},
-            { 0.36f, 1.4f, 0.48f, 0.42f, 4.0f},
-            { 0.62f, 0.6f, 0.28f, 0.65f, 5.2f},
-            { 0.88f, 1.0f, 0.38f, 0.50f, 2.8f},
-    };
-
     /** Кристаллы инея по краям: {X, Y (доли экрана), размер, альфа 0-255, фаза пульсации}. */
     private static final float[][] FROST_SPOTS = {
             {0.030f, 0.14f, 24, 40, 0.0f},
@@ -244,32 +232,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         RenderUtil.Images.texture(GLOW_TEX, cx - 46, cy - 40, 92, 80,
                 ColorUtil.getColor(200, 250, 255, a * 0.40F));
 
-        // 3) острые рваные всполохи неоново-голубого света из центра
-        for (int i = 0; i < AURORA_BEAMS.length; i++) {
-            float[] b = AURORA_BEAMS[i];
-            float phase = time * b[3] + b[4];
-            float sway = (float) Math.sin(phase) * 8F;
-            float flicker = 0.45F + 0.55F * (float) Math.abs(Math.sin(phase * 1.37F + i * 2.1F));
-
-            float bx = cx + b[0] * sw * 0.24F + sway;
-            float bw = 1.0F + b[1];
-            float len = sh * b[2];
-
-            int beam = (i % 3 == 0)
-                    ? ColorUtil.getColor(80, 245, 220, a * 0.50F * flicker)
-                    : ColorUtil.getColor(120, 230, 255, a * 0.50F * flicker);
-            int trans = ColorUtil.getColor(120, 230, 255, 0F);
-
-            if (i % 2 == 0) { // луч вверх от центра
-                Draw.gradientRect(bx - bw / 2F, cy - len, bw, len,
-                        new int[]{trans, trans, beam, beam}, 0);
-            } else {          // луч вниз от центра
-                Draw.gradientRect(bx - bw / 2F, cy, bw, len,
-                        new int[]{beam, beam, trans, trans}, 0);
-            }
-        }
-
-        // 4) широкие мягкие "занавесы" сияния, медленно колышущиеся
+        // 3) широкие мягкие "занавесы" сияния, медленно колышущиеся
         for (int i = 0; i < 2; i++) {
             float phase = time * (0.25F + 0.12F * i) + i * 2.3F;
             float bx = cx + (float) Math.sin(phase) * sw * 0.18F;
