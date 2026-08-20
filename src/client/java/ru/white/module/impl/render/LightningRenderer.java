@@ -24,7 +24,7 @@ import java.util.function.Function;
 import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_SNIPPET;
 
 /**
- * Рендерер молний вокруг таргета. Адаптирован под пайплайны Nightix
+ * Рендерер молний вокруг таргета. Адаптирован под пайплайны FrostixDLC
  * (текстурное свечение как у ROMB_ESP + 3D-линии как у кольца).
  * Матричные преобразования повторяют родной код проекта (translate(мир-камера) + локальные
  * вершины для линий; multiply(camera.getRotation()) для билборда свечения), чтобы не было

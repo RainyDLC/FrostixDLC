@@ -25,7 +25,7 @@ public class RPC implements IMinecraft {
             DiscordEventHandlers handlers = new DiscordEventHandlers();
             rpc.Discord_Initialize("1505143136215634050", handlers, true, "");
             presence.startTimestamp = (System.currentTimeMillis() / 1000L);
-            presence.largeImageText = "https://t.me/LuminasMinecraft - 1.21.11";
+            presence.largeImageText = "https://t.me/FrostixDLC - 1.21.11";
             rpc.Discord_UpdatePresence(presence);
 
             thread = new Thread(() -> {

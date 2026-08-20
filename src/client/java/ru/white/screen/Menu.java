@@ -439,7 +439,7 @@ public class Menu extends Screen implements IMinecraft {
 
         float animL = animUserInfo.getOutput();
         float xAnimADd2 = 16 * S - 16 * S * animL;
-        String sgff = "Nightix" + ColorFormatting.getColor(ColorUtil.replAlpha(ColorUtil.client(), globalAnim * animL)) + " 5.0";
+        String sgff = "FrostixDLC" + ColorFormatting.getColor(ColorUtil.replAlpha(ColorUtil.client(), globalAnim * animL)) + " 5.0";
 
         RenderUtil.Render2D.glow(xPanelMini - draw.getWidth(sgff, 8 * S) - 4 * S + xAnimADd2, yPanelMini + 7 * S, 7 * S + draw.getWidth(sgff, 8 * S), 14 * S, ColorUtil.multAlpha(ColorUtil.getColor(0), globalAnim * animL * 0.1F), 4 * S, 6, 1);
         RenderUtil.Blur.blur(xPanelMini - draw.getWidth(sgff, 8 * S) - 4 * S + xAnimADd2, yPanelMini + 7 * S, 7 * S + draw.getWidth(sgff, 8 * S), 14 * S, globalAnim * animL, 4 * S, ColorUtil.multAlpha(ColorUtil.background(), globalAnim * animL * 0.2F));

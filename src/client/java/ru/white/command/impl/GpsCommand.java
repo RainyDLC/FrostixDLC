@@ -124,7 +124,7 @@ public class GpsCommand extends Command implements IMinecraft {
         );
 
         // ── distance label ────────────────────────────────────────────────────
-        // placed below the arrow center (same layout as NightixNew GPS)
+        // placed below the arrow center (same layout as FrostixDLCNew GPS)
         Fonts.sf_regular.drawCentered(
                 dst + "м",
                 cx,

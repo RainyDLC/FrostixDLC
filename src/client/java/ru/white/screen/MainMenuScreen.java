@@ -196,7 +196,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         Fonts.nightix_2.drawCentered("G", screenWidth / 2,
                 screenHeight * 0.32F + 30 - 30 * alphaVal, 16, ColorUtil.replAlpha(ColorUtil.client(), alphaVal));
 
-        Fonts.sf_regular.drawCentered("Nightix @LuminasMinecraft", screenWidth / 2,
+        Fonts.sf_regular.drawCentered("FrostixDLC", screenWidth / 2,
                 screenHeight * 0.36F + 30 - 30 * alphaVal, 12, ColorUtil.getColor(255, alphaVal));
 
         for (MenuButton b : buttons) b.update(lastMouseX, lastMouseY);
@@ -288,7 +288,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     // ── подпись автора со сияющей снежинкой (низ справа) ────────────────
 
     private void drawSignature(int sw, int sh, float a, float time) {
-        String text = "Nightix  @LuminasMinecraft";
+        String text = "FrostixDLC";
         float tw = Fonts.sf_regular.getWidth(text, 6);
         float flake = 8F, gap = 5F;
         float x = sw - tw - gap - flake - 12;

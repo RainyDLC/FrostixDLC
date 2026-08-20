@@ -23,7 +23,7 @@ public class ChatUtils implements IMinecraft {
             return;
         }
 
-        Text message = Text.literal(    "").append(gradientText("Nightix", new Color(ColorUtil.fade(90)),new Color(ColorUtil.fade(180)))).append(Text.literal(" » ").formatted(Formatting.GRAY)).append(Text.literal(text).formatted(Formatting.WHITE));
+        Text message = Text.literal(    "").append(gradientText("FrostixDLC", new Color(ColorUtil.fade(90)),new Color(ColorUtil.fade(180)))).append(Text.literal(" » ").formatted(Formatting.GRAY)).append(Text.literal(text).formatted(Formatting.WHITE));
 
         mc.inGameHud.getChatHud().addMessage(message);
     }
@@ -38,7 +38,7 @@ public class ChatUtils implements IMinecraft {
             return;
         }
 
-        Text message = Text.literal(    "").append(gradientText("Nightix [Dev]", new Color(ColorUtil.fade(90)),new Color(ColorUtil.fade(180)))).append(Text.literal(" » ").formatted(Formatting.GRAY)).append(Text.literal(text).formatted(Formatting.WHITE));
+        Text message = Text.literal(    "").append(gradientText("FrostixDLC [Dev]", new Color(ColorUtil.fade(90)),new Color(ColorUtil.fade(180)))).append(Text.literal(" » ").formatted(Formatting.GRAY)).append(Text.literal(text).formatted(Formatting.WHITE));
 
         mc.inGameHud.getChatHud().addMessage(message);
     }

@@ -87,7 +87,7 @@ public abstract class SplashOverlayMixin {
 
         boolean drawn = false;
         try {
-            drawn = drawNightix(context, alpha, l);
+            drawn = drawFrostixDLC(context, alpha, l);
         } catch (Throwable ignored) {
             drawn = false;
         }
@@ -103,7 +103,7 @@ public abstract class SplashOverlayMixin {
     }
 
     @Unique
-    private boolean drawNightix(DrawContext context, float fade, long now) {
+    private boolean drawFrostixDLC(DrawContext context, float fade, long now) {
         double scaleFactor = client.getWindow().getScaleFactor();
         if (scaleFactor <= 0) return false;
 
@@ -137,7 +137,7 @@ public abstract class SplashOverlayMixin {
         Fonts.sf_medium.drawCentered("a", cx + 0.25F, cy + 0.25F, 40F * breathe, ColorUtil.getColor(138, 161, 186, a * 0.9F));
         Fonts.sf_medium.drawCentered("a", cx, cy, 39F * breathe, ColorUtil.getColor(175, 199, 230, a));
 
-        Fonts.sf_bold.drawCentered("Nightix", cx, cy + 34F, 24F, ColorUtil.getColor(255, a));
+        Fonts.sf_bold.drawCentered("FrostixDLC", cx, cy + 34F, 24F, ColorUtil.getColor(255, a));
 
 
         int dots = (int) ((now / 400) % 4);
@@ -147,7 +147,7 @@ public abstract class SplashOverlayMixin {
 
         drawBarBranded(sw, sh, a, t);
 
-        Fonts.sf_bold.drawCentered(ru.white.lang.Lang.pick("Nightix · 2026 · Все права защищены", "Nightix · 2026 · All rights reserved"), cx, sh - 22F, 8F, ColorUtil.getColor(255, a * 0.12F));
+        Fonts.sf_bold.drawCentered(ru.white.lang.Lang.pick("FrostixDLC · 2026 · Все права защищены", "FrostixDLC · 2026 · All rights reserved"), cx, sh - 22F, 8F, ColorUtil.getColor(255, a * 0.12F));
 
         Render2D.endOverlay();
         context.getMatrices().popMatrix();
