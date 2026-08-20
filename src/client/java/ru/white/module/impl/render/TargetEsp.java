@@ -13,11 +13,13 @@ import ru.white.module.api.ModuleInfo;
 import ru.white.module.api.preview.ModulePreview;
 import ru.white.module.api.preview.PreviewContext;
 import ru.white.module.api.preview.PreviewSettings;
+import ru.white.module.api.settings.impl.BooleanSetting;
 import ru.white.module.api.settings.impl.ButtonSetting;
 import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
 
 import ru.white.module.impl.combat.AttackAura;
+import ru.white.module.impl.combat.TriggerBot;
 import ru.white.utils.animation.Animation;
 import ru.white.utils.animation.Easings;
 import ru.white.utils.colors.ColorUtil;
@@ -49,7 +51,7 @@ public class TargetEsp extends Module implements ModulePreview {
 
     public ButtonSetting previewButton = PreviewSettings.button(this);
 
-    public ModeSetting type = new ModeSetting(this,"Режим","Призраки","Картинка","Кольцо","Бублик","Кубики");
+    public ModeSetting type = new ModeSetting(this,"Режим","Призраки","Картинка","Кольцо","Бублик","Кубики","Молнии");
 
     public ModeSetting typeGhost = new ModeSetting(this,"Тип призраков","1","2","3","4").setVisible(() -> type.is("Призраки"));;
 
@@ -67,6 +69,12 @@ public class TargetEsp extends Module implements ModulePreview {
     public SliderSetting ringSpeed = new SliderSetting(this,"Скорость кольца",1800,600,4000,100).setVisible(() -> type.is("Кольцо"));
     public SliderSetting bublikSpeed = new SliderSetting(this,"Скорость бублика",1400,600,4000,100).setVisible(() -> type.is("Бублик"));
     public SliderSetting bublikSize = new SliderSetting(this,"Размер бублика",1,0.5F,2.5F,0.05F).setVisible(() -> type.is("Бублик"));
+
+    public SliderSetting lightningCount = new SliderSetting(this,"Кол-во молний",16,4,48,1).setVisible(() -> type.is("Молнии"));
+    public SliderSetting lightningSpeed = new SliderSetting(this,"Скорость молний",42,10,120,1).setVisible(() -> type.is("Молнии"));
+    public BooleanSetting lightningHit = new BooleanSetting(this,"Красный при ударе", false).setVisible(() -> type.is("Молнии"));
+
+    public final LightningRenderer lightningRenderer = new LightningRenderer();
 
     private final PreviewSettings previewSettings = PreviewSettings.of(this, 4F, 0F, 2F);
 
@@ -124,7 +132,7 @@ public class TargetEsp extends Module implements ModulePreview {
     public void onRender(EventRender3D e) {
         alpha.update();
 
-        LivingEntity currentTarget = previewTarget != null ? previewTarget : AttackAura.target;
+        LivingEntity currentTarget = previewTarget != null ? previewTarget : (AttackAura.target != null ? AttackAura.target : TriggerBot.targets);
 
         if (currentTarget != null) {
             target = currentTarget;
@@ -773,6 +781,13 @@ public class TargetEsp extends Module implements ModulePreview {
             }
 
             matrices.pop();
+        }
+
+        if (alphaPC > 0.001f && target != null && type.is("Молнии")) {
+            lightningRenderer.maxBolts = lightningCount.getValue().intValue();
+            lightningRenderer.spawnIntervalMs = lightningSpeed.getValue().longValue();
+            lightningRenderer.redOnHit = lightningHit.getValue();
+            lightningRenderer.render(e, immediate, target, alphaPC);
         }
 
         if (alphaPC > 0.001f && target != null && type.is("Кубики")) {
