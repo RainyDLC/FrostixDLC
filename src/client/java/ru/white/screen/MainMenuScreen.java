@@ -232,17 +232,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         RenderUtil.Images.texture(GLOW_TEX, cx - 46, cy - 40, 92, 80,
                 ColorUtil.getColor(200, 250, 255, a * 0.40F));
 
-        // 3) широкие мягкие "занавесы" сияния, медленно колышущиеся
-        for (int i = 0; i < 2; i++) {
-            float phase = time * (0.25F + 0.12F * i) + i * 2.3F;
-            float bx = cx + (float) Math.sin(phase) * sw * 0.18F;
-            int soft = ColorUtil.getColor(60, 190, 235, a * 0.10F);
-            int softT = ColorUtil.getColor(60, 190, 235, 0F);
-            Draw.gradientRect(bx - 26, sh * 0.05F, 52, sh * 0.5F,
-                    new int[]{softT, softT, soft, soft}, 0);
-        }
-
-        // 5) морозные узоры: полупрозрачные кристаллы инея по краям экрана
+        // 3) морозные узоры: полупрозрачные кристаллы инея по краям экрана
         for (float[] s : FROST_SPOTS) {
             float pulse = 0.7F + 0.3F * (float) Math.sin(time * 1.4F + s[4]);
             float size = s[2];
