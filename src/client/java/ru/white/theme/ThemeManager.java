@@ -119,7 +119,7 @@ public class ThemeManager {
         themes.clear();
 
 
-        themes.add(builtin("Blue",   Theme.rgb(124, 143, 246), Theme.rgb(143, 161, 250)));
+        themes.add(builtin("Blue",   Theme.rgb(143, 219, 255), Theme.rgb(189, 238, 255)));
         themes.add(builtin("Red",    Theme.rgb(246, 124, 126), Theme.rgb(246, 124, 126)));
 
         try {

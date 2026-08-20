@@ -167,7 +167,7 @@ public abstract class SplashOverlayMixin {
         float fillW = barW * progress;
         if (fillW > 0.5F) {
 
-            RenderUtil.Render2D.rect(x, y, fillW, barH, ColorUtil.getColor(125, 145, 244, a), barH / 2.0F);
+            RenderUtil.Render2D.rect(x, y, fillW, barH, ColorUtil.getColor(143, 219, 255, a), barH / 2.0F);
 
             float sweep = (t * 0.6F) % 1.0F;
             float sx = x + sweep * fillW;
@@ -196,7 +196,7 @@ public abstract class SplashOverlayMixin {
         float cx = (width / 2.0F) / s;
         float ty = (height / 2.0F - 26F) / s;
         float half = tr.getWidth(title) / 2.0F;
-        context.drawText(tr, title, (int) (cx - half), (int) ty, withAlpha(0x7D91F4, a), false);
+        context.drawText(tr, title, (int) (cx - half), (int) ty, withAlpha(0x8FDBFF, a), false);
         matrices.popMatrix();
 
         int barW = (int) Math.min(width * 0.5F, 320F);
@@ -204,7 +204,7 @@ public abstract class SplashOverlayMixin {
         int y = (int) (height * 0.78F);
         context.fill(x, y, x + barW, y + 4, withAlpha(0x232A3A, (int) (a * 0.85F)));
         int fillW = MathHelper.ceil((barW - 2) * progress);
-        context.fill(x + 1, y + 1, x + 1 + fillW, y + 3, withAlpha(0x7D91F4, a));
+        context.fill(x + 1, y + 1, x + 1 + fillW, y + 3, withAlpha(0x8FDBFF, a));
         String pct = (int) (progress * 100F) + "%";
         context.drawText(tr, pct, x + barW + 8, y - 2, ColorHelper.getArgb(a, 220, 226, 240), false);
     }

@@ -8,12 +8,12 @@ import java.awt.*;
 
 public enum Theme {
     NIGHT("Blue",
-            new Color(0x8BA2FF).getRGB(),
+            new Color(0x8FDBFF).getRGB(),
              new Color(0x9912192B, true).getRGB()
             , ColorUtil.getColor(240)
             ,ColorUtil.getColor(160)
             ,ColorUtil.getColor(24,24,27),
-            new Color(0x8BA2FF).getRGB()),
+            new Color(0xBDEEFF).getRGB()),
     AKAR("Red",
             new Color(0xFF8B8B).getRGB()
             ,   new Color(0x991B0C0C, true).getRGB()
