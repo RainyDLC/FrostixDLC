@@ -32,7 +32,6 @@ public class InterFace extends Module {
             new BooleanSetting("Key Binds", true),
             new BooleanSetting("Potions", true),
             new BooleanSetting("Music Player", true),
-            new BooleanSetting("ArrayList", true),
             new BooleanSetting("Notifications", true),
             new BooleanSetting("Target Hud", true),
             new BooleanSetting("Item hud",true),
@@ -55,7 +54,6 @@ public class InterFace extends Module {
     public DragSetting keyBind = new DragSetting(this, "Key Binds", new Vector2f(10, 50));
     public DragSetting potion = new DragSetting(this, "Potions", new Vector2f(90, 50));
     public DragSetting music = new DragSetting(this, "Music Player", new Vector2f(10, 400));
-    public DragSetting arrayList = new DragSetting(this, "ArrayList", new Vector2f(90, 40));
     public DragSetting notifications = new DragSetting(this, "Notifications", new Vector2f(0, 200));
     public DragSetting targetHudDrag = new DragSetting(this, "Target Hud", new Vector2f(90, 40));
     public DragSetting itemHud = new DragSetting(this, "Item hud", new Vector2f(200, 90));
@@ -66,7 +64,6 @@ public class InterFace extends Module {
     private final KeyBinds keyBinds = new KeyBinds();
     private final Potions potions = new Potions();
     private final MusicHud musicHud = new MusicHud();
-    private final ArrayListHud arrayListHud = new ArrayListHud();
     private final Notify notifyHud = new Notify();
     private final TargetHud targetHud = new TargetHud();
     private final UseTrackerHud useTrackerHud = new UseTrackerHud();
@@ -104,7 +101,6 @@ public class InterFace extends Module {
         if (element.getValue("Key Binds")) keyBinds.onRender(keyBind, this);
         if (element.getValue("Water mark")) waterMarkElemnt.onRender(waterMark, this);
         if (element.getValue("Music Player")) musicHud.onRender(music, this);
-        if (element.getValue("ArrayList")) arrayListHud.onRender(arrayList, this);
         if (element.getValue("Notifications")) notifyHud.onRender(notifications, this, eventDisplay);
         if (element.getValue("Target Hud")) targetHud.onRender(targetHudDrag, this, eventDisplay);
         if (element.getValue("Use Tracker")) useTrackerHud.onRender(useTracker, this);
