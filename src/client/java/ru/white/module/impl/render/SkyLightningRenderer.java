@@ -42,7 +42,7 @@ public final class SkyLightningRenderer {
                     .withVertexShader("core/position_color")
                     .withFragmentShader("core/position_color")
                     .withBlend(BlendFunction.LIGHTNING)
-                    .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+                    .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
                     .withDepthWrite(false)
                     .withCull(false)
                     .withVertexFormat(VertexFormats.POSITION_COLOR, VertexFormat.DrawMode.QUADS)
@@ -56,7 +56,7 @@ public final class SkyLightningRenderer {
                     .withFragmentShader("core/position_tex_color")
                     .withSampler("Sampler0")
                     .withBlend(BlendFunction.LIGHTNING)
-                    .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+                    .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
                     .withDepthWrite(false)
                     .withCull(false)
                     .withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.QUADS)
@@ -188,12 +188,12 @@ public final class SkyLightningRenderer {
 
             for (int i = 0; i < s.pts.size(); i += 2) {
                 sprite(glowBuf, matrix, s.pts.get(i), camPos, right, up,
-                        0.55f + 0.35f * flicker, glowCol);
+                        1.0f + 0.7f * flicker, glowCol);
             }
             for (List<Vec3d> br : s.branches) {
                 for (int i = 0; i < br.size(); i += 2) {
                     sprite(glowBuf, matrix, br.get(i), camPos, right, up,
-                            0.35f + 0.25f * flicker, glowCol);
+                            0.6f + 0.45f * flicker, glowCol);
                 }
             }
 
@@ -201,7 +201,7 @@ public final class SkyLightningRenderer {
             float flash = flashEnv(now - s.born);
             if (flash > 0.01f) {
                 sprite(glowBuf, matrix, s.impact.add(0, 0.8, 0), camPos, right, up,
-                        2.6f + 2.2f * (1f - flash), argb(200, 225, 255, (int) (flash * env * 200)));
+                        3.4f + 2.8f * (1f - flash), argb(200, 225, 255, (int) (flash * env * 200)));
             }
         }
         consumers.draw(GLOW_LAYER);
@@ -213,9 +213,9 @@ public final class SkyLightningRenderer {
             if (env <= 0.01f) continue;
             float flicker = flicker(now, s.seed);
             int col = argb(120, 175, 255, (int) (env * flicker * 130));
-            ribbonPolyline(outerBuf, matrix, s.pts, camPos, 0.085f, col);
+            ribbonPolyline(outerBuf, matrix, s.pts, camPos, 0.17f, col);
             for (List<Vec3d> br : s.branches) {
-                ribbonPolyline(outerBuf, matrix, br, camPos, 0.055f, col);
+                ribbonPolyline(outerBuf, matrix, br, camPos, 0.115f, col);
             }
         }
         consumers.draw(OUTER_LAYER);
@@ -227,17 +227,17 @@ public final class SkyLightningRenderer {
             if (env <= 0.01f) continue;
             float flicker = flicker(now, s.seed);
             int core = argb(235, 245, 255, (int) (env * flicker * 235));
-            ribbonPolyline(coreBuf, matrix, s.pts, camPos, 0.034f, core);
+            ribbonPolyline(coreBuf, matrix, s.pts, camPos, 0.072f, core);
             for (List<Vec3d> br : s.branches) {
-                ribbonPolyline(coreBuf, matrix, br, camPos, 0.02f, core);
+                ribbonPolyline(coreBuf, matrix, br, camPos, 0.046f, core);
             }
 
             // кольцо-волна от удара
             float tR = (now - s.born) / FLASH_TIME;
             if (tR < 1f) {
-                float ringR = 0.4f + 3.2f * (1f - (1f - tR) * (1f - tR));
+                float ringR = 0.5f + 4.2f * (1f - (1f - tR) * (1f - tR));
                 int ringCol = argb(190, 220, 255, (int) ((1f - tR) * env * 150));
-                groundRing(coreBuf, matrix, s.impact, ringR, 0.14f, ringCol);
+                groundRing(coreBuf, matrix, s.impact, ringR, 0.24f, ringCol);
             }
         }
         consumers.draw(CORE_LAYER);
