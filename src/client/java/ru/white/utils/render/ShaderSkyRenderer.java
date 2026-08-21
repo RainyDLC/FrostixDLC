@@ -81,7 +81,8 @@ public class ShaderSkyRenderer {
     private ByteBuffer dataBuffer;
     private boolean initialized = false;
     private boolean enabled = false;
-    private long startTime = System.currentTimeMillis();
+    private long lastFrameMs = -1L;
+    private float animTime = 0.0f;
 
     public ShaderSkyRenderer() {
         client = MinecraftClient.getInstance();
@@ -99,7 +100,8 @@ public class ShaderSkyRenderer {
         this.enabled = enabled;
         if (enabled) {
             ensureInitialized();
-            startTime = System.currentTimeMillis();
+            lastFrameMs = -1L;
+            animTime = 0.0f;
         }
     }
 
@@ -183,10 +185,20 @@ public class ShaderSkyRenderer {
         Color color2 = new Color(ShaderSky.geteColor2(), true);
         Color accentColor = Color.WHITE;
 
+        // integrate time with the current speed so slider changes never jump
+        long now = System.currentTimeMillis();
+        if (lastFrameMs > 0L) {
+            float dt = (now - lastFrameMs) / 1000.0f;
+            if (dt > 0.0f && dt < 0.25f) {
+                animTime += dt * module.speed.getValue();
+            }
+        }
+        lastFrameMs = now;
+
         dataBuffer.clear();
         dataBuffer.putFloat(width);
         dataBuffer.putFloat(height);
-        dataBuffer.putFloat((System.currentTimeMillis() - startTime) / 1000.0f);
+        dataBuffer.putFloat(animTime);
         dataBuffer.putFloat(alpha);
         putColor(dataBuffer, color1, alpha);
         putColor(dataBuffer, color2, alpha);
