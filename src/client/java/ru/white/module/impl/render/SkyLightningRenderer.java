@@ -110,8 +110,14 @@ public final class SkyLightningRenderer {
     private static void spawn(float radius) {
         MinecraftClient mc = MinecraftClient.getInstance();
 
-        double ang = random.nextDouble() * Math.PI * 2;
-        double dist = radius * (0.35f + 0.65f * random.nextFloat());
+        // спавним в конусе перед камерой, а не за спиной:
+        // forward для yaw θ — это угол θ+90° в параметризации (cos a, sin a)
+        float yaw = mc.gameRenderer.getCamera().getYaw();
+        double baseAng = Math.toRadians(yaw) + Math.PI * 0.5;
+        double spread = Math.toRadians(110.0); // ±55° от направления взгляда
+        double ang = baseAng + (random.nextDouble() - 0.5) * spread;
+
+        double dist = radius * (0.4f + 0.6f * random.nextFloat());
         double x = mc.player.getX() + Math.cos(ang) * dist;
         double z = mc.player.getZ() + Math.sin(ang) * dist;
 
