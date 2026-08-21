@@ -40,7 +40,7 @@ import java.util.Random;
 import java.util.regex.Pattern;
 
 public final class InventoryPresetManager {
-    private static final Path DIRECTORY = Path.of("C:/nightix/client1_21_11/inventory-presets");
+    private static final Path DIRECTORY = Path.of("C:/rainydlc/client1_21_11/inventory-presets");
     private static final Path CURRENT_FILE = DIRECTORY.resolve("current.txt");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final EquipmentSlot[] ARMOR = {

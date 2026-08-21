@@ -16,7 +16,7 @@ import java.util.*;
  */
 public class AltManager {
 
-    private static final Path FILE = Path.of("C:/nightix/client1_21_11/alts.json");
+    private static final Path FILE = Path.of("C:/rainydlc/client1_21_11/alts.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static AltManager instance;

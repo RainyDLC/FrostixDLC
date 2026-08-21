@@ -126,7 +126,7 @@ public class NameTag extends Module {
                         Client.get().moduleManager().get(NameProtect.class).friends.getValue() &&
                         Client.get().friendManager().isFriend(p.getNameForScoreboard()) ? "Friend" :
                         toColoredString(p.getDisplayName()).replace("⚡", "");
-                displayName = playerName.replace(mc.player.getName().getString(), "nightix.fun") + " " + Formatting.RED  + (entity.isInvisible() ? "null " : (int) getHealth(p)) + "hp";
+                displayName = playerName.replace(mc.player.getName().getString(), "rainydlc.fun") + " " + Formatting.RED  + (entity.isInvisible() ? "null " : (int) getHealth(p)) + "hp";
             } else if (entity instanceof LivingEntity le) {
                 displayName = le.getType().getName().getString() + Formatting.GRAY + " / " + Formatting.WHITE + (int) getHealth(le) + Formatting.GRAY + "hp";
             } else if (entity instanceof ItemEntity item) {

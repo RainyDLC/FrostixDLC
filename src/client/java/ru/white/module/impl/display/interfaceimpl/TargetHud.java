@@ -194,7 +194,7 @@ public class TargetHud implements element {
                 : (target.isInvisible() ? "null" : String.format("%.0f", displayHp));
         String name = target.getName().getString().replace(mc.player.getName().getString(),
                 Client.get().moduleManager().get(NameProtect.class).isEnabled()
-                        ? "nightix.fun"
+                        ? "rainydlc.fun"
                         : mc.player.getName().getString());
 
         RenderUtil.Render2D.rect(barX, barY, barW, BAR_HEIGHT,

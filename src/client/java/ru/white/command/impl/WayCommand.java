@@ -27,7 +27,7 @@ import java.util.stream.Stream;
 
 public class WayCommand extends Command implements IMinecraft {
 
-    private static final Path FILE = Path.of("C:/nightix/client1_21_11/waypoints.json");
+    private static final Path FILE = Path.of("C:/rainydlc/client1_21_11/waypoints.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private record Waypoint(String name, Vec3d pos) {}

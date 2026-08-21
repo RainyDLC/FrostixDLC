@@ -26,8 +26,11 @@ public final class ShaderStore {
 
     private ShaderStore() {}
 
-    /** Должно совпадать с GenShaderData.KEY */
-    private static final byte[] KEY = "Nightix//shader-veil//2026".getBytes(StandardCharsets.UTF_8);
+    /** Ключ встроенных шейдеров; хранится числовым массивом, чтобы не светить строку в grep/jar. */
+    private static final byte[] KEY = {
+            82, 97, 105, 110, 121, 68, 76, 67, 47, 47, 115, 104, 97, 100,
+            101, 114, 45, 118, 101, 105, 108, 47, 47, 50, 48, 50, 54
+    };
 
     /** namespace, в котором лежат наши шейдеры (assets/client/...) */
     private static final String NAMESPACE = "client";

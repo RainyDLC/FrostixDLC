@@ -21,7 +21,7 @@ public final class Lang {
     public enum Language { RUSSIAN, ENGLISH }
 
     /** Файл, где запоминается выбранный язык между сессиями. */
-    private static final Path LANG_FILE = Path.of("C:/nightix/client1_21_11/language.txt");
+    private static final Path LANG_FILE = Path.of("C:/rainydlc/client1_21_11/language.txt");
 
     /** Словарь рус→англ. Строится один раз при инициализации класса. */
     private static final Map<String, String> DICT = Translations.build();

@@ -45,8 +45,8 @@ public class NeuroRotation {
     public static final int MIN_SAMPLES = 300;
 
     private static final int MAX_SAMPLES = 40_000;
-    private static final Path MODEL_PATH = Path.of("C:/nightix/client1_21_11/neuro_rotation.json");
-    private static final Path SAMPLES_PATH = Path.of("C:/nightix/client1_21_11/neuro_samples.bin");
+    private static final Path MODEL_PATH = Path.of("C:/rainydlc/client1_21_11/neuro_rotation.json");
+    private static final Path SAMPLES_PATH = Path.of("C:/rainydlc/client1_21_11/neuro_samples.bin");
     private static final Gson GSON = new GsonBuilder().create();
 
     private final float[][] w1 = new float[H1][IN];

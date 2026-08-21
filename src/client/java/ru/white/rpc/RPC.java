@@ -25,7 +25,7 @@ public class RPC implements IMinecraft {
             DiscordEventHandlers handlers = new DiscordEventHandlers();
             rpc.Discord_Initialize("1540311646407491636", handlers, true, "");
             presence.startTimestamp = (System.currentTimeMillis() / 1000L);
-            presence.largeImageText = "https://t.me/FrostixDLC - 1.21.11";
+            presence.largeImageText = "https://t.me/RainyDLC - 1.21.11";
             rpc.Discord_UpdatePresence(presence);
 
             thread = new Thread(() -> {
@@ -36,7 +36,7 @@ public class RPC implements IMinecraft {
                     presence.state = "Plays on " + ServerUtil.server;
 
                     presence.button_label_1 = "Web";
-                    presence.button_url_1 = "https://nightix.fun";
+                    presence.button_url_1 = "https://rainydlc.fun";
 
                     presence.button_label_2 = "Discord";
                     presence.button_url_2 = "https://discord.gg/5jRJjDYW5T";

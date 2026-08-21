@@ -17,7 +17,7 @@ import java.util.List;
  */
 public class ThemeManager {
 
-    private static final Path THEME_DIR = Path.of("C:/nightix/client1_21_11/theme");
+    private static final Path THEME_DIR = Path.of("C:/rainydlc/client1_21_11/theme");
     private static final Path ACTIVE_FILE = THEME_DIR.resolve(".active");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 

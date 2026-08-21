@@ -132,7 +132,7 @@ public class Potions implements IMinecraft {
 
         Font font = Fonts.sf_regular;
 
-        Fonts.nightix_2.draw("P", x + TITLE_ICON_X, y + TITLE_ICON_Y, TITLE_ICON, ColorUtil.replAlpha(ColorUtil.client(), alpha2));
+        Fonts.rainydlc_2.draw("P", x + TITLE_ICON_X, y + TITLE_ICON_Y, TITLE_ICON, ColorUtil.replAlpha(ColorUtil.client(), alpha2));
         font.draw("Potions", x + TITLE_TEXT_X, y + TITLE_TEXT_Y, TITLE_TEXT, ColorUtil.multAlpha(ColorUtil.getColor(240), alpha2));
 
         List<EffectData> sortedEffects = displayedEffects.values().stream()

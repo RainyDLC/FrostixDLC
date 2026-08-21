@@ -12,7 +12,7 @@ import java.nio.file.*;
 import java.util.*;
 
 public class FriendManager {
-    private static final Path FILE = Path.of("C:/nightix/client1_21_11/friends.json");
+    private static final Path FILE = Path.of("C:/rainydlc/client1_21_11/friends.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final Set<String> friends = new HashSet<>();

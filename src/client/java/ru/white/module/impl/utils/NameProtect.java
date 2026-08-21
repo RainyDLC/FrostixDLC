@@ -22,9 +22,9 @@ public class NameProtect extends Module {
     public void onEvent(TextFactoryEvent e) {
 
         if(anarhy.getValue())
-        e.replaceRegex("(?ui)Анархия-(?:(?:1\\d{3})|(?:[1-9]\\d{0,2})|2000)", "nightix.fun");
+        e.replaceRegex("(?ui)Анархия-(?:(?:1\\d{3})|(?:[1-9]\\d{0,2})|2000)", "rainydlc.fun");
 
-        e.replaceText(mc.getSession().getUsername(), "nightix");
+        e.replaceText(mc.getSession().getUsername(), "rainydlc");
 
         e.replaceRegex("funtime", "Успешный проект");
 

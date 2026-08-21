@@ -14,7 +14,7 @@ loom {
     splitEnvironmentSourceSets()
     accessWidenerPath = file("src/client/resources/client.accesswidener")
     mods {
-        "untitled" {
+        "rainydlc" {
             sourceSet sourceSets.main
             sourceSet sourceSets.client
         }

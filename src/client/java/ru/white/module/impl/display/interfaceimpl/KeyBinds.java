@@ -113,7 +113,7 @@ public class KeyBinds implements element {
         RenderUtil.Blur.blur(x, y, MIN_W, H, alpha2, RADIUS, ColorUtil.replAlpha(ColorUtil.background(), alpha2 * InterFace.getInstance().alphaHUD.getValue()));
 
         Font font = Fonts.sf_regular;
-        Font cat = Fonts.nightix_2;
+        Font cat = Fonts.rainydlc_2;
 
         cat.draw("E", x + TITLE_ICON_X, y + TITLE_ICON_Y, TITLE_ICON, ColorUtil.replAlpha(ColorUtil.client(), alpha2));
         font.draw("Key binds", x + TITLE_TEXT_X, y + TITLE_TEXT_Y, TITLE_TEXT, ColorUtil.multAlpha(ColorUtil.getColor(240), alpha2));

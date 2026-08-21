@@ -125,9 +125,9 @@ public class UnHook extends Module {
             List<String> lines = Files.readAllLines(sourceLog, StandardCharsets.UTF_8);
 
             List<String> cleanedLines = lines.stream()
-                    .filter(line -> !line.contains("FrostixDLC »"))
+                    .filter(line -> !line.contains("RainyDLC »"))
 
-                    .filter(line -> !line.contains("[FrostixDLC]"))
+                    .filter(line -> !line.contains("[RainyDLC]"))
                     .filter(line -> !line.contains("[Config]"))
                     .filter(line -> !line.contains("[Manager]"))
 

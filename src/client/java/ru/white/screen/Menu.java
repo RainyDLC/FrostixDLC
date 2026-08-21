@@ -553,7 +553,7 @@ public class Menu extends Screen implements IMinecraft {
 
         float animL = animUserInfo.getOutput();
         float xAnimADd2 = 16 * S - 16 * S * animL;
-        String sgff = "FrostixDLC" + ColorFormatting.getColor(ColorUtil.replAlpha(ColorUtil.client(), globalAnim * animL)) + " 5.0";
+        String sgff = "RainyDLC" + ColorFormatting.getColor(ColorUtil.replAlpha(ColorUtil.client(), globalAnim * animL)) + " 5.0";
 
         RenderUtil.Render2D.glow(xPanelMini - draw.getWidth(sgff, 8 * S) - 4 * S + xAnimADd2, yPanelMini + 7 * S, 7 * S + draw.getWidth(sgff, 8 * S), 14 * S, ColorUtil.multAlpha(ColorUtil.getColor(0), globalAnim * animL * 0.1F), 4 * S, 6, 1);
         RenderUtil.Blur.blur(xPanelMini - draw.getWidth(sgff, 8 * S) - 4 * S + xAnimADd2, yPanelMini + 7 * S, 7 * S + draw.getWidth(sgff, 8 * S), 14 * S, globalAnim * animL, 4 * S, ColorUtil.multAlpha(ColorUtil.background(), globalAnim * animL * 0.2F));
@@ -581,7 +581,7 @@ public class Menu extends Screen implements IMinecraft {
             String name = category.getIcon();
             RenderUtil.Render2D.outline(xPanelMini + (30 * S) / 2 - (16 * S) / 2 - 1 * S * anim + 1 * S, cy - 1 * S * anim + 1 * S, 16 * S + 2 * S * anim - 2 * S, 16 * S + 2 * S * anim - 2 * S, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * anim), 5 * S);
             RenderUtil.Render2D.glow(xPanelMini + (30 * S) / 2 - (12 * S) / 2 + 5.8F * S, cy + 7.8F * S, 0.1F * S, 0.1F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * animL2 * 0.15F * anim), 8 * S, 9, 1);
-            Fonts.nightix_2.drawCentered(name, xPanelMini + (30 * S) / 2, cy + 4.5F * S, 8 * S, ColorUtil.multAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 0.15F * globalAnim + 0.5F * animL2), ColorUtil.client(), anim), globalAnim));
+            Fonts.rainydlc_2.drawCentered(name, xPanelMini + (30 * S) / 2, cy + 4.5F * S, 8 * S, ColorUtil.multAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 0.15F * globalAnim + 0.5F * animL2), ColorUtil.client(), anim), globalAnim));
 
             String sgff2 = category.getName();
             float xAnimADd = 16 * S - 16 * S * animL2;
@@ -635,7 +635,7 @@ public class Menu extends Screen implements IMinecraft {
         RenderUtil.Render2D.rect(catPanX, y + 6 * S, catPanW, 20 * S, ColorUtil.getColor(0, 0.15F * globalAnim), 6 * S);
 
         String catName = active.getIcon();
-        Fonts.nightix_2.draw(catName, catPanX + 8 * S, y + 12.7F * S + 5 * S - 5 * S * animCategoryReset.getOutput(), 7 * S, ColorUtil.multAlpha(ColorUtil.client(), globalAnim * animCategoryReset.getOutput()));
+        Fonts.rainydlc_2.draw(catName, catPanX + 8 * S, y + 12.7F * S + 5 * S - 5 * S * animCategoryReset.getOutput(), 7 * S, ColorUtil.multAlpha(ColorUtil.client(), globalAnim * animCategoryReset.getOutput()));
         draw.draw(active.getName(), catPanX + 20 * S, y + 11.8F * S + 5 * S - 5 * S * animCategoryReset.getOutput(), 7 * S, ColorUtil.getColor(200, globalAnim * animCategoryReset.getOutput()));
 
         int found = searchResults();

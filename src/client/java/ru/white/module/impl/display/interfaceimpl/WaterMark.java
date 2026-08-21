@@ -65,7 +65,7 @@ public class WaterMark implements element {
         RenderUtil.Render2D.glow(x,y,H,H - 0.5F,ColorUtil.getColor(0,0.1F),RADIUS,8,1);
         RenderUtil.Blur.blur(x,y,H,H,1,RADIUS,ColorUtil.replAlpha(ColorUtil.background(),InterFace.getInstance().alphaHUD.getValue()));
 
-        Fonts.nightix_2.drawCentered("G",x  + H / 2,y + 5.1F * S,LOGO,ColorUtil.getClientColor(1));
+        Fonts.rainydlc_2.drawCentered("G",x  + H / 2,y + 5.1F * S,LOGO,ColorUtil.getClientColor(1));
 
         //RenderUtil.Render2D.rect(x + 16 / 2  - 2,y + 14.5F,4,1.5F,ColorUtil.getClientColor1(1),2,2,0,0);
 
@@ -96,7 +96,7 @@ public class WaterMark implements element {
         RenderUtil.Render2D.glow(x,y,w2,H - 0.5F,ColorUtil.getColor(0,0.1F),RADIUS,8,1);
         RenderUtil.Blur.blur(x,y,w2,H,1,RADIUS, ColorUtil.replAlpha(ColorUtil.background(),InterFace.getInstance().alphaHUD.getValue()));
 
-        Fonts.nightix_2.draw("N",x + ICON_X,y + ICON_Y,ICON,ColorUtil.getClientColor(1));
+        Fonts.rainydlc_2.draw("N",x + ICON_X,y + ICON_Y,ICON,ColorUtil.getClientColor(1));
 
 
 
@@ -109,7 +109,7 @@ public class WaterMark implements element {
 
         x2+= AFTER_SEP;
 
-        Fonts.nightix_2.draw("C",x2 ,y + ICON_Y,ICON, ThemeColor.getHudColor());
+        Fonts.rainydlc_2.draw("C",x2 ,y + ICON_Y,ICON, ThemeColor.getHudColor());
 
         x2+= AFTER_ICON;
 
@@ -123,7 +123,7 @@ public class WaterMark implements element {
 
         x3+= AFTER_SEP;
 
-        Fonts.nightix_2.draw("S",x3 ,y + ICON_Y,ICON, ThemeColor.getHudColor());
+        Fonts.rainydlc_2.draw("S",x3 ,y + ICON_Y,ICON, ThemeColor.getHudColor());
 
         x3+= AFTER_ICON;
 

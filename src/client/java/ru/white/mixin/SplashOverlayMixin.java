@@ -34,9 +34,9 @@ public abstract class SplashOverlayMixin {
     @Shadow private long reloadCompleteTime;
     @Shadow private long reloadStartTime;
 
-    @Unique private static final int NIGHTIX_BG = 0x0A0E14;
+    @Unique private static final int RAINYDLC_BG = 0x071426;
     @Unique private static final Identifier MENU_BG = Identifier.of("client", "textures/frame/menu.png");
-    @Unique private long nightixStart = -1L;
+    @Unique private long rainydlcStart = -1L;
 
     @Unique
     private static int withAlpha(int rgb, int alpha) {
@@ -44,12 +44,12 @@ public abstract class SplashOverlayMixin {
     }
 
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
-    private void nightixRender(DrawContext context, int mouseX, int mouseY, float deltaTicks, CallbackInfo ci) {
+    private void rainydlcRender(DrawContext context, int mouseX, int mouseY, float deltaTicks, CallbackInfo ci) {
         int i = context.getScaledWindowWidth();
         int j = context.getScaledWindowHeight();
         long l = Util.getMeasuringTimeMs();
 
-        if (nightixStart == -1L) nightixStart = l;
+        if (rainydlcStart == -1L) rainydlcStart = l;
         if (reloading && reloadStartTime == -1L) reloadStartTime = l;
 
         float f = reloadCompleteTime > -1L ? (float) (l - reloadCompleteTime) / 1000.0F : -1.0F;
@@ -77,7 +77,7 @@ public abstract class SplashOverlayMixin {
         } else {
 
             RenderSystem.getDevice().createCommandEncoder()
-                    .clearColorTexture(client.getFramebuffer().getColorAttachment(), 0xFF000000 | NIGHTIX_BG);
+                    .clearColorTexture(client.getFramebuffer().getColorAttachment(), 0xFF000000 | RAINYDLC_BG);
             alpha = 1.0F;
         }
 
@@ -87,7 +87,7 @@ public abstract class SplashOverlayMixin {
 
         boolean drawn = false;
         try {
-            drawn = drawFrostixDLC(context, alpha, l);
+            drawn = drawRainyDLC(context, alpha, l);
         } catch (Throwable ignored) {
             drawn = false;
         }
@@ -103,7 +103,7 @@ public abstract class SplashOverlayMixin {
     }
 
     @Unique
-    private boolean drawFrostixDLC(DrawContext context, float fade, long now) {
+    private boolean drawRainyDLC(DrawContext context, float fade, long now) {
         double scaleFactor = client.getWindow().getScaleFactor();
         if (scaleFactor <= 0) return false;
 
@@ -112,7 +112,7 @@ public abstract class SplashOverlayMixin {
         int sh = (int) (client.getWindow().getScaledHeight() / scaleFix);
         if (sw <= 0 || sh <= 0) return false;
 
-        float intro = MathHelper.clamp((now - nightixStart) / 600.0F, 0.0F, 1.0F);
+        float intro = MathHelper.clamp((now - rainydlcStart) / 600.0F, 0.0F, 1.0F);
         float ease = 1.0F - (1.0F - intro) * (1.0F - intro) * (1.0F - intro);
         float a = MathHelper.clamp(fade * ease, 0.0F, 1.0F);
         if (a <= 0.01F) return true;
@@ -137,7 +137,7 @@ public abstract class SplashOverlayMixin {
         Fonts.sf_medium.drawCentered("a", cx + 0.25F, cy + 0.25F, 40F * breathe, ColorUtil.getColor(138, 161, 186, a * 0.9F));
         Fonts.sf_medium.drawCentered("a", cx, cy, 39F * breathe, ColorUtil.getColor(175, 199, 230, a));
 
-        Fonts.sf_bold.drawCentered("FrostixDLC", cx, cy + 34F, 24F, ColorUtil.getColor(255, a));
+        Fonts.sf_bold.drawCentered("RainyDLC", cx, cy + 34F, 24F, ColorUtil.getColor(255, a));
 
 
         int dots = (int) ((now / 400) % 4);
@@ -147,7 +147,7 @@ public abstract class SplashOverlayMixin {
 
         drawBarBranded(sw, sh, a, t);
 
-        Fonts.sf_bold.drawCentered(ru.white.lang.Lang.pick("FrostixDLC · 2026 · Все права защищены", "FrostixDLC · 2026 · All rights reserved"), cx, sh - 22F, 8F, ColorUtil.getColor(255, a * 0.12F));
+        Fonts.sf_bold.drawCentered(ru.white.lang.Lang.pick("RainyDLC · 2026 · Все права защищены", "RainyDLC · 2026 · All rights reserved"), cx, sh - 22F, 8F, ColorUtil.getColor(255, a * 0.12F));
 
         Render2D.endOverlay();
         context.getMatrices().popMatrix();
@@ -167,7 +167,7 @@ public abstract class SplashOverlayMixin {
         float fillW = barW * progress;
         if (fillW > 0.5F) {
 
-            RenderUtil.Render2D.rect(x, y, fillW, barH, ColorUtil.getColor(143, 219, 255, a), barH / 2.0F);
+            RenderUtil.Render2D.rect(x, y, fillW, barH, ColorUtil.getColor(48, 119, 184, a), barH / 2.0F);
 
             float sweep = (t * 0.6F) % 1.0F;
             float sx = x + sweep * fillW;
@@ -185,18 +185,18 @@ public abstract class SplashOverlayMixin {
         int a = MathHelper.ceil(MathHelper.clamp(alpha, 0F, 1F) * 255F);
         if (a <= 4) return;
 
-        context.fill(0, 0, width, height, withAlpha(NIGHTIX_BG, a));
+        context.fill(0, 0, width, height, withAlpha(RAINYDLC_BG, a));
 
         TextRenderer tr = client.textRenderer;
         var matrices = context.getMatrices();
-        String title = "NIGHTIX";
+        String title = "RAINYDLC";
         float s = 4.0F;
         matrices.pushMatrix();
         matrices.scale(s, s);
         float cx = (width / 2.0F) / s;
         float ty = (height / 2.0F - 26F) / s;
         float half = tr.getWidth(title) / 2.0F;
-        context.drawText(tr, title, (int) (cx - half), (int) ty, withAlpha(0x8FDBFF, a), false);
+        context.drawText(tr, title, (int) (cx - half), (int) ty, withAlpha(0x418FCD, a), false);
         matrices.popMatrix();
 
         int barW = (int) Math.min(width * 0.5F, 320F);
@@ -204,7 +204,7 @@ public abstract class SplashOverlayMixin {
         int y = (int) (height * 0.78F);
         context.fill(x, y, x + barW, y + 4, withAlpha(0x232A3A, (int) (a * 0.85F)));
         int fillW = MathHelper.ceil((barW - 2) * progress);
-        context.fill(x + 1, y + 1, x + 1 + fillW, y + 3, withAlpha(0x8FDBFF, a));
+        context.fill(x + 1, y + 1, x + 1 + fillW, y + 3, withAlpha(0x3077B8, a));
         String pct = (int) (progress * 100F) + "%";
         context.drawText(tr, pct, x + barW + 8, y - 2, ColorHelper.getArgb(a, 220, 226, 240), false);
     }

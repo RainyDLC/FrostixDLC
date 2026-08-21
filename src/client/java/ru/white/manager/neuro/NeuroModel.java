@@ -8,11 +8,11 @@ import java.util.List;
 
 /**
  * Именованная нейро-модель: сеть + метаданные. Сохраняется в
- * C:/nightix/client1_21_11/neuro/&lt;name&gt;.neuro
+ * C:/rainydlc/client1_21_11/neuro/&lt;name&gt;.neuro
  */
 public class NeuroModel {
 
-    public static final Path DIR = Path.of("C:/nightix/client1_21_11/neuro");
+    public static final Path DIR = Path.of("C:/rainydlc/client1_21_11/neuro");
     private static final Path CURRENT_FILE = DIR.resolve("current.txt");
 
     public static final int INPUTS = 14;

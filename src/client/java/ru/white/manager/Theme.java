@@ -7,13 +7,13 @@ import ru.white.utils.colors.ColorUtil;
 import java.awt.*;
 
 public enum Theme {
-    NIGHT("Blue",
-            new Color(0x8FDBFF).getRGB(),
-             new Color(0x9912192B, true).getRGB()
+    NIGHT("Rainy Blue",
+            new Color(0x1D5C91).getRGB(),
+             new Color(0x99101F35, true).getRGB()
             , ColorUtil.getColor(240)
             ,ColorUtil.getColor(160)
             ,ColorUtil.getColor(24,24,27),
-            new Color(0xBDEEFF).getRGB()),
+            new Color(0x5EA9D6).getRGB()),
     AKAR("Red",
             new Color(0xFF8B8B).getRGB()
             ,   new Color(0x991B0C0C, true).getRGB()

@@ -9,7 +9,7 @@ import java.util.Properties;
 
 public class GuiManager {
 
-    public static final File file = new File("C:/nightix/client1_21_11/config", "theme/theme.json");
+    public static final File file = new File("C:/rainydlc/client1_21_11/config", "theme/theme.json");
     private Theme currentTheme = Theme.NIGHT;
 
 

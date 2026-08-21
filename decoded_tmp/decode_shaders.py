@@ -2,7 +2,8 @@ import re, base64, os
 
 path = "src/client/java/ru/white/utils/render/shader/ShaderData.java"
 src = open(path, encoding="utf-8").read()
-KEY = "Nightix//shader-veil//2026".encode("utf-8")
+KEY = bytes((82, 97, 105, 110, 121, 68, 76, 67, 47, 47, 115, 104, 97, 100,
+             101, 114, 45, 118, 101, 105, 108, 47, 47, 50, 48, 50, 54))
 
 pat = re.compile(r'SOURCES\.put\(\s*"([^"]+)"\s*,\s*"([^"]*)"\s*\)')
 outdir = "decoded_tmp/out"

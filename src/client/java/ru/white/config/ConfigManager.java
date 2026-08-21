@@ -19,7 +19,7 @@ import java.util.*;
 
 public class ConfigManager {
     public static final String AUTO_CONFIG = "auto";
-    private static final Path CONFIG_DIR = Path.of("C:/nightix/client1_21_11/config");
+    private static final Path CONFIG_DIR = Path.of("C:/rainydlc/client1_21_11/config");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private int tickTimer = 0;
 

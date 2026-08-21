@@ -25,46 +25,23 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * Главное меню в морозном (ледяном / cyan) стиле:
- *  - фон: глубокий сине-чёрный градиент с кобальтом и аквамарином,
- *    вспышка полярного сияния с рваными неоновыми всполохами в центре,
- *    морозные узоры (кристаллы инея) по краям экрана;
- *  - кнопки: полированные блоки тёмно-синего льда с градиентной
- *    "замороженной жидкостью" внутри и неоновым контуром Ice Blue;
- *  - внизу слева — консоль крио-лаборатории, внизу справа — подпись
- *    автора со сияющей снежинкой.
- * Логотип клиента не изменён.
+ * Главное меню RainyDLC в глубокой дождевой синей палитре:
+ * тёмное небо, холодное свечение и полупрозрачные синие панели.
  */
 public class MainMenuScreen extends Screen implements IMinecraft {
 
-    // ── морозная палитра ────────────────────────────────────────────────
-    private static final int ICE_R = 125, ICE_G = 228, ICE_B = 255;   // Ice Blue (контур/акцент)
-    private static final int AQUA_R = 64, AQUA_G = 224, AQUA_B = 208; // бирюза (консоль)
-    private static final int TXT_R = 222, TXT_G = 240, TXT_B = 255;   // морозно-белый текст
+    // ── дождевая синяя палитра ─────────────────────────────────────────
+    private static final int ICE_R = 65, ICE_G = 145, ICE_B = 205;     // синий акцент
+    private static final int AQUA_R = 74, AQUA_G = 157, AQUA_B = 209;  // холодный синий
+    private static final int TXT_R = 218, TXT_G = 235, TXT_B = 250;    // светлый текст
 
     private static final Identifier MENU_BG = Identifier.of("client", "textures/frame/menu.png");
     private static final Identifier GLOW_TEX = Identifier.of("client", "textures/particles/glow.png");
-    private static final Identifier SNOWFLAKE_TEX = Identifier.of("client", "textures/particles/snowflake.png");
     /** Текстура молний — та же, что в LightningRenderer (Отображение таргета). */
     private static final Identifier BOLT_TEX = Identifier.of("client", "textures/visuals/particles_2.png");
     /** Стрелка раскрытия информационной панели (при повороте 0° смотрит вверх). */
     private static final Identifier ARROW_TEX = Identifier.of("client", "textures/arrow.png");
 
-    /** Кристаллы инея по краям: {X, Y (доли экрана), размер, альфа 0-255, фаза пульсации}. */
-    private static final float[][] FROST_SPOTS = {
-            {0.030f, 0.14f, 24, 40, 0.0f},
-            {0.012f, 0.44f, 17, 28, 1.3f},
-            {0.045f, 0.76f, 28, 44, 2.6f},
-            {0.968f, 0.20f, 22, 36, 0.7f},
-            {0.988f, 0.54f, 16, 26, 2.0f},
-            {0.952f, 0.84f, 26, 42, 3.4f},
-            {0.10f, 0.968f, 19, 32, 1.0f},
-            {0.30f, 0.988f, 14, 22, 2.9f},
-            {0.70f, 0.988f, 16, 26, 0.5f},
-            {0.89f, 0.965f, 21, 34, 3.9f},
-            {0.08f, 0.045f, 17, 30, 1.8f},
-            {0.87f, 0.055f, 15, 26, 4.4f},
-    };
 
     public MainMenuScreen() {
         super(Text.literal("MainMenuScreen"));
@@ -192,28 +169,28 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         float bgX = (screenWidth - bgW) / 2F + offsetX;
         float bgY = (screenHeight - bgH) / 2F + offsetY;
 
-        // фон-картинка в ледяной тонировке
-        RenderUtil.Images.texture(MENU_BG, bgX, bgY, bgW, bgH, ColorUtil.getColor(170, 205, 255, alphaVal));
+        // фон-картинка в глубокой дождливой синей тонировке
+        RenderUtil.Images.texture(MENU_BG, bgX, bgY, bgW, bgH, ColorUtil.getColor(105, 155, 210, alphaVal));
 
         ScreenBlur.capture(2);
         RenderUtil.Blur.blur(0, 0, screenWidth, screenHeight, alphaVal,
                 ColorUtil.getColor(5, 12, 30, alphaVal * 0.35F));
         ScreenBlur.capture(4);
 
-        // морозная атмосфера: градиент, полярное сияние, всполохи, иней
-        drawFrostBackground(screenWidth, screenHeight, alphaVal, time);
+        // дождливая атмосфера: градиент и мягкое холодное свечение
+        drawRainyBackground(screenWidth, screenHeight, alphaVal, time);
 
         // ЛОГОТИП — без изменений
-        Fonts.nightix_2.drawCentered("G", screenWidth / 2,
+        Fonts.rainydlc_2.drawCentered("G", screenWidth / 2,
                 screenHeight * 0.32F + 30 - 30 * alphaVal, 16, ColorUtil.replAlpha(ColorUtil.client(), alphaVal));
 
-        Fonts.sf_regular.drawCentered("FrostixDLC", screenWidth / 2,
+        Fonts.sf_regular.drawCentered("RainyDLC", screenWidth / 2,
                 screenHeight * 0.36F + 30 - 30 * alphaVal, 12, ColorUtil.getColor(255, alphaVal));
 
         for (MenuButton b : buttons) b.update(lastMouseX, lastMouseY);
         drawMenuButtons(screenWidth, screenHeight, alphaVal);
 
-        // вспомогательный UI морозной темы
+        // вспомогательный UI дождевой темы
         drawInfoPanel(screenWidth, screenHeight, alphaVal, time);
         drawSignature(screenWidth, screenHeight, alphaVal, time);
         drawLanguageButton(screenWidth, alphaVal);
@@ -222,14 +199,14 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         if (context != null) context.getMatrices().popMatrix();
     }
 
-    // ── морозный фон ────────────────────────────────────────────────────
+    // ── дождевой фон ────────────────────────────────────────────────────
 
-    private void drawFrostBackground(int sw, int sh, float a, float time) {
-        // 1) градиент: кобальт/аквамарин вверху → иссиня-чёрный внизу
-        int tl = ColorUtil.getColor(14, 38, 84, a * 0.55F);
-        int tr = ColorUtil.getColor(8, 30, 66, a * 0.55F);
-        int br = ColorUtil.getColor(3, 9, 24, a * 0.75F);
-        int bl = ColorUtil.getColor(4, 12, 30, a * 0.75F);
+    private void drawRainyBackground(int sw, int sh, float a, float time) {
+        // градиент глубокого синего дождевого неба
+        int tl = ColorUtil.getColor(12, 42, 82, a * 0.62F);
+        int tr = ColorUtil.getColor(8, 31, 66, a * 0.62F);
+        int br = ColorUtil.getColor(2, 8, 22, a * 0.82F);
+        int bl = ColorUtil.getColor(3, 13, 31, a * 0.82F);
         Draw.gradientRect(0, 0, sw, sh, new int[]{tl, tr, br, bl}, 0);
 
         float cx = sw / 2F;
@@ -237,20 +214,12 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
         // 2) очень мягкое «дышащее» гало за логотипом — едва заметная холодная
         // дымка вместо яркой вспышки: без пересвеченного белого ядра,
-        // медленная пульсация (вдох/выдох), холодный аквамариновый тон
+        // медленная пульсация (вдох/выдох), холодный синий тон
         float breathe = 0.70F + 0.30F * (float) Math.sin(time * 0.7F);
         RenderUtil.Images.texture(GLOW_TEX, cx - 200, cy - 155, 400, 310,
-                ColorUtil.getColor(60, 170, 230, a * 0.10F * breathe));
+                ColorUtil.getColor(40, 105, 185, a * 0.12F * breathe));
         RenderUtil.Images.texture(GLOW_TEX, cx - 110, cy - 85, 220, 170,
-                ColorUtil.getColor(80, 190, 240, a * 0.09F * breathe));
-
-        // 3) морозные узоры: полупрозрачные кристаллы инея по краям экрана
-        for (float[] s : FROST_SPOTS) {
-            float pulse = 0.7F + 0.3F * (float) Math.sin(time * 1.4F + s[4]);
-            float size = s[2];
-            RenderUtil.Images.texture(SNOWFLAKE_TEX, s[0] * sw - size / 2F, s[1] * sh - size / 2F, size, size,
-                    ColorUtil.getColor(175, 228, 255, a * (s[3] / 255F) * pulse));
-        }
+                ColorUtil.getColor(55, 130, 210, a * 0.10F * breathe));
 
         // 6) виньетка: лёд темнеет к верхнему и нижнему краю
         int edge = ColorUtil.getColor(3, 8, 20, a * 0.8F);
@@ -276,7 +245,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         infoBtnX = x; infoBtnY = y; infoBtnW = w; infoBtnH = headerH;
         boolean hov = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, x, y, w, headerH);
 
-        // панель: ровная морозная заливка + тёмный контур
+        // панель: глубокая синяя заливка + тёмный контур
         RenderUtil.Blur.blur(x, y, w, h, 1, 9, ColorUtil.getColor(6, 16, 38, a * 0.60F));
         Draw.rect(x, y, w, h, ColorUtil.getColor(14, 40, 74, a * 0.40F), 9);
         Draw.outline(x, y, w, h, 0.8F, ColorUtil.getColor(6, 24, 46, a * 0.90F), 9);
@@ -330,26 +299,15 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         }
     }
 
-    // ── подпись автора со сияющей снежинкой (низ справа) ────────────────
+    // ── подпись клиента (низ справа) ───────────────────────────────────
 
     private void drawSignature(int sw, int sh, float a, float time) {
-        String text = "FrostixDLC";
+        String text = "RainyDLC";
         float tw = Fonts.sf_regular.getWidth(text, 6);
-        float flake = 8F, gap = 5F;
-        float x = sw - tw - gap - flake - 12;
+        float x = sw - tw - 12;
         float y = sh - 20;
 
-        float pulse = 0.65F + 0.35F * (float) Math.sin(time * 2.0F);
-
-        Fonts.sf_regular.draw(text, x, y, 6, ColorUtil.getColor(210, 232, 255, a * 0.7F));
-
-        float fx = x + tw + gap;
-        // ореол за снежинкой
-        RenderUtil.Images.texture(GLOW_TEX, fx - 7, y - 7, flake + 14, flake + 14,
-                ColorUtil.getColor(120, 220, 255, a * 0.50F * pulse));
-        // сама снежинка
-        RenderUtil.Images.texture(SNOWFLAKE_TEX, fx, y, flake, flake,
-                ColorUtil.getColor(190, 240, 255, a * (0.75F + 0.25F * pulse)));
+        Fonts.sf_regular.draw(text, x, y, 6, ColorUtil.getColor(170, 210, 242, a * 0.78F));
     }
 
     // ── кнопки ──────────────────────────────────────────────────────────
@@ -572,7 +530,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         }
 
         /**
-         * Ледяная панель: усиленный блюр + ровная морозная заливка (без
+         * Дождевая панель: усиленный блюр + ровная синяя заливка (без
          * градиента) + тёмный контур + слабое постоянное свечение.
          * При наведении контур гаснет и вдоль границы бегут электрические
          * молнии (как «Отображение таргета» с режимом «Молнии»).
@@ -581,11 +539,11 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             float radius = 9F;
 
             // полупрозрачность "как у name tag": фон и блюр сильно прозрачнее,
-            // сквозь панели просвечивает фон (аврора, снежинки)
+            // сквозь панели просвечивает дождливый фон
             RenderUtil.Blur.blur(x, y, width, height, 1, radius + 3F,
                     ColorUtil.getColor(8, 20, 46, globalAlpha * (0.16F + hp * 0.08F)));
 
-            // ровный морозный цвет без вертикального градиента — тонкая вуаль
+            // ровный дождевой синий без вертикального градиента — тонкая вуаль
             int fill = ColorUtil.getColor(20, 48, 88, globalAlpha * (0.07F + hp * 0.06F));
             Draw.rect(x, y, width, height, fill, radius);
 
@@ -800,7 +758,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
             float progress = Math.max(0F, Math.min(1F, slideProgress));
 
-            // заполнение дорожки при сдвиге — ровная ледяная волна
+            // заполнение дорожки при сдвиге — ровная синяя волна
             if (progress > 0.01F) {
                 Draw.rect(x + 2, y + 2, (width - 4) * progress, height - 4,
                         ColorUtil.getColor(70, 190, 240, globalAlpha * (0.10F + progress * 0.16F)), 7);
@@ -809,7 +767,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             float knobSize = height - 8F;
             float knobX = x + 5F + (width - knobSize - 10F) * progress;
 
-            // ледяной кубик-ползунок: ровная морозная заливка
+            // синий ползунок: ровная дождевая заливка
             Draw.rect(knobX, y + 4F, knobSize, knobSize,
                     ColorUtil.getColor(150, 220, 250, globalAlpha * (0.25F + progress * 0.45F)), 4);
             Draw.outline(knobX, y + 4F, knobSize, knobSize, 0.7F,
