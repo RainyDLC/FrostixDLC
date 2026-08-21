@@ -224,6 +224,8 @@ void main() {
 
     float dith = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
     color += (dith - 0.5) * (1.6 / 255.0);
-    float alpha = opacity * mix(1.0, 0.72, clamp(extra.y, 0.0, 1.0));
-    fragColor = vec4(color, alpha);
+    // The procedural dome must fully replace Minecraft's sky. Keep its alpha
+    // opaque in every non-Blur mode; vanillaSky remains only a module setting
+    // for compatibility and no longer reveals the vanilla sky underneath.
+    fragColor = vec4(color, opacity);
 }

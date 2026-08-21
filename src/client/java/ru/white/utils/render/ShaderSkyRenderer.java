@@ -260,9 +260,7 @@ public class ShaderSkyRenderer {
         if (module.mode.is("Blur")) {
             return module.intensity.getValue();
         }
-        if (module.vanillaSky.getValue()) {
-            return 0.78f;
-        }
+        // Procedural modes fully replace the Minecraft sky.
         return 1.0f;
     }
 
