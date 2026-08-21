@@ -120,7 +120,7 @@ public class AttackAura extends Module {
     public SliderSetting snowCount = new SliderSetting(this,"Кол-во снежинок",12,4,24,1).setVisible(() -> typeTargetESP.is("Снег"));
     public SliderSetting snowSpeed = new SliderSetting(this,"Скорость вращения",0.6F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Снег"));
     public SliderSetting snowRadius = new SliderSetting(this,"Радиус орбиты",0.9F,0.4F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Снег"));
-    public SliderSetting snowSize = new SliderSetting(this,"Размер снежинок",0.14F,0.06F,0.35F,0.01F).setVisible(() -> typeTargetESP.is("Снег"));
+    public SliderSetting snowSize = new SliderSetting(this,"Размер снежинок",0.18F,0.06F,0.35F,0.01F).setVisible(() -> typeTargetESP.is("Снег"));
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
             new BooleanSetting("Умные криты", false),

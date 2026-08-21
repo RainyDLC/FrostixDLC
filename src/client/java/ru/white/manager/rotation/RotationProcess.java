@@ -1704,6 +1704,7 @@ public class RotationProcess extends Component {
      * Снег вокруг цели: снежинки-биллборды на орбитах.
      * Каждая — шесть заострённых лучей (три перекрестия) + мягкое свечение,
      * крутится вокруг своей оси и плавно покачивается по высоте.
+     * Слои рисуются строго последовательно: сначала всё свечение, потом все лучи.
      */
     private void renderTargetSnow(EventRender3D e, VertexConsumerProvider.Immediate immediate,
                                   AttackAura aura, LivingEntity target, float alphaPC) {
@@ -1735,12 +1736,11 @@ public class RotationProcess extends Component {
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
 
-        VertexConsumer texBuf = immediate.getBuffer(
-                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
-        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
-
-        matrices.push();
-        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
+        // геометрия считаем один раз, используем в обоих проходах
+        float[] pxArr = new float[count];
+        float[] pyArr = new float[count];
+        float[] pzArr = new float[count];
+        float[] spinArr = new float[count];
 
         for (int i = 0; i < count; i++) {
             // золотое сечение — равномерный разброс высот без «рядов»
@@ -1748,34 +1748,44 @@ public class RotationProcess extends Component {
             double orbA = Math.toRadians(
                     animationNurik * 1.4f * speed * ((i % 2 == 0) ? 1f : -1f) + i * (360.0 / count));
 
-            float fx = (float) Math.cos(orbA) * radius;
-            float fz = (float) Math.sin(orbA) * radius;
-            float fy = bodyH * heightFrac
+            pxArr[i] = (float) Math.cos(orbA) * radius;
+            pzArr[i] = (float) Math.sin(orbA) * radius;
+            pyArr[i] = bodyH * heightFrac
                     + (float) Math.sin(Math.toRadians(animationNurik * 1.3f + i * 61.0)) * bodyH * 0.08f;
+            spinArr[i] = animationNurik * 2.6f * speed * ((i % 2 == 0) ? 1f : -1f) + i * 53f;
+        }
 
-            int col = ColorUtil.replAlpha(color, (int) (alphaPC * 210));
-            int glowCol = ColorUtil.replAlpha(color, (int) (alphaPC * 90));
-            float spin = animationNurik * 2.6f * speed * ((i % 2 == 0) ? 1f : -1f) + i * 53f;
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
 
+        // --- Pass 1: мягкое свечение под каждой снежинкой ---
+        VertexConsumer texBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+
+        for (int i = 0; i < count; i++) {
             matrices.push();
-            matrices.translate(fx, fy, fz);
-
-            // мягкое свечение под снежинкой
-            matrices.push();
+            matrices.translate(pxArr[i], pyArr[i], pzArr[i]);
             matrices.multiply(mc.gameRenderer.getCamera().getRotation());
-            float g = size * 2.3f;
+            float g = size * 4.5f;
             matrices.scale(g, g, g);
             drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
-                    glowCol, glowCol, glowCol, glowCol, (int) (alphaPC * 90));
+                    color, color, color, color, (int) (alphaPC * 110));
             matrices.pop();
+        }
 
-            // сама снежинка: биллборд, три перекрестия заострённых лучей
+        // --- Pass 2: сами снежинки — три перекрестия заострённых лучей ---
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+
+        float L = size * 1.5f;
+        float W = Math.max(size * 0.24f, 0.012f);
+        int col = ColorUtil.replAlpha(color, (int) (alphaPC * 230));
+        int dotCol = ColorUtil.replAlpha(snowWhite, (int) (alphaPC * 255));
+
+        for (int i = 0; i < count; i++) {
             matrices.push();
+            matrices.translate(pxArr[i], pyArr[i], pzArr[i]);
             matrices.multiply(mc.gameRenderer.getCamera().getRotation());
-            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(spin));
-
-            float L = size;
-            float W = Math.max(size * 0.16f, 0.008f);
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(spinArr[i]));
 
             for (int k = 0; k < 3; k++) {
                 matrices.push();
@@ -1796,7 +1806,13 @@ public class RotationProcess extends Component {
                 matrices.pop();
             }
 
-            matrices.pop();
+            // яркая сердцевина
+            Matrix4f dm = matrices.peek().getPositionMatrix();
+            fillBuf.vertex(dm, -W, -W, 0).color(dotCol);
+            fillBuf.vertex(dm, W, -W, 0).color(dotCol);
+            fillBuf.vertex(dm, W, W, 0).color(dotCol);
+            fillBuf.vertex(dm, -W, W, 0).color(dotCol);
+
             matrices.pop();
         }
 
