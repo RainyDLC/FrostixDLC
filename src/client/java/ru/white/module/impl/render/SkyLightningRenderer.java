@@ -86,6 +86,10 @@ public final class SkyLightningRenderer {
     private static long nextStrikeAt;
     private static final Random random = new Random();
 
+    // переиспользуемые векторы базиса камеры (без аллокаций в кадре)
+    private static final Vector3f CAM_RIGHT = new Vector3f();
+    private static final Vector3f CAM_UP = new Vector3f();
+
     private SkyLightningRenderer() {
     }
 
@@ -185,8 +189,9 @@ public final class SkyLightningRenderer {
 
         long now = System.currentTimeMillis();
         Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
-        Vector3f right = mc.gameRenderer.getCamera().getRotation().transform(new Vector3f(1, 0, 0));
-        Vector3f up = mc.gameRenderer.getCamera().getRotation().transform(new Vector3f(0, 1, 0));
+        var camRot = mc.gameRenderer.getCamera().getRotation();
+        Vector3f right = camRot.transform(CAM_RIGHT.set(1, 0, 0));
+        Vector3f up = camRot.transform(CAM_UP.set(0, 1, 0));
 
         VertexConsumerProvider.Immediate consumers = mc.getBufferBuilders().getEntityVertexConsumers();
         Matrix4f matrix = e.getMatrixStack().peek().getPositionMatrix();

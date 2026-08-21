@@ -192,6 +192,16 @@ public class RotationProcess extends Component {
     /** Фаза сердцебиения для режима «Сердце»: интеграл частоты по времени. */
     private long heartLastTime = 0L;
     private float heartPhase = 0f;
+
+    // ── скретч-буферы кадра для ESP-режимов: ноль аллокаций в цикле рендера ──
+    private static final float[] SNOW_PX = new float[24], SNOW_PY = new float[24],
+            SNOW_PZ = new float[24], SNOW_SPIN = new float[24];
+    private static final float[] SWORD_PX = new float[16], SWORD_PY = new float[16],
+            SWORD_PZ = new float[16], SWORD_TILT = new float[16];
+    private static final float[] FIRE_OX = new float[64], FIRE_OY = new float[64], FIRE_OZ = new float[64],
+            FIRE_ALPHA = new float[64], FIRE_H = new float[64];
+    private static final int[] FIRE_RGB_OUT = new int[64], FIRE_RGB_CORE = new int[64];
+    private static final float[] HEART_HX = new float[48], HEART_HY = new float[48];
     public LivingEntity target = null;
     public Animation alpha = new Animation();
     public Animation alpha_2 = new Animation();
@@ -1751,11 +1761,11 @@ public class RotationProcess extends Component {
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
 
-        // геометрия считаем один раз, используем в обоих проходах
-        float[] pxArr = new float[count];
-        float[] pyArr = new float[count];
-        float[] pzArr = new float[count];
-        float[] spinArr = new float[count];
+        // геометрия считаем один раз, используем в обоих проходах (буферы без аллокаций)
+        float[] pxArr = SNOW_PX;
+        float[] pyArr = SNOW_PY;
+        float[] pzArr = SNOW_PZ;
+        float[] spinArr = SNOW_SPIN;
 
         for (int i = 0; i < count; i++) {
             // золотое сечение — равномерный разброс высот без «рядов»
@@ -1892,10 +1902,10 @@ public class RotationProcess extends Component {
 
         float k = size / 34f * beatScale;
 
-        // контур сердца: классическая параметрическая кривая
+        // контур сердца: классическая параметрическая кривая (буферы без аллокаций)
         final int SEGS = 48;
-        float[] hxArr = new float[SEGS];
-        float[] hyArr = new float[SEGS];
+        float[] hxArr = HEART_HX;
+        float[] hyArr = HEART_HY;
         for (int i = 0; i < SEGS; i++) {
             double t = Math.PI * 2.0 * i / SEGS;
             hxArr[i] = (float) (16.0 * Math.pow(Math.sin(t), 3)) * k;
@@ -1990,14 +2000,14 @@ public class RotationProcess extends Component {
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
         var camRot = mc.gameRenderer.getCamera().getRotation();
 
-        // предрасчёт частиц кадра
-        float[] oxArr = new float[count];
-        float[] oyArr = new float[count];
-        float[] ozArr = new float[count];
-        int[] outRgb = new int[count];
-        int[] coreRgb = new int[count];
-        float[] outAlpha = new float[count];
-        float[] outH = new float[count];
+        // предрасчёт частиц кадра (буферы без аллокаций)
+        float[] oxArr = FIRE_OX;
+        float[] oyArr = FIRE_OY;
+        float[] ozArr = FIRE_OZ;
+        int[] outRgb = FIRE_RGB_OUT;
+        int[] coreRgb = FIRE_RGB_CORE;
+        float[] outAlpha = FIRE_ALPHA;
+        float[] outH = FIRE_H;
 
         for (int i = 0; i < count; i++) {
             float seed = (i * 0.618034f) % 1f;
@@ -2134,11 +2144,11 @@ public class RotationProcess extends Component {
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
 
-        // геометрия кадра
-        float[] pxArr = new float[count];
-        float[] pyArr = new float[count];
-        float[] pzArr = new float[count];
-        float[] tiltArr = new float[count];
+        // геометрия кадра (переиспользуемые буферы)
+        float[] pxArr = SWORD_PX;
+        float[] pyArr = SWORD_PY;
+        float[] pzArr = SWORD_PZ;
+        float[] tiltArr = SWORD_TILT;
 
         for (int i = 0; i < count; i++) {
             double orbA = Math.toRadians(
