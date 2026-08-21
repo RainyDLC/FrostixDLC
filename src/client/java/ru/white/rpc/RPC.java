@@ -23,7 +23,7 @@ public class RPC implements IMinecraft {
         if (!started) {
             started = true;
             DiscordEventHandlers handlers = new DiscordEventHandlers();
-            rpc.Discord_Initialize("1505143136215634050", handlers, true, "");
+            rpc.Discord_Initialize("1540311646407491636", handlers, true, "");
             presence.startTimestamp = (System.currentTimeMillis() / 1000L);
             presence.largeImageText = "https://t.me/FrostixDLC - 1.21.11";
             rpc.Discord_UpdatePresence(presence);
@@ -31,7 +31,8 @@ public class RPC implements IMinecraft {
             thread = new Thread(() -> {
                 while (!Thread.currentThread().isInterrupted()) {
                     rpc.Discord_RunCallbacks();
-                    presence.details = "Build: ";
+                    String nick = mc.getSession() != null ? mc.getSession().getUsername() : "-";
+                    presence.details = "Username: " + nick;
                     presence.state = "Plays on " + ServerUtil.server;
 
                     presence.button_label_1 = "Web";

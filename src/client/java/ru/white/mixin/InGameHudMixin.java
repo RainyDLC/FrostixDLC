@@ -53,6 +53,11 @@ public abstract class InGameHudMixin  {
 
         event.hook();
 
+        // осколки закрытого клик-гуя доживают поверх HUD, чтобы экран не держал управление
+        if (Client.get().clickGuiScreen() != null) {
+            Client.get().clickGuiScreen().renderShardsAfterClose();
+        }
+
         Client.get().render2D().flushAll();
 
         context.getMatrices().popMatrix();

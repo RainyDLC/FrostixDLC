@@ -17,6 +17,7 @@ public class Render2D {
     private final OutlinePipeline outlinePipeline;
     private final TexturePipeline texturePipeline;
     private final BlurPipeline blurPipeline;
+    private final ShardPipeline shardPipeline;
 
     public Render2D() {
         this.fontRenderer = new FontRenderer();
@@ -25,6 +26,7 @@ public class Render2D {
         this.outlinePipeline = new OutlinePipeline();
         this.blurPipeline = new BlurPipeline();
         this.texturePipeline = new TexturePipeline();
+        this.shardPipeline = new ShardPipeline();
     }
 
     private boolean fontsLoaded = false;
@@ -53,6 +55,7 @@ public class Render2D {
         blurPipeline.flush();
         rectPipeline.flush();
         circleProgressPipeline.flush();
+        shardPipeline.flush();
         fontRenderer.flush();
     }
 
@@ -63,7 +66,12 @@ public class Render2D {
         texturePipeline.close();
         blurPipeline.close();
         outlinePipeline.close();
+        shardPipeline.close();
         ScreenBlur.close();
+    }
+
+    public ShardPipeline getShardPipeline() {
+        return shardPipeline;
     }
 
     public OutlinePipeline getOutlinePipeline() {

@@ -30,7 +30,8 @@ public class ClickGui extends Module {
             new BooleanSetting("Частицы", true),
             new BooleanSetting("Скан линии", true),
             new BooleanSetting("Свечение", true),
-            new BooleanSetting("Точки", true));
+            new BooleanSetting("Точки", true),
+            new BooleanSetting("Сборка", true));
 
 
     public SliderSetting size = new SliderSetting(this,"Размер",1.0F,0.5F,1.5F,0.1F);

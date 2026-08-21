@@ -21,6 +21,7 @@ import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.module.api.settings.impl.StringSetting;
 import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
+import net.minecraft.client.util.InputUtil;
 import ru.white.screen.editor.OverlayEditor;
 import ru.white.screen.editor.OverlayEditors;
 import ru.white.utils.animation.Animation;
@@ -59,6 +60,21 @@ public class Menu extends Screen implements IMinecraft {
     boolean exit = false;
 
     public Animation glomalAnim = new Animation();
+
+    /** Сборка/распад меню из треугольных осколков. */
+    private final MenuShards shards = new MenuShards();
+    /** Осколки стартуют в первом кадре — там уже известен прямоугольник панели. */
+    private boolean pendingAssemble = false;
+    /** Панель начинает проявляться, только когда осколки почти долетели. */
+    private boolean panelAnimStarted = true;
+    private float panelX, panelY, panelW, panelH, panelScreenW, panelScreenH;
+    private boolean panelKnown = false;
+    /** Клавишу открытия ждём отпущенной, иначе она же сразу закроет меню. */
+    private boolean toggleArmed = false;
+    /** Пауза между «закрыть» и распадом: меню успевает замереть на месте. */
+    private static final long SHATTER_HOLD_MS = 240;
+    private long exitHoldStart;
+    private boolean dissolveStarted = true;
 
     private final HandsEditor handsEditor = HandsEditor.getInstance();
 
@@ -281,12 +297,29 @@ public class Menu extends Screen implements IMinecraft {
         searchActive = false;
         searchTypeTime = System.currentTimeMillis();
         bindingModule = null;
+        toggleArmed = false;
+        dissolveStarted = true;
         GuiSounds.open();
         GuiMusicPlayer.start(0.15F);
-        glomalAnim.run(1, 0.25F, Easings.SINE_OUT);
+        if (shatter()) {
+            // панель проявится под осколками, когда они почти соберутся
+            shards.reset();
+            pendingAssemble = true;
+            panelAnimStarted = false;
+            glomalAnim.set(0);
+        } else {
+            shards.reset();
+            pendingAssemble = false;
+            panelAnimStarted = true;
+            glomalAnim.run(1, 0.25F, Easings.SINE_OUT);
+        }
         selectedTheme = Client.get().guiManager().getCurrentTheme();
         preSelectedTheme = Client.get().guiManager().getCurrentTheme();
         themes = ru.white.manager.Theme.values();
+    }
+
+    private boolean shatter() {
+        return effect("Сборка");
     }
 
     @Override
@@ -311,11 +344,29 @@ public class Menu extends Screen implements IMinecraft {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         closeCheck();
+        armToggleKey();
         glomalAnim.update();
         mouseX = (int) (mouseX / scaleFix);
         mouseY = (int) (mouseY / scaleFix);
         lastMouseX = mouseX;
         lastMouseY = mouseY;
+    }
+
+    private int toggleKey() {
+        ClickGui gui = Client.get().moduleManager().get(ClickGui.class);
+        return gui == null ? -1 : gui.getKey();
+    }
+
+    /**
+     * Клавиша открытия (по умолчанию правый шифт) закрывает меню только после того,
+     * как её отпустили: то самое нажатие, что открыло экран, доходит и до
+     * {@link #keyPressed}, а удержание клавиши даёт GLFW-повторы — иначе меню
+     * закрывалось бы в тот же кадр, в котором открылось.
+     */
+    private void armToggleKey() {
+        if (toggleArmed) return;
+        int key = toggleKey();
+        if (key == -1 || !InputUtil.isKeyPressed(mc.getWindow(), key)) toggleArmed = true;
     }
 
     public void renderOverlay(DrawContext context, RenderTickCounter tickCounter) {
@@ -340,13 +391,18 @@ public class Menu extends Screen implements IMinecraft {
             return;
         }
 
-        if (effect("Серый фон")) grayscalePipeline.draw(globalAnim);
+        // фон гаснет/размывается уже пока осколки летят — сама панель проявится позже
+        float bgAnim = (shatter() && shards.isAssembling())
+                ? Math.max(globalAnim, smoothstep(0F, 0.55F, shards.progress()))
+                : globalAnim;
+
+        if (effect("Серый фон")) grayscalePipeline.draw(bgAnim);
         ScreenBlur.capture(1);
         if (effect("Размывать фон")) {
-            RenderUtil.Blur.blur(0, 0, screenWidth, screenHeight, globalAnim, 0, ColorUtil.getColor(0, 0));
+            RenderUtil.Blur.blur(0, 0, screenWidth, screenHeight, bgAnim, 0, ColorUtil.getColor(0, 0));
         }
         if (effect("Затемнять фон")) {
-            RenderUtil.Images.texture(Identifier.of("client","textures/frame/background.png"), 0, 0, screenWidth, screenHeight, ColorUtil.multAlpha(ColorUtil.client(), globalAnim));
+            RenderUtil.Images.texture(Identifier.of("client","textures/frame/background.png"), 0, 0, screenWidth, screenHeight, ColorUtil.multAlpha(ColorUtil.client(), bgAnim));
         }
 
         float shaderMouseX = (float) (mc.mouse.getScaledX(mc.getWindow()) / scaleFix);
@@ -354,23 +410,23 @@ public class Menu extends Screen implements IMinecraft {
 
         if (effect("Шейдер")) {
             int rayBase = ColorUtil.client();
-            raysPipeline.draw(globalAnim, ColorUtil.replAlpha(ColorUtil.multDark(rayBase, 0.5F), 0.9F * globalAnim), ColorUtil.replAlpha(rayBase, 0.9F * globalAnim), 0.1F, 0.08F, 0.26F);
+            raysPipeline.draw(bgAnim, ColorUtil.replAlpha(ColorUtil.multDark(rayBase, 0.5F), 0.9F * bgAnim), ColorUtil.replAlpha(rayBase, 0.9F * bgAnim), 0.1F, 0.08F, 0.26F);
         }
 
         if (effect("Точки")) {
-            halftonePipeline.draw(screenWidth, screenHeight, shaderMouseX, shaderMouseY, globalAnim * 0.1F, ColorUtil.getColor(255), 6, 0.7F, 3, 100);
+            halftonePipeline.draw(screenWidth, screenHeight, shaderMouseX, shaderMouseY, bgAnim * 0.1F, ColorUtil.getColor(255), 6, 0.7F, 3, 100);
         }
 
-        if (effect("Скан линии")) drawScanLines(screenWidth, screenHeight, globalAnim);
+        if (effect("Скан линии")) drawScanLines(screenWidth, screenHeight, bgAnim);
 
         if (effect("Свечение")) {
-            int glowColor = ColorUtil.replAlpha(ColorUtil.client(), globalAnim * 0.5F);
-            RenderUtil.Images.texture(Identifier.of("client","textures/effects/circles_effect.png"), 0, 30 - 30 * globalAnim, screenWidth, screenHeight, glowColor);
-            RenderUtil.Images.texture(Identifier.of("client","textures/effects/top_glow.png"), 0, -30 + 30 * globalAnim, screenWidth, screenHeight, glowColor);
+            int glowColor = ColorUtil.replAlpha(ColorUtil.client(), bgAnim * 0.5F);
+            RenderUtil.Images.texture(Identifier.of("client","textures/effects/circles_effect.png"), 0, 30 - 30 * bgAnim, screenWidth, screenHeight, glowColor);
+            RenderUtil.Images.texture(Identifier.of("client","textures/effects/top_glow.png"), 0, -30 + 30 * bgAnim, screenWidth, screenHeight, glowColor);
 
-            if (!exit && globalAnim > 0.01F && globalAnim < 0.99F) {
-                float pulse = (globalAnim > 0.5F ? 1F - globalAnim : globalAnim) * 2F;
-                float scale = screenWidth / 1.75F * globalAnim;
+            if (!exit && bgAnim > 0.01F && bgAnim < 0.99F) {
+                float pulse = (bgAnim > 0.5F ? 1F - bgAnim : bgAnim) * 2F;
+                float scale = screenWidth / 1.75F * bgAnim;
                 float cx = screenWidth / 2F;
                 float cy = screenHeight / 2F;
                 RenderUtil.Render2D.rect(cx - scale, cy - scale, scale * 2, scale * 2, ColorUtil.getColor(255, 0.2F * pulse), scale);
@@ -380,7 +436,7 @@ public class Menu extends Screen implements IMinecraft {
 
         if (effect("Частицы")) {
             spawnParticle(screenWidth, screenHeight);
-            renderParticles(globalAnim);
+            renderParticles(bgAnim);
         } else if (!particles.isEmpty()) {
             particles.clear();
         }
@@ -392,7 +448,32 @@ public class Menu extends Screen implements IMinecraft {
         float w = 420 * S;
         float h = 280 * S;
         float x = screenWidth / 2F - w / 2;
-        float y = screenHeight / 2F - h / 2 + (exit ? 60 * S - 60 * S * globalAnim : -60 * S + 60 * S * globalAnim);
+        // при сборке из осколков панель никуда не съезжает — она «остаётся на месте»
+        float slide = shatter() ? 0F : (exit ? 60 * S - 60 * S * globalAnim : -60 * S + 60 * S * globalAnim);
+        float y = screenHeight / 2F - h / 2 + slide;
+
+        panelX = x;
+        panelY = y;
+        panelW = w;
+        panelH = h;
+        panelScreenW = screenWidth;
+        panelScreenH = screenHeight;
+        panelKnown = true;
+
+        if (pendingAssemble) {
+            pendingAssemble = false;
+            shards.assemble(x, y, w, h, 8 * S, screenWidth, screenHeight, S);
+        }
+        if (!panelAnimStarted && shards.isAssembling() && shards.progress() >= 0.5F) {
+            panelAnimStarted = true;
+            glomalAnim.run(1, 0.2F, Easings.SINE_OUT);
+        }
+        // меню постояло на месте — теперь подменяем его мозаикой и рассыпаем
+        if (exit && !dissolveStarted && System.currentTimeMillis() - exitHoldStart >= SHATTER_HOLD_MS) {
+            dissolveStarted = true;
+            shards.dissolve(x, y, w, h, 8 * S, screenWidth, screenHeight, S);
+            glomalAnim.run(0, 0.1F, Easings.SINE_IN);
+        }
 
         Font draw = Fonts.sf_regular;
         Font regular = Fonts.sf_regular;
@@ -985,6 +1066,7 @@ public class Menu extends Screen implements IMinecraft {
         if (settingScrollTarget > settingMaxScroll) settingScrollTarget = settingMaxScroll;
 
         Scissor.disable();
+        shards.render();
         Render2D.endOverlay();
         if (context != null) context.getMatrices().popMatrix();
     }
@@ -992,9 +1074,38 @@ public class Menu extends Screen implements IMinecraft {
     public void openHandsEditor() { beforeEditorOpen(); handsEditor.open(); GuiSounds.editor(); }
     public void openPreviewEditor(Module target) { beforeEditorOpen(); PreviewEditor.getInstance().open(target); GuiSounds.editor(); }
     public void openCrosshairEditor() { beforeEditorOpen(); CrosshairEditor.getInstance().open(); GuiSounds.editor(); }
-    private void beforeEditorOpen() { exit = false; glomalAnim.run(1, 0.2F, Easings.QUAD_OUT); }
+    private void beforeEditorOpen() { exit = false; shards.reset(); pendingAssemble = false; panelAnimStarted = true; glomalAnim.run(1, 0.2F, Easings.QUAD_OUT); }
     @Override public void removed() { OverlayEditors.closeAll(); super.removed(); }
-    private void closeCheck() { if (exit && glomalAnim.isFinished()) { close(); GuiMusicPlayer.stop(); exit = false; } }
+    private void closeCheck() { if (exit && dissolveStarted && glomalAnim.isFinished()) { close(); GuiMusicPlayer.stop(); exit = false; } }
+
+    /**
+     * Догоняющий распад: экран уже закрыт (управление вернулось игроку), а осколки
+     * ещё разлетаются — их дорисовывает HUD. Пока меню открыто, они рисуются в
+     * {@link #renderOverlay}, поэтому здесь такой кадр пропускаем.
+     */
+    public void renderShardsAfterClose() {
+        if (mc.currentScreen == this) return;
+        if (!shards.isDissolving()) return;
+        shards.render();
+    }
+
+    /** Запуск закрытия: панель замирает на месте, потом рассыпается на осколки. */
+    private void startExit() {
+        if (exit) return;
+        exit = true;
+        GuiSounds.close();
+        pendingAssemble = false;
+        panelAnimStarted = true;
+        if (shatter() && panelKnown) {
+            // панель пока не трогаем — распад стартует по таймеру в renderOverlay
+            exitHoldStart = System.currentTimeMillis();
+            dissolveStarted = false;
+        } else {
+            shards.reset();
+            dissolveStarted = true;
+            glomalAnim.run(0, 0.3F, Easings.SINE_IN);
+        }
+    }
 
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
@@ -1003,6 +1114,9 @@ public class Menu extends Screen implements IMinecraft {
 
         OverlayEditor editor = OverlayEditors.active();
         if (editor != null) { return editor.mouseClicked(mouseX, mouseY, click.button()); }
+
+        // меню уже закрывается (замерло перед распадом) — клики игнорируем
+        if (exit) return true;
 
         if (bindingModule != null) { bindingModule = null; GuiSounds.bindReset(); return true; }
 
@@ -1254,6 +1368,13 @@ public class Menu extends Screen implements IMinecraft {
             return true;
         }
 
+        // бинд Click Gui (по умолчанию правый шифт) закрывает меню — открытие/закрытие одной клавишей
+        int toggle = toggleKey();
+        if (toggle != -1 && key == toggle) {
+            if (toggleArmed) startExit();
+            return true;
+        }
+
         return super.keyPressed(input);
     }
 
@@ -1307,6 +1428,6 @@ public class Menu extends Screen implements IMinecraft {
     @Override public boolean shouldCloseOnEsc() {
         OverlayEditor editor = OverlayEditors.active();
         if (editor != null) { editor.saveAndExit(); return false; }
-        if (!exit) { glomalAnim.run(0, 0.3F, Easings.SINE_IN); exit = true; GuiSounds.close(); } return false;
+        startExit(); return false;
     }
 }
