@@ -1,0 +1,120 @@
+Compiled from "class_10151.java"
+class net.minecraft.class_10151$class_10170 implements java.lang.AutoCloseable {
+  private final net.minecraft.class_10151$class_10153 field_54022;
+
+  final java.util.Map<net.minecraft.class_2960, java.util.Optional<net.minecraft.class_279>> field_54025;
+
+  boolean field_55152;
+
+  final net.minecraft.class_10151 field_54021;
+
+  net.minecraft.class_10151$class_10170(net.minecraft.class_10151, net.minecraft.class_10151$class_10153);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: putfield      #39                 // Field field_54021:Lnet/minecraft/class_10151;
+       5: aload_0
+       6: invokespecial #42                 // Method java/lang/Object."<init>":()V
+       9: aload_0
+      10: new           #44                 // class java/util/HashMap
+      13: dup
+      14: invokespecial #45                 // Method java/util/HashMap."<init>":()V
+      17: putfield      #47                 // Field field_54025:Ljava/util/Map;
+      20: aload_0
+      21: aload_2
+      22: putfield      #49                 // Field field_54022:Lnet/minecraft/class_10151$class_10153;
+      25: return
+
+  public net.minecraft.class_279 method_63523(net.minecraft.class_2960, java.util.Set<net.minecraft.class_2960>) throws net.minecraft.class_10151$class_10152;
+    Code:
+       0: aload_0
+       1: getfield      #47                 // Field field_54025:Ljava/util/Map;
+       4: aload_1
+       5: invokeinterface #62,  2           // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+      10: checkcast     #64                 // class java/util/Optional
+      13: astore_3
+      14: aload_3
+      15: ifnull        27
+      18: aload_3
+      19: aconst_null
+      20: invokevirtual #67                 // Method java/util/Optional.orElse:(Ljava/lang/Object;)Ljava/lang/Object;
+      23: checkcast     #69                 // class net/minecraft/class_279
+      26: areturn
+      27: aload_0
+      28: aload_1
+      29: aload_2
+      30: invokevirtual #72                 // Method method_63527:(Lnet/minecraft/class_2960;Ljava/util/Set;)Lnet/minecraft/class_279;
+      33: astore        4
+      35: aload_0
+      36: getfield      #47                 // Field field_54025:Ljava/util/Map;
+      39: aload_1
+      40: aload         4
+      42: invokestatic  #76                 // Method java/util/Optional.of:(Ljava/lang/Object;)Ljava/util/Optional;
+      45: invokeinterface #80,  3           // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+      50: pop
+      51: aload         4
+      53: areturn
+
+  private net.minecraft.class_279 method_63527(net.minecraft.class_2960, java.util.Set<net.minecraft.class_2960>) throws net.minecraft.class_10151$class_10152;
+    Code:
+       0: aload_0
+       1: getfield      #49                 // Field field_54022:Lnet/minecraft/class_10151$class_10153;
+       4: getfield      #91                 // Field net/minecraft/class_10151$class_10153.comp_3107:Ljava/util/Map;
+       7: aload_1
+       8: invokeinterface #62,  2           // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+      13: checkcast     #93                 // class net/minecraft/class_9962
+      16: astore_3
+      17: aload_3
+      18: ifnonnull     38
+      21: new           #15                 // class net/minecraft/class_10151$class_10152
+      24: dup
+      25: aload_1
+      26: invokestatic  #99                 // Method java/lang/String.valueOf:(Ljava/lang/Object;)Ljava/lang/String;
+      29: invokedynamic #111,  0            // InvokeDynamic #0:makeConcatWithConstants:(Ljava/lang/String;)Ljava/lang/String;
+      34: invokespecial #114                // Method net/minecraft/class_10151$class_10152."<init>":(Ljava/lang/String;)V
+      37: athrow
+      38: aload_3
+      39: aload_0
+      40: getfield      #39                 // Field field_54021:Lnet/minecraft/class_10151;
+      43: getfield      #118                // Field net/minecraft/class_10151.field_53940:Lnet/minecraft/class_1060;
+      46: aload_2
+      47: aload_1
+      48: aload_0
+      49: getfield      #39                 // Field field_54021:Lnet/minecraft/class_10151;
+      52: getfield      #122                // Field net/minecraft/class_10151.field_60129:Lnet/minecraft/class_11278;
+      55: invokestatic  #126                // Method net/minecraft/class_279.method_1256:(Lnet/minecraft/class_9962;Lnet/minecraft/class_1060;Ljava/util/Set;Lnet/minecraft/class_2960;Lnet/minecraft/class_11278;)Lnet/minecraft/class_279;
+      58: areturn
+
+  public void close();
+    Code:
+       0: aload_0
+       1: getfield      #47                 // Field field_54025:Ljava/util/Map;
+       4: invokeinterface #132,  1          // InterfaceMethod java/util/Map.values:()Ljava/util/Collection;
+       9: invokedynamic #151,  0            // InvokeDynamic #1:accept:()Ljava/util/function/Consumer;
+      14: invokeinterface #157,  2          // InterfaceMethod java/util/Collection.forEach:(Ljava/util/function/Consumer;)V
+      19: aload_0
+      20: getfield      #47                 // Field field_54025:Ljava/util/Map;
+      23: invokeinterface #160,  1          // InterfaceMethod java/util/Map.clear:()V
+      28: return
+
+  public java.lang.String method_68498(net.minecraft.class_2960, com.mojang.blaze3d.shaders.ShaderType);
+    Code:
+       0: aload_0
+       1: getfield      #49                 // Field field_54022:Lnet/minecraft/class_10151$class_10153;
+       4: getfield      #166                // Field net/minecraft/class_10151$class_10153.comp_3106:Ljava/util/Map;
+       7: new           #18                 // class net/minecraft/class_10151$class_10155
+      10: dup
+      11: aload_1
+      12: aload_2
+      13: invokespecial #169                // Method net/minecraft/class_10151$class_10155."<init>":(Lnet/minecraft/class_2960;Lcom/mojang/blaze3d/shaders/ShaderType;)V
+      16: invokeinterface #62,  2           // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+      21: checkcast     #95                 // class java/lang/String
+      24: areturn
+
+  private static void method_71129(java.util.Optional);
+    Code:
+       0: aload_0
+       1: invokedynamic #176,  0            // InvokeDynamic #2:accept:()Ljava/util/function/Consumer;
+       6: invokevirtual #179                // Method java/util/Optional.ifPresent:(Ljava/util/function/Consumer;)V
+       9: return
+}

@@ -1,6 +1,15 @@
 package ru.white.utils.math;
 
 public class Interpolator {
+    /**
+     * int-специализация {@link #lerp}: та же формула и то же округление,
+     * но без упаковки в Integer (важно для цветов — вызывается по 4 раза
+     * на каждый overCol/interpolate, тысячи раз за кадр).
+     */
+    public static int lerpInt(int input, int target, double step) {
+        return (int) Math.round(input + step * (target - input));
+    }
+
     public static <T extends Number> T lerp(T input, T target, double step) {
         double start = input.doubleValue();
         double end = target.doubleValue();

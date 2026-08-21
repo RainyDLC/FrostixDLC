@@ -135,60 +135,117 @@ public final class ModuleManager extends LinkedHashMap<Class<? extends Module>, 
     }
 
     public void addSorted(Module... modules) {
-        Arrays.stream(modules)
-                .forEach(module -> this.put(module.getClass(), module));
+        for (Module module : modules) {
+            this.put(module.getClass(), module);
+        }
     }
 
     public void unregister(Module... modules) {
-        Arrays.stream(modules).forEach(module -> this.remove(module.getClass()));
+        for (Module module : modules) {
+            this.remove(module.getClass());
+        }
     }
 
     @EventHandler
     public void onKeyboardPress(EventKey event) {
-            this.values().stream()
-                    .filter(module -> module.getKey() == event.getKey())
-                    //.filter(module -> !(module instanceof ClickGui))
-                    .forEach(Module::toggle);
+        // Обычный цикл вместо stream: обработчик клавиш дёргается на каждое нажатие
+        for (Module module : values()) {
+            if (module.getKey() == event.getKey()) {
+                module.toggle();
+            }
+        }
     }
 
 
-
     public <T extends Module> T get(final String name) {
-        return this.values().stream()
-                .filter(module -> module.getName().equalsIgnoreCase(name))
-                .map(module -> (T) module)
-                .findFirst()
-                .orElse(null);
+        return (T) getModule(name);
     }
 
 
     public <T extends Module> T get(final Class<T> clazz) {
-        return this.values().stream()
-                .filter(module -> clazz.isAssignableFrom(module.getClass()))
-                .map(clazz::cast)
-                .findFirst()
-                .orElse(null);
+        // Карта уже ключуется классом модуля — прямой поиск вместо линейного скана
+        Module direct = super.get(clazz);
+        if (direct != null) return clazz.cast(direct);
+
+        // Запрос по суперклассу/интерфейсу: обход в том же (отсортированном)
+        // порядке, что и раньше, — выбирается тот же модуль
+        for (Module module : values()) {
+            if (clazz.isAssignableFrom(module.getClass())) return clazz.cast(module);
+        }
+        return null;
     }
 
 
     public List<Module> get(final Category category) {
-        return this.values().stream()
-                .filter(module -> module.getCategory() == category)
-                .collect(Collectors.toList());
+        List<Module> result = new ArrayList<>();
+        for (Module module : values()) {
+            if (module.getCategory() == category) result.add(module);
+        }
+        return result;
     }
 
 
     public Module getModule(String name) {
-        return this.values().stream()
-                .filter(module -> module.getName().equalsIgnoreCase(name))
-                .findFirst()
-                .orElse(null);
+        return byName().get(name.toLowerCase(Locale.ROOT));
+    }
+
+    // ── кэш отсортированного списка и поиска по имени ─────────────────────
+    // values() вызывался по несколько раз за кадр (ClickGui, HUD-элементы),
+    // каждый раз пересобирая и пересортировывая список из ~80 модулей
+    // компаратором CASE_INSENSITIVE_ORDER. Состав модулей меняется только
+    // при init/unregister, поэтому результат кэшируется.
+
+    private transient List<Module> sortedCache;
+    private transient Map<String, Module> nameCache;
+
+    private void invalidateCaches() {
+        sortedCache = null;
+        nameCache = null;
+    }
+
+    @Override
+    public Module put(Class<? extends Module> key, Module value) {
+        invalidateCaches();
+        return super.put(key, value);
+    }
+
+    @Override
+    public Module remove(Object key) {
+        invalidateCaches();
+        return super.remove(key);
+    }
+
+    @Override
+    public void clear() {
+        invalidateCaches();
+        super.clear();
+    }
+
+    private Map<String, Module> byName() {
+        Map<String, Module> cached = nameCache;
+        if (cached == null) {
+            cached = new HashMap<>();
+            // Обход в том же (отсортированном) порядке, что и раньше у values():
+            // при совпадении имён побеждает тот же модуль, что и до кэширования
+            for (Module module : values()) {
+                cached.putIfAbsent(module.getName().toLowerCase(Locale.ROOT), module);
+            }
+            nameCache = cached;
+        }
+        return cached;
     }
 
     @Override
     public Collection<Module> values() {
-        return super.values().stream()
-                .sorted(Comparator.comparing(Module::getName, String.CASE_INSENSITIVE_ORDER))
-                .collect(Collectors.toList());
+        List<Module> cached = sortedCache;
+        if (cached == null) {
+            List<Module> sorted = new ArrayList<>(super.values());
+            sorted.sort(Comparator.comparing(Module::getName, String.CASE_INSENSITIVE_ORDER));
+            // Только для чтения: список переиспользуется между кадрами, случайная
+            // правка снаружи испортила бы кэш
+            cached = Collections.unmodifiableList(sorted);
+            sortedCache = cached;
+        }
+        return cached;
     }
 }

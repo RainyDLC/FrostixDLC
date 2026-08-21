@@ -106,6 +106,7 @@ public class MathUtil implements IMinecraft {
     }
 
     private static final Random RANDOM = new Random();
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     public static float randomGaussian(double min, double max) {
         double mean = (min + max) * 0.5;
@@ -142,7 +143,11 @@ public class MathUtil implements IMinecraft {
         return Math.max(min, Math.min(max, value));
     }
     public float randomLerp(float min, float max) {
-        return Interpolator.lerp(max, min, new SecureRandom().nextFloat());
+        // Раньше здесь создавался new SecureRandom() на КАЖДЫЙ вызов (а вызывается
+        // он по несколько раз за тик из RotationProcess/AttackAura). Конструктор
+        // SecureRandom дорог: поиск провайдера + сбор энтропии ОС.
+        // Тот же генератор, то же распределение — просто один экземпляр.
+        return Interpolator.lerp(max, min, SECURE_RANDOM.nextFloat());
     }    public static double getRandomNumberBetween(double min, double max) {
         return Math.random() * (max - min) + min;
     }

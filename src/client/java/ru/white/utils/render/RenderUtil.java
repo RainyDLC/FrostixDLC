@@ -185,20 +185,21 @@ public class RenderUtil implements IMinecraft {
           //  Draw.glow(x, y, width, height, color, topLeft, topRight, bottomRight, bottomLeft, glowSize, strength, softness);
         }
 
+        private static final int[] CLIENT_RECT_COLORS = new int[4];
+
         public static void clientRect(float x, float y, float width, float height,
                                       float alphaPC, float radius) {
             int color = ColorUtil.getColor(255, alphaPC);
+            int a = ColorUtil.alpha(color) << 24;
 
-            gradientRect(
-                    x, y, width, height,
-                    new int[]{
-                            new Color(24, 25, 31, ColorUtil.alpha(color)).getRGB(), // верх
-                            new Color(30, 32, 37, ColorUtil.alpha(color)).getRGB(),
-                            new Color(14, 15, 21, ColorUtil.alpha(color)).getRGB(),
-                            new Color(13, 14, 20, ColorUtil.alpha(color)).getRGB()
-                    },
-                    radius
-            );
+            // Те же ARGB-значения, что и раньше через new Color(...).getRGB(),
+            // но без аллокаций на каждый кадр
+            CLIENT_RECT_COLORS[0] = a | (24 << 16) | (25 << 8) | 31;  // верх
+            CLIENT_RECT_COLORS[1] = a | (30 << 16) | (32 << 8) | 37;
+            CLIENT_RECT_COLORS[2] = a | (14 << 16) | (15 << 8) | 21;
+            CLIENT_RECT_COLORS[3] = a | (13 << 16) | (14 << 8) | 20;
+
+            gradientRect(x, y, width, height, CLIENT_RECT_COLORS, radius);
         }
 
         public static void gradientRect(float x, float y, float width, float height,

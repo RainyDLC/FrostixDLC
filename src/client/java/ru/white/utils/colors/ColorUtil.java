@@ -6,15 +6,11 @@ import ru.white.theme.Theme;
 import ru.white.theme.ThemeColor;
 import ru.white.utils.math.Interpolator;
 import it.unimi.dsi.fastutil.chars.Char2IntArrayMap;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.experimental.UtilityClass;
 import net.minecraft.util.math.MathHelper;
 import org.lwjgl.opengl.GL11;
 
 import java.awt.*;
-import java.util.concurrent.*;
 import java.util.regex.Pattern;
 
 @SuppressWarnings("unused")
@@ -38,16 +34,17 @@ public class ColorUtil {
         float progress = MathHelper.clamp(health / maxHealth, 0F, 1F);
 
         // Красный -> Оранжевый -> Жёлтый -> Зелёный
+        // (константы вместо new Color(...).getRGB() — те же значения ARGB)
         if (progress <= 0.5F) {
             return interpolateColor2(
-                    new Color(255, 0, 0).getRGB(),      // red
-                    new Color(255, 255, 0).getRGB(),    // yellow
+                    0xFFFF0000,                         // red
+                    0xFFFFFF00,                         // yellow
                     progress / 0.5F
             );
         } else {
             return interpolateColor2(
-                    new Color(255, 255, 0).getRGB(),    // yellow
-                    new Color(0, 255, 0).getRGB(),      // green
+                    0xFFFFFF00,                         // yellow
+                    0xFF00FF00,                         // green
                     (progress - 0.5F) / 0.5F
             );
         }
@@ -79,34 +76,27 @@ public class ColorUtil {
     public static int interpolateColor2(int color1, int color2, float amount) {
         amount = MathHelper.clamp(amount, 0F, 1F);
 
-        Color c1 = new Color(color1, true);
-        Color c2 = new Color(color2, true);
+        int a1 = (color1 >> 24) & 0xFF, r1 = (color1 >> 16) & 0xFF, g1 = (color1 >> 8) & 0xFF, b1 = color1 & 0xFF;
+        int a2 = (color2 >> 24) & 0xFF, r2 = (color2 >> 16) & 0xFF, g2 = (color2 >> 8) & 0xFF, b2 = color2 & 0xFF;
 
-        int red = (int) (c1.getRed() + (c2.getRed() - c1.getRed()) * amount);
-        int green = (int) (c1.getGreen() + (c2.getGreen() - c1.getGreen()) * amount);
-        int blue = (int) (c1.getBlue() + (c2.getBlue() - c1.getBlue()) * amount);
-        int alpha = (int) (c1.getAlpha() + (c2.getAlpha() - c1.getAlpha()) * amount);
+        int red = (int) (r1 + (r2 - r1) * amount);
+        int green = (int) (g1 + (g2 - g1) * amount);
+        int blue = (int) (b1 + (b2 - b1) * amount);
+        int alpha = (int) (a1 + (a2 - a1) * amount);
 
-        return new Color(red, green, blue, alpha).getRGB();
+        return (alpha << 24) | (red << 16) | (green << 8) | blue;
     }
     public static int interpolateColor(int color1, int color2, float amount, boolean trueColor) {
         amount = Math.min(1, Math.max(0, amount));
 
-        Color c1 = new Color(color1, true);
-        Color c2 = new Color(color2, true);
+        int a1 = (color1 >> 24) & 0xFF, r1 = (color1 >> 16) & 0xFF, g1 = (color1 >> 8) & 0xFF, b1 = color1 & 0xFF;
+        int a2 = (color2 >> 24) & 0xFF, r2 = (color2 >> 16) & 0xFF, g2 = (color2 >> 8) & 0xFF, b2 = color2 & 0xFF;
 
-        return new Color(
-                (int) (c1.getRed() + (c2.getRed() - c1.getRed()) * amount),
-                (int) (c1.getGreen() + (c2.getGreen() - c1.getGreen()) * amount),
-                (int) (c1.getBlue() + (c2.getBlue() - c1.getBlue()) * amount),
-                (int) (c1.getAlpha() + (c2.getAlpha() - c1.getAlpha()) * amount)
-        ).getRGB();
+        return (((int) (a1 + (a2 - a1) * amount)) << 24)
+                | (((int) (r1 + (r2 - r1) * amount)) << 16)
+                | (((int) (g1 + (g2 - g1) * amount)) << 8)
+                | ((int) (b1 + (b2 - b1) * amount));
     }
-
-    private final long CACHE_EXPIRATION_TIME = 60 * 1000;
-    private final ConcurrentHashMap<ColorKey, CacheEntry> colorCache = new ConcurrentHashMap<>();
-    private final ScheduledExecutorService cacheCleaner = Executors.newScheduledThreadPool(1);
-    private final DelayQueue<CacheEntry> cleanupQueue = new DelayQueue<>();
 
     public static int applyOpacity(int color, float opacity) {
         // Извлекаем текущую альфу (сдвигаем на 24 бита вправо и берем последние 8 бит)
@@ -226,10 +216,12 @@ public class ColorUtil {
 
     public static int skyRainbow(int speed, int index) {
         double angle = (int) ((System.currentTimeMillis() / speed + index) % 360);
-        return Color.getHSBColor(
+        // Color.getHSBColor(...).hashCode() возвращает то же ARGB-значение, что и HSBtoRGB,
+        // но без аллокации Color
+        return Color.HSBtoRGB(
                 ((angle %= 360) / 360.0) < 0.5 ? -((float) (angle / 360.0)) : (float) (angle / 360.0),
                 0.5F,
-                1.0F).hashCode();
+                1.0F);
     }
 
     public float[] normalize(Color color) {
@@ -296,18 +288,6 @@ public class ColorUtil {
         if (v > 1F)
             return 1F;
         return v;
-    }
-
-    static {
-        cacheCleaner.scheduleWithFixedDelay(() -> {
-            CacheEntry entry = cleanupQueue.poll();
-            while (entry != null) {
-                if (entry.isExpired()) {
-                    colorCache.remove(entry.getKey());
-                }
-                entry = cleanupQueue.poll();
-            }
-        }, 0, 1, TimeUnit.SECONDS);
     }
 
     public static float[] rgba(final int color) {
@@ -464,10 +444,10 @@ public class ColorUtil {
     public int overCol(int color1, int color2, float percent01) {
         final float percent = MathHelper.clamp(percent01, 0F, 1F);
         return getColorRaw(
-                Interpolator.lerp(red(color1), red(color2), percent),
-                Interpolator.lerp(green(color1), green(color2), percent),
-                Interpolator.lerp(blue(color1), blue(color2), percent),
-                Interpolator.lerp(alpha(color1), alpha(color2), percent));
+                Interpolator.lerpInt(red(color1), red(color2), percent),
+                Interpolator.lerpInt(green(color1), green(color2), percent),
+                Interpolator.lerpInt(blue(color1), blue(color2), percent),
+                Interpolator.lerpInt(alpha(color1), alpha(color2), percent));
     }
 
     public int overCol(int color1, int color2) {
@@ -486,10 +466,10 @@ public class ColorUtil {
     public static int interpolate(int color1, int color2, double amount) {
         amount = (float) MathHelper.clamp(amount, 0, 1);
         return getColorRaw(
-                Interpolator.lerp(red(color1), red(color2), amount),
-                Interpolator.lerp(green(color1), green(color2), amount),
-                Interpolator.lerp(blue(color1), blue(color2), amount),
-                Interpolator.lerp(alpha(color1), alpha(color2), amount));
+                Interpolator.lerpInt(red(color1), red(color2), amount),
+                Interpolator.lerpInt(green(color1), green(color2), amount),
+                Interpolator.lerpInt(blue(color1), blue(color2), amount),
+                Interpolator.lerpInt(alpha(color1), alpha(color2), amount));
     }
 
     public int rainbow(int speed, int index, float saturation, float brightness, float opacity) {
@@ -592,11 +572,11 @@ public class ColorUtil {
             color = interpolate(second, third, (angle - 0.5f) * 2f);
         }
 
-        float[] hs = rgba(color);
+        // Тот же float-роундтрип, что и раньше (через rgba()), но без промежуточного float[4]
         float[] hsb = Color.RGBtoHSB(
-                (int) (hs[0] * 255),
-                (int) (hs[1] * 255),
-                (int) (hs[2] * 255),
+                (int) (((color >> 16 & 0xFF) / 255f) * 255),
+                (int) (((color >> 8 & 0xFF) / 255f) * 255),
+                (int) (((color & 0xFF) / 255f) * 255),
                 null
         );
 
@@ -610,8 +590,12 @@ public class ColorUtil {
         int angle = (int) ((System.currentTimeMillis() / speed + index) % 360);
         angle = (angle > 180 ? 360 - angle : angle) + 180;
         int color = interpolate(start, end, MathHelper.clamp(angle / 180f - 1, 0, 1));
-        float[] hs = rgba(color);
-        float[] hsb = Color.RGBtoHSB((int) (hs[0] * 255), (int) (hs[1] * 255), (int) (hs[2] * 255), null);
+        float[] hsb = Color.RGBtoHSB(
+                (int) (((color >> 16 & 0xFF) / 255f) * 255),
+                (int) (((color >> 8 & 0xFF) / 255f) * 255),
+                (int) (((color & 0xFF) / 255f) * 255),
+                null
+        );
 
         hsb[1] *= 1.5F;
         hsb[1] = Math.min(hsb[1], 1.0f);
@@ -622,13 +606,10 @@ public class ColorUtil {
 
 
     public static int getColor(int red, int green, int blue, int alpha) {
-        ColorKey key = new ColorKey(red, green, blue, alpha);
-        CacheEntry cacheEntry = colorCache.computeIfAbsent(key, k -> {
-            CacheEntry newEntry = new CacheEntry(k, computeColor(red, green, blue, alpha), CACHE_EXPIRATION_TIME);
-            cleanupQueue.offer(newEntry);
-            return newEntry;
-        });
-        return cacheEntry.getColor();
+        // Раньше здесь был ConcurrentHashMap + DelayQueue + поток-чистильщик,
+        // кэширующие четыре сдвига. Хэш-поиск и аллокация ключа стоили дороже
+        // самого вычисления, поэтому считаем напрямую — результат бит-в-бит тот же.
+        return computeColor(red, green, blue, alpha);
     }
     public int getColorRaw(int red, int green, int blue, int alpha) {
         return ((MathHelper.clamp(alpha, 0, 255) << 24) |
@@ -658,46 +639,7 @@ public class ColorUtil {
         return red + "," + green + "," + blue + "," + alpha;
     }
 
-
-    @Getter
-    @RequiredArgsConstructor
-    @EqualsAndHashCode
-    private static class ColorKey {
-        final int red, green, blue, alpha;
-    }
-    @Getter
-    private static class CacheEntry implements Delayed {
-        private final ColorKey key;
-        private final int color;
-        private final long expirationTime;
-
-        CacheEntry(ColorKey key, int color, long ttl) {
-            this.key = key;
-            this.color = color;
-            this.expirationTime = System.currentTimeMillis() + ttl;
-        }
-
-        @Override
-        public long getDelay(TimeUnit unit) {
-            long delay = expirationTime - System.currentTimeMillis();
-            return unit.convert(delay, TimeUnit.MILLISECONDS);
-        }
-
-        @Override
-        public int compareTo(Delayed other) {
-            if (other instanceof CacheEntry) {
-                return Long.compare(this.expirationTime, ((CacheEntry) other).expirationTime);
-            }
-            return 0;
-        }
-
-        public boolean isExpired() {
-            return System.currentTimeMillis() > expirationTime;
-        }
-
-    }
-
+    /** Оставлено для совместимости: кэш цветов больше не использует отдельный поток. */
     public void shutdownCacheCleaner() {
-        cacheCleaner.shutdown();
     }
 }
