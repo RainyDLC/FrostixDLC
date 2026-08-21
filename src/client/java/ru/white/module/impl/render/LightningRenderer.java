@@ -2,6 +2,7 @@ package ru.white.module.impl.render;
 
 import ru.white.manager.event_impl.EventRender3D;
 import ru.white.utils.annotation.IMinecraft;
+import ru.white.utils.render.LightningPath;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
@@ -224,43 +225,13 @@ public class LightningRenderer implements IMinecraft {
         double spikeLength = 0.25 + random.nextDouble() * 0.3;
         Vec3d end = start.add(dx * spikeLength, dy * spikeLength, dz * spikeLength);
 
-        List<Vec3d> points = generateLightningPath(start, end, LIGHTNING_DEPTH, spikeLength * 0.4);
+        List<Vec3d> points = LightningPath.generate(start, end, LIGHTNING_DEPTH, spikeLength * 0.4, random);
 
         Bolt bolt = new Bolt();
         bolt.points = points;
         bolt.spawnTime = System.currentTimeMillis();
         bolt.lifetimeMs = 130 + random.nextInt(140);
         return bolt;
-    }
-
-    private List<Vec3d> generateLightningPath(Vec3d start, Vec3d end, int depth, double maxOffset) {
-        if (depth <= 0) {
-            List<Vec3d> result = new ArrayList<>(2);
-            result.add(start);
-            result.add(end);
-            return result;
-        }
-
-        Vec3d dir = end.subtract(start);
-        Vec3d mid = start.add(dir.multiply(0.5));
-        Vec3d perp = randomPerpendicular(dir);
-        double offset = (random.nextDouble() - 0.5) * 2.0 * maxOffset;
-        Vec3d displacedMid = mid.add(perp.multiply(offset));
-
-        List<Vec3d> left = generateLightningPath(start, displacedMid, depth - 1, maxOffset * 0.5);
-        List<Vec3d> right = generateLightningPath(displacedMid, end, depth - 1, maxOffset * 0.5);
-        left.remove(left.size() - 1);
-        left.addAll(right);
-        return left;
-    }
-
-    private Vec3d randomPerpendicular(Vec3d dir) {
-        Vec3d normDir = dir.normalize();
-        Vec3d arbitrary = Math.abs(normDir.y) < 0.9 ? new Vec3d(0, 1, 0) : new Vec3d(1, 0, 0);
-        Vec3d perp1 = normDir.crossProduct(arbitrary).normalize();
-        Vec3d perp2 = normDir.crossProduct(perp1).normalize();
-        double angle = random.nextDouble() * Math.PI * 2;
-        return perp1.multiply(Math.cos(angle)).add(perp2.multiply(Math.sin(angle)));
     }
 
     private int lerpRgb(int rgbA, int rgbB, float t) {
