@@ -161,9 +161,6 @@ public class GlassHands extends Module {
         applyRendererSettings();
         if (event.getPhase() == GlassHandsRenderEvent.Phase.PRE) {
             renderer.captureSceneBeforeHands();
-        } else if (event.getPhase() == GlassHandsRenderEvent.Phase.POST) {
-            renderer.captureSceneAfterHands();
-            renderer.renderGlassEffect();
         }
     }
 

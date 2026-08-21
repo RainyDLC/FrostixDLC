@@ -5,11 +5,13 @@ import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.systems.RenderSystem;
 import ru.white.Client;
 import ru.white.module.impl.render.NoRender;
+import ru.white.module.impl.render.GlassHands;
 import ru.white.screen.Menu;
 import ru.white.inventorypreset.InventoryPresetOverlay;
 import ru.white.screen.HandsEditor;
 import ru.white.utils.player.Spectator;
 import ru.white.utils.render.RenderUtil;
+import ru.white.utils.render.GlassHandsRenderer;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.render.GuiRenderer;
@@ -165,6 +167,20 @@ public abstract class GameRenderMixin {
         HandsEditor editor = HandsEditor.getInstance();
         if (editor.isActive()) {
             editor.captureAfterHands();
+            return;
+        }
+
+        // HeldItemRenderer uses an OrderedRenderCommandQueue. Its TAIL runs
+        // before the queued hand/item geometry reaches the framebuffer, so a
+        // capture there produces an empty mask. This injection is immediately
+        // after Immediate.draw(), when the first-person item is really present.
+        GlassHands glassHands = GlassHands.getInstance();
+        if (glassHands != null && glassHands.isEnabled()) {
+            GlassHandsRenderer renderer = GlassHandsRenderer.getInstance();
+            if (renderer.isCapturing()) {
+                renderer.captureSceneAfterHands();
+                renderer.renderGlassEffect();
+            }
         }
     }
 
