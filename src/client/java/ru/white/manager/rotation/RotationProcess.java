@@ -1353,6 +1353,10 @@ public class RotationProcess extends Component {
             renderTargetHeart(e, immediate, aura, target, alphaPC);
         }
 
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Огонь")) {
+            renderTargetFire(e, immediate, aura, target, alphaPC);
+        }
+
 
         immediate.draw();
 
@@ -1943,6 +1947,138 @@ public class RotationProcess extends Component {
 
         matrices.pop();
         matrices.pop();
+    }
+
+    /**
+     * Огненный вихрь вокруг цели: частицы закручиваются по спирали и поднимаются
+     * вверх, меняя цвет красный → оранжевый → жёлтый и сужаясь к вершине.
+     * Слои рисуются строго последовательно: сначала внешнее свечение, потом ядра.
+     */
+    private void renderTargetFire(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                  AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int hurtRed = ColorUtil.getColor(255, 60, 40);
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
+        long timeDiff = currentTime - currentTimeSpirits;
+        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
+        currentTimeSpirits = currentTime;
+
+        int count = Math.max(4, aura.fireCount.getValue().intValue());
+        float speed = aura.fireSpeed.getValue();
+        float radiusMul = aura.fireRadius.getValue();
+        float heightMul = aura.fireHeight.getValue();
+        float atts = alpha_2.get();
+
+        float bodyH = target.getHeight();
+        float baseR = (target.getWidth() * 0.55f + 0.22f) * radiusMul;
+        float riseH = bodyH * 0.95f * heightMul;
+        float tSec = animationNurik / 60f;
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+        var camRot = mc.gameRenderer.getCamera().getRotation();
+
+        // предрасчёт частиц кадра
+        float[] oxArr = new float[count];
+        float[] oyArr = new float[count];
+        float[] ozArr = new float[count];
+        int[] outRgb = new int[count];
+        int[] coreRgb = new int[count];
+        float[] outAlpha = new float[count];
+        float[] outH = new float[count];
+
+        for (int i = 0; i < count; i++) {
+            float seed = (i * 0.618034f) % 1f;
+            float cyc = (tSec * 0.85f * speed + seed * 13.7f) % 1f;   // цикл жизни частицы
+
+            // вихрь: подъём с докручиванием, сужение кверху
+            float ang = seed * (float) Math.PI * 2f + tSec * 1.5f * speed + cyc * 2.6f;
+            float r = baseR * (1f - 0.45f * cyc) * (0.82f + 0.36f * (float) Math.sin(seed * 41f));
+            oxArr[i] = (float) Math.cos(ang) * r;
+            ozArr[i] = (float) Math.sin(ang) * r;
+            oyArr[i] = 0.05f + cyc * riseH
+                    + 0.03f * (float) Math.sin(tSec * 3f + seed * 31f);
+
+            // появление/затухание за цикл
+            float fadeIn = smooth01(cyc / 0.14f);
+            float fadeOut = 1f - smooth01((cyc - 0.7f) / 0.3f);
+            float env = Math.max(0f, fadeIn * fadeOut);
+            float flicker = 0.72f + 0.28f * (float) Math.sin(tSec * 13f + seed * 97f);
+
+            // цвет по высоте пламени: красный → оранжевый → жёлтый
+            int rgb;
+            if (cyc < 0.5f) rgb = fireLerp(0xFF3C0A, 0xFF8C19, cyc * 2f);
+            else rgb = fireLerp(0xFF8C19, 0xFFE16E, (cyc - 0.5f) * 2f);
+            outRgb[i] = ColorUtil.overCol(rgb, hurtRed, atts);
+            coreRgb[i] = ColorUtil.overCol(fireLerp(rgb, 0xFFF0B4, 0.55f), hurtRed, atts);
+
+            outAlpha[i] = alphaPC * env * flicker;
+            outH[i] = bodyH * (0.10f + 0.13f * cyc) * heightMul * (0.85f + 0.3f * flicker);
+        }
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
+
+        // --- Pass 1: мягкое внешнее свечение ---
+        VertexConsumer glowBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_2.png")));
+        for (int i = 0; i < count; i++) {
+            if (outAlpha[i] <= 0.02f) continue;
+            float h = outH[i] * 1.6f;
+
+            matrices.push();
+            matrices.translate(oxArr[i], oyArr[i], ozArr[i]);
+            matrices.multiply(camRot);
+            float s = h * 2f;
+            matrices.scale(s, s, s);
+            Matrix4f mm = matrices.peek().getPositionMatrix();
+            drawGradientQuad(glowBuf, mm, outRgb[i], outRgb[i], outRgb[i], outRgb[i],
+                    (int) (outAlpha[i] * 105));
+            matrices.pop();
+        }
+
+        // --- Pass 2: яркие ядра языков ---
+        VertexConsumer coreBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+        for (int i = 0; i < count; i++) {
+            if (outAlpha[i] <= 0.02f) continue;
+            float h = outH[i] * 0.75f;
+
+            matrices.push();
+            matrices.translate(oxArr[i], oyArr[i], ozArr[i]);
+            matrices.multiply(camRot);
+            float s = h * 2f;
+            matrices.scale(s, s, s);
+            Matrix4f mm = matrices.peek().getPositionMatrix();
+            drawGradientQuad(coreBuf, mm, coreRgb[i], coreRgb[i], coreRgb[i], coreRgb[i],
+                    (int) (outAlpha[i] * 220));
+            matrices.pop();
+        }
+
+        matrices.pop();
+    }
+
+    /** Плавный step 0..1 с клампом. */
+    private static float smooth01(float x) {
+        x = Math.max(0f, Math.min(1f, x));
+        return x * x * (3f - 2f * x);
+    }
+
+    private static int fireLerp(int a, int b, float t) {
+        t = Math.max(0f, Math.min(1f, t));
+        int ra = (a >> 16) & 0xFF, ga = (a >> 8) & 0xFF, ba = a & 0xFF;
+        int rb = (b >> 16) & 0xFF, gb = (b >> 8) & 0xFF, bb = b & 0xFF;
+        return ((int) (ra + (rb - ra) * t) << 16)
+                | ((int) (ga + (gb - ga) * t) << 8)
+                | (int) (ba + (bb - ba) * t);
     }
 
 
