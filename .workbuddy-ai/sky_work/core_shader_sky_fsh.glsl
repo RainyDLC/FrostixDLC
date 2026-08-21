@@ -67,7 +67,7 @@ float hash2(vec2 p) {
     return fract(p.x * p.y);
 }
 
-float noise2(vec2 p) {
+float noise2D(vec2 p) {
     vec2 i = floor(p);
     vec2 f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
@@ -82,7 +82,7 @@ float fbm2(vec2 p) {
     float value = 0.0;
     float amp = 0.5;
     for (int i = 0; i < 6; i++) {
-        value += noise2(p) * amp;
+        value += noise2D(p) * amp;
         p = mat2(1.6, 1.2, -1.2, 1.6) * p;
         amp *= 0.5;
     }
@@ -211,7 +211,7 @@ float cloudDensity(vec2 p, float time) {
     float r = 0.0;
     float weight = 0.8;
     for (int i = 0; i < 8; i++) {
-        r += abs(weight * noise2(uv));
+        r += abs(weight * noise2D(uv));
         uv = mat2(1.6, 1.2, -1.2, 1.6) * uv + time * 0.03;
         weight *= 0.7;
     }
@@ -219,7 +219,7 @@ float cloudDensity(vec2 p, float time) {
     uv = p - q * 0.6 + time * 0.03;
     weight = 0.2;
     for (int i = 0; i < 8; i++) {
-        f += weight * noise2(uv);
+        f += weight * noise2D(uv);
         uv = mat2(1.6, 1.2, -1.2, 1.6) * uv + time * 0.03;
         weight *= 0.6;
     }
