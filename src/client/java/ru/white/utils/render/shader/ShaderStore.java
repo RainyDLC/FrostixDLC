@@ -46,9 +46,12 @@ public final class ShaderStore {
         String key = id.getPath() + "|" + ext;          // напр. "core/rect|vsh"
 
         String enc = ShaderData.SOURCES.get(key);
-        if (enc == null) return null;
-
-        String raw = decrypt(enc);
+        // New shaders may intentionally remain regular resources while the
+        // generated embedded bundle is kept backwards-compatible.
+        String raw = enc != null
+                ? decrypt(enc)
+                : readResource(Identifier.of(id.getNamespace(), "shaders/" + id.getPath() + "." + ext));
+        if (raw == null) return null;
         // owner в форме ресурса — нужен только для относительных #moj_import "..."
         Identifier owner = Identifier.of(id.getNamespace(), "shaders/" + id.getPath() + "." + ext);
         String resolved = resolveImports(raw, owner, new HashSet<>());
