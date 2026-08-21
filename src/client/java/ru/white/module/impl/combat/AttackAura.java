@@ -97,7 +97,7 @@ public class AttackAura extends Module {
     public ModeSetting typeSprint = new ModeSetting(this,"Тип спринта", "Packet","Silent","Legit");
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
 
-    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Не отображать");
+    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Не отображать");
 
     public SliderSetting cubeSize = new SliderSetting(this,"Размер куба",1.15F,0.6F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
     public SliderSetting cubeRotateSpeed = new SliderSetting(this,"Скорость вращения куба",1.2F,0.2F,4.0F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
@@ -108,6 +108,11 @@ public class AttackAura extends Module {
     public SliderSetting lightningCount = new SliderSetting(this,"Кол-во молний",16,4,48,1).setVisible(() -> typeTargetESP.is("Молнии"));
     public SliderSetting lightningSpeed = new SliderSetting(this,"Скорость молний",42,10,120,1).setVisible(() -> typeTargetESP.is("Молнии"));
     public BooleanSetting lightningHit = new BooleanSetting(this,"Красный при ударе", false).setVisible(() -> typeTargetESP.is("Молнии"));
+
+    public SliderSetting crystalCount = new SliderSetting(this,"Кол-во кристаллов",14,4,32,1).setVisible(() -> typeTargetESP.is("Кристаллы"));
+    public SliderSetting crystalSpeed = new SliderSetting(this,"Скорость вращения",1.0F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Кристаллы"));
+    public SliderSetting crystalRadius = new SliderSetting(this,"Радиус орбиты",1.0F,0.4F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Кристаллы"));
+    public SliderSetting crystalSize = new SliderSetting(this,"Размер кристаллов",0.12F,0.04F,0.35F,0.01F).setVisible(() -> typeTargetESP.is("Кристаллы"));
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
             new BooleanSetting("Умные криты", false),

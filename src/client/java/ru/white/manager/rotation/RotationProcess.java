@@ -1334,6 +1334,10 @@ public class RotationProcess extends Component {
             lightningRenderer.render(e, immediate, target, alphaPC);
         }
 
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Кристаллы")) {
+            renderTargetCrystals(e, immediate, aura, target, alphaPC);
+        }
+
 
         immediate.draw();
 
@@ -1376,6 +1380,136 @@ public class RotationProcess extends Component {
         buf.vertex(m,  s, -s, -s).color(color); buf.vertex(m,  s,  s, -s).color(color);
         buf.vertex(m,  s, -s,  s).color(color); buf.vertex(m,  s,  s,  s).color(color);
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m, -s,  s,  s).color(color);
+    }
+
+    /** Рой кристаллов-октаэдров, вращающихся вокруг таргета. */
+    private void renderTargetCrystals(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                      AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
+        int color = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC), redColor, alpha_2.get());
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
+        long timeDiff = currentTime - currentTimeSpirits;
+        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
+        currentTimeSpirits = currentTime;
+
+        float count = Math.max(1, aura.crystalCount.getValue().intValue());
+        float orbitSpeed = aura.crystalSpeed.getValue();
+        float radius = aura.crystalRadius.getValue() + target.getWidth() * 0.3f + 0.15f;
+        float size = aura.crystalSize.getValue();
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+
+        float centerY = target.getHeight() * 0.55f;
+        float heightSpread = target.getHeight() * 0.28f;
+
+        int glowColor = ColorUtil.multAlpha(color, 0.3f);
+        int fillTop = ColorUtil.replAlpha(color, (int) (alphaPC * 80));
+        int fillBottom = ColorUtil.replAlpha(color, (int) (alphaPC * 40));
+        int lineColor = ColorUtil.replAlpha(color, (int) (alphaPC * 235));
+
+        for (int pass = 0; pass < 3; pass++) {
+            VertexConsumer buf = switch (pass) {
+                case 0 -> immediate.getBuffer(ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+                case 1 -> immediate.getBuffer(RING_FILL_LAYER);
+                default -> immediate.getBuffer(RING_LINE_LAYER);
+            };
+
+            for (int i = 0; i < (int) count; i++) {
+                float baseAngle = i * (360f / count) + animationNurik * 2.0f * orbitSpeed;
+
+                float sin = (float) Math.sin(Math.toRadians(baseAngle));
+                float cos = (float) Math.cos(Math.toRadians(baseAngle));
+                double x = targetPos.x + cos * radius;
+                double z = targetPos.z + sin * radius;
+                double y = targetPos.y + centerY
+                        + Math.sin(Math.toRadians(baseAngle * 3.0f + i * 53.0f)) * heightSpread;
+
+                matrices.push();
+                matrices.translate(x - cameraPos.x, y - cameraPos.y, z - cameraPos.z);
+
+                if (pass == 0) {
+                    matrices.multiply(mc.gameRenderer.getCamera().getRotation());
+                    float gs = size * 5.0f;
+                    matrices.scale(gs, gs, gs);
+                    drawGradientQuad(buf, matrices.peek().getPositionMatrix(),
+                            glowColor, glowColor, glowColor, glowColor,
+                            (int) (alphaPC * 0.35f * 255));
+                } else {
+                    matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(animationNurik * 4.0f * orbitSpeed + i * 37.0f));
+                    matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(24.0f
+                            + 8.0f * (float) Math.sin(Math.toRadians(animationNurik * 1.7f + i * 29.0f))));
+                    Matrix4f matrix = matrices.peek().getPositionMatrix();
+
+                    if (pass == 1) {
+                        drawCrystalFill(buf, matrix, size, size * 1.7f, fillTop, fillBottom);
+                    } else {
+                        drawCrystalOutline(buf, matrix, size, size * 1.7f, lineColor);
+                    }
+                }
+
+                matrices.pop();
+            }
+        }
+    }
+
+    /** Октаэдр: 8 треугольных граней (в QUADS дублируем последнюю вершину). */
+    private static void drawCrystalFill(VertexConsumer buf, Matrix4f m, float r, float h, int topColor, int bottomColor) {
+        float ax = r, az = 0;
+        float bx = 0, bz = r;
+        float cx = -r, cz = 0;
+        float dx = 0, dz = -r;
+
+        buf.vertex(m, 0, h, 0).color(topColor);  buf.vertex(m, ax, 0, az).color(topColor);
+        buf.vertex(m, bx, 0, bz).color(topColor); buf.vertex(m, bx, 0, bz).color(topColor);
+
+        buf.vertex(m, 0, h, 0).color(topColor);  buf.vertex(m, bx, 0, bz).color(topColor);
+        buf.vertex(m, cx, 0, cz).color(topColor); buf.vertex(m, cx, 0, cz).color(topColor);
+
+        buf.vertex(m, 0, h, 0).color(topColor);  buf.vertex(m, cx, 0, cz).color(topColor);
+        buf.vertex(m, dx, 0, dz).color(topColor); buf.vertex(m, dx, 0, dz).color(topColor);
+
+        buf.vertex(m, 0, h, 0).color(topColor);  buf.vertex(m, dx, 0, dz).color(topColor);
+        buf.vertex(m, ax, 0, az).color(topColor); buf.vertex(m, ax, 0, az).color(topColor);
+
+        buf.vertex(m, 0, -h, 0).color(bottomColor); buf.vertex(m, bx, 0, bz).color(bottomColor);
+        buf.vertex(m, ax, 0, az).color(bottomColor); buf.vertex(m, ax, 0, az).color(bottomColor);
+
+        buf.vertex(m, 0, -h, 0).color(bottomColor); buf.vertex(m, cx, 0, cz).color(bottomColor);
+        buf.vertex(m, bx, 0, bz).color(bottomColor); buf.vertex(m, bx, 0, bz).color(bottomColor);
+
+        buf.vertex(m, 0, -h, 0).color(bottomColor); buf.vertex(m, dx, 0, dz).color(bottomColor);
+        buf.vertex(m, cx, 0, cz).color(bottomColor); buf.vertex(m, cx, 0, cz).color(bottomColor);
+
+        buf.vertex(m, 0, -h, 0).color(bottomColor); buf.vertex(m, ax, 0, az).color(bottomColor);
+        buf.vertex(m, dx, 0, dz).color(bottomColor); buf.vertex(m, dx, 0, dz).color(bottomColor);
+    }
+
+    /** Рёбра октаэдра для DEBUG_LINES: парами вершин. */
+    private static void drawCrystalOutline(VertexConsumer buf, Matrix4f m, float r, float h, int color) {
+        float[][] eq = {{r, 0}, {0, r}, {-r, 0}, {0, -r}};
+        for (int k = 0; k < 4; k++) {
+            float[] cur = eq[k];
+            float[] next = eq[(k + 1) % 4];
+
+            buf.vertex(m, 0, h, 0).color(color);
+            buf.vertex(m, cur[0], 0, cur[1]).color(color);
+
+            buf.vertex(m, 0, -h, 0).color(color);
+            buf.vertex(m, cur[0], 0, cur[1]).color(color);
+
+            buf.vertex(m, cur[0], 0, cur[1]).color(color);
+            buf.vertex(m, next[0], 0, next[1]).color(color);
+        }
     }
 
 
