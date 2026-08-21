@@ -1338,6 +1338,10 @@ public class RotationProcess extends Component {
             renderTargetCrystals(e, immediate, aura, target, alphaPC);
         }
 
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Пентаграмма")) {
+            renderTargetPentagram(e, immediate, aura, target, alphaPC);
+        }
+
 
         immediate.draw();
 
@@ -1510,6 +1514,186 @@ public class RotationProcess extends Component {
             buf.vertex(m, cur[0], 0, cur[1]).color(color);
             buf.vertex(m, next[0], 0, next[1]).color(color);
         }
+    }
+
+    /** Светящаяся пентаграмма на земле под целью. */
+    private void renderTargetPentagram(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                       AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
+        int base = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC), redColor, alpha_2.get());
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
+        long timeDiff = currentTime - currentTimeSpirits;
+        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
+        currentTimeSpirits = currentTime;
+
+        float speed = aura.pentaSpeed.getValue();
+        float r = (aura.pentaRadius.getValue() + target.getWidth() * 0.35f)
+                * (1.0f + 0.04f * (float) Math.sin(Math.toRadians(animationNurik * 6.0f)));
+        float spin = animationNurik * 2.2f * speed;
+        int aSoft = (int) (alphaPC * 36);
+        int aRibbon = (int) (alphaPC * 150);
+        int aCore = (int) (alphaPC * 235);
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x,
+                targetPos.y - cameraPos.y + 0.06f,
+                targetPos.z - cameraPos.z);
+        Matrix4f m = matrices.peek().getPositionMatrix();
+
+        // вершины пентакля
+        float[] tipX = new float[5];
+        float[] tipZ = new float[5];
+        for (int k = 0; k < 5; k++) {
+            double a = Math.toRadians(spin + k * 72.0);
+            tipX[k] = (float) (Math.cos(a) * r);
+            tipZ[k] = (float) (Math.sin(a) * r);
+        }
+
+        // --- Pass 1: свечение (текстурные квады лежат на земле) ---
+        VertexConsumer texBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+
+        matrices.push();
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90.0f));
+        float cg = r * 1.6f;
+        matrices.scale(cg, cg, cg);
+        drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                base, base, base, base, aSoft * 2);
+        matrices.pop();
+
+        for (int k = 0; k < 5; k++) {
+            matrices.push();
+            matrices.translate(tipX[k], 0, tipZ[k]);
+            matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90.0f));
+            float gs = r * 0.34f;
+            matrices.scale(gs, gs, gs);
+            int tipCol = ColorUtil.overCol(ColorUtil.fade(k * 48), redColor, alpha_2.get());
+            drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                    tipCol, tipCol, tipCol, tipCol, (int) (alphaPC * 110));
+            matrices.pop();
+        }
+
+        // --- Pass 2: заливки-ленты ---
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+
+        // мягкий диск под сигилой: центр ярче, край растворяется
+        int discSegs = 64;
+        for (int i = 0; i < discSegs; i++) {
+            float a0 = (float) (Math.PI * 2.0 * i / discSegs);
+            float a1 = (float) (Math.PI * 2.0 * (i + 1) / discSegs);
+            float x0 = (float) Math.cos(a0) * r * 1.32f;
+            float z0 = (float) Math.sin(a0) * r * 1.32f;
+            float x1 = (float) Math.cos(a1) * r * 1.32f;
+            float z1 = (float) Math.sin(a1) * r * 1.32f;
+            fillBuf.vertex(m, 0, 0, 0).color(ColorUtil.replAlpha(base, aSoft));
+            fillBuf.vertex(m, x0, 0, z0).color(ColorUtil.replAlpha(base, 0));
+            fillBuf.vertex(m, x1, 0, z1).color(ColorUtil.replAlpha(base, 0));
+            fillBuf.vertex(m, x1, 0, z1).color(ColorUtil.replAlpha(base, 0));
+        }
+
+        float w = r * 0.032f + 0.008f;
+
+        // классический пентакль: хорды 0-2-4-1-3 с градиентом по кончикам
+        for (int k = 0; k < 5; k++) {
+            int nk = (k + 2) % 5;
+            int c0 = ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(k * 48), 0.85F), redColor, alpha_2.get());
+            int c1 = ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(nk * 48), 0.85F), redColor, alpha_2.get());
+            pentagramRibbon(fillBuf, m, tipX[k], tipZ[k], tipX[nk], tipZ[nk], w,
+                    ColorUtil.replAlpha(c0, aRibbon), ColorUtil.replAlpha(c1, aRibbon));
+        }
+
+        // внутренний пятиугольник (пересечения хорд)
+        for (int k = 0; k < 5; k++) {
+            int nk = (k + 1) % 5;
+            pentagramRibbon(fillBuf, m,
+                    tipX[k] * 0.382f, tipZ[k] * 0.382f,
+                    tipX[nk] * 0.382f, tipZ[nk] * 0.382f,
+                    w * 0.7f,
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 110)),
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 110)));
+        }
+
+        // круги через кончики и внешний контур
+        for (int i = 0; i < discSegs; i++) {
+            float a0 = (float) (Math.PI * 2.0 * i / discSegs);
+            float a1 = (float) (Math.PI * 2.0 * (i + 1) / discSegs);
+            pentagramRibbon(fillBuf, m,
+                    (float) Math.cos(a0) * r, (float) Math.sin(a0) * r,
+                    (float) Math.cos(a1) * r, (float) Math.sin(a1) * r,
+                    w * 0.75f,
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 130)),
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 130)));
+            pentagramRibbon(fillBuf, m,
+                    (float) Math.cos(a0) * r * 1.16f, (float) Math.sin(a0) * r * 1.16f,
+                    (float) Math.cos(a1) * r * 1.16f, (float) Math.sin(a1) * r * 1.16f,
+                    w * 0.55f,
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 80)),
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 80)));
+        }
+
+        // внешняя контр-вращающаяся пентаграмма
+        float rOuter = r * 1.32f;
+        int faint = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(180), 0.8F), redColor, alpha_2.get()),
+                (int) (alphaPC * 60));
+        float spin2 = -spin * 0.7f + 36.0f;
+        for (int k = 0; k < 5; k++) {
+            double a0 = Math.toRadians(spin2 + k * 72.0);
+            double a1 = Math.toRadians(spin2 + ((k + 2) % 5) * 72.0);
+            pentagramRibbon(fillBuf, m,
+                    (float) (Math.cos(a0) * rOuter), (float) (Math.sin(a0) * rOuter),
+                    (float) (Math.cos(a1) * rOuter), (float) (Math.sin(a1) * rOuter),
+                    w * 0.5f, faint, faint);
+        }
+
+        // --- Pass 3: тонкие яркие сердцевины линий ---
+        VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
+        int coreCol = ColorUtil.replAlpha(base, aCore);
+        for (int i = 0; i < discSegs; i++) {
+            float a0 = (float) (Math.PI * 2.0 * i / discSegs);
+            float a1 = (float) (Math.PI * 2.0 * (i + 1) / discSegs);
+            lineBuf.vertex(m, (float) Math.cos(a0) * r, 0, (float) Math.sin(a0) * r).color(coreCol);
+            lineBuf.vertex(m, (float) Math.cos(a1) * r, 0, (float) Math.sin(a1) * r).color(coreCol);
+        }
+        for (int k = 0; k < 5; k++) {
+            int nk = (k + 2) % 5;
+            lineBuf.vertex(m, tipX[k], 0, tipZ[k]).color(coreCol);
+            lineBuf.vertex(m, tipX[nk], 0, tipZ[nk]).color(coreCol);
+        }
+        for (int k = 0; k < 5; k++) {
+            int nk = (k + 1) % 5;
+            lineBuf.vertex(m, tipX[k] * 0.382f, 0, tipZ[k] * 0.382f).color(coreCol);
+            lineBuf.vertex(m, tipX[nk] * 0.382f, 0, tipZ[nk] * 0.382f).color(coreCol);
+        }
+
+        matrices.pop();
+    }
+
+    /** Отрезок на плоскости XZ как тонкая лента-квад шириной width. */
+    private static void pentagramRibbon(VertexConsumer buf, Matrix4f m,
+                                        float x0, float z0, float x1, float z1,
+                                        float width, int c0, int c1) {
+        float dx = x1 - x0, dz = z1 - z0;
+        float len = (float) Math.sqrt(dx * dx + dz * dz);
+        if (len < 1e-5f) return;
+        float nx = (dz / len) * width;
+        float nz = (-dx / len) * width;
+
+        buf.vertex(m, x0 + nx, 0, z0 + nz).color(c0);
+        buf.vertex(m, x1 + nx, 0, z1 + nz).color(c1);
+        buf.vertex(m, x1 - nx, 0, z1 - nz).color(c1);
+        buf.vertex(m, x0 - nx, 0, z0 - nz).color(c0);
     }
 
 
