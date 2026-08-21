@@ -1,5 +1,7 @@
 package ru.white.module.impl.render;
 
+import ru.white.manager.event_impl.EventRender3D;
+import ru.white.manager.event_impl.EventTick;
 import ru.white.manager.event_impl.FogEvent;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.module.api.Category;
@@ -29,6 +31,10 @@ public class WorldTweaks extends Module {
     public SliderSetting fog = new SliderSetting(this,"Дистанция тумана",100, 2,200,1).setVisible(() -> fogs.getValue());
     public ModeSetting typeColor = new ModeSetting(this,"Режим цвета","Тема","Свой");
 
+    public BooleanSetting lightnings = new BooleanSetting(this,"Молнии",false);
+    public SliderSetting lightningInterval = new SliderSetting(this,"Интервал молний",4F,1F,15F,0.5F).setVisible(() -> lightnings.getValue());
+    public SliderSetting lightningRadius = new SliderSetting(this,"Дальность молний",40F,12F,80F,1F).setVisible(() -> lightnings.getValue());
+
     public ColorSetting tintColor = new ColorSetting(this, "Цвет", 0xFF00FFFF).setVisible(() -> typeColor.is("Свой"));
 
     public int getColor() {
@@ -47,6 +53,19 @@ public class WorldTweaks extends Module {
             e.cancel();
         }
 
+    }
+
+    @EventHandler
+    public void onTick(EventTick e) {
+        SkyLightningRenderer.update(lightnings.getValue(), lightningInterval.getValue(),
+                lightningRadius.getValue());
+    }
+
+    @EventHandler
+    public void onRender3D(EventRender3D e) {
+        if (lightnings.getValue()) {
+            SkyLightningRenderer.render(e);
+        }
     }
 
 }
