@@ -80,7 +80,12 @@ public final class LightningOutlinePipeline {
         float red = ((rgb >> 16) & 0xFF) / 255f;
         float green = ((rgb >> 8) & 0xFF) / 255f;
         float blue = (rgb & 0xFF) / 255f;
-        float time = (System.currentTimeMillis() / 1000f) * Math.max(0.1f, speed);
+
+        // unix-time в секундах (~1.8e9) убивает точность float32: fract()/floor()
+        // в шейдере от такого числа дают мусор, и молнии не видны вовсе.
+        // Держим время в пределах ~2400 с после умножения на скорость.
+        long millis = System.currentTimeMillis() % 1_000_000L;
+        float time = (millis / 1000f) * Math.max(0.1f, speed);
         float density = Math.max(0.05f, Math.min(1f, count / 32f));
 
         uniformData.clear();
