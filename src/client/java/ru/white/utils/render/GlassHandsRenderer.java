@@ -17,7 +17,6 @@ public class GlassHandsRenderer {
     private GlassCompositePipeline glassComposite;
     private MaskDiffPipeline maskDiff;
     private GlassOutlinePipeline glassOutline;
-    private LightningOutlinePipeline lightningOutline;
     private BurningHandsPipeline burningHands;
 
     private GpuTexture sceneBeforeTexture;
@@ -89,15 +88,6 @@ public class GlassHandsRenderer {
     private int outlineGlowMode = 2;
     private boolean outlineUseItemColor = false;
 
-    private boolean lightningEnabled = false;
-    private int lightningColor = 0xFF66CCFF;
-    private float lightningAlpha = 1.0f;
-    private float lightningCount = 16.0f;
-    private float lightningSpeed = 1.0f;
-    private float lightningRadius = 4.0f;
-    private float lightningLength = 24.0f;
-    private float lightningSwing = 0.0f;
-
     public GlassHandsRenderer() {
         this.client = MinecraftClient.getInstance();
         instance = this;
@@ -124,14 +114,12 @@ public class GlassHandsRenderer {
         if (glassComposite != null) glassComposite.close();
         if (maskDiff != null) maskDiff.close();
         if (glassOutline != null) glassOutline.close();
-        if (lightningOutline != null) lightningOutline.close();
         if (burningHands != null) burningHands.close();
 
         this.kawaseBlur = new KawaseBlurPipeline();
         this.glassComposite = new GlassCompositePipeline();
         this.maskDiff = new MaskDiffPipeline();
         this.glassOutline = new GlassOutlinePipeline();
-        this.lightningOutline = new LightningOutlinePipeline();
         this.burningHands = new BurningHandsPipeline();
 
         lastWidth = 0;
@@ -183,14 +171,6 @@ public class GlassHandsRenderer {
     public void setOutlineWidth(int width) { this.outlineWidth = width; }
     public void setOutlineGlowMode(int mode) { this.outlineGlowMode = mode; }
     public void setOutlineUseItemColor(boolean use) { this.outlineUseItemColor = use; }
-    public void setLightningEnabled(boolean enabled) { this.lightningEnabled = enabled; }
-    public void setLightningColor(int rgb) { this.lightningColor = rgb & 0xFFFFFF; }
-    public void setLightningAlpha(float alpha) { this.lightningAlpha = Math.max(0.0f, Math.min(1.0f, alpha)); }
-    public void setLightningCount(float count) { this.lightningCount = count; }
-    public void setLightningSpeed(float speed) { this.lightningSpeed = speed; }
-    public void setLightningRadius(float radius) { this.lightningRadius = radius; }
-    public void setLightningLength(float length) { this.lightningLength = length; }
-    public void setLightningSwing(float swing) { this.lightningSwing = swing; }
     public void setShimmerEnabled(boolean enabled)  { if (glassOutline != null) glassOutline.setShimmerEnabled(enabled); }
     public void setShimmerWidth(float width)        { if (glassOutline != null) glassOutline.setShimmerWidth(width); }
     public void setShimmerPeriodSec(float sec)      { if (glassOutline != null) glassOutline.setShimmerPeriodSec(sec); }
@@ -367,12 +347,6 @@ public class GlassHandsRenderer {
                     sceneAfterTextureView, outlineUseItemColor);
         }
 
-        if (lightningEnabled && lightningOutline != null) {
-            lightningOutline.render(maskTextureView, fb.getColorAttachmentView(),
-                    lastWidth, lastHeight, lightningColor, lightningAlpha,
-                    lightningCount, lightningSpeed, lightningRadius, lightningLength, lightningSwing);
-        }
-
         if (fireEnabled) {
             burningHands.updateUniforms(lastWidth, lastHeight, fireFillMode,
                     fireRadius, fireStrength, fireSpeed, fireColorMix,
@@ -436,12 +410,6 @@ public class GlassHandsRenderer {
                     sceneAfterTextureView, outlineUseItemColor);
         }
 
-        if (lightningEnabled && lightningOutline != null) {
-            lightningOutline.render(maskTextureView, fb.getColorAttachmentView(),
-                    lastWidth, lastHeight, lightningColor, lightningAlpha,
-                    lightningCount, lightningSpeed, lightningRadius, lightningLength, lightningSwing);
-        }
-
         maskReady = false;
     }
 
@@ -453,13 +421,11 @@ public class GlassHandsRenderer {
         if (glassComposite != null) glassComposite.close();
         if (maskDiff != null) maskDiff.close();
         if (glassOutline != null) glassOutline.close();
-        if (lightningOutline != null) lightningOutline.close();
         if (burningHands != null) burningHands.close();
         kawaseBlur = null;
         glassComposite = null;
         maskDiff = null;
         glassOutline = null;
-        lightningOutline = null;
         burningHands = null;
         lastWidth = 0;
         lastHeight = 0;
@@ -473,7 +439,6 @@ public class GlassHandsRenderer {
         if (glassComposite != null) { glassComposite.close(); glassComposite = null; }
         if (maskDiff != null) { maskDiff.close(); maskDiff = null; }
         if (glassOutline != null) { glassOutline.close(); glassOutline = null; }
-        if (lightningOutline != null) { lightningOutline.close(); lightningOutline = null; }
         if (burningHands != null) { burningHands.close(); burningHands = null; }
         lastWidth = 0;
         lastHeight = 0;

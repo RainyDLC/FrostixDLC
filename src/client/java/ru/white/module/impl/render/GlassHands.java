@@ -13,9 +13,6 @@ import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.render.GlassHandsRenderer;
 import lombok.Getter;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.math.MathHelper;
 
 @Getter
 @ModuleInfo(name = "Glass Hands", category = Category.RENDER, desc = "Делает руки и предметы стеклянными")
@@ -89,42 +86,12 @@ public class GlassHands extends Module {
     public SliderSetting shimmerPeriod = new SliderSetting(this, "Период шиммера", 5f, 1f, 15f, 0.5f)
             .setVisible(() -> enableEdgeGlow.getValue() && shimmer.getValue());
 
-    public ModeSetting lightningMode = new ModeSetting(this, "Режим обводки", "Обычная", "Молнии");
-    public ModeSetting lightningHands = new ModeSetting(this, "Руки", "Обе", "Главная", "Вторая")
-            .setVisible(() -> lightningMode.is("Молнии"));
-    public ModeSetting lightningItems = new ModeSetting(this, "Предметы", "Любой", "Оружие и инструменты")
-            .setVisible(() -> lightningMode.is("Молнии"));
-    public SliderSetting lightningCount = new SliderSetting(this, "Кол-во молний", 16, 4, 48, 1)
-            .setVisible(() -> lightningMode.is("Молнии"));
-    public SliderSetting lightningSpeed = new SliderSetting(this, "Скорость молний", 42, 10, 120, 1)
-            .setVisible(() -> lightningMode.is("Молнии"));
-    public SliderSetting lightningRadius = new SliderSetting(this, "Радиус молний", 0.18f, 0.05f, 0.5f, 0.01f)
-            .setVisible(() -> lightningMode.is("Молнии"));
-    public SliderSetting lightningLength = new SliderSetting(this, "Длина разряда", 0.25f, 0.1f, 0.6f, 0.01f)
-            .setVisible(() -> lightningMode.is("Молнии"));
-    public SliderSetting lightningSwing = new SliderSetting(this, "Реакция на удар", 1.0f, 0f, 2f, 0.05f)
-            .setVisible(() -> lightningMode.is("Молнии"));
-    public SliderSetting lightningAlpha = new SliderSetting(this, "Прозрачность молний", 1.0f, 0.1f, 1.0f, 0.05f)
-            .setVisible(() -> lightningMode.is("Молнии"));
-    public BooleanSetting lightningHit = new BooleanSetting(this, "Красный при ударе", false)
-            .setVisible(() -> lightningMode.is("Молнии"));
-    public ModeSetting lightningColorMode = new ModeSetting(this, "Цвет молний", "Тема", "Свой")
-            .setVisible(() -> lightningMode.is("Молнии"));
-    public ColorSetting lightningColor = new ColorSetting(this, "Свой цвет молний", 0xFF66CCFF)
-            .setVisible(() -> lightningMode.is("Молнии") && lightningColorMode.is("Свой"));
-
     public GlassHands() {
         instance = this;
     }
 
     public static GlassHands getInstance() {
         return instance;
-    }
-
-    private boolean qualifies(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) return false;
-        if (lightningItems.is("Любой")) return true;
-        return stack.contains(DataComponentTypes.TOOL) || stack.contains(DataComponentTypes.WEAPON);
     }
 
     @Override
@@ -138,7 +105,6 @@ public class GlassHands extends Module {
     @Override
     protected void onDisable() {
         GlassHandsRenderer renderer = GlassHandsRenderer.getInstance();
-        renderer.setLightningEnabled(false);
         renderer.setEnabled(false);
     }
 
@@ -214,9 +180,7 @@ public class GlassHands extends Module {
         }
 
 
-        // Режимы обводки взаимоисключающие: молнии заменяют обычное свечение,
-        // поэтому под разрядами не остаётся сплошная вторая линия.
-        renderer.setOutlineEnabled(enableEdgeGlow.getValue() && lightningMode.is("Обычная"));
+        renderer.setOutlineEnabled(enableEdgeGlow.getValue());
         if (enableEdgeGlow.getValue()) {
             float strength = edgeGlowIntensity.getValue() * 20.0f;
             renderer.setOutlineGlowStrength(strength);
@@ -233,38 +197,6 @@ public class GlassHands extends Module {
             renderer.setShimmerWidth(shimmerWidth.getValue());
             renderer.setShimmerPeriodSec(shimmerPeriod.getValue());
         }
-
-        boolean lightningActive = shouldRenderLightning();
-        renderer.setLightningEnabled(lightningActive);
-        if (lightningActive) {
-            int color = lightningColorMode.is("Тема")
-                    ? ColorUtil.getClientColor1(1)
-                    : lightningColor.getValue();
-            if (lightningHit.getValue() && mc.player != null) {
-                float swing = MathHelper.clamp(mc.player.handSwingProgress, 0.0f, 1.0f);
-                float hitProgress = (float) Math.sin(swing * Math.PI);
-                color = ColorUtil.overCol(color, 0xFFFF3B30, hitProgress);
-            }
-
-            renderer.setLightningColor(color);
-            renderer.setLightningAlpha(lightningAlpha.getValue());
-            renderer.setLightningCount(lightningCount.getValue());
-            renderer.setLightningSpeed(0.25f + lightningSpeed.getValue() / 55.0f);
-            renderer.setLightningRadius(lightningRadius.getValue() * 24.0f);
-            renderer.setLightningLength(lightningLength.getValue() * 96.0f);
-            float swing = mc.player == null ? 0.0f
-                    : MathHelper.clamp(mc.player.handSwingProgress, 0.0f, 1.0f);
-            renderer.setLightningSwing(lightningSwing.getValue() * swing);
-        }
-
-    }
-
-    private boolean shouldRenderLightning() {
-        if (!lightningMode.is("Молнии") || mc.player == null) return false;
-        if (!mc.options.getPerspective().isFirstPerson()) return false;
-        boolean main = !lightningHands.is("Вторая") && qualifies(mc.player.getMainHandStack());
-        boolean off = !lightningHands.is("Главная") && qualifies(mc.player.getOffHandStack());
-        return main || off;
 
     }
 }
