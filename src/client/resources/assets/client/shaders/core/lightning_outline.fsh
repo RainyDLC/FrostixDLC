@@ -94,10 +94,10 @@ void main() {
     float travel = contourPos / segmentLength + time * (2.2 + swing * 0.8);
     float local = fract(travel);
     float cell = floor(travel);
-    float active = smoothstep(1.0 - density, 1.0, hash11(cell));
+    float activeSegment = smoothstep(1.0 - density, 1.0, hash11(cell));
     float segment = smoothstep(0.02, 0.16, local)
                   * (1.0 - smoothstep(0.72, 0.98, local));
-    float pulse = max(0.16 + density * 0.24, active * segment);
+    float pulse = max(0.16 + density * 0.24, activeSegment * segment);
     float flicker = 0.72 + 0.28 * hash11(floor(time * 24.0) + cell * 3.17);
 
     float strength = (core + glow * 0.58) * pulse * flicker * alpha;
