@@ -97,7 +97,7 @@ public class AttackAura extends Module {
     public ModeSetting typeSprint = new ModeSetting(this,"Тип спринта", "Packet","Silent","Legit");
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
 
-    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Огонь","Скелет","Не отображать");
+    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Огонь","Мечи","Не отображать");
 
     public SliderSetting cubeSize = new SliderSetting(this,"Размер куба",1.15F,0.6F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
     public SliderSetting cubeRotateSpeed = new SliderSetting(this,"Скорость вращения куба",1.2F,0.2F,4.0F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
@@ -130,8 +130,10 @@ public class AttackAura extends Module {
     public SliderSetting fireRadius = new SliderSetting(this,"Радиус вихря",0.7F,0.3F,1.5F,0.05F).setVisible(() -> typeTargetESP.is("Огонь"));
     public SliderSetting fireHeight = new SliderSetting(this,"Сила пламени",1.0F,0.5F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Огонь"));
 
-    public SliderSetting skeletonSize = new SliderSetting(this,"Размер скелета",1.0F,0.8F,1.3F,0.01F).setVisible(() -> typeTargetESP.is("Скелет"));
-    public BooleanSetting skeletonBreak = new BooleanSetting(this,"Ломать кости при низком ХП",true).setVisible(() -> typeTargetESP.is("Скелет"));
+    public SliderSetting swordsCount = new SliderSetting(this,"Кол-во мечей",4,2,10,1).setVisible(() -> typeTargetESP.is("Мечи"));
+    public SliderSetting swordsSpeed = new SliderSetting(this,"Скорость вращения",1.0F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Мечи"));
+    public SliderSetting swordsRadius = new SliderSetting(this,"Радиус орбиты",0.8F,0.4F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Мечи"));
+    public SliderSetting swordsSize = new SliderSetting(this,"Размер мечей",0.7F,0.3F,1.5F,0.05F).setVisible(() -> typeTargetESP.is("Мечи"));
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
             new BooleanSetting("Умные криты", false),
