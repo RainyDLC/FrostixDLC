@@ -52,21 +52,27 @@ public class WorldRendererMixin {
     private static void renderShaderSkyLayer(GpuBufferSlice fogBuffer, SkyRenderState skyRenderState, SkyRendering skyRendering, CallbackInfo ci) {
         ShaderSky shaderSky = ShaderSky.getInstance();
         if (shaderSky == null || !shaderSky.isEnabled() || shaderSky.mode.is("Blur")) return;
+        // Only draw on top of the still-rendered vanilla sky; when vanilla sky is
+        // removed we already drew (and cancelled) in hideVanillaSky below.
+        if (shaderSky.hideVanillaSky.getValue()) return;
 
         ShaderSkyRenderer.getInstance().renderCelestialShader();
     }
 
     @Inject(
-            method = "renderTopSky",
+            method = "method_62215",
             at = @At("HEAD"),
             cancellable = true,
             require = 0
     )
-    private void hideVanillaSky(int renderMode, CallbackInfo ci) {
+    private static void hideVanillaSky(GpuBufferSlice fogBuffer, SkyRenderState skyRenderState, SkyRendering skyRendering, CallbackInfo ci) {
         ShaderSky shaderSky = ShaderSky.getInstance();
-        if (shaderSky != null && shaderSky.isEnabled() && shaderSky.hideVanillaSky.getValue()) {
-            ci.cancel();
-        }
+        if (shaderSky == null || !shaderSky.isEnabled() || shaderSky.mode.is("Blur")) return;
+        if (!shaderSky.hideVanillaSky.getValue()) return;
+
+        // Replace the vanilla sky entirely with the procedural Shader Sky dome.
+        ShaderSkyRenderer.getInstance().renderCelestialShader();
+        ci.cancel();
     }
 
     @Inject(method = "render", at = @At("RETURN"))
