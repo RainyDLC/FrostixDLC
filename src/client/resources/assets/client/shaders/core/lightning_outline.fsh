@@ -99,7 +99,6 @@ void main() {
                   * (1.0 - smoothstep(0.72, 0.98, local));
     float pulse = max(0.16 + density * 0.24, activeSegment * segment);
     float flicker = 0.72 + 0.28 * hash11(floor(time * 24.0) + cell * 3.17);
-
     float strength = (core + glow * 0.58) * pulse * flicker * alpha;
     if (strength < 0.008) discard;
 
