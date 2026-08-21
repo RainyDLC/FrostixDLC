@@ -1,5 +1,6 @@
 package ru.white.screen;
 
+import ru.white.Client;
 import ru.white.utils.animation.Animation;
 import ru.white.utils.animation.Easings;
 import ru.white.utils.annotation.IMinecraft;
@@ -44,6 +45,8 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     private static final Identifier MENU_BG = Identifier.of("client", "textures/frame/menu.png");
     private static final Identifier GLOW_TEX = Identifier.of("client", "textures/particles/glow.png");
     private static final Identifier SNOWFLAKE_TEX = Identifier.of("client", "textures/particles/snowflake.png");
+    /** Текстура молний — та же, что в LightningRenderer (Отображение таргета). */
+    private static final Identifier BOLT_TEX = Identifier.of("client", "textures/visuals/particles_2.png");
 
     /** Кристаллы инея по краям: {X, Y (доли экрана), размер, альфа 0-255, фаза пульсации}. */
     private static final float[][] FROST_SPOTS = {
@@ -253,13 +256,11 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         float w = 160, h = 48;
         float x = 12, y = sh - h - 12;
 
-        // панель приборов с бирюзовой подсветкой
+        // панель приборов: ровная морозная заливка + тёмный контур
         RenderUtil.Blur.blur(x, y, w, h, 1, 9, ColorUtil.getColor(6, 16, 38, a * 0.60F));
-        int top = ColorUtil.getColor(16, 56, 88, a * 0.35F);
-        int bot = ColorUtil.getColor(4, 12, 30, a * 0.55F);
-        Draw.gradientRect(x, y, w, h, new int[]{top, top, bot, bot}, 9);
-        Draw.outline(x, y, w, h, 0.8F, ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * 0.55F), 9);
-        Draw.glow(x, y, w, h, ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * 0.30F), 9, 4F, 0.45F);
+        Draw.rect(x, y, w, h, ColorUtil.getColor(14, 40, 74, a * 0.40F), 9);
+        Draw.outline(x, y, w, h, 0.8F, ColorUtil.getColor(6, 24, 46, a * 0.90F), 9);
+        Draw.glow(x, y, w, h, ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * 0.22F), 9, 4F, 0.35F);
 
         float blink = 0.45F + 0.55F * (float) Math.abs(Math.sin(time * 2.4F));
         int teal = ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * 0.95F);
@@ -522,27 +523,195 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         }
 
         /**
-         * Ледяная панель: блюр + градиент "замороженной жидкости" +
-         * неоновый контур Ice Blue + Arctic Glow при наведении.
+         * Ледяная панель: усиленный блюр + ровная морозная заливка (без
+         * градиента) + тёмный контур + слабое постоянное свечение.
+         * При наведении контур гаснет и вдоль границы бегут электрические
+         * молнии (как «Отображение таргета» с режимом «Молнии»).
          */
         private void drawFrostPanel(float x, float y, float width, float height, float globalAlpha, float hp, int accent) {
             float radius = 9F;
 
-            RenderUtil.Blur.blur(x, y, width, height, 1, radius,
+            RenderUtil.Blur.blur(x, y, width, height, 1, radius + 3F,
                     ColorUtil.getColor(8, 20, 46, globalAlpha * (0.50F + hp * 0.15F)));
 
-            int top = ColorUtil.getColor(30, 72, 130, globalAlpha * (0.14F + hp * 0.14F));
-            int bottom = ColorUtil.getColor(6, 16, 40, globalAlpha * (0.22F + hp * 0.16F));
-            Draw.gradientRect(x, y, width, height, new int[]{top, top, bottom, bottom}, radius);
+            // ровный морозный цвет без вертикального градиента
+            int fill = ColorUtil.getColor(20, 48, 88, globalAlpha * (0.26F + hp * 0.10F));
+            Draw.rect(x, y, width, height, fill, radius);
 
-            Draw.outline(x, y, width, height, 0.7F,
-                    ColorUtil.replAlpha(accent, (int) (globalAlpha * 255 * (0.30F + hp * 0.50F))), radius);
+            // тёмная обводка, гаснет при наведении — её сменяют молнии
+            if (hp < 0.98F) {
+                int edge = ColorUtil.getColor(10, 26, 52, globalAlpha * (1F - hp * 0.85F));
+                Draw.outline(x, y, width, height, 0.8F, edge, radius);
+            }
+
+            // слабое приятное свечение — всегда, чуть сильнее при наведении
+            Draw.glow(x, y, width, height,
+                    ColorUtil.replAlpha(accent, (int) (globalAlpha * 255 * (0.10F + hp * 0.12F))),
+                    radius, 4F, 0.35F + hp * 0.35F);
 
             if (hp > 0.01F) {
                 Draw.glow(x, y, width, height,
-                        ColorUtil.replAlpha(accent, (int) (globalAlpha * 255 * (hp * 0.45F))),
-                        radius, 5F, hp * 0.7F);
+                        ColorUtil.replAlpha(accent, (int) (globalAlpha * 255 * (hp * 0.40F))),
+                        radius, 5F, hp * 0.6F);
+
+                // молнии по контуру при наведении
+                drawBolts(x, y, width, height, globalAlpha, hp);
             }
+        }
+
+        // ── электрические молнии при наведении (стиль LightningRenderer) ──
+
+        private static final int MAX_BOLTS = 14;
+        private static final long BOLT_INTERVAL_MS = 42L;
+        private static final java.util.Random BOLT_RAND = new java.util.Random();
+
+        private final List<Bolt2D> bolts = new ArrayList<>();
+        private long lastBoltSpawn = 0L;
+
+        private static final class Bolt2D {
+            final float[] pts; // x0,y0,x1,y1,...
+            final long spawnTime;
+            final long lifetimeMs;
+
+            Bolt2D(float[] pts, long spawnTime, long lifetimeMs) {
+                this.pts = pts;
+                this.spawnTime = spawnTime;
+                this.lifetimeMs = lifetimeMs;
+            }
+        }
+
+        private void drawBolts(float x, float y, float w, float h, float globalAlpha, float hp) {
+            long now = System.currentTimeMillis();
+
+            if (hp > 0.25F && now - lastBoltSpawn > BOLT_INTERVAL_MS && bolts.size() < MAX_BOLTS) {
+                bolts.add(spawnBolt(x, y, w, h));
+                lastBoltSpawn = now;
+            }
+
+            bolts.removeIf(bolt -> now - bolt.spawnTime > bolt.lifetimeMs);
+
+            for (Bolt2D bolt : bolts) {
+                float life = (now - bolt.spawnTime) / (float) bolt.lifetimeMs;
+                float fade = 1F - life;
+                float flicker = 0.65F + BOLT_RAND.nextFloat() * 0.35F;
+                float alpha = globalAlpha * hp * fade * flicker;
+                if (alpha <= 0.03F) continue;
+
+                // свечение-блобы у вершин (как glow-фаза 3D-молний)
+                for (int i = 0; i < bolt.pts.length; i += 2) {
+                    float s = 3.5F;
+                    drawRotTexture(BOLT_TEX, bolt.pts[i] - s / 2F, bolt.pts[i + 1] - s / 2F, s, s, 0F,
+                            ColorUtil.getColor(150, 225, 255, alpha * 0.55F));
+                }
+
+                // светящиеся сегменты разряда
+                for (int i = 0; i < bolt.pts.length - 2; i += 2) {
+                    float ax = bolt.pts[i], ay = bolt.pts[i + 1];
+                    float bx = bolt.pts[i + 2], by = bolt.pts[i + 3];
+                    float dx = bx - ax, dy = by - ay;
+                    float len = (float) Math.sqrt(dx * dx + dy * dy);
+                    if (len < 0.1F) continue;
+                    float angleDeg = (float) Math.toDegrees(Math.atan2(dy, dx));
+                    float segH = 1.8F;
+                    drawRotTexture(BOLT_TEX, (ax + bx) / 2F - (len + 2F) / 2F, (ay + by) / 2F - segH / 2F,
+                            len + 2F, segH, angleDeg,
+                            ColorUtil.getColor(235, 250, 255, alpha * 0.85F));
+                }
+            }
+        }
+
+        /** Добавляет в 2D-оверлей повернутую светящуюся текстуру (аддитивный блендинг). */
+        private static void drawRotTexture(Identifier tex, float x, float y, float w, float h,
+                                           float rotationDeg, int color) {
+            Client.get().render2D().getTexturePipeline().drawGlowTexture(
+                    tex, x, y, w, h, 0F, 0F, 1F, 1F,
+                    new int[]{color, color, color, color},
+                    new float[]{0F, 0F, 0F, 0F}, 0F, rotationDeg);
+        }
+
+        private Bolt2D spawnBolt(float x, float y, float w, float h) {
+            List<Float> pts = new ArrayList<>(32);
+
+            if (BOLT_RAND.nextInt(4) == 0) {
+                // шип наружу от контура (как спайки вокруг таргета)
+                float t = BOLT_RAND.nextFloat();
+                float[] p = perimeterPoint(x, y, w, h, t);
+                float[] n = perimeterNormal(x, y, w, h, t);
+                float len = 5F + BOLT_RAND.nextFloat() * 8F;
+                float[] end = {p[0] + n[0] * len, p[1] + n[1] * len};
+                pts.add(p[0]);
+                pts.add(p[1]);
+                buildPath(pts, p, end, 3, len * 0.4F);
+            } else {
+                // дуга, ползущая вдоль контура кнопки
+                float per = 2F * (w + h);
+                float t0 = BOLT_RAND.nextFloat() * per;
+                float arc = 16F + BOLT_RAND.nextFloat() * 46F;
+                int steps = Math.max(3, (int) (arc / 10F));
+                float[] prev = null;
+                for (int i = 0; i <= steps; i++) {
+                    float[] p = perimeterPoint(x, y, w, h, t0 + arc * i / steps);
+                    if (prev != null) {
+                        float segLen = (float) Math.hypot(p[0] - prev[0], p[1] - prev[1]);
+                        buildPath(pts, prev, p, 2, Math.min(3.5F, segLen * 0.4F));
+                    } else {
+                        pts.add(p[0]);
+                        pts.add(p[1]);
+                    }
+                    prev = p;
+                }
+            }
+
+            float[] flat = new float[pts.size()];
+            for (int i = 0; i < flat.length; i++) flat[i] = pts.get(i);
+            return new Bolt2D(flat, System.currentTimeMillis(), 130 + BOLT_RAND.nextInt(140));
+        }
+
+        /** Рекурсивное смещение середины (тот же алгоритм, что в LightningRenderer). */
+        private void buildPath(List<Float> out, float[] a, float[] b, int depth, float maxOffset) {
+            if (depth <= 0) {
+                out.add(b[0]);
+                out.add(b[1]);
+                return;
+            }
+            float dx = b[0] - a[0], dy = b[1] - a[1];
+            float len = (float) Math.sqrt(dx * dx + dy * dy);
+            if (len < 0.001F) {
+                out.add(b[0]);
+                out.add(b[1]);
+                return;
+            }
+            float off = (BOLT_RAND.nextFloat() - 0.5F) * 2F * maxOffset;
+            float mx = (a[0] + b[0]) / 2F - dy / len * off;
+            float my = (a[1] + b[1]) / 2F + dx / len * off;
+            float[] mid = {mx, my};
+            buildPath(out, a, mid, depth - 1, maxOffset * 0.5F);
+            buildPath(out, mid, b, depth - 1, maxOffset * 0.5F);
+        }
+
+        /** Точка на периметре прямоугольника, t — путь от левого верхнего угла по часовой. */
+        private float[] perimeterPoint(float x, float y, float w, float h, float t) {
+            float per = 2F * (w + h);
+            t = ((t % per) + per) % per;
+            if (t < w) return new float[]{x + t, y};
+            t -= w;
+            if (t < h) return new float[]{x + w, y + t};
+            t -= h;
+            if (t < w) return new float[]{x + w - t, y + h};
+            t -= w;
+            return new float[]{x, y + h - t};
+        }
+
+        /** Наружная нормаль периметра в точке с тем же параметром t. */
+        private float[] perimeterNormal(float x, float y, float w, float h, float t) {
+            float per = 2F * (w + h);
+            t = ((t % per) + per) % per;
+            if (t < w) return new float[]{0F, -1F};
+            t -= w;
+            if (t < h) return new float[]{1F, 0F};
+            t -= h;
+            if (t < w) return new float[]{0F, 1F};
+            return new float[]{-1F, 0F};
         }
 
         public void drawHero(float x, float y, float width, float height, float globalAlpha, int variant) {
@@ -580,25 +749,20 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
             float progress = Math.max(0F, Math.min(1F, slideProgress));
 
-            // заполнение дорожки при сдвиге — волна ледяной энергии
+            // заполнение дорожки при сдвиге — ровная ледяная волна
             if (progress > 0.01F) {
-                int pTop = ColorUtil.getColor(90, 220, 255, globalAlpha * (0.06F + progress * 0.16F));
-                int pBot = ColorUtil.getColor(40, 130, 200, globalAlpha * (0.02F + progress * 0.06F));
-                Draw.gradientRect(x + 2, y + 2, (width - 4) * progress, height - 4,
-                        new int[]{pTop, pTop, pBot, pBot}, 7);
+                Draw.rect(x + 2, y + 2, (width - 4) * progress, height - 4,
+                        ColorUtil.getColor(70, 190, 240, globalAlpha * (0.10F + progress * 0.16F)), 7);
             }
 
             float knobSize = height - 8F;
             float knobX = x + 5F + (width - knobSize - 10F) * progress;
 
-            // ледяной кубик-ползунок
-            Draw.gradientRect(knobX, y + 4F, knobSize, knobSize, new int[]{
-                    ColorUtil.getColor(170, 235, 255, globalAlpha * (0.25F + progress * 0.45F)),
-                    ColorUtil.getColor(120, 200, 250, globalAlpha * (0.25F + progress * 0.45F)),
-                    ColorUtil.getColor(50, 120, 190, globalAlpha * (0.25F + progress * 0.45F)),
-                    ColorUtil.getColor(90, 180, 240, globalAlpha * (0.25F + progress * 0.45F))}, 4);
-            Draw.outline(knobX, y + 4F, knobSize, knobSize, 0.6F,
-                    ColorUtil.getColor(160, 235, 255, globalAlpha * (0.35F + progress * 0.50F)), 4);
+            // ледяной кубик-ползунок: ровная морозная заливка
+            Draw.rect(knobX, y + 4F, knobSize, knobSize,
+                    ColorUtil.getColor(150, 220, 250, globalAlpha * (0.25F + progress * 0.45F)), 4);
+            Draw.outline(knobX, y + 4F, knobSize, knobSize, 0.7F,
+                    ColorUtil.getColor(14, 36, 66, globalAlpha * 0.90F), 4);
 
             Fonts.icon.drawCentered("i", knobX + knobSize / 2F, y + height / 2F - 3, 7,
                     ColorUtil.replAlpha(accent, (int) (globalAlpha * 255 * (0.25F + hp * 0.2F + progress * 0.55F))));
