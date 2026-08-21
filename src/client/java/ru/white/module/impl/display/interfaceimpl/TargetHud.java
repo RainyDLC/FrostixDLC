@@ -166,13 +166,11 @@ public class TargetHud implements element {
         float addXHEADP = -ANIM_OFFSET + ANIM_OFFSET * alpha;
         float addALL = ANIM_OFFSET - ANIM_OFFSET * alpha;
 
-        RenderUtil.Render2D.glow(x + addXHEADP, y, HEAD_CONTAINER_W, h, ColorUtil.getColor(0, 0.1F * alpha), rad, GLOW_RADIUS, 1);
-        RenderUtil.Blur.glass(x + addXHEADP, y, HEAD_CONTAINER_W, h, alpha, rad,
-                ColorUtil.replAlpha(ColorUtil.background(), InterFace.getInstance().alphaHUD.getValue() * alpha), BLUR_RADIUS, 1, 1, 4);
+        float hudOpacity = InterFace.getInstance().alphaHUD.getValue();
 
-        RenderUtil.Render2D.glow(x + CONTENT_OFFSET_X + addALL, y, w - CONTENT_OFFSET_X, h, ColorUtil.getColor(0, 0.1F * alpha), rad, GLOW_RADIUS, 1);
-        RenderUtil.Blur.glass(x + CONTENT_OFFSET_X + addALL, y, w - CONTENT_OFFSET_X, h, alpha, rad,
-                ColorUtil.replAlpha(ColorUtil.background(), InterFace.getInstance().alphaHUD.getValue() * alpha), BLUR_RADIUS, 1, 1, 4);
+        RenderUtil.Render2D.hudPlate(x + addXHEADP, y, HEAD_CONTAINER_W, h, alpha, rad, hudOpacity);
+        RenderUtil.Render2D.hudPlate(x + CONTENT_OFFSET_X + addALL, y, w - CONTENT_OFFSET_X, h, alpha, rad, hudOpacity);
+        RenderUtil.Render2D.hudAccent(x + CONTENT_OFFSET_X + addALL, y, h, alpha, rad);
 
         drawFace(target, eventDisplay.getPartialTicks(), x + HEAD_OFFSET_X + addXHEADP, y + HEAD_OFFSET_Y, alpha);
 
@@ -242,9 +240,7 @@ public class TargetHud implements element {
         float bgW = armorItems.size() * ITEM_SIZE + ARMOR_PAD * 2;
         float bgH = ITEM_SIZE + ARMOR_PAD * 2;
 
-        RenderUtil.Render2D.glow(bgX, bgY, bgW, bgH - 0.5F * S, ColorUtil.getColor(0, 0.1F * alpha), 4 * S, GLOW_RADIUS, 1);
-        RenderUtil.Blur.glass(bgX, bgY, bgW, bgH, alpha, 4 * S,
-                ColorUtil.replAlpha(ColorUtil.background(), InterFace.getInstance().alphaHUD.getValue() * alpha), BLUR_RADIUS, 1, 1, 4);
+        RenderUtil.Render2D.hudPlate(bgX, bgY, bgW, bgH, alpha, 4 * S, InterFace.getInstance().alphaHUD.getValue());
 
         for (ItemStack stack : armorItems) {
             Matrix3x2fStack matrix = eventDisplay.getDrawContext().getMatrices();

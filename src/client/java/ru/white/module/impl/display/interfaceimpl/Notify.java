@@ -206,10 +206,8 @@ public class Notify implements element {
                 float nx = screenWidth / 2f - nw / 2f;
                 float actualY = ny;
 
-                RenderUtil.Render2D.glow(nx, actualY, nw, GLOW_H, ColorUtil.getColor(0,0.1F * a), RADIUS, 12, 1);
-
-                RenderUtil.Blur.glass(nx, actualY, nw, ITEM_H, a, RADIUS,
-                        ColorUtil.replAlpha(ColorUtil.background(),InterFace.getInstance().alphaHUD.getValue() * a), 20, 1, 1, 4);
+                RenderUtil.Render2D.hudPlate(nx, actualY, nw, ITEM_H, a, RADIUS, InterFace.getInstance().alphaHUD.getValue());
+                RenderUtil.Render2D.hudAccent(nx, actualY, ITEM_H, a, RADIUS);
 
                 // drawIcon(eventDisplay, e, nx, actualY, a, scaleFix);
 

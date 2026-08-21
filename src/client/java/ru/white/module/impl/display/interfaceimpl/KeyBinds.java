@@ -109,8 +109,8 @@ public class KeyBinds implements element {
         float alpha2 = animation2.getOutput();
 
         // Отрисовка состояния пустого списка (чат)
-        RenderUtil.Render2D.glow(x, y, MIN_W, H, ColorUtil.replAlpha(ColorUtil.getColor(0), alpha2 * 0.1F), RADIUS, 12, 1);
-        RenderUtil.Blur.blur(x, y, MIN_W, H, alpha2, RADIUS, ColorUtil.replAlpha(ColorUtil.background(), alpha2 * InterFace.getInstance().alphaHUD.getValue()));
+        RenderUtil.Render2D.hudPlate(x, y, MIN_W, H, alpha2, RADIUS, InterFace.getInstance().alphaHUD.getValue());
+        RenderUtil.Render2D.hudAccent(x, y, H, alpha2, RADIUS);
 
         Font font = Fonts.sf_regular;
         Font cat = Fonts.rainydlc_2;
@@ -137,8 +137,8 @@ public class KeyBinds implements element {
         }
 
         // Отрисовка фона списка
-        RenderUtil.Render2D.glow(x, y, w, h - 0.5F, ColorUtil.replAlpha(ColorUtil.getColor(0), alpha * 0.1F), RADIUS, 12, 1);
-        RenderUtil.Blur.blur(x, y, w, h, alpha, RADIUS, ColorUtil.replAlpha(ColorUtil.background(), alpha * InterFace.getInstance().alphaHUD.getValue()));
+        RenderUtil.Render2D.hudPlate(x, y, w, h, alpha, RADIUS, InterFace.getInstance().alphaHUD.getValue());
+        RenderUtil.Render2D.hudAccent(x, y, h, alpha, RADIUS);
 
         float offsetY = y + ROW_START_Y;
         float offsetY2 = 0;

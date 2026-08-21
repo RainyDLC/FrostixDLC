@@ -174,8 +174,8 @@ public class UseTrackerHud implements element {
         float alpha2 = animation2.getOutput();
 
         // Отрисовка состояния пустого списка (в чате)
-        RenderUtil.Render2D.glow(x, y, MIN_W, H, ColorUtil.replAlpha(ColorUtil.getColor(0), alpha2 * 0.1F), RADIUS, 12, 1);
-        RenderUtil.Blur.blur(x, y, MIN_W, H, alpha2, RADIUS, ColorUtil.replAlpha(ColorUtil.background(), alpha2 * InterFace.getInstance().alphaHUD.getValue()));
+        RenderUtil.Render2D.hudPlate(x, y, MIN_W, H, alpha2, RADIUS, InterFace.getInstance().alphaHUD.getValue());
+        RenderUtil.Render2D.hudAccent(x, y, H, alpha2, RADIUS);
 
         Font font = Fonts.sf_regular;
 
@@ -216,8 +216,8 @@ public class UseTrackerHud implements element {
         widthAnim += (w - widthAnim) * 0.2F;
 
         // Отрисовка основного фона
-        RenderUtil.Render2D.glow(x, y, widthAnim, h - 0.5F, ColorUtil.replAlpha(ColorUtil.getColor(0), alpha * 0.1F), RADIUS, 12, 1);
-        RenderUtil.Blur.blur(x, y, widthAnim, h, alpha, RADIUS, ColorUtil.replAlpha(ColorUtil.background(), alpha * InterFace.getInstance().alphaHUD.getValue()));
+        RenderUtil.Render2D.hudPlate(x, y, widthAnim, h, alpha, RADIUS, InterFace.getInstance().alphaHUD.getValue());
+        RenderUtil.Render2D.hudAccent(x, y, h, alpha, RADIUS);
 
         float offsetY = y + ROW_START_Y;
         float offsetY2 = 0;
