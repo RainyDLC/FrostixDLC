@@ -1342,8 +1342,8 @@ public class RotationProcess extends Component {
             renderTargetPentagram(e, immediate, aura, target, alphaPC);
         }
 
-        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Цепи")) {
-            renderTargetChains(e, immediate, aura, target, alphaPC);
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Снег")) {
+            renderTargetSnow(e, immediate, aura, target, alphaPC);
         }
 
 
@@ -1700,27 +1700,13 @@ public class RotationProcess extends Component {
         buf.vertex(m, x0 - nx, 0, z0 - nz).color(c0);
     }
 
-    /** Вертикальная лента-звено на радиусе (x,z): нижняя кромка y0, верхняя y1. */
-    private static void chainStrand(VertexConsumer buf, Matrix4f m,
-                                    float x, float z, float y0, float y1,
-                                    float width, int c0, int c1) {
-        float rl = (float) Math.sqrt(x * x + z * z);
-        if (rl < 1e-5f) return;
-        float tx = (-z / rl) * width;
-        float tz = (x / rl) * width;
-
-        buf.vertex(m, x + tx, y0, z + tz).color(c0);
-        buf.vertex(m, x - tx, y0, z - tz).color(c0);
-        buf.vertex(m, x - tx, y1, z - tz).color(c1);
-        buf.vertex(m, x + tx, y1, z + tz).color(c1);
-    }
-
     /**
-     * Цепи вокруг цели: кольца из звеньев на разной высоте вращаются
-     * в разные стороны и соединяются вертикальными стойками — «клетка».
+     * Снег вокруг цели: снежинки-биллборды на орбитах.
+     * Каждая — шесть заострённых лучей (три перекрестия) + мягкое свечение,
+     * крутится вокруг своей оси и плавно покачивается по высоте.
      */
-    private void renderTargetChains(EventRender3D e, VertexConsumerProvider.Immediate immediate,
-                                    AttackAura aura, LivingEntity target, float alphaPC) {
+    private void renderTargetSnow(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                  AttackAura aura, LivingEntity target, float alphaPC) {
         int hurtTicks = target.hurtTime;
         float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
 
@@ -1728,7 +1714,10 @@ public class RotationProcess extends Component {
         alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
 
         int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
-        int color = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC), redColor, alpha_2.get());
+        int snowWhite = ColorUtil.getColor(235, 245, 255);
+        int color = ColorUtil.overCol(
+                ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC), snowWhite, 0.55f),
+                redColor, alpha_2.get());
 
         long currentTime = System.currentTimeMillis();
         if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
@@ -1736,106 +1725,84 @@ public class RotationProcess extends Component {
         if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
         currentTimeSpirits = currentTime;
 
-        int count = Math.max(1, aura.chainCount.getValue().intValue());
-        float speed = aura.chainSpeed.getValue();
-        float linkSize = aura.chainLink.getValue();
+        int count = Math.max(1, aura.snowCount.getValue().intValue());
+        float speed = aura.snowSpeed.getValue();
+        float radius = aura.snowRadius.getValue() + target.getWidth() * 0.35f + 0.1f;
+        float size = aura.snowSize.getValue();
         float bodyH = target.getHeight();
 
         MatrixStack matrices = e.getMatrixStack();
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
 
-        matrices.push();
-        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
-        Matrix4f m = matrices.peek().getPositionMatrix();
-
-        // геометрия колец: высота, радиус, угол вращения (соседние — в разные стороны)
-        float[] ringY = new float[count];
-        float[] ringR = new float[count];
-        float[] ringA = new float[count];
-        for (int i = 0; i < count; i++) {
-            float frac = count == 1 ? 0.55f : 0.26f + 0.52f * i / (count - 1);
-            ringY[i] = bodyH * frac;
-            ringR[i] = aura.chainRadius.getValue() + target.getWidth() * 0.4f + 0.1f;
-            float dir = (i % 2 == 0) ? 1f : -1f;
-            ringA[i] = animationNurik * 1.7f * speed * dir + i * 47f;
-        }
-
-        // --- Pass 1: мягкое свечение в центре клетки ---
         VertexConsumer texBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
-        matrices.push();
-        matrices.translate(0, bodyH * 0.5f, 0);
-        matrices.multiply(mc.gameRenderer.getCamera().getRotation());
-        float gs = 0.9f;
-        matrices.scale(gs, gs, gs);
-        drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
-                color, color, color, color, (int) (alphaPC * 60));
-        matrices.pop();
-
-        // --- Pass 2: звенья и стойки ---
         VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
 
-        final int LINKS = 22;
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
+
         for (int i = 0; i < count; i++) {
-            for (int j = 0; j < LINKS; j++) {
-                float a0 = (float) Math.toRadians(ringA[i] + j * (360f / LINKS));
-                float a1 = (float) Math.toRadians(ringA[i] + (j + 1) * (360f / LINKS));
-                boolean alt = (j & 1) == 0;
+            // золотое сечение — равномерный разброс высот без «рядов»
+            float heightFrac = 0.22f + 0.6f * ((i * 0.618f) % 1f);
+            double orbA = Math.toRadians(
+                    animationNurik * 1.4f * speed * ((i % 2 == 0) ? 1f : -1f) + i * (360.0 / count));
 
-                // чередование плоских и узких звеньев + лёгкий сдвиг по радиусу
-                float rr = ringR[i] + (alt ? linkSize * 0.18f : -linkSize * 0.18f);
-                float w = alt ? linkSize : linkSize * 0.55f;
-                int col = ColorUtil.replAlpha(color, (int) (alphaPC * (alt ? 105 : 70)));
+            float fx = (float) Math.cos(orbA) * radius;
+            float fz = (float) Math.sin(orbA) * radius;
+            float fy = bodyH * heightFrac
+                    + (float) Math.sin(Math.toRadians(animationNurik * 1.3f + i * 61.0)) * bodyH * 0.08f;
 
-                pentagramRibbon(fillBuf, m,
-                        (float) Math.cos(a0) * rr, (float) Math.sin(a0) * rr,
-                        (float) Math.cos(a1) * rr, (float) Math.sin(a1) * rr,
-                        w, col, col);
+            int col = ColorUtil.replAlpha(color, (int) (alphaPC * 210));
+            int glowCol = ColorUtil.replAlpha(color, (int) (alphaPC * 90));
+            float spin = animationNurik * 2.6f * speed * ((i % 2 == 0) ? 1f : -1f) + i * 53f;
+
+            matrices.push();
+            matrices.translate(fx, fy, fz);
+
+            // мягкое свечение под снежинкой
+            matrices.push();
+            matrices.multiply(mc.gameRenderer.getCamera().getRotation());
+            float g = size * 2.3f;
+            matrices.scale(g, g, g);
+            drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                    glowCol, glowCol, glowCol, glowCol, (int) (alphaPC * 90));
+            matrices.pop();
+
+            // сама снежинка: биллборд, три перекрестия заострённых лучей
+            matrices.push();
+            matrices.multiply(mc.gameRenderer.getCamera().getRotation());
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(spin));
+
+            float L = size;
+            float W = Math.max(size * 0.16f, 0.008f);
+
+            for (int k = 0; k < 3; k++) {
+                matrices.push();
+                matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(k * 60f));
+                Matrix4f bm = matrices.peek().getPositionMatrix();
+
+                // луч-«шип»: вытянутый шестиугольник из двух квадов
+                fillBuf.vertex(bm, -L, -W * 0.45f, 0).color(col);
+                fillBuf.vertex(bm, -L * 0.42f, -W, 0).color(col);
+                fillBuf.vertex(bm, L * 0.42f, -W, 0).color(col);
+                fillBuf.vertex(bm, L, -W * 0.45f, 0).color(col);
+
+                fillBuf.vertex(bm, L, W * 0.45f, 0).color(col);
+                fillBuf.vertex(bm, L * 0.42f, W, 0).color(col);
+                fillBuf.vertex(bm, -L * 0.42f, W, 0).color(col);
+                fillBuf.vertex(bm, -L, W * 0.45f, 0).color(col);
+
+                matrices.pop();
             }
-        }
 
-        // стойки между соседними кольцами: по 4 азимута, каждая из трёх подзвеньев с зазорами
-        for (int i = 0; i + 1 < count; i++) {
-            if (ringY[i + 1] - ringY[i] < 0.08f) continue;
-            float midR = (ringR[i] + ringR[i + 1]) * 0.5f;
-            float midA = ringA[i] + (ringA[i + 1] - ringA[i]) * 0.5f;
-
-            for (int k = 0; k < 4; k++) {
-                double ar = Math.toRadians(midA + k * 90.0);
-                float cx = (float) Math.cos(ar) * midR;
-                float cz = (float) Math.sin(ar) * midR;
-
-                for (int s = 0; s < 3; s++) {
-                    boolean alt = (s & 1) == 0;
-                    float f0 = (s + 0.18f) / 3f;
-                    float f1 = (s + 0.82f) / 3f;
-                    float y0 = ringY[i] + (ringY[i + 1] - ringY[i]) * f0;
-                    float y1 = ringY[i] + (ringY[i + 1] - ringY[i]) * f1;
-
-                    chainStrand(fillBuf, m, cx, cz, y0, y1,
-                            linkSize * (alt ? 1f : 0.6f),
-                            ColorUtil.replAlpha(color, (int) (alphaPC * (alt ? 95 : 65))),
-                            ColorUtil.replAlpha(color, (int) (alphaPC * (alt ? 95 : 65))));
-                }
-            }
-        }
-
-        // --- Pass 3: яркие сердцевины колец ---
-        VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
-        int coreCol = ColorUtil.replAlpha(color, (int) (alphaPC * 150));
-        final int SEGS = 40;
-        for (int i = 0; i < count; i++) {
-            for (int j = 0; j < SEGS; j++) {
-                float a0 = (float) Math.toRadians(ringA[i] + j * (360f / SEGS));
-                float a1 = (float) Math.toRadians(ringA[i] + (j + 1) * (360f / SEGS));
-                lineBuf.vertex(m, (float) Math.cos(a0) * ringR[i], ringY[i], (float) Math.sin(a0) * ringR[i]).color(coreCol);
-                lineBuf.vertex(m, (float) Math.cos(a1) * ringR[i], ringY[i], (float) Math.sin(a1) * ringR[i]).color(coreCol);
-            }
+            matrices.pop();
+            matrices.pop();
         }
 
         matrices.pop();
     }
+
 
 
     private static void drawGradientQuad(VertexConsumer buffer, Matrix4f matrix,int color,int color2,int color3,int color4, int alpha) {
