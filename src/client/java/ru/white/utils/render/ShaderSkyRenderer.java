@@ -291,7 +291,11 @@ public class ShaderSkyRenderer {
     }
 
     private static ByteBuffer createCelestialQuad() {
-        float s = 512.0f;
+        // Ванильный масштаб небесного купола: геометрия живёт в пространстве
+        // "только поворот камеры" вокруг наблюдателя, поэтому размер должен
+        // быть небольшим, иначе грани отсекаются far-плоскостью проекции
+        // (дырки с ванильным небом у горизонта).
+        float s = 16.0f;
         float[] vertices = new float[] {
                 -s, -s, -s,  s, -s, -s,  s,  s, -s,
                 -s, -s, -s,  s,  s, -s, -s,  s, -s,

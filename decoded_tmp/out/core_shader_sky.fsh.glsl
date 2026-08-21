@@ -1,518 +1,333 @@
 #version 330
 
-
-
 layout(std140) uniform ShaderSkyData {
-
     vec4 screenTimeOpacity;
-
     vec4 primaryColor;
-
     vec4 secondaryColor;
-
     vec4 accentColor;
-
     vec4 params;
-
     vec4 extra;
-
 };
 
-
-
 in vec3 skyDir;
-
-
-
 out vec4 fragColor;
 
-
-
-float hash(vec3 p) {
-
-    p = fract(p * vec3(123.34, 456.21, 321.79));
-
-    p += dot(p, p.yzx + 45.32);
-
-    return fract((p.x + p.y) * p.z);
-
+float hash2(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
 }
 
-
-
-float noise(vec3 p) {
-
-    vec3 i = floor(p);
-
-    vec3 f = fract(p);
-
-    vec3 u = f * f * (3.0 - 2.0 * f);
-
-
-
-    float n000 = hash(i + vec3(0.0, 0.0, 0.0));
-
-    float n100 = hash(i + vec3(1.0, 0.0, 0.0));
-
-    float n010 = hash(i + vec3(0.0, 1.0, 0.0));
-
-    float n110 = hash(i + vec3(1.0, 1.0, 0.0));
-
-    float n001 = hash(i + vec3(0.0, 0.0, 1.0));
-
-    float n101 = hash(i + vec3(1.0, 0.0, 1.0));
-
-    float n011 = hash(i + vec3(0.0, 1.0, 1.0));
-
-    float n111 = hash(i + vec3(1.0, 1.0, 1.0));
-
-
-
-    float nx00 = mix(n000, n100, u.x);
-
-    float nx10 = mix(n010, n110, u.x);
-
-    float nx01 = mix(n001, n101, u.x);
-
-    float nx11 = mix(n011, n111, u.x);
-
-    float nxy0 = mix(nx00, nx10, u.y);
-
-    float nxy1 = mix(nx01, nx11, u.y);
-
-    return mix(nxy0, nxy1, u.z);
-
+float noise2D(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = hash2(i);
+    float b = hash2(i + vec2(1.0, 0.0));
+    float c = hash2(i + vec2(0.0, 1.0));
+    float d = hash2(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-
-
-float fbm(vec3 p) {
-
-    float value = 0.0;
-
-    float amp = 0.5;
-
-    for (int i = 0; i < 5; i++) {
-
-        value += noise(p) * amp;
-
-        p = mat3(
-
-            1.53, 0.72, 0.21,
-
-           -0.64, 1.39, 0.57,
-
-            0.31,-0.48, 1.71
-
-        ) * p;
-
-        amp *= 0.5;
-
+float fbm3(vec2 p) {
+    float v = 0.0;
+    float a = 0.55;
+    for (int i = 0; i < 3; i++) {
+        v += noise2D(p) * a;
+        p = mat2(1.55, 1.15, -1.15, 1.55) * p + 7.13;
+        a *= 0.5;
     }
-
-    return value;
-
+    return v;
 }
 
-
+float fbm4(vec2 p) {
+    float v = 0.0;
+    float a = 0.53;
+    for (int i = 0; i < 4; i++) {
+        v += noise2D(p) * a;
+        p = mat2(1.48, 1.08, -1.08, 1.48) * p + 3.71;
+        a *= 0.5;
+    }
+    return v;
+}
 
 vec2 domeUv(vec3 dir) {
-
-    dir = normalize(dir);
-
     float k = 1.0 / (1.0 + max(dir.y, -0.35));
-
     return dir.xz * k * 0.55 + 0.5;
-
 }
 
-
-
-float hash2(vec2 p) {
-
-    p = fract(p * vec2(123.34, 456.21));
-
-    p += dot(p, p + 45.32);
-
-    return fract(p.x * p.y);
-
+// Shared luminous base so every mode stays clearly readable against the world.
+vec3 modeBase(vec3 dir) {
+    float h = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+    return mix(primaryColor.rgb * 0.17, secondaryColor.rgb * 0.34, pow(h, 1.15));
 }
 
-
-
-float noise2(vec2 p) {
-
-    vec2 i = floor(p);
-
-    vec2 f = fract(p);
-
-    vec2 u = f * f * (3.0 - 2.0 * f);
-
-    float a = hash2(i);
-
-    float b = hash2(i + vec2(1.0, 0.0));
-
-    float c = hash2(i + vec2(0.0, 1.0));
-
-    float d = hash2(i + vec2(1.0, 1.0));
-
-    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-
+vec3 starField(vec3 dir, float amount, float time) {
+    if (amount <= 0.001) return vec3(0.0);
+    vec2 p = domeUv(dir) * 175.0;
+    vec2 cell = floor(p);
+    vec2 local = fract(p) - 0.5;
+    float seed = hash2(cell);
+    float pick = smoothstep(1.0 - amount * 0.070, 1.0 - amount * 0.022, seed);
+    float size = mix(0.10, 0.24, fract(seed * 9.17));
+    vec2 off = (vec2(hash2(cell + 3.7), hash2(cell + 8.1)) - 0.5) * 0.5;
+    float d = length(local - off);
+    float shape = smoothstep(size, 0.0, d);
+    float halo = exp(-d * (9.0 + fract(seed * 5.3) * 5.0)) * 0.35;
+    float twinkle = 0.68 + 0.32 * sin(time * (1.4 + fract(seed * 4.1) * 2.2) + seed * 47.0);
+    vec3 tint = mix(vec3(0.74, 0.84, 1.0), vec3(1.0, 0.87, 0.72), fract(seed * 11.7));
+    return tint * ((shape * shape + halo * shape) * twinkle * pick * 1.75);
 }
-
-
-
-float fbm2(vec2 p) {
-
-    float value = 0.0;
-
-    float amp = 0.5;
-
-    for (int i = 0; i < 6; i++) {
-
-        value += noise2(p) * amp;
-
-        p = mat2(1.6, 1.2, -1.2, 1.6) * p;
-
-        amp *= 0.5;
-
-    }
-
-    return value;
-
-}
-
-
-
-float stars(vec3 dir, float amount, float time) {
-
-    vec3 grid = dir * 130.0;
-
-    vec3 cell = floor(grid);
-
-    vec3 local = fract(grid) - 0.5;
-
-    float h = hash(cell);
-
-    float sparkle = smoothstep(0.997 - amount * 0.045, 1.0, h);
-
-    float shape = smoothstep(0.18, 0.0, length(local));
-
-    return sparkle * shape * (0.65 + 0.35 * sin(time * 2.0 + h * 12.0));
-
-}
-
-
 
 vec3 aurora(vec3 dir, float time, float scale, float intensity) {
+    vec3 col = modeBase(dir);
 
-    vec3 p = dir * scale * 2.6;
+    // project onto curtain plane and drift slowly sideways
+    vec2 p = dir.xz / max(dir.y * 0.85 + 0.38, 0.20) * scale;
+    float drift = time * 0.05;
 
-    float flow = fbm(p + vec3(time * 0.08, -time * 0.03, time * 0.04));
+    float acc = 0.0;
+    vec3 tintAcc = vec3(0.0);
+    for (int l = 0; l < 3; l++) {
+        float fl = float(l);
+        vec2 q = p * (1.0 + fl * 0.65) + vec2(drift * (1.0 + fl * 0.4), fl * 3.7);
+        float warp = fbm3(q * 1.6) - 0.5;
 
-    float bands = 0.0;
+        // vertical envelope: defined lower edge, long soft top
+        float bottom = 0.02 + 0.09 * fl + 0.12 * warp;
+        float top = 0.62 + 0.14 * fl + warp * 0.34;
+        float env = smoothstep(bottom, bottom + 0.11, dir.y)
+                  * exp(-max(dir.y - top, 0.0) * (5.0 - fl * 0.9));
+        if (env <= 0.002) continue;
 
-    for (int i = 0; i < 4; i++) {
+        // vertical rays warped by noise
+        float rayU = q.x * 9.0 + warp * 6.5 + drift * 2.2;
+        float rays = pow(0.5 + 0.5 * sin(rayU), 1.7);
+        rays *= 0.70 + 0.30 * fbm3(vec2(q.x * 21.0, dir.y * 3.5 - time * 0.18));
 
-        float fi = float(i);
-
-        float center = -0.15 + fi * 0.18 + sin((dir.x + dir.z) * (2.2 + fi) + time * (0.35 + fi * 0.08)) * 0.10;
-
-        bands += smoothstep(0.18, 0.0, abs(dir.y - center - flow * 0.16));
-
+        float w = env * rays * (1.0 - fl * 0.18);
+        acc += w;
+        tintAcc += mix(primaryColor.rgb, secondaryColor.rgb,
+                       clamp(dir.y * 1.5 - fl * 0.25, 0.0, 1.0)) * w;
     }
 
-    vec3 base = mix(primaryColor.rgb * 0.16, secondaryColor.rgb * 0.32, clamp(dir.y * 0.5 + 0.5, 0.0, 1.0));
+    col += tintAcc * intensity * 1.15;
 
-    vec3 glow = mix(primaryColor.rgb, secondaryColor.rgb, flow);
+    // glowing lower rim
+    float rim = exp(-abs(dir.y - 0.05) * 9.0) * smoothstep(0.05, 0.5, acc);
+    col += accentColor.rgb * rim * intensity * 0.28;
 
-    return base + glow * bands * 0.55 * intensity + accentColor.rgb * pow(bands, 3.0) * 0.24;
-
+    return col;
 }
-
-
 
 vec3 night(vec3 dir, float time, float scale, float intensity) {
-
+    vec3 col = modeBase(dir) * 0.85;
     vec2 uv = domeUv(dir) * scale;
 
-    vec2 drift = vec2(time * 0.0062379, cos(time * 0.0962379)) * (sin(time * 0.0041839) + 1.1);
+    // milky way band with dust structure
+    vec3 axis = normalize(vec3(0.62, 0.42, 0.66));
+    float md = dot(dir, axis);
+    float dust = fbm3(uv * 5.5 + 7.31);
+    float mw = exp(-md * md * 20.0) * (0.40 + 0.60 * dust);
+    col += mix(primaryColor.rgb, vec3(0.88, 0.93, 1.0), 0.45) * mw * intensity * 0.42;
 
-    float n1 = fbm2(uv * 2.0 + drift);
+    // drifting cloud wisps
+    vec2 drift = vec2(time * 0.006, sin(time * 0.004) * 0.30);
+    float cn = fbm3(uv * 2.4 + drift);
+    float wisp = pow(max(0.80 - cn, 0.0), 2.0);
+    col += primaryColor.rgb * wisp * intensity * 0.85;
 
-    float n2 = fbm2(uv * 6.0 + drift * 1.15 + 12.523);
+    // dense tiny stars
+    vec2 sp = uv * 260.0;
+    vec2 cell = floor(sp);
+    vec2 f = fract(sp) - 0.5;
+    float r1 = hash2(cell);
+    float r2 = hash2(cell.yx + 17.0);
+    float tw = 0.65 + 0.35 * sin(time * (0.9 + r1 * 2.6) + r1 * 61.0);
+    float off = (hash2(cell + 3.1) - 0.5) * 0.6;
+    float star = step(0.985, r1) * tw
+               * smoothstep(0.22 + abs(off) * 0.1, 0.0, length(f - vec2(off, 0.0)));
+    col += vec3(0.82, 0.88, 1.0) * star * 1.4 * intensity;
 
-    float cloud = pow(max(0.8 - n1, 0.0), 2.0);
+    // rare bright stars with cross flare
+    float flareMask = step(0.9975, r2);
+    float flare = flareMask
+                * max(0.0, 1.0 - length(f) * 2.4)
+                * max(0.0, 1.0 - (abs(f.x) + abs(f.y)) * 1.5)
+                * (0.75 + 0.25 * sin(time * 1.7 + r1 * 40.0));
+    col += vec3(1.0) * flare * 2.2 * intensity;
 
-    float core = pow(max((0.9 - n2) * cloud, 0.0), 1.1);
-
-    vec2 starCell = floor(uv * 420.0);
-
-    float r1 = hash2(starCell);
-
-    float r2 = hash2(starCell.yx + 17.0);
-
-    float twinkle = sin((time + 10.0) * r1 * 2.7) * 0.8 + 0.5;
-
-    float star = r1 * pow(r2, 20.0) * twinkle * 0.9;
-
-    float h = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
-
-    vec3 base = mix(primaryColor.rgb * 0.08, secondaryColor.rgb * 0.22, h);
-
-    return base + (primaryColor.rgb * cloud * 0.55 + secondaryColor.rgb * core * 0.95 + accentColor.rgb * star) * intensity;
-
+    return col;
 }
-
-
 
 vec3 snow(vec3 dir, float time, float scale, float intensity) {
+    float h = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+    vec3 col = mix(primaryColor.rgb * 0.13, secondaryColor.rgb * 0.24, h);
 
     vec2 uv = domeUv(dir) * 2.0 - 1.0;
-
-    float h = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
-
-    vec3 base = mix(primaryColor.rgb * 0.10, secondaryColor.rgb * 0.18, h);
-
-    float c = smoothstep(1.0, 0.3, clamp(uv.y * 0.3 + 0.8, 0.0, 0.75));
-
-    for (int i = 0; i < 7; i++) {
-
+    float flakes = 0.0;
+    for (int i = 0; i < 5; i++) {
         float fi = float(i);
-
-        float sc = (6.0 + fi * 2.5) * scale;
-
-        vec2 p = uv;
-
-        p += time / sc;
-
-        p.y += time * 2.0 / sc;
-
-        p.x += sin(p.y + time * 0.5) / sc;
-
-        p *= sc;
-
+        float density = (6.0 + fi * 3.5) * scale;
+        vec2 p = uv * density;
+        p.y -= time * (0.55 + fi * 0.10);                            // fall down
+        p.x += sin(time * (0.45 + fi * 0.13) + fi * 2.1) * 0.35;     // gentle sway
         vec2 cell = floor(p);
-
-        vec2 local = fract(p);
-
-        vec2 flake = 0.5 + 0.35 * sin(11.0 * fract(sin((cell + sc) * mat2(7.0, 3.0, 6.0, 5.0)) * 5.0)) - local;
-
-        c += smoothstep(0.035, 0.0, length(flake)) * (0.45 + fi * 0.08);
-
+        vec2 local = fract(p) - 0.5;
+        vec2 offset = (vec2(hash2(cell), hash2(cell + 13.7)) - 0.5) * 0.55;
+        float depth = 0.45 + 0.55 * hash2(cell + 27.3);
+        float d = length(local - offset);
+        float size = 0.090 - fi * 0.007;
+        float flake = smoothstep(size, 0.0, d);
+        flake *= flake;
+        float halo = exp(-d * (15.0 - fi * 1.5)) * 0.12;
+        flakes += (flake * depth + halo) * (0.42 + fi * 0.13);
     }
 
-    return base + mix(primaryColor.rgb, accentColor.rgb, 0.75) * c * intensity;
-
+    col += mix(primaryColor.rgb, vec3(1.0), 0.72) * flakes * intensity;
+    return col;
 }
-
-
 
 vec3 sky(vec3 dir, float time, float scale, float intensity) {
-
-    vec2 p = domeUv(dir) * scale * 1.1;
-
     float h = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+    vec2 p = domeUv(dir) * scale * 1.1 + vec2(time * 0.020, time * 0.011);
 
-    float q = fbm2(p * 0.5);
+    // domain-warped clouds with softly shaded tops
+    vec2 warp = vec2(fbm3(p * 1.8), fbm3(p * 1.8 + 4.7));
+    vec2 cp = p * 2.4 + warp * 1.5;
+    float density = fbm4(cp);
+    float densityLit = fbm4(cp + vec2(-0.07, -0.05));
+    float clouds = smoothstep(0.30, 0.78, density);
+    float shade = clamp(0.5 + (density - densityLit) * 3.2, 0.0, 1.0);
 
-    float r = 0.0;
+    vec3 base = mix(primaryColor.rgb * 0.44, secondaryColor.rgb * 0.66, h);
+    vec3 cloudCol = mix(accentColor.rgb * 0.92 + secondaryColor.rgb * 0.08,
+                        secondaryColor.rgb, density * 0.35);
+    cloudCol *= 0.76 + 0.48 * shade;
 
-    vec2 uv = p - q + time * 0.03;
+    vec3 col = mix(base, cloudCol, clouds * min(intensity, 1.2));
 
-    float weight = 0.8;
-
-    for (int i = 0; i < 8; i++) {
-
-        r += abs(weight * noise2(uv));
-
-        uv = mat2(1.6, 1.2, -1.2, 1.6) * uv + time * 0.03;
-
-        weight *= 0.7;
-
-    }
-
-    float f = 0.0;
-
-    uv = p - q + time * 0.03;
-
-    weight = 0.2;
-
-    for (int i = 0; i < 8; i++) {
-
-        f += weight * noise2(uv);
-
-        uv = mat2(1.6, 1.2, -1.2, 1.6) * uv + time * 0.03;
-
-        weight *= 0.6;
-
-    }
-
-    float clouds = clamp(0.2 + 8.0 * f * r + r * 0.25, 0.0, 1.0);
-
-    vec3 base = mix(primaryColor.rgb * 0.30, secondaryColor.rgb * 0.50, h);
-
-    vec3 cloud = vec3(1.1, 1.1, 0.9) * mix(accentColor.rgb, secondaryColor.rgb, 0.18);
-
-    return mix(base, cloud, clouds * intensity);
-
+    // warm haze along the horizon
+    float haze = 1.0 - smoothstep(0.0, 0.38, abs(dir.y));
+    col = mix(col, mix(secondaryColor.rgb, accentColor.rgb, 0.40) * 0.74, haze * 0.38);
+    return col;
 }
-
-
 
 vec3 starMode(vec3 dir, float time, float scale, float intensity) {
+    vec3 col = modeBase(dir) * 0.65;
 
-    vec2 uv = (domeUv(dir) - 0.5) * vec2(2.0, 2.0) * scale;
+    // faint static sprinkle between meteors
+    vec2 bp = domeUv(dir) * 220.0 * scale;
+    vec2 bc = floor(bp);
+    float br = hash2(bc);
+    vec2 bf = fract(bp) - 0.5;
+    float bstar = step(0.993, br) * smoothstep(0.16, 0.0, length(bf))
+                * (0.60 + 0.40 * sin(time * 2.0 + br * 50.0));
+    col += vec3(0.85, 0.90, 1.0) * bstar * 0.9 * intensity;
 
-    uv.x += sin(0.2 + uv.y * 0.8) * 0.5;
+    // meteors falling in swaying columns
+    vec2 uv = (domeUv(dir) - 0.5) * 2.0 * scale;
+    float sway = sin(0.2 + uv.y * 0.8) * 0.5;
+    float cols = 26.0 / max(scale, 0.4);
+    float cx = floor((uv.x + sway) * cols);
+    float fx = fract((uv.x + sway) * cols) - 0.5;
 
-    uv.x *= 50.0;
-
-    float dx = fract(uv.x);
-
-    uv.x = floor(uv.x);
-
-    uv.y *= 0.15;
-
-    float o = sin(uv.x * 215.4);
-
-    float s = cos(uv.x * 33.1) * 0.3 + 0.7;
-
-    float trail = mix(95.0, 35.0, s);
-
-    float yv = fract(uv.y + time * 0.4 * s + o) * trail;
-
-    yv = 1.0 / max(yv, 0.001);
-
-    yv = smoothstep(0.0, 1.0, yv * yv);
-
-    yv = sin(yv * 3.14159) * (s * 5.0);
-
-    float d2 = sin(dx * 3.14159);
-
-    yv *= d2 * d2;
-
-    float h = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
-
-    vec3 base = mix(primaryColor.rgb * 0.05, secondaryColor.rgb * 0.18, h);
-
-    return base + mix(primaryColor.rgb, secondaryColor.rgb, s) * sqrt(max(yv, 0.0)) * intensity;
-
+    float seed = hash2(vec2(cx, 5.0));
+    float gate = hash2(vec2(cx, 31.0));
+    if (gate > 0.35) {
+        float period = 1.6 + seed * 2.4;
+        float phase = fract(time / period + seed * 7.0);
+        float yHead = 1.15 - phase * 1.3;
+        float y = uv.y * 0.5 + 0.5;
+        float d = yHead - y;
+        float len = 0.10 + seed * 0.16;
+        float life = smoothstep(0.0, 0.07, phase) * (1.0 - smoothstep(0.92, 1.0, phase));
+        float body = exp(-max(d, 0.0) * (1.0 / len)) * step(0.0, d);
+        body += exp(-abs(d) * 24.0) * 0.9;      // hot head
+        float lateral = exp(-fx * fx * 22.0);
+        vec3 mcol = mix(primaryColor.rgb, vec3(1.0), 0.65);
+        col += mcol * body * lateral * life * intensity * 1.6;
+    }
+    return col;
 }
-
-
 
 vec3 glow(vec3 dir, float time, float scale, float intensity) {
+    vec3 col = modeBase(dir) * 0.55;
 
-    vec2 uv = (domeUv(dir) - 0.5) * 2.0 * scale;
-
-    for (float i = 1.0; i < 10.0; i++) {
-
-        uv.x += 0.6 / i * cos(i * 2.5 * uv.y + time);
-
-        uv.y += 0.6 / i * cos(i * 1.5 * uv.x + time);
-
+    vec2 p = (domeUv(dir) - 0.5) * 2.0 * scale;
+    for (float i = 1.0; i < 6.0; i++) {
+        p.x += 0.55 / i * cos(i * 2.2 * p.y + time * 1.1);
+        p.y += 0.50 / i * cos(i * 1.4 * p.x - time * 0.8);
     }
 
-    float wave = 0.1 / max(abs(sin(time - uv.y - uv.x)), 0.035);
+    float bands = 0.5 + 0.5 * sin(p.x * 2.0 + p.y * 3.0 + time * 0.6);
+    float silk = pow(bands, 2.2);
+    float lines = pow(max(sin((p.x + p.y) * 5.0 + time), 0.0), 12.0) * 0.35;
 
-    float h = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
-
-    vec3 base = mix(primaryColor.rgb * 0.04, secondaryColor.rgb * 0.10, h);
-
-    return base + mix(primaryColor.rgb, secondaryColor.rgb, smoothstep(0.0, 1.2, wave)) * wave * intensity;
-
+    col += mix(primaryColor.rgb, secondaryColor.rgb, silk) * silk * intensity * 1.35;
+    col += accentColor.rgb * lines * intensity;
+    return col;
 }
 
-
-
 vec3 plasma(vec3 dir, float time, float scale, float intensity) {
+    vec3 col = modeBase(dir) * 0.60;
+
     vec2 uv = (domeUv(dir) - 0.5) * 1.6 * scale;
-    float t = time * 0.6;
-    float h = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+    float t = time * 0.55;
+    float ca = cos(t * 0.05);
+    float sa = sin(t * 0.05);
+    uv = mat2(ca, -sa, sa, ca) * uv;
 
-    // domain-warped fractal noise -> organic plasma blobs
-    vec2 q = vec2(fbm2(uv * 1.6 + vec2(0.0, t * 0.20)),
-                  fbm2(uv * 1.6 + vec2(5.2, 1.3) - t * 0.15));
-    vec2 r = vec2(fbm2(uv * 2.0 + 4.0 * q + vec2(1.7, 9.2) + t * 0.13),
-                  fbm2(uv * 2.0 + 4.0 * q + vec2(8.3, 2.8) - t * 0.11));
-    float f = fbm2(uv * 2.4 + 4.0 * r);
+    vec2 q = vec2(fbm3(uv * 1.6 + vec2(0.0, t * 0.22)),
+                  fbm3(uv * 1.6 + vec2(5.2, 1.3) - t * 0.17));
+    float field = fbm4(uv * 2.1 + q * 3.4);
+    float filaments = pow(clamp(field * 1.5 - 0.25, 0.0, 1.0), 1.6);
 
-    // neon plasma sine bands
-    float bands = sin((uv.x + uv.y) * 6.2831 + t * 2.0 + f * 6.2831)
-                + sin((uv.x - uv.y) * 5.0 - t * 1.5 + f * 6.2831)
-                + sin(length(uv) * 11.0 - t * 3.0);
-    bands *= 0.3333;
+    vec3 neb = mix(primaryColor.rgb, secondaryColor.rgb, clamp(q.x * 1.2, 0.0, 1.0));
+    neb += accentColor.rgb * pow(filaments, 3.0) * 0.9;
 
-    float m = clamp(0.5 + 0.5 * f + 0.30 * bands, 0.0, 1.0);
-    vec3 pcol = mix(primaryColor.rgb, secondaryColor.rgb, m);
-    pcol += accentColor.rgb * pow(max(bands, 0.0), 3.0) * 0.30;
-
-    vec3 base = mix(primaryColor.rgb * 0.05, secondaryColor.rgb * 0.12, h);
-    return base + pcol * intensity;
+    col += neb * (0.35 + filaments * 0.95) * intensity;
+    return col;
 }
 
 void main() {
-
-    float time = screenTimeOpacity.z * params.y;
-
+    float time = screenTimeOpacity.z;
     float opacity = screenTimeOpacity.w;
-
     float mode = params.x;
-
     float scale = max(params.z, 0.01);
-
     float intensity = params.w;
-
-    float starAmount = extra.x;
-
-    float vanillaBlend = extra.y;
-
     vec3 dir = normalize(skyDir);
-
     vec3 color;
 
-
-
     if (mode < 0.5) {
-
         color = aurora(dir, time, scale, intensity);
-
     } else if (mode < 1.5) {
-
         color = night(dir, time, scale, intensity);
-
     } else if (mode < 2.5) {
-
         color = snow(dir, time, scale, intensity);
-
     } else if (mode < 3.5) {
-
         color = sky(dir, time, scale, intensity);
-
     } else if (mode < 4.5) {
-
         color = starMode(dir, time, scale, intensity);
-
-        } else if (mode < 5.5) {
+    } else if (mode < 5.5) {
         color = glow(dir, time, scale, intensity);
     } else {
         color = plasma(dir, time, scale, intensity);
     }
 
+    color += starField(dir, extra.x, time) * smoothstep(-0.12, 0.55, dir.y);
 
+    // soft atmospheric band at the horizon
+    float horizon = 1.0 - smoothstep(0.0, 0.30, abs(dir.y + 0.03));
+    color += mix(secondaryColor.rgb, accentColor.rgb, 0.45) * horizon * 0.10;
 
-    float starValue = stars(dir, starAmount, time) * smoothstep(-0.15, 0.65, dir.y);
+    // mild zenith falloff — keeps every mode readable low near the horizon too
+    color *= 0.86 + 0.26 * smoothstep(-0.55, 0.85, dir.y);
+    // filmic-style curve with higher exposure than before
+    color = (color * 1.32) / (1.0 + 0.22 * color);
 
-    color += accentColor.rgb * starValue;
-
-    color *= 0.72 + smoothstep(-0.65, 0.85, dir.y) * 0.34;
-
-
-
-    float alpha = opacity * mix(1.0, 0.72, clamp(vanillaBlend, 0.0, 1.0));
-
-    fragColor = vec4(color, alpha);
-
+    float dith = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+    color += (dith - 0.5) * (1.6 / 255.0);
+    // The procedural dome fully replaces Minecraft's sky; alpha stays opaque.
+    fragColor = vec4(color, opacity);
 }
-

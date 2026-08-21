@@ -169,8 +169,8 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         float bgX = (screenWidth - bgW) / 2F + offsetX;
         float bgY = (screenHeight - bgH) / 2F + offsetY;
 
-        // фон-картинка в глубокой дождливой синей тонировке
-        RenderUtil.Images.texture(MENU_BG, bgX, bgY, bgW, bgH, ColorUtil.getColor(105, 155, 210, alphaVal));
+        // фон-картинка в естественных цветах, без синей тонировки
+        RenderUtil.Images.texture(MENU_BG, bgX, bgY, bgW, bgH, ColorUtil.getColor(255, 255, 255, alphaVal));
 
         ScreenBlur.capture(2);
         RenderUtil.Blur.blur(0, 0, screenWidth, screenHeight, alphaVal,
@@ -202,26 +202,18 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     // ── дождевой фон ────────────────────────────────────────────────────
 
     private void drawRainyBackground(int sw, int sh, float a, float time) {
-        // градиент глубокого синего дождевого неба
-        int tl = ColorUtil.getColor(12, 42, 82, a * 0.62F);
-        int tr = ColorUtil.getColor(8, 31, 66, a * 0.62F);
-        int br = ColorUtil.getColor(2, 8, 22, a * 0.82F);
-        int bl = ColorUtil.getColor(3, 13, 31, a * 0.82F);
-        Draw.gradientRect(0, 0, sw, sh, new int[]{tl, tr, br, bl}, 0);
-
         float cx = sw / 2F;
         float cy = sh * 0.30F;
 
-        // 2) очень мягкое «дышащее» гало за логотипом — едва заметная холодная
-        // дымка вместо яркой вспышки: без пересвеченного белого ядра,
-        // медленная пульсация (вдох/выдох), холодный синий тон
+        // очень мягкое «дышащее» гало за логотипом — едва заметная холодная
+        // дымка: без пересвеченного белого ядра, медленная пульсация (вдох/выдох)
         float breathe = 0.70F + 0.30F * (float) Math.sin(time * 0.7F);
         RenderUtil.Images.texture(GLOW_TEX, cx - 200, cy - 155, 400, 310,
                 ColorUtil.getColor(40, 105, 185, a * 0.12F * breathe));
         RenderUtil.Images.texture(GLOW_TEX, cx - 110, cy - 85, 220, 170,
                 ColorUtil.getColor(55, 130, 210, a * 0.10F * breathe));
 
-        // 6) виньетка: лёд темнеет к верхнему и нижнему краю
+        // виньетка: края мягко темнеют
         int edge = ColorUtil.getColor(3, 8, 20, a * 0.8F);
         int edgeT = ColorUtil.getColor(3, 8, 20, 0F);
         Draw.gradientRect(0, 0, sw, 64, new int[]{edge, edge, edgeT, edgeT}, 0);

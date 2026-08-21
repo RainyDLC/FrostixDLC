@@ -20,6 +20,7 @@
     "HeldItemRendererMixin",
     "ChatScreenMixin",
     "WorldRendererMixin",
+    "SkyRenderingMixin",
     "PlayerListEntryMixin",
     "ClientPlayerInteractionManagerMixin",
     "StatusEffectFogModifierMixin",
