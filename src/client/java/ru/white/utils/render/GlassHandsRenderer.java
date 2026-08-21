@@ -89,14 +89,13 @@ public class GlassHandsRenderer {
     private int outlineGlowMode = 2;
     private boolean outlineUseItemColor = false;
 
-    // Electric silhouette parameters
     private boolean lightningEnabled = false;
-    private int lightningColor = 0x66CCFF;
+    private int lightningColor = 0xFF66CCFF;
     private float lightningAlpha = 1.0f;
-    private float lightningCount = 12.0f;
+    private float lightningCount = 16.0f;
     private float lightningSpeed = 1.0f;
-    private float lightningRadius = 5.0f;
-    private float lightningLength = 26.0f;
+    private float lightningRadius = 4.0f;
+    private float lightningLength = 24.0f;
     private float lightningSwing = 0.0f;
 
     public GlassHandsRenderer() {
@@ -186,7 +185,7 @@ public class GlassHandsRenderer {
     public void setOutlineUseItemColor(boolean use) { this.outlineUseItemColor = use; }
     public void setLightningEnabled(boolean enabled) { this.lightningEnabled = enabled; }
     public void setLightningColor(int rgb) { this.lightningColor = rgb & 0xFFFFFF; }
-    public void setLightningAlpha(float alpha) { this.lightningAlpha = Math.max(0f, Math.min(1f, alpha)); }
+    public void setLightningAlpha(float alpha) { this.lightningAlpha = Math.max(0.0f, Math.min(1.0f, alpha)); }
     public void setLightningCount(float count) { this.lightningCount = count; }
     public void setLightningSpeed(float speed) { this.lightningSpeed = speed; }
     public void setLightningRadius(float radius) { this.lightningRadius = radius; }
@@ -435,6 +434,12 @@ public class GlassHandsRenderer {
                     lastWidth, lastHeight, outlineGlowStrength, outlineWidth,
                     outlineGlowMode, outlineColor, outlineColorFill,
                     sceneAfterTextureView, outlineUseItemColor);
+        }
+
+        if (lightningEnabled && lightningOutline != null) {
+            lightningOutline.render(maskTextureView, fb.getColorAttachmentView(),
+                    lastWidth, lastHeight, lightningColor, lightningAlpha,
+                    lightningCount, lightningSpeed, lightningRadius, lightningLength, lightningSwing);
         }
 
         maskReady = false;

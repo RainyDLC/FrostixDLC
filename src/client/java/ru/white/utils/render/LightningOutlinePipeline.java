@@ -24,7 +24,7 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
-/** Draws animated electric arcs along the exact first-person hand/item mask. */
+/** Draws animated electric arcs along the first-person mask. */
 public final class LightningOutlinePipeline {
 
     private static final RenderPipeline PIPELINE = RenderPipelines.register(
@@ -74,7 +74,7 @@ public final class LightningOutlinePipeline {
     public void render(GpuTextureView maskView, GpuTextureView targetView,
                        int width, int height, int rgb, float alpha,
                        float count, float speed, float radius, float length, float swing) {
-        if (maskView == null || targetView == null || alpha <= 0.001f) return;
+        if (maskView == null || targetView == null || alpha <= 0.001f || width <= 0 || height <= 0) return;
         ensureInitialized();
 
         float red = ((rgb >> 16) & 0xFF) / 255f;
