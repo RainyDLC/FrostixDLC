@@ -47,6 +47,8 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     private static final Identifier SNOWFLAKE_TEX = Identifier.of("client", "textures/particles/snowflake.png");
     /** Текстура молний — та же, что в LightningRenderer (Отображение таргета). */
     private static final Identifier BOLT_TEX = Identifier.of("client", "textures/visuals/particles_2.png");
+    /** Стрелка раскрытия информационной панели (при повороте 0° смотрит вверх). */
+    private static final Identifier ARROW_TEX = Identifier.of("client", "textures/arrow.png");
 
     /** Кристаллы инея по краям: {X, Y (доли экрана), размер, альфа 0-255, фаза пульсации}. */
     private static final float[][] FROST_SPOTS = {
@@ -66,6 +68,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
     public MainMenuScreen() {
         super(Text.literal("MainMenuScreen"));
+        infoAnim.set(1); // панель по умолчанию раскрыта
     }
 
     public Animation alpha = new Animation();
@@ -88,6 +91,11 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     // язык: маленькая кнопка-переключатель РУС/АНГ в углу экрана
     private float langBtnX, langBtnY, langBtnW, langBtnH;
     private final Animation langHover = new Animation();
+
+    // информационная панель (низ слева): раскрытие/свёртывание по клику на заголовок
+    private boolean infoExpanded = true;
+    private final Animation infoAnim = new Animation();
+    private float infoBtnX, infoBtnY, infoBtnW, infoBtnH;
 
     @Override
     protected void init() {
@@ -206,7 +214,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         drawMenuButtons(screenWidth, screenHeight, alphaVal);
 
         // вспомогательный UI морозной темы
-        drawCryoConsole(screenWidth, screenHeight, alphaVal, time);
+        drawInfoPanel(screenWidth, screenHeight, alphaVal, time);
         drawSignature(screenWidth, screenHeight, alphaVal, time);
         drawLanguageButton(screenWidth, alphaVal);
 
@@ -227,13 +235,14 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         float cx = sw / 2F;
         float cy = sh * 0.30F;
 
-        // 2) яркая вспышка полярного сияния в центре (под логотипом)
-        RenderUtil.Images.texture(GLOW_TEX, cx - 190, cy - 150, 380, 300,
-                ColorUtil.getColor(80, 200, 255, a * 0.30F));
-        RenderUtil.Images.texture(GLOW_TEX, cx - 100, cy - 80, 200, 160,
-                ColorUtil.getColor(140, 240, 255, a * 0.35F));
-        RenderUtil.Images.texture(GLOW_TEX, cx - 46, cy - 40, 92, 80,
-                ColorUtil.getColor(200, 250, 255, a * 0.40F));
+        // 2) очень мягкое «дышащее» гало за логотипом — едва заметная холодная
+        // дымка вместо яркой вспышки: без пересвеченного белого ядра,
+        // медленная пульсация (вдох/выдох), холодный аквамариновый тон
+        float breathe = 0.70F + 0.30F * (float) Math.sin(time * 0.7F);
+        RenderUtil.Images.texture(GLOW_TEX, cx - 200, cy - 155, 400, 310,
+                ColorUtil.getColor(60, 170, 230, a * 0.10F * breathe));
+        RenderUtil.Images.texture(GLOW_TEX, cx - 110, cy - 85, 220, 170,
+                ColorUtil.getColor(80, 190, 240, a * 0.09F * breathe));
 
         // 3) морозные узоры: полупрозрачные кристаллы инея по краям экрана
         for (float[] s : FROST_SPOTS) {
@@ -250,13 +259,24 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         Draw.gradientRect(0, sh - 80, sw, 80, new int[]{edgeT, edgeT, edge, edge}, 0);
     }
 
-    // ── консоль крио-лаборатории (низ слева) ────────────────────────────
+    // ── информационная панель (низ слева): клик по заголовку — раскрыть/свернуть ──
 
-    private void drawCryoConsole(int sw, int sh, float a, float time) {
-        float w = 160, h = 48;
-        float x = 12, y = sh - h - 12;
+    private void drawInfoPanel(int sw, int sh, float a, float time) {
+        float w = 160;
+        float headerH = 20F;                 // заголовок виден всегда
+        float bodyH = 28F;                   // три строки информации
+        float x = 12;
 
-        // панель приборов: ровная морозная заливка + тёмный контур
+        infoAnim.update();
+        float open = infoAnim.get();         // 0 — свёрнуто, 1 — развёрнуто
+        float h = headerH + bodyH * open;
+        float y = sh - h - 12;               // низ панели закреплён, раскрывается вверх
+
+        // кликабельная зона — заголовок
+        infoBtnX = x; infoBtnY = y; infoBtnW = w; infoBtnH = headerH;
+        boolean hov = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, x, y, w, headerH);
+
+        // панель: ровная морозная заливка + тёмный контур
         RenderUtil.Blur.blur(x, y, w, h, 1, 9, ColorUtil.getColor(6, 16, 38, a * 0.60F));
         Draw.rect(x, y, w, h, ColorUtil.getColor(14, 40, 74, a * 0.40F), 9);
         Draw.outline(x, y, w, h, 0.8F, ColorUtil.getColor(6, 24, 46, a * 0.90F), 9);
@@ -264,26 +284,50 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
         float blink = 0.45F + 0.55F * (float) Math.abs(Math.sin(time * 2.4F));
         int teal = ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * 0.95F);
-        int dim = ColorUtil.getColor(150, 200, 210, a * 0.55F);
 
-        // заголовок + мигающий индикатор
-        Fonts.sf_regular.draw("CRYO CONSOLE", x + 10, y + 7, 5.5F, teal);
-        Draw.rect(x + w - 16, y + 7.5F, 4.5F, 4.5F, ColorUtil.getColor(80, 255, 230, a * blink), 2.2F);
+        // заголовок + мигающий индикатор рядом с текстом
+        String title = "INFORMATION";
+        Fonts.sf_regular.draw(title, x + 10, y + 7, 5.5F, teal);
+        Draw.rect(x + 10 + Fonts.sf_regular.getWidth(title, 5.5F) + 4, y + 7.5F, 4.5F, 4.5F,
+                ColorUtil.getColor(80, 255, 230, a * blink), 2.2F);
 
-        // разделитель
-        Draw.rect(x + 10, y + 16.5F, w - 20, 0.5F, ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * 0.25F));
+        // стрелка раскрытия: свёрнуто — смотрит вниз, развёрнуто — вверх (плавный поворот)
+        float arrowSize = 7F;
+        int arrowCol = ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * (0.45F + (hov ? 0.55F : 0F)));
+        Client.get().render2D().getTexturePipeline().drawGlowTexture(
+                ARROW_TEX, x + w - 14, y + headerH / 2F - arrowSize / 2F, arrowSize, arrowSize,
+                0F, 0F, 1F, 1F,
+                new int[]{arrowCol, arrowCol, arrowCol, arrowCol},
+                new float[]{0F, 0F, 0F, 0F}, 0F, 180F * (1F - open));
 
-        // строка 1: FPS + версия
-        Fonts.sf_regular.draw("FPS " + mc.getCurrentFps(), x + 10, y + 20, 5, dim);
-        String ver = "VER 1.21.11";
-        Fonts.sf_regular.draw(ver, x + w - 10 - Fonts.sf_regular.getWidth(ver, 5), y + 20, 5, dim);
+        if (open > 0.01F) {
+            float ca = a * open;             // контент проявляется вместе с раскрытием
+            int dim = ColorUtil.getColor(150, 200, 210, ca * 0.55F);
 
-        // строка 2: время + статус
-        String t = new SimpleDateFormat("HH:mm").format(new Date());
-        Fonts.sf_regular.draw("TIME " + t, x + 10, y + 29, 5, dim);
-        String status = "SYSTEM ONLINE";
-        Fonts.sf_regular.draw(status, x + w - 10 - Fonts.sf_regular.getWidth(status, 5), y + 29, 5,
-                ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * (0.5F + 0.4F * blink)));
+            // разделитель под заголовком
+            Draw.rect(x + 10, y + 16.5F, w - 20, 0.5F, ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, ca * 0.25F));
+
+            // строка 1: текущий ник игрока
+            String nick = mc.getSession() != null ? mc.getSession().getUsername() : "-";
+            Fonts.sf_regular.draw("USER " + nick, x + 10, y + 20, 5,
+                    ColorUtil.getColor(190, 235, 250, ca * 0.85F));
+
+            // строка 2: FPS + версия
+            if (h >= 35F) {
+                Fonts.sf_regular.draw("FPS " + mc.getCurrentFps(), x + 10, y + 28, 5, dim);
+                String ver = "VER 1.21.11";
+                Fonts.sf_regular.draw(ver, x + w - 10 - Fonts.sf_regular.getWidth(ver, 5), y + 28, 5, dim);
+            }
+
+            // строка 3: время + статус
+            if (h >= 43F) {
+                String t = new SimpleDateFormat("HH:mm").format(new Date());
+                Fonts.sf_regular.draw("TIME " + t, x + 10, y + 36, 5, dim);
+                String status = "SYSTEM ONLINE";
+                Fonts.sf_regular.draw(status, x + w - 10 - Fonts.sf_regular.getWidth(status, 5), y + 36, 5,
+                        ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, ca * (0.5F + 0.4F * blink)));
+            }
+        }
     }
 
     // ── подпись автора со сияющей снежинкой (низ справа) ────────────────
@@ -396,6 +440,11 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         if (button == 0) {
             if (MathUtil.isHovered(mouseX, mouseY, langBtnX, langBtnY, langBtnW, langBtnH)) {
                 ru.white.lang.Lang.toggle();
+                return true;
+            }
+            if (MathUtil.isHovered(mouseX, mouseY, infoBtnX, infoBtnY, infoBtnW, infoBtnH)) {
+                infoExpanded = !infoExpanded;
+                infoAnim.run(infoExpanded ? 1 : 0, 0.3F, Easings.QUAD_OUT);
                 return true;
             }
             for (MenuButton btn : buttons) {
@@ -531,11 +580,13 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         private void drawFrostPanel(float x, float y, float width, float height, float globalAlpha, float hp, int accent) {
             float radius = 9F;
 
+            // полупрозрачность "как у name tag": фон и блюр сильно прозрачнее,
+            // сквозь панели просвечивает фон (аврора, снежинки)
             RenderUtil.Blur.blur(x, y, width, height, 1, radius + 3F,
-                    ColorUtil.getColor(8, 20, 46, globalAlpha * (0.50F + hp * 0.15F)));
+                    ColorUtil.getColor(8, 20, 46, globalAlpha * (0.16F + hp * 0.08F)));
 
-            // ровный морозный цвет без вертикального градиента
-            int fill = ColorUtil.getColor(20, 48, 88, globalAlpha * (0.26F + hp * 0.10F));
+            // ровный морозный цвет без вертикального градиента — тонкая вуаль
+            int fill = ColorUtil.getColor(20, 48, 88, globalAlpha * (0.07F + hp * 0.06F));
             Draw.rect(x, y, width, height, fill, radius);
 
             // тёмная обводка, гаснет при наведении — её сменяют молнии
