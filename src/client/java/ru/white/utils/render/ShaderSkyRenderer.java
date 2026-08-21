@@ -208,7 +208,7 @@ public class ShaderSkyRenderer {
         dataBuffer.putFloat(module.scale.getValue());
         dataBuffer.putFloat(module.intensity.getValue());
         dataBuffer.putFloat(module.stars.getValue());
-        dataBuffer.putFloat(module.vanillaSky.getValue() ? 1.0f : 0.0f);
+        dataBuffer.putFloat(module.hideVanillaSky.getValue() ? 1.0f : 0.0f);
         dataBuffer.putFloat(0.0f);
         dataBuffer.putFloat(0.0f);
         dataBuffer.flip();

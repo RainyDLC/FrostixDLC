@@ -56,6 +56,19 @@ public class WorldRendererMixin {
         ShaderSkyRenderer.getInstance().renderCelestialShader();
     }
 
+    @Inject(
+            method = "renderTopSky",
+            at = @At("HEAD"),
+            cancellable = true,
+            require = 0
+    )
+    private void hideVanillaSky(int renderMode, CallbackInfo ci) {
+        ShaderSky shaderSky = ShaderSky.getInstance();
+        if (shaderSky != null && shaderSky.isEnabled() && shaderSky.hideVanillaSky.getValue()) {
+            ci.cancel();
+        }
+    }
+
     @Inject(method = "render", at = @At("RETURN"))
     private void publishWorldRenderEvent(
             ObjectAllocator allocator, RenderTickCounter tickCounter, boolean renderBlockOutline, Camera camera, Matrix4f positionMatrix, Matrix4f basicProjectionMatrix, Matrix4f projectionMatrix, GpuBufferSlice fogBuffer, Vector4f fogColor, boolean renderSky, CallbackInfo ci

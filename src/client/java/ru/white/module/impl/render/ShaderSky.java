@@ -40,7 +40,7 @@ public class ShaderSky extends Module {
             .setVisible(() ->  typeColor.is("Свой"));
     public ColorSetting color2 = new ColorSetting(this, "Цвет 2", 0xFFFF7AE6)
             .setVisible(() ->  typeColor.is("Свой"));
-    public BooleanSetting vanillaSky = new BooleanSetting(this, "Ванильное небо", false);
+    public BooleanSetting hideVanillaSky = new BooleanSetting(this, "Убрать небо", true);
     public ShaderSky() {
         instance = this;
     }
