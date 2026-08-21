@@ -136,6 +136,13 @@ public final class SkyLightningRenderer {
         s.impact = impact;
         s.pts.addAll(LightningPath.generate(start, end, 3, skyH * 0.09, random));
 
+        // канал не должен нырять под землю
+        float minY = (float) impact.y - 0.05f;
+        for (int i = 0; i < s.pts.size(); i++) {
+            Vec3d p = s.pts.get(i);
+            if (p.y < minY) s.pts.set(i, new Vec3d(p.x, minY, p.z));
+        }
+
         // ветвления от случайных точек основного канала
         for (int b = 0; b < 3; b++) {
             if (s.pts.size() < 6) break;
