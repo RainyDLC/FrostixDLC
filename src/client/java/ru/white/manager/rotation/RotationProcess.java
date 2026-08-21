@@ -7,6 +7,8 @@ import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.*;
+import net.minecraft.client.render.entity.LivingEntityRenderer;
+import net.minecraft.client.render.entity.state.LivingEntityRenderState;
 import net.minecraft.client.util.BufferAllocator;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
@@ -1357,6 +1359,10 @@ public class RotationProcess extends Component {
             renderTargetFire(e, immediate, aura, target, alphaPC);
         }
 
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Скелет")) {
+            renderTargetSkeleton(e, immediate, aura, target, alphaPC);
+        }
+
 
         immediate.draw();
 
@@ -2079,6 +2085,273 @@ public class RotationProcess extends Component {
         return ((int) (ra + (rb - ra) * t) << 16)
                 | ((int) (ga + (gb - ga) * t) << 8)
                 | (int) (ba + (bb - ba) * t);
+    }
+
+    /** Лента-кость в плоскости XY (каркас смотрит в камеру). */
+    private static void boneRibbon(VertexConsumer buf, Matrix4f m,
+                                   float x0, float y0, float x1, float y1,
+                                   float w, int c) {
+        float dx = x1 - x0, dy = y1 - y0;
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-5f) return;
+        float nx = (-dy / len) * w;
+        float ny = (dx / len) * w;
+
+        buf.vertex(m, x0 + nx, y0 + ny, 0).color(c);
+        buf.vertex(m, x1 + nx, y1 + ny, 0).color(c);
+        buf.vertex(m, x1 - nx, y1 - ny, 0).color(c);
+        buf.vertex(m, x0 - nx, y0 - ny, 0).color(c);
+    }
+
+    private static void boneDisc(VertexConsumer buf, Matrix4f m,
+                                 float cx, float cy, float r, int segs, int c) {
+        for (int i = 0; i < segs; i++) {
+            double a0 = Math.PI * 2.0 * i / segs;
+            double a1 = Math.PI * 2.0 * (i + 1) / segs;
+            buf.vertex(m, cx, cy, 0).color(c);
+            buf.vertex(m, cx + (float) Math.cos(a0) * r, cy + (float) Math.sin(a0) * r, 0).color(c);
+            buf.vertex(m, cx + (float) Math.cos(a1) * r, cy + (float) Math.sin(a1) * r, 0).color(c);
+            buf.vertex(m, cx + (float) Math.cos(a1) * r, cy + (float) Math.sin(a1) * r, 0).color(c);
+        }
+    }
+
+    private static float frac01(float x) {
+        return x - (float) Math.floor(x);
+    }
+
+    /**
+     * Кость с возможным переломом: при dmg > порога (свой у каждой кости)
+     * раскалывается на две части со смещением и выдаёт осколок.
+     */
+    private static void drawBrokenBone(VertexConsumer buf, Matrix4f m,
+                                       float x0, float y0, float x1, float y1, float w,
+                                       float seed, float dmg, float bodyH,
+                                       int colFull, int colBroken,
+                                       float[] frags, int[] fragN) {
+        float dx = x1 - x0, dy = y1 - y0;
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-4f) return;
+        float nx = -dy / len, ny = dx / len;
+
+        float th = 0.25f + 0.55f * frac01(seed * 7.13f);
+        if (dmg <= th) {
+            boneRibbon(buf, m, x0, y0, x1, y1, w, colFull);
+            return;
+        }
+
+        float excess = Math.min(1f, (dmg - th) / (1f - th));
+        float tb = 0.4f + 0.2f * frac01(seed * 3.71f);
+        float bx = x0 + dx * tb, by = y0 + dy * tb;
+        float off = excess * bodyH * 0.055f;
+        float gx = nx * off, gy = ny * off;
+
+        boneRibbon(buf, m, x0, y0, bx + gx, by + gy, w, colBroken);
+        boneRibbon(buf, m, bx - gx, by - gy, x1, y1, w, colBroken);
+
+        if (fragN[0] < 12) {
+            int i = fragN[0] * 3;
+            frags[i] = bx;
+            frags[i + 1] = by;
+            frags[i + 2] = seed;
+            fragN[0]++;
+        }
+    }
+
+    /**
+     * Скелет поверх цели: череп с настоящим лицом игрока (текстура скина),
+     * позвоночник, рёбра, таз, конечности. При низком ХП кости ломаются,
+     * от мест переломов падают осколки.
+     */
+    private void renderTargetSkeleton(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                      AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        float hpMax = target.getMaxHealth() + target.getAbsorptionAmount();
+        float hpNow = target.getHealth() + target.getAbsorptionAmount();
+        float hpFrac = hpMax <= 0f ? 1f : Math.min(hpNow / hpMax, 1f);
+
+        boolean canBreak = aura.skeletonBreak.getValue();
+        float dmg = canBreak ? Math.max(0f, Math.min(1f, (0.85f - hpFrac) / 0.75f)) : 0f;
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
+        long timeDiff = currentTime - currentTimeSpirits;
+        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
+        currentTimeSpirits = currentTime;
+        float tSec = animationNurik / 60f;
+
+        float bodyH = target.getHeight();
+        float bodyW = target.getWidth();
+
+        int hurtTint = ColorUtil.getColor(255, 70, 60);
+        int boneCol = ColorUtil.overCol(ColorUtil.getColor(233, 225, 205), hurtTint, alpha_2.get());
+        int boneDark = ColorUtil.overCol(ColorUtil.getColor(150, 142, 126), hurtTint, alpha_2.get());
+        int socketCol = ColorUtil.getColor(22, 20, 26);
+        int fillA = (int) (alphaPC * 205);
+        int colFull = ColorUtil.replAlpha(boneCol, fillA);
+        int colBroken = ColorUtil.replAlpha(boneDark, fillA);
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-mc.gameRenderer.getCamera().getYaw()));
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(mc.gameRenderer.getCamera().getPitch()));
+
+        // дрожь повреждённого скелета
+        float sz = aura.skeletonSize.getValue();
+        float shiver = dmg * 0.010f * bodyH;
+        matrices.translate((float) Math.sin(tSec * 37f) * shiver, (float) Math.cos(tSec * 29f) * shiver, 0);
+        matrices.scale(sz, sz, sz);
+
+        Matrix4f m = matrices.peek().getPositionMatrix();
+
+        float scx = 0f, scy = bodyH * 0.90f, r = bodyH * 0.105f;
+        float[] frags = new float[36];
+        int[] fragN = {0};
+
+        // ── Pass A: основа — диск черепа и все кости ──
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+
+        boneDisc(fillBuf, m, scx, scy, r, 24, colFull);
+
+        // позвоночник
+        drawBrokenBone(fillBuf, m, 0, bodyH * 0.84f, 0, bodyH * 0.66f, bodyH * 0.022f, 11f, dmg, bodyH, colFull, colBroken, frags, fragN);
+        drawBrokenBone(fillBuf, m, 0, bodyH * 0.66f, 0, bodyH * 0.50f, bodyH * 0.022f, 12f, dmg, bodyH, colFull, colBroken, frags, fragN);
+
+        // рёбра: 4 пары дуг
+        for (int i = 0; i < 4; i++) {
+            float ry = bodyH * (0.80f - 0.048f * i);
+            float rw = bodyW * (0.40f - 0.05f * i);
+            drawBrokenBone(fillBuf, m, 0, ry, -rw, ry - bodyH * 0.032f, bodyH * 0.015f, 20f + i, dmg, bodyH, colFull, colBroken, frags, fragN);
+            drawBrokenBone(fillBuf, m, 0, ry, rw, ry - bodyH * 0.032f, bodyH * 0.015f, 30f + i, dmg, bodyH, colFull, colBroken, frags, fragN);
+        }
+
+        // таз
+        drawBrokenBone(fillBuf, m, 0, bodyH * 0.50f, -bodyW * 0.26f, bodyH * 0.44f, bodyH * 0.017f, 41f, dmg, bodyH, colFull, colBroken, frags, fragN);
+        drawBrokenBone(fillBuf, m, 0, bodyH * 0.50f, bodyW * 0.26f, bodyH * 0.44f, bodyH * 0.017f, 42f, dmg, bodyH, colFull, colBroken, frags, fragN);
+        drawBrokenBone(fillBuf, m, -bodyW * 0.26f, bodyH * 0.44f, bodyW * 0.26f, bodyH * 0.44f, bodyH * 0.017f, 43f, dmg, bodyH, colFull, colBroken, frags, fragN);
+
+        // руки
+        for (int s = 0; s < 2; s++) {
+            float dir = s == 0 ? -1f : 1f;
+            drawBrokenBone(fillBuf, m, dir * bodyW * 0.46f, bodyH * 0.80f, dir * bodyW * 0.56f, bodyH * 0.63f, bodyH * 0.014f, 50f + s, dmg, bodyH, colFull, colBroken, frags, fragN);
+            drawBrokenBone(fillBuf, m, dir * bodyW * 0.56f, bodyH * 0.63f, dir * bodyW * 0.50f, bodyH * 0.45f, bodyH * 0.013f, 60f + s, dmg, bodyH, colFull, colBroken, frags, fragN);
+        }
+
+        // ноги
+        for (int s = 0; s < 2; s++) {
+            float dir = s == 0 ? -1f : 1f;
+            drawBrokenBone(fillBuf, m, dir * bodyW * 0.19f, bodyH * 0.44f, dir * bodyW * 0.23f, bodyH * 0.23f, bodyH * 0.017f, 70f + s, dmg, bodyH, colFull, colBroken, frags, fragN);
+            drawBrokenBone(fillBuf, m, dir * bodyW * 0.23f, bodyH * 0.23f, dir * bodyW * 0.20f, bodyH * 0.02f, bodyH * 0.014f, 80f + s, dmg, bodyH, colFull, colBroken, frags, fragN);
+        }
+
+        // ── Pass B: свечение и лицо персонажа на черепе ──
+        Identifier skin = null;
+        try {
+            var baseRenderer = mc.getEntityRenderDispatcher().getRenderer(target);
+            if (baseRenderer instanceof LivingEntityRenderer<?, ?, ?>) {
+                @SuppressWarnings("unchecked")
+                LivingEntityRenderer<LivingEntity, LivingEntityRenderState, ?> cast =
+                        (LivingEntityRenderer<LivingEntity, LivingEntityRenderState, ?>) baseRenderer;
+                var state = cast.getAndUpdateRenderState(target, e.getTickDelta());
+                skin = cast.getTexture(state);
+            }
+        } catch (Exception ignored) {
+        }
+
+        VertexConsumer glowBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_2.png")));
+        matrices.push();
+        matrices.translate(scx, scy, 0);
+        float gs = r * 5.5f;
+        matrices.scale(gs, gs, gs);
+        drawGradientQuad(glowBuf, matrices.peek().getPositionMatrix(),
+                boneCol, boneCol, boneCol, boneCol, (int) (alphaPC * 55));
+        matrices.pop();
+
+        if (skin != null) {
+            VertexConsumer faceBuf = immediate.getBuffer(ROMB_ESP.apply(skin));
+            matrices.push();
+            matrices.translate(scx, scy, 0);
+            float fs = r * 1.55f;
+            matrices.scale(fs, fs, fs);
+            Matrix4f fm = matrices.peek().getPositionMatrix();
+            int faceCol = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 245, 228), hurtTint, alpha_2.get()),
+                    (int) (alphaPC * 255));
+            faceBuf.vertex(fm, -0.5f, -0.5f, 0).color(faceCol).texture(0f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+            faceBuf.vertex(fm, 0.5f, -0.5f, 0).color(faceCol).texture(1f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+            faceBuf.vertex(fm, 0.5f, 0.5f, 0).color(faceCol).texture(1f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+            faceBuf.vertex(fm, -0.5f, 0.5f, 0).color(faceCol).texture(0f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+            matrices.pop();
+        }
+
+        // ── Pass C: глазницы, нос, рот, трещины, осколки ──
+        VertexConsumer overBuf = immediate.getBuffer(RING_FILL_LAYER);
+        int darkA = ColorUtil.replAlpha(socketCol, (int) (alphaPC * 235));
+
+        boneDisc(overBuf, m, scx - r * 0.36f, scy + r * 0.20f, r * 0.18f, 12, darkA);
+        boneDisc(overBuf, m, scx + r * 0.36f, scy + r * 0.20f, r * 0.18f, 12, darkA);
+
+        // нос — треугольник
+        overBuf.vertex(m, scx, scy - r * 0.02f, 0).color(darkA);
+        overBuf.vertex(m, scx - r * 0.14f, scy - r * 0.42f, 0).color(darkA);
+        overBuf.vertex(m, scx + r * 0.14f, scy - r * 0.42f, 0).color(darkA);
+        overBuf.vertex(m, scx + r * 0.14f, scy - r * 0.42f, 0).color(darkA);
+
+        // рот
+        boneRibbon(overBuf, m, scx - r * 0.40f, scy - r * 0.62f, scx + r * 0.40f, scy - r * 0.62f, r * 0.07f, darkA);
+
+        // зубы — две светлые перемычки
+        int teethCol = ColorUtil.replAlpha(boneCol, fillA);
+        boneRibbon(overBuf, m, scx - r * 0.15f, scy - r * 0.52f, scx - r * 0.15f, scy - r * 0.72f, r * 0.035f, teethCol);
+        boneRibbon(overBuf, m, scx + r * 0.15f, scy - r * 0.52f, scx + r * 0.15f, scy - r * 0.72f, r * 0.035f, teethCol);
+
+        // трещины на черепе при сильных повреждениях
+        if (dmg > 0.35f) {
+            float cd = (dmg - 0.35f) / 0.65f;
+            int crackCol = ColorUtil.replAlpha(socketCol, (int) (alphaPC * 190 * cd));
+            float px = scx + (frac01(3.7f) - 0.5f) * r * 0.4f;
+            float py = scy + r * 0.95f;
+            for (int k = 0; k < 4; k++) {
+                float nxp = px + (frac01(k * 7.3f + 11.7f) - 0.5f) * r * 0.55f;
+                float nyp = py - r * 0.30f;
+                boneRibbon(overBuf, m, px, py, nxp, nyp, r * 0.05f, crackCol);
+                px = nxp;
+                py = nyp;
+            }
+        }
+
+        // падающие осколки костей
+        int shardMax = Math.min(fragN[0], 12);
+        for (int i = 0; i < shardMax; i++) {
+            float fx = frags[i * 3];
+            float fy = frags[i * 3 + 1];
+            float sd = frags[i * 3 + 2];
+
+            float ph = (tSec * 0.8f + sd * 5.1f) % 1f;
+            float sy = fy - ph * ph * bodyH * 0.45f;
+            int shardCol = ColorUtil.replAlpha(boneCol, (int) (alphaPC * (1f - ph) * 230));
+
+            matrices.push();
+            matrices.translate(fx, sy, 0);
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(ph * 540f * (sd > 0.5f ? 1f : -1f)));
+            float q = bodyH * 0.022f * (0.7f + 0.6f * sd);
+            Matrix4f sm = matrices.peek().getPositionMatrix();
+            overBuf.vertex(sm, -q, -q, 0).color(shardCol);
+            overBuf.vertex(sm, q, -q, 0).color(shardCol);
+            overBuf.vertex(sm, q, q, 0).color(shardCol);
+            overBuf.vertex(sm, -q, q, 0).color(shardCol);
+            matrices.pop();
+        }
+
+        matrices.pop();
     }
 
 
