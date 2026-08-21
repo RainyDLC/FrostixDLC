@@ -189,6 +189,9 @@ public class RotationProcess extends Component {
     }
     private float animationNurik = 0.0F;
     private long currentTimeSpirits = 0;
+    /** Фаза сердцебиения для режима «Сердце»: интеграл частоты по времени. */
+    private long heartLastTime = 0L;
+    private float heartPhase = 0f;
     public LivingEntity target = null;
     public Animation alpha = new Animation();
     public Animation alpha_2 = new Animation();
@@ -1346,6 +1349,10 @@ public class RotationProcess extends Component {
             renderTargetSnow(e, immediate, aura, target, alphaPC);
         }
 
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Сердце")) {
+            renderTargetHeart(e, immediate, aura, target, alphaPC);
+        }
+
 
         immediate.draw();
 
@@ -1816,6 +1823,125 @@ public class RotationProcess extends Component {
             matrices.pop();
         }
 
+        matrices.pop();
+    }
+
+    /**
+     * Сердце над целью: бьётся тем быстрее, чем меньше здоровья у противника.
+     * «Тук-тук» — два толчка за цикл, на каждом ударе расходится кольцо-волна.
+     */
+    private void renderTargetHeart(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                   AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 20.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        // доля здоровья цели
+        float hpMax = target.getMaxHealth() + target.getAbsorptionAmount();
+        float hpNow = target.getHealth() + target.getAbsorptionAmount();
+        float hpFrac = hpMax <= 0f ? 1f : Math.min(hpNow / hpMax, 1f);
+        float lowHp = 1f - hpFrac;
+
+        // фаза сердцебиения: интегрируем частоту по времени (при низком ХП — быстрее)
+        long now = System.currentTimeMillis();
+        if (heartLastTime == 0L) heartLastTime = now;
+        long dtMs = now - heartLastTime;
+        heartLastTime = now;
+        float bpm = (55f + 170f * lowHp * lowHp) * aura.heartSpeed.getValue();
+        heartPhase += dtMs / 1000f * (bpm / 60f);
+
+        float f = heartPhase % 1f;
+        // «тук-тук»: основной толчок + второй слабее
+        float pulse = (float) (Math.exp(-7.0 * f) + 0.5 * Math.exp(-11.0 * Math.abs(f - 0.24)));
+        pulse = Math.min(pulse, 1.4f);
+
+        float beatScale = 1f + 0.20f * pulse;
+
+        int hurtRed = ColorUtil.getColor(255, 90, 90, (int) (255.0f * alphaPC));
+        int baseCol = ColorUtil.overCol(ColorUtil.getColor(255, 92, 120),
+                ColorUtil.getColor(255, 34, 56), lowHp);
+        int col = ColorUtil.overCol(ColorUtil.multAlpha(baseCol, alphaPC), hurtRed, alpha_2.get());
+        int hotCol = ColorUtil.replAlpha(
+                ColorUtil.overCol(ColorUtil.getColor(255, 195, 210), ColorUtil.getColor(255, 125, 145), lowHp),
+                (int) (alphaPC * 235));
+        int fillCol = ColorUtil.replAlpha(col, (int) (alphaPC * (70 + 50 * pulse)));
+
+        float size = aura.heartSize.getValue();
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
+        matrices.push();
+        matrices.translate(0,
+                target.getHeight() * 0.62f + 0.05f * (float) Math.sin(now / 420.0),
+                0);
+        matrices.multiply(mc.gameRenderer.getCamera().getRotation());
+
+        float k = size / 34f * beatScale;
+
+        // контур сердца: классическая параметрическая кривая
+        final int SEGS = 48;
+        float[] hxArr = new float[SEGS];
+        float[] hyArr = new float[SEGS];
+        for (int i = 0; i < SEGS; i++) {
+            double t = Math.PI * 2.0 * i / SEGS;
+            hxArr[i] = (float) (16.0 * Math.pow(Math.sin(t), 3)) * k;
+            hyArr[i] = (float) (13.0 * Math.cos(t) - 5.0 * Math.cos(2 * t)
+                    - 2.0 * Math.cos(3 * t) - Math.cos(4 * t)) * k
+                    + 6f * k;   // вертикальное центрирование
+        }
+
+        // --- Pass 1: свечение ---
+        VertexConsumer texBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+        matrices.push();
+        float g = size * beatScale * (1.6f + 0.5f * pulse);
+        matrices.scale(g, g, g);
+        drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                col, col, col, col, (int) (alphaPC * (85 + 55 * pulse)));
+        matrices.pop();
+
+        // --- Pass 2: заливка сердца веером ---
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+        Matrix4f m = matrices.peek().getPositionMatrix();
+        for (int i = 0; i < SEGS; i++) {
+            int j = (i + 1) % SEGS;
+            fillBuf.vertex(m, 0, 0, 0).color(fillCol);
+            fillBuf.vertex(m, hxArr[i], hyArr[i], 0).color(fillCol);
+            fillBuf.vertex(m, hxArr[j], hyArr[j], 0).color(fillCol);
+            fillBuf.vertex(m, hxArr[j], hyArr[j], 0).color(fillCol);
+        }
+
+        // волна от удара: расширяющееся кольцо в плоскости биллборда
+        if (f < 0.38f) {
+            float rf = f / 0.38f;
+            float ringR = size * (0.65f + 0.85f * rf) * beatScale;
+            float ringW = size * 0.05f;
+            int ringCol = ColorUtil.replAlpha(col, (int) (alphaPC * (1f - rf) * 120));
+            for (int i = 0; i < SEGS; i++) {
+                double a0 = Math.PI * 2.0 * i / SEGS;
+                double a1 = Math.PI * 2.0 * (i + 1) / SEGS;
+                fillBuf.vertex(m, (float) Math.cos(a0) * ringR, (float) Math.sin(a0) * ringR, 0).color(ringCol);
+                fillBuf.vertex(m, (float) Math.cos(a1) * ringR, (float) Math.sin(a1) * ringR, 0).color(ringCol);
+                fillBuf.vertex(m, (float) Math.cos(a1) * (ringR - ringW), (float) Math.sin(a1) * (ringR - ringW), 0).color(ringCol);
+                fillBuf.vertex(m, (float) Math.cos(a0) * (ringR - ringW), (float) Math.sin(a0) * (ringR - ringW), 0).color(ringCol);
+            }
+        }
+
+        // --- Pass 3: яркий контур ---
+        VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
+        for (int i = 0; i < SEGS; i++) {
+            int j = (i + 1) % SEGS;
+            lineBuf.vertex(m, hxArr[i], hyArr[i], 0).color(hotCol);
+            lineBuf.vertex(m, hxArr[j], hyArr[j], 0).color(hotCol);
+        }
+
+        matrices.pop();
         matrices.pop();
     }
 

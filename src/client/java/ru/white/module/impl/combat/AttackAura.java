@@ -97,7 +97,7 @@ public class AttackAura extends Module {
     public ModeSetting typeSprint = new ModeSetting(this,"Тип спринта", "Packet","Silent","Legit");
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
 
-    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Не отображать");
+    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Не отображать");
 
     public SliderSetting cubeSize = new SliderSetting(this,"Размер куба",1.15F,0.6F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
     public SliderSetting cubeRotateSpeed = new SliderSetting(this,"Скорость вращения куба",1.2F,0.2F,4.0F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
@@ -121,6 +121,9 @@ public class AttackAura extends Module {
     public SliderSetting snowSpeed = new SliderSetting(this,"Скорость вращения",0.6F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Снег"));
     public SliderSetting snowRadius = new SliderSetting(this,"Радиус орбиты",0.9F,0.4F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Снег"));
     public SliderSetting snowSize = new SliderSetting(this,"Размер снежинок",0.18F,0.06F,0.35F,0.01F).setVisible(() -> typeTargetESP.is("Снег"));
+
+    public SliderSetting heartSize = new SliderSetting(this,"Размер сердца",0.9F,0.4F,1.8F,0.05F).setVisible(() -> typeTargetESP.is("Сердце"));
+    public SliderSetting heartSpeed = new SliderSetting(this,"Множитель пульса",1.0F,0.2F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Сердце"));
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
             new BooleanSetting("Умные криты", false),
