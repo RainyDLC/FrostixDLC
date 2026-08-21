@@ -91,15 +91,31 @@ void main() {
 
     float core = edgeAt(warpedUv, texel);
 
+    // Only broken moving arcs are drawn.  There is deliberately no minimum
+    // pulse here: a minimum turns the whole silhouette into a transparent
+    // neon outline instead of separate lightning bolts.
     float travel = contourPos / segmentLength + time * (2.2 + swing * 0.8);
     float local = fract(travel);
     float cell = floor(travel);
-    float activeSegment = smoothstep(1.0 - density, 1.0, hash11(cell));
-    float segment = smoothstep(0.02, 0.16, local)
-                  * (1.0 - smoothstep(0.72, 0.98, local));
-    float pulse = max(0.16 + density * 0.24, activeSegment * segment);
-    float flicker = 0.72 + 0.28 * hash11(floor(time * 24.0) + cell * 3.17);
-    float strength = (core + glow * 0.58) * pulse * flicker * alpha;
+    float activeSegment = step(1.0 - density, hash11(cell));
+    float segment = smoothstep(0.015, 0.10, local)
+                  * (1.0 - smoothstep(0.62, 0.88, local));
+
+    // A shorter, independently seeded strand makes the discharge look forked
+    // like Target ESP lightning while both strands remain glued to the mask.
+    float travel2 = contourPos / max(segmentLength * 0.63, 4.0)
+                  - time * (1.45 + swing * 0.35) + 13.71;
+    float local2 = fract(travel2);
+    float cell2 = floor(travel2);
+    float activeSegment2 = step(1.12 - density * 0.72, hash11(cell2 + 41.3));
+    float segment2 = smoothstep(0.02, 0.12, local2)
+                   * (1.0 - smoothstep(0.48, 0.76, local2));
+
+    float pulse = max(activeSegment * segment, activeSegment2 * segment2 * 0.82);
+    if (pulse < 0.01) discard;
+
+    float flicker = 0.78 + 0.22 * hash11(floor(time * 28.0) + cell * 3.17);
+    float strength = (core * 1.35 + glow * 0.46) * pulse * flicker * alpha;
     if (strength < 0.008) discard;
 
     vec3 color = lightningColor.rgb;
