@@ -97,7 +97,7 @@ public class AttackAura extends Module {
     public ModeSetting typeSprint = new ModeSetting(this,"Тип спринта", "Packet","Silent","Legit");
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
 
-    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Не отображать");
+    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Цепи","Не отображать");
 
     public SliderSetting cubeSize = new SliderSetting(this,"Размер куба",1.15F,0.6F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
     public SliderSetting cubeRotateSpeed = new SliderSetting(this,"Скорость вращения куба",1.2F,0.2F,4.0F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
@@ -116,6 +116,11 @@ public class AttackAura extends Module {
 
     public SliderSetting pentaRadius = new SliderSetting(this,"Радиус пентаграммы",1.4F,0.8F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Пентаграмма"));
     public SliderSetting pentaSpeed = new SliderSetting(this,"Скорость вращения",0.6F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Пентаграмма"));
+
+    public SliderSetting chainCount = new SliderSetting(this,"Кол-во цепей",3,1,6,1).setVisible(() -> typeTargetESP.is("Цепи"));
+    public SliderSetting chainSpeed = new SliderSetting(this,"Скорость вращения",0.8F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Цепи"));
+    public SliderSetting chainRadius = new SliderSetting(this,"Радиус орбиты",1.0F,0.4F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Цепи"));
+    public SliderSetting chainLink = new SliderSetting(this,"Размер звеньев",0.06F,0.03F,0.12F,0.01F).setVisible(() -> typeTargetESP.is("Цепи"));
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
             new BooleanSetting("Умные криты", false),

@@ -170,7 +170,8 @@ public class RenderUtil implements IMinecraft {
             int tint = ((int) (a * Math.max(0f, Math.min(1f, opacity)) * 255f) << 24) | 0x0A0B0F;
 
             Blur.blur(x, y, width, height, a, radius, tint);
-            glassOutline(x, y, width, height, 0.5f, radius, Math.min(1f, a), 0.45f);
+            // приглушённая обводка: ниже общая яркость и блик сверху
+            glassOutline(x, y, width, height, 0.5f, radius, Math.min(1f, a) * 0.42f, 0.10f);
         }
 
         /** Вертикальная акцентная полоса цвета темы на левой кромке подложки. */
