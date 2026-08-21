@@ -231,10 +231,11 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
         int i = 0;
         while (i < text.length()) {
-            ColorAdvance colorAdvance = tryParseColorCode(text, i, color, currentColor);
-            if (colorAdvance.matched()) {
-                currentColor = colorAdvance.color();
-                i += colorAdvance.skip();
+            long colorAdvance = tryParseColorCode(text, i, color, currentColor);
+            int skip = advanceSkip(colorAdvance);
+            if (skip != 0) {
+                currentColor = advanceColor(colorAdvance);
+                i += skip;
                 continue;
             }
 
@@ -336,9 +337,9 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
         int i = 0;
         while (i < text.length()) {
-            ColorAdvance colorAdvance = trySkipColorCode(text, i);
-            if (colorAdvance.matched()) {
-                i += colorAdvance.skip();
+            int skip = advanceSkip(trySkipColorCode(text, i));
+            if (skip != 0) {
+                i += skip;
                 continue;
             }
 
@@ -434,9 +435,9 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
         int i = 0;
         while (i < text.length()) {
-            ColorAdvance colorAdvance = trySkipColorCode(text, i);
-            if (colorAdvance.matched()) {
-                i += colorAdvance.skip();
+            int skip = advanceSkip(trySkipColorCode(text, i));
+            if (skip != 0) {
+                i += skip;
                 continue;
             }
 
@@ -538,9 +539,9 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
         int i = 0;
         while (i < text.length()) {
-            ColorAdvance colorAdvance = trySkipColorCode(text, i);
-            if (colorAdvance.matched()) {
-                i += colorAdvance.skip();
+            int skip = advanceSkip(trySkipColorCode(text, i));
+            if (skip != 0) {
+                i += skip;
                 continue;
             }
 
@@ -630,10 +631,11 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
         int i = 0;
         while (i < text.length()) {
-            ColorAdvance colorAdvance = tryParseColorCode(text, i, color, currentColor);
-            if (colorAdvance.matched()) {
-                currentColor = colorAdvance.color();
-                i += colorAdvance.skip();
+            long colorAdvance = tryParseColorCode(text, i, color, currentColor);
+            int skip = advanceSkip(colorAdvance);
+            if (skip != 0) {
+                currentColor = advanceColor(colorAdvance);
+                i += skip;
                 continue;
             }
 
@@ -869,9 +871,9 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
         int i = 0;
         while (i < text.length()) {
-            ColorAdvance colorAdvance = trySkipColorCode(text, i);
-            if (colorAdvance.matched()) {
-                i += colorAdvance.skip();
+            int skip = advanceSkip(trySkipColorCode(text, i));
+            if (skip != 0) {
+                i += skip;
                 continue;
             }
 
@@ -973,13 +975,29 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
         return result;
     }
 
-    private record ColorAdvance(int skip, int color, boolean matched) {
+    /**
+     * \u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u0440\u0430\u0437\u0431\u043E\u0440\u0430 \u0446\u0432\u0435\u0442\u043E\u0432\u043E\u0433\u043E \u0442\u0435\u0433\u0430, \u0443\u043F\u0430\u043A\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0432 long: \u0441\u0442\u0430\u0440\u0448\u0438\u0435 32 \u0431\u0438\u0442\u0430 \u2014
+     * \u0446\u0432\u0435\u0442, \u043C\u043B\u0430\u0434\u0448\u0438\u0435 \u2014 \u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u043F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C (0 = \u0442\u0435\u0433\u0430 \u043D\u0435\u0442).
+     *
+     * \u0420\u0430\u043D\u044C\u0448\u0435 \u0437\u0434\u0435\u0441\u044C \u0432\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u043B\u0441\u044F record ColorAdvance, \u0442.\u0435. \u0430\u043B\u043B\u043E\u043A\u0430\u0446\u0438\u044F \u043D\u0430 \u041A\u0410\u0416\u0414\u042B\u0419
+     * \u0441\u0438\u043C\u0432\u043E\u043B \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u043E\u043A\u0438 \u043A\u0430\u0436\u0434\u044B\u0439 \u043A\u0430\u0434\u0440. \u0423\u043F\u0430\u043A\u043E\u0432\u043A\u0430 \u0432 long \u0443\u0431\u0438\u0440\u0430\u0435\u0442 \u0435\u0451 \u043F\u043E\u043B\u043D\u043E\u0441\u0442\u044C\u044E.
+     */
+    private static long advance(int skip, int color) {
+        return ((long) color << 32) | (skip & 0xFFFFFFFFL);
     }
 
-    private ColorAdvance tryParseColorCode(String text, int index, int defaultColor, int currentColor) {
+    private static int advanceSkip(long packed) {
+        return (int) packed;
+    }
+
+    private static int advanceColor(long packed) {
+        return (int) (packed >>> 32);
+    }
+
+    private long tryParseColorCode(String text, int index, int defaultColor, int currentColor) {
         ColorFormatting.ColorTag tag = ColorFormatting.parseTag(text, index, defaultColor);
         if (tag != null) {
-            return new ColorAdvance(tag.length(), tag.color(), true);
+            return advance(tag.length(), tag.color());
         }
 
         int codePoint = text.codePointAt(index);
@@ -990,21 +1008,21 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
                 try {
                     String hex = text.substring(index + charCount + 1, index + charCount + 7);
                     int parsed = (0xFF << 24) | Integer.parseInt(hex, 16);
-                    return new ColorAdvance(charCount + 7, parsed, true);
+                    return advance(charCount + 7, parsed);
                 } catch (Exception ignored) {
                 }
             }
             int code = LEGACY_CODE_CHARS.indexOf(Character.toLowerCase((char) nextCodePoint));
             if (code >= 0) {
                 int parsed = code < 16 ? LEGACY_COLORS[code] : (code == 21 ? defaultColor : currentColor);
-                return new ColorAdvance(charCount + Character.charCount(nextCodePoint), parsed, true);
+                return advance(charCount + Character.charCount(nextCodePoint), parsed);
             }
         }
 
-        return new ColorAdvance(0, currentColor, false);
+        return advance(0, currentColor);
     }
 
-    private ColorAdvance trySkipColorCode(String text, int index) {
+    private long trySkipColorCode(String text, int index) {
         return tryParseColorCode(text, index, 0, 0);
     }
 

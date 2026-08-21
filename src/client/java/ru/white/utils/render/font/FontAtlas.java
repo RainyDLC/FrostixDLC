@@ -25,6 +25,14 @@ public class FontAtlas {
     private final Identifier jsonId;
     private final Identifier textureId;
     private final Map<Integer, Glyph> glyphs;
+
+    /**
+     * Плоский кэш глифов для codePoint &lt; 0x600 (ASCII, Latin-1, кириллица) —
+     * это все символы, реально встречающиеся в интерфейсе. Остальное берётся из
+     * {@link #glyphs}. Массив — зеркало карты, а не отдельный источник данных.
+     */
+    private static final int FAST_GLYPH_LIMIT = 0x600;
+    private final Glyph[] fastGlyphs = new Glyph[FAST_GLYPH_LIMIT];
     private float atlasWidth = 512;
     private float atlasHeight = 512;
     private float fontSize = 32;
@@ -186,7 +194,11 @@ public class FontAtlas {
             yOffset = getFloat(g, "yoffset", 0);
         }
 
-        glyphs.put(unicode, new Glyph(unicode, x, y, w, h, xOffset, yOffset, advance, atlasWidth, atlasHeight));
+        Glyph glyph = new Glyph(unicode, x, y, w, h, xOffset, yOffset, advance, atlasWidth, atlasHeight);
+        glyphs.put(unicode, glyph);
+        if (unicode < FAST_GLYPH_LIMIT) {
+            fastGlyphs[unicode] = glyph;
+        }
     }
 
     private float getFloat(JsonObject obj, String key, float def) {
@@ -194,11 +206,16 @@ public class FontAtlas {
     }
 
     public Glyph getGlyph(int codePoint) {
+        // Плоский массив для латиницы/кириллицы: убирает упаковку int -> Integer
+        // и хэш-поиск на каждый символ каждой строки каждый кадр
+        if (codePoint >= 0 && codePoint < FAST_GLYPH_LIMIT) {
+            return fastGlyphs[codePoint];
+        }
         return glyphs.get(codePoint);
     }
 
     public boolean hasGlyph(int codePoint) {
-        return glyphs.containsKey(codePoint);
+        return getGlyph(codePoint) != null;
     }
 
     public Identifier getTextureId() {

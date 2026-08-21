@@ -243,13 +243,46 @@ public class Menu extends Screen implements IMinecraft {
         return chipsHeight(s, multiNames(s), width);
     }
 
-    private String query() { return searchQuery.trim().toLowerCase(); }
+    // Нормализованный запрос кэшируется: query() зовётся для каждого модуля
+    // каждый кадр, а searchQuery меняется только при вводе с клавиатуры
+    private static String cachedQuerySource;
+    private static String cachedQuery = "";
+
+    private String query() {
+        String source = searchQuery;
+        if (!source.equals(cachedQuerySource)) {
+            cachedQuerySource = source;
+            cachedQuery = source.trim().toLowerCase();
+        }
+        return cachedQuery;
+    }
+
     private boolean searching() { return !query().isEmpty(); }
+
+    // Поля модуля в нижнем регистре — имя/описание/категория неизменны после
+    // конструктора, поэтому приводим их один раз, а не 4 раза на модуль за кадр
+    private static final java.util.Map<Module, String[]> searchFields = new java.util.IdentityHashMap<>();
+
+    private static String[] searchFields(Module f) {
+        String[] cached = searchFields.get(f);
+        if (cached == null) {
+            cached = new String[] {
+                    f.getName().toLowerCase(),
+                    f.getBigName().toLowerCase(),
+                    f.getDesc().toLowerCase(),
+                    f.getCategory().getName().toLowerCase()
+            };
+            searchFields.put(f, cached);
+        }
+        return cached;
+    }
 
     private boolean moduleVisible(Module f) {
         String q = query();
         if (q.isEmpty()) return f.getCategory() == active;
-        return f.getName().toLowerCase().contains(q) || f.getBigName().toLowerCase().contains(q) || f.getDesc().toLowerCase().contains(q) || f.getCategory().getName().toLowerCase().contains(q);
+        String[] fields = searchFields(f);
+        return fields[0].contains(q) || fields[1].contains(q)
+                || fields[2].contains(q) || fields[3].contains(q);
     }
 
     private int searchResults() {

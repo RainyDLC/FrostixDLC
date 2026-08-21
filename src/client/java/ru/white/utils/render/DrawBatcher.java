@@ -10,8 +10,8 @@ import org.joml.Vector3f;
 import org.joml.Vector4f;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
+import java.util.List;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
@@ -58,6 +58,7 @@ public final class DrawBatcher {
     private static final Matrix4f TEXTURE_MATRIX = new Matrix4f();
 
     private static final ArrayList<Batched> active = new ArrayList<>(8);
+    private static final Comparator<Batched> BY_LAYER = Comparator.comparingInt(Batched::batchLayer);
     private static boolean enabled = false;
 
     private DrawBatcher() {
@@ -89,9 +90,10 @@ public final class DrawBatcher {
     public static void flushPending() {
         if (active.isEmpty()) return;
         // копия — во время сброса кто-то может опять зарегистрироваться
-        Batched[] pending = active.toArray(new Batched[0]);
+        // (компаратор статический: раньше на каждый сброс создавался новый)
+        List<Batched> pending = new ArrayList<>(active);
         active.clear();
-        Arrays.sort(pending, Comparator.comparingInt(Batched::batchLayer));
+        pending.sort(BY_LAYER);
 
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null || client.getFramebuffer() == null) {

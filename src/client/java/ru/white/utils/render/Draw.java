@@ -19,6 +19,28 @@ public final class Draw {
     private static final float GLASS_DISTORTION = 125f;
     private static final float GLASS_WAVE_SIZE = 75f;
 
+    // Скретч-буферы вместо new float[]/new int[] на каждый примитив.
+    // Пайплайны читают эти массивы синхронно (копируют в ByteBuffer) и нигде
+    // не сохраняют ссылку, поэтому переиспользование безопасно. Весь 2D-рендер
+    // идёт с одного (рендерного) потока.
+    private static final float[] RADII = new float[4];
+    private static final int[] COLORS4 = new int[4];
+    private static final int[] COLORS8 = new int[8];
+    private static final int[] COLORS9 = new int[9];
+    private static final float[] THICKNESS8 = new float[8];
+
+    private static float[] radii(float topLeft, float topRight, float bottomRight, float bottomLeft) {
+        RADII[0] = topLeft;
+        RADII[1] = topRight;
+        RADII[2] = bottomRight;
+        RADII[3] = bottomLeft;
+        return RADII;
+    }
+
+    private static float[] radii(float radius) {
+        return radii(radius, radius, radius, radius);
+    }
+
     private Draw() {
     }
 
@@ -44,7 +66,7 @@ public final class Draw {
     public static void blur(float x, float y, float width, float height, float alpha,
                             float topLeft, float topRight, float bottomRight, float bottomLeft,
                             int tintColor) {
-        float[] radii = {topLeft, topRight, bottomRight, bottomLeft};
+        float[] radii = radii(topLeft, topRight, bottomRight, bottomLeft);
         BlurPipeline pipeline = r2d().getBlurPipeline();
         if (ThemeColor.getDistortion()) {
             pipeline.drawGlassBlur(x, y, width, height, alpha, radii, tintColor,
@@ -58,8 +80,8 @@ public final class Draw {
     public static void glass(float x, float y, float width, float height,
                              float alpha, float topLeft, float topRight,
                              float bottomRight, float bottomLeft, int tintColor) {
-        float[] radii = {topLeft, topRight, bottomRight, bottomLeft};
-        r2d().getBlurPipeline().drawGlassBlur(x, y, width, height, alpha, radii, tintColor,
+        r2d().getBlurPipeline().drawGlassBlur(x, y, width, height, alpha,
+                radii(topLeft, topRight, bottomRight, bottomLeft), tintColor,
                 GLASS_DISTORTION, GLASS_WAVE_SIZE, 0f, 0f);
     }
 
@@ -75,9 +97,11 @@ public final class Draw {
 
     public static void rect(float x, float y, float width, float height, int color,
                             float topLeft, float topRight, float bottomRight, float bottomLeft) {
-        int[] colors = ColorUtil.solid(color);
-        float[] radii = {topLeft, topRight, bottomRight, bottomLeft};
-        r2d().getRectPipeline().drawRect(x, y, width, height, colors, radii);
+        for (int i = 0; i < 9; i++) {
+            COLORS9[i] = color;
+        }
+        r2d().getRectPipeline().drawRect(x, y, width, height, COLORS9,
+                radii(topLeft, topRight, bottomRight, bottomLeft));
     }
 
     public static void gradientRect(float x, float y, float width, float height,
@@ -88,8 +112,8 @@ public final class Draw {
     public static void gradientRect(float x, float y, float width, float height,
                                     int[] colors, float topLeft, float topRight,
                                     float bottomRight, float bottomLeft) {
-        float[] radii = {topLeft, topRight, bottomRight, bottomLeft};
-        r2d().getRectPipeline().drawRect(x, y, width, height, colors, radii);
+        r2d().getRectPipeline().drawRect(x, y, width, height, colors,
+                radii(topLeft, topRight, bottomRight, bottomLeft));
     }
 
     public static void glow(float x, float y, float width, float height,
@@ -105,8 +129,8 @@ public final class Draw {
     public static void glow(float x, float y, float width, float height,
                             int color, float topLeft, float topRight, float bottomRight, float bottomLeft,
                             float glowSize, float strength, float softness) {
-        float[] radii = {topLeft, topRight, bottomRight, bottomLeft};
-        r2d().getRectPipeline().drawGlow(x, y, width, height, color, radii, glowSize, strength, softness);
+        r2d().getRectPipeline().drawGlow(x, y, width, height, color,
+                radii(topLeft, topRight, bottomRight, bottomLeft), glowSize, strength, softness);
     }
 
     // ── обводки ──────────────────────────────────────────────────────────
@@ -122,11 +146,12 @@ public final class Draw {
 
     public static void outline(float x, float y, float width, float height, float thickness, int color,
                                float topLeft, float topRight, float bottomRight, float bottomLeft) {
-        int[] colors = ColorUtil.solid8(color);
-        float[] thicknesses = {thickness, thickness, thickness, thickness,
-                thickness, thickness, thickness, thickness};
-        float[] radii = {topLeft, topRight, bottomRight, bottomLeft};
-        r2d().getOutlinePipeline().drawOutline(x, y, width, height, colors, thicknesses, radii, 1.0f);
+        for (int i = 0; i < 8; i++) {
+            COLORS8[i] = color;
+            THICKNESS8[i] = thickness;
+        }
+        r2d().getOutlinePipeline().drawOutline(x, y, width, height, COLORS8, THICKNESS8,
+                radii(topLeft, topRight, bottomRight, bottomLeft), 1.0f);
     }
 
     public static void glassOutline(float x, float y, float width, float height,
@@ -140,28 +165,26 @@ public final class Draw {
         float base = Math.max(0f, alpha);
         float hot = Math.max(0f, shine);
 
-        int[] colors = {
-                glassColor(base * 0.42f),
-                glassColor(base * (0.55f + hot * 0.30f)),
-                glassColor(base * (0.28f + hot * 0.10f)),
-                glassColor(base * 0.24f),
-                glassColor(base * (0.34f + hot * 0.16f)),
-                glassColor(base * (0.48f + hot * 0.24f)),
-                glassColor(base * 0.30f),
-                glassColor(base * (0.62f + hot * 0.38f))
-        };
-        float[] thicknesses = {
-                thickness,
-                thickness + hot * 0.18f,
-                thickness * 0.86f,
-                thickness * 0.78f,
-                thickness * 0.9f,
-                thickness + hot * 0.16f,
-                thickness * 0.84f,
-                thickness + hot * 0.24f
-        };
-        float[] radii = {topLeft, topRight, bottomRight, bottomLeft};
-        r2d().getOutlinePipeline().drawOutline(x, y, width, height, colors, thicknesses, radii, 1.35f);
+        COLORS8[0] = glassColor(base * 0.42f);
+        COLORS8[1] = glassColor(base * (0.55f + hot * 0.30f));
+        COLORS8[2] = glassColor(base * (0.28f + hot * 0.10f));
+        COLORS8[3] = glassColor(base * 0.24f);
+        COLORS8[4] = glassColor(base * (0.34f + hot * 0.16f));
+        COLORS8[5] = glassColor(base * (0.48f + hot * 0.24f));
+        COLORS8[6] = glassColor(base * 0.30f);
+        COLORS8[7] = glassColor(base * (0.62f + hot * 0.38f));
+
+        THICKNESS8[0] = thickness;
+        THICKNESS8[1] = thickness + hot * 0.18f;
+        THICKNESS8[2] = thickness * 0.86f;
+        THICKNESS8[3] = thickness * 0.78f;
+        THICKNESS8[4] = thickness * 0.9f;
+        THICKNESS8[5] = thickness + hot * 0.16f;
+        THICKNESS8[6] = thickness * 0.84f;
+        THICKNESS8[7] = thickness + hot * 0.24f;
+
+        r2d().getOutlinePipeline().drawOutline(x, y, width, height, COLORS8, THICKNESS8,
+                radii(topLeft, topRight, bottomRight, bottomLeft), 1.35f);
     }
 
     private static int glassColor(float alpha) {
@@ -182,9 +205,11 @@ public final class Draw {
     public static void texture(Identifier id, float x, float y, float width, float height,
                                float u0, float v0, float u1, float v1,
                                int color, float smoothness, float radius) {
-        int[] colors = {color, color, color, color};
-        float[] radii = {radius, radius, radius, radius};
+        COLORS4[0] = color;
+        COLORS4[1] = color;
+        COLORS4[2] = color;
+        COLORS4[3] = color;
         r2d().getTexturePipeline()
-                .drawTexture(id, x, y, width, height, u0, v0, u1, v1, colors, radii, smoothness);
+                .drawTexture(id, x, y, width, height, u0, v0, u1, v1, COLORS4, radii(radius), smoothness);
     }
 }
