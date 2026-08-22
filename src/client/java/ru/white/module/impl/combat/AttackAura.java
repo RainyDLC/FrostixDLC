@@ -96,6 +96,9 @@ public class AttackAura extends Module {
 
     public BooleanSetting fovRender = new BooleanSetting(this,"Отображать Fov",false).setVisible(() -> typeRotation.is("Snap") && typeSnap.is("Fov"));
 
+    /** Стратегия выбора цели. */
+    public ModeSetting targetSort = new ModeSetting(this, "Сортировать по", "Умный", "Здоровью", "Дистанции", "Прицелу");
+
     // ── Конструктор ротации (режим Custom) ──
     public ButtonSetting rotationBuilder = new ButtonSetting(this, "Конструктор ротации", () ->
             mc.setScreen(new RotationBuilderScreen())).setVisible(() -> typeRotation.is("Custom"));
@@ -185,7 +188,11 @@ public class AttackAura extends Module {
 
 
         LivingEntity prevTarget = target;
-        if ((target == null || !isValidTarget(target))) {
+
+        // переоценка цели: мгновенно при потере валидности, иначе раз в 10 тиков —
+        // чтобы захватывать более выгодную цель (ближе/в радиусе удара)
+        boolean recheck = ++retargetClock % 10 == 0;
+        if (target == null || !isValidTarget(target) || recheck) {
             updateTarget();
         }
 
@@ -345,6 +352,8 @@ public static int lookUpDuration = 0;
     private int pitchFlickThreshold = ThreadLocalRandom.current().nextInt(14,19);
     public boolean pitchFlickActive = false;
     public long pitchFlickEndTime = 0;
+    /** Счётчик тиков для периодической переоценки цели. */
+    private int retargetClock = 0;
 
     public TimerUtil timeSped1 = new TimerUtil();
     public TimerUtil timeSped2 = new TimerUtil();
@@ -483,17 +492,51 @@ public static int lookUpDuration = 0;
         }
 
         LivingEntity bestTarget = null;
-        double bestAngle = Double.MAX_VALUE;
+        double bestScore = Double.MAX_VALUE;
         Vec3d eyePos = mc.player.getEyePos();
         Vec3d lookVec = mc.player.getRotationVec(1.0F).normalize();
+        float atkRange = attackRange.getValue();
+        boolean smart = targetSort.is("Умный");
+
         for (Entity entity : mc.world.getEntities()) {
             if (!(entity instanceof LivingEntity living)) continue;
             if (!isValidTarget(living)) continue;
             Vec3d targetPos = living.getEntityPos().add(0, living.getHeight() * 0.5, 0);
             Vec3d toTarget = targetPos.subtract(eyePos).normalize();
             double angle = Math.acos(MathHelper.clamp(lookVec.dotProduct(toTarget), -1.0, 1.0));
-            if (angle < bestAngle) {
-                bestAngle = angle;
+            double dist = eyePos.distanceTo(targetPos);
+
+            double score;
+            switch (targetSort.getValue()) {
+                case "Здоровью" -> score = living.getHealth() + dist * 0.02;
+                case "Дистанции" -> score = dist + angle * 2.5;
+                case "Прицелу" -> score = angle;
+                default -> {
+                    // Умный: угол, приоритет радиуса удара, добивание низкого ХП,
+                    // дожим цели в комбо и реакция на замах врага
+                    score = angle * 0.55;
+
+                    double over = Math.max(0, dist - atkRange);
+                    score += over * 0.06;
+                    if (over > 0) score += 0.8;              // вне радиуса удара — большой штраф
+
+                    score += living.getHealth() * 0.06;      // слабых добиваем первыми
+
+                    if (living.hurtTime > 5) score -= 0.20;  // цель уже летает в комбо — не отпускать
+
+                    // враг замахнулся рядом с нами — он атакует прямо сейчас
+                    if (dist <= atkRange * 1.4 && living.handSwingTicks >= 0 && living.handSwingTicks < 8)
+                        score -= 0.30;
+
+                    score -= 0.35;                            // «липкость» текущей цели
+                }
+            }
+
+            // лёгкая анти-флип защита для простых режимов
+            if (!smart && living == target) score -= 0.10;
+
+            if (score < bestScore) {
+                bestScore = score;
                 bestTarget = living;
             }
         }
