@@ -14,7 +14,8 @@ public enum RotationType {
     SNAP("Snap", new SnapRotation()),
     NEURO("Neuro", new NeuroRotation()),
     HVH("HvH", new HvHRotation()),
-    SPOOKY("SpookyTime 1.21", new MatrixRotation());
+    SPOOKY("SpookyTime 1.21", new MatrixRotation()),
+    CUSTOM("Custom", new CustomRotation());
 
 
     private final String name;

@@ -1,6 +1,10 @@
 package ru.white;
 
 import net.fabricmc.api.ClientModInitializer;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.texture.NativeImage;
+import org.lwjgl.glfw.GLFW;
+import org.lwjgl.glfw.GLFWImage;
 import ru.white.command.CommandManager;
 import ru.white.config.ConfigManager;
 import ru.white.friend.FriendManager;
@@ -56,12 +60,42 @@ public class Client implements ClientModInitializer {
     private GuiManager guiManager;
 
     
+    /** Иконка окна/таскбара из ресурсов клиента (без фона). */
+    private void applyWindowIcon() {
+        try {
+            long handle = MinecraftClient.getInstance().getWindow().getHandle();
+            if (handle == 0L) return;
+
+            try (var s64 = Client.class.getResourceAsStream("/assets/client/textures/icon2.png");
+                 var s128 = Client.class.getResourceAsStream("/assets/client/textures/icon.png")) {
+                if (s64 == null || s128 == null) return;
+
+                try (NativeImage img64 = NativeImage.read(s64);
+                     NativeImage img128 = NativeImage.read(s128);
+                     GLFWImage i64 = GLFWImage.malloc();
+                     GLFWImage i128 = GLFWImage.malloc();
+                     GLFWImage.Buffer buffer = GLFWImage.malloc(2)) {
+
+                    buffer.put(0, i64.set(img64.getWidth(), img64.getHeight(),
+                            org.lwjgl.system.MemoryUtil.memByteBuffer(img64.pointer, img64.getWidth() * img64.getHeight() * 4)));
+                    buffer.put(1, i128.set(img128.getWidth(), img128.getHeight(),
+                            org.lwjgl.system.MemoryUtil.memByteBuffer(img128.pointer, img128.getWidth() * img128.getHeight() * 4)));
+                    GLFW.glfwSetWindowIcon(handle, buffer);
+                }
+            }
+        } catch (Exception e) {
+            // иконка не критична: окно может быть ещё не готово или ресурс недоступен
+        }
+    }
+
     @Override
     public void onInitializeClient() {
 
-        System.out.print("Вход");
+        System.out.print("Йа:3");
 
         get = this;
+
+        applyWindowIcon();
 
         ru.white.lang.Lang.init();
 

@@ -54,3 +54,4 @@ accessible method net/minecraft/client/render/WorldRenderer getEntityOutlinesFra
 accessible method net/minecraft/client/render/entity/LivingEntityRenderer addFeature (Lnet/minecraft/client/render/entity/feature/FeatureRenderer;)Z
 accessible field net/minecraft/client/render/state/SkyRenderState skyColor I
 accessible field net/minecraft/client/render/state/SkyRenderState starBrightness F
+accessible field net/minecraft/client/texture/NativeImage pointer J

@@ -4,6 +4,7 @@
   "id": "white",
   "version": "1.0",
   "name": "RainyDLC",
+  "icon": "assets/client/textures/icon.png",
   "description": "Minecraft Modification",
   "authors": [
     "RainyDLC"
