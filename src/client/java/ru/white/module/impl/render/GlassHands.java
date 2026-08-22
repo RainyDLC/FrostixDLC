@@ -1,5 +1,6 @@
 package ru.white.module.impl.render;
 
+import ru.white.manager.event_impl.EventRender3D;
 import ru.white.manager.event_impl.GlassHandsRenderEvent;
 import ru.white.manager.event_impl.WorldLoadEvent;
 import ru.white.manager.events.orbit.EventHandler;
@@ -13,6 +14,11 @@ import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.render.GlassHandsRenderer;
 import lombok.Getter;
+import net.minecraft.util.Arm;
+import net.minecraft.util.Hand;
+import net.minecraft.util.math.Vec3d;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 @Getter
 @ModuleInfo(name = "Glass Hands", category = Category.RENDER, desc = "Делает руки и предметы стеклянными")
@@ -85,6 +91,10 @@ public class GlassHands extends Module {
             .setVisible(() -> enableEdgeGlow.getValue() && shimmer.getValue());
     public SliderSetting shimmerPeriod = new SliderSetting(this, "Период шиммера", 5f, 1f, 15f, 0.5f)
             .setVisible(() -> enableEdgeGlow.getValue() && shimmer.getValue());
+
+    public BooleanSetting lightning = new BooleanSetting(this, "Молнии", false);
+    public SliderSetting lightningSize = new SliderSetting(this, "Размер молний", 0.4f, 0.15f, 0.8f, 0.05f)
+            .setVisible(() -> lightning.getValue());
 
     public GlassHands() {
         instance = this;
@@ -198,5 +208,36 @@ public class GlassHands extends Module {
             renderer.setShimmerPeriodSec(shimmerPeriod.getValue());
         }
 
+    }
+
+    // молнии вокруг предмета в руках — та же стилистика, что "Молнии" в Attack Aura
+    private final LightningRenderer[] handLightning = {new LightningRenderer(), new LightningRenderer()};
+
+    @EventHandler
+    public void onRender3D(EventRender3D event) {
+        if (!isEnabled() || !lightning.getValue() || mc.player == null || mc.world == null
+                || !mc.options.getPerspective().isFirstPerson()) {
+            handLightning[0].renderPoint(event, null, 0f, 0f);
+            handLightning[1].renderPoint(event, null, 0f, 0f);
+            return;
+        }
+
+        float spread = lightningSize.getValue();
+        if (!mc.player.getMainHandStack().isEmpty()) {
+            handLightning[0].renderPoint(event, getHeldItemPos(Hand.MAIN_HAND), spread, 1.0f);
+        }
+        if (!mc.player.getOffHandStack().isEmpty()) {
+            handLightning[1].renderPoint(event, getHeldItemPos(Hand.OFF_HAND), spread, 1.0f);
+        }
+    }
+
+    /** Мировая позиция предмета в руке: вью-пространственный оффект экипировки (как в HeldItemRenderer), повёрнутый камерой. */
+    private Vec3d getHeldItemPos(Hand hand) {
+        boolean mainSide = (hand == Hand.MAIN_HAND) == (mc.player.getMainArm() == Arm.RIGHT);
+        float side = mainSide ? 0.56f : -0.56f;
+        Vector3f local = new Vector3f(side, -0.52f, -0.72f);
+        local.rotate(mc.gameRenderer.getCamera().getRotation().conjugate(new Quaternionf()));
+        Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
+        return camPos.add(local.x, local.y, local.z);
     }
 }
