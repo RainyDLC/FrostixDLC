@@ -36,6 +36,8 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     private static final int TXT_R = 218, TXT_G = 235, TXT_B = 250;    // светлый текст
 
     private static final Identifier MENU_BG = Identifier.of("client", "textures/frame/menu.png");
+    /** Фирменный логотип (R с листом) — иконка окна, худ-ватермарка и главное меню. */
+    private static final Identifier ICON_LOGO = Identifier.of("client", "textures/icon.png");
     private static final Identifier GLOW_TEX = Identifier.of("client", "textures/particles/glow.png");
     /** Текстура молний — та же, что в LightningRenderer (Отображение таргета). */
     private static final Identifier BOLT_TEX = Identifier.of("client", "textures/visuals/particles_2.png");
@@ -180,9 +182,11 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         // дождливая атмосфера: градиент и мягкое холодное свечение
         drawRainyBackground(screenWidth, screenHeight, alphaVal, time);
 
-        // ЛОГОТИП — без изменений
-        Fonts.rainydlc_2.drawCentered("G", screenWidth / 2,
-                screenHeight * 0.32F + 30 - 30 * alphaVal, 16, ColorUtil.replAlpha(ColorUtil.client(), alphaVal));
+        // ЛОГОТИП — текстовый знак клиента заменён на фирменный R-логотип
+        float logoSize = 19F;
+        RenderUtil.Images.texture(ICON_LOGO, screenWidth / 2F - logoSize / 2F,
+                screenHeight * 0.32F + 26F - 30F * alphaVal, logoSize, logoSize,
+                ColorUtil.getColor(255, alphaVal));
 
         Fonts.sf_regular.drawCentered("RainyDLC", screenWidth / 2,
                 screenHeight * 0.36F + 30 - 30 * alphaVal, 12, ColorUtil.getColor(255, alphaVal));

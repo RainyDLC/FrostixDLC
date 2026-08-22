@@ -549,9 +549,10 @@ public class Menu extends Screen implements IMinecraft {
         // ── строка 1: лого · точки тем справа ──
         float rowY = y + 6 * S;
 
-        icons.drawCentered("A", x + 15 * S, rowY + 8 * S, 9 * S, ColorUtil.multAlpha(ColorUtil.client(), globalAnim));
+        RenderUtil.Images.texture(Identifier.of("client", "textures/icon.png"),
+                x + 10.5F * S, rowY + 3.5F * S, 9.5F * S, 9.5F * S, ColorUtil.getColor(255, globalAnim));
         draw.draw("RainyDLC", x + 25 * S, rowY + 5.5F * S, 8 * S, ColorUtil.getColor(215, globalAnim * 0.9F));
-        draw.draw("5.0", x + 25 * S + draw.getWidth("RainyDLC", 8 * S) + 4 * S, rowY + 6.2F * S, 6.5F * S,
+        draw.draw("1.0", x + 25 * S + draw.getWidth("RainyDLC", 8 * S) + 4 * S, rowY + 6.2F * S, 6.5F * S,
                 ColorUtil.replAlpha(ColorUtil.client(), globalAnim * 0.75F));
 
         float dotsW = themes.length * 14 * S - 6 * S;

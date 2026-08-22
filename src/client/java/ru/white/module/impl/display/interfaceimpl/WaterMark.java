@@ -1,6 +1,7 @@
 package ru.white.module.impl.display.interfaceimpl;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.util.Identifier;
 
 import ru.white.module.api.settings.impl.DragSetting;
 import ru.white.module.impl.display.InterFace;
@@ -67,7 +68,9 @@ public class WaterMark implements element {
         // бейдж-логотип
         RenderUtil.Render2D.hudPlate(x, y, H, H, 1, RADIUS, opacity);
 
-        Fonts.rainydlc_2.drawCentered("G",x  + H / 2,y + 5.1F * S,LOGO,ColorUtil.getClientColor(1));
+        float logoS = Math.min(H - 6F * S, LOGO * 1.2F);
+        RenderUtil.Images.texture(Identifier.of("client", "textures/icon.png"),
+                x + (H - logoS) / 2F, y + (H - logoS) / 2F, logoS, logoS, ColorUtil.getClientColor(1));
 
         //RenderUtil.Render2D.rect(x + 16 / 2  - 2,y + 14.5F,4,1.5F,ColorUtil.getClientColor1(1),2,2,0,0);
 
