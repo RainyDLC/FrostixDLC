@@ -25,8 +25,10 @@ import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 import java.security.SecureRandom;
@@ -200,12 +202,29 @@ public class UAttack implements IMinecraft {
         return pre$post;
     }
 
+    /** Касание земли произойдёт в пределах указанных тиков (падаем с отрицательной скоростью). */
+    private static boolean isLandingWithinTicks(int ticks) {
+        Vec3d v = mc.player.getVelocity();
+        if (v.y >= -0.05F) return false;
+        Box box = mc.player.getBoundingBox();
+        double dy = v.y;
+        for (int i = 0; i < ticks; i++) {
+            Box shifted = box.offset(0, dy, 0);
+            if (!mc.world.isSpaceEmpty(mc.player, shifted)) return true;
+            box = shifted;
+            dy = Math.max(dy * 0.98 - 0.06, -3.92);
+        }
+        return false;
+    }
+
     public static boolean isBestMomentToHit(boolean fallCheck) {
         if (mc.player == null)
             return true;
 
+        boolean landingSoon = isLandingWithinTicks(2);
+
         if (AttackAura.get().others.getValue("Только криты") && fallCheck) {
-            return AttackUtil.isPlayerInCriticalState();
+            return AttackUtil.isPlayerInCriticalState() || landingSoon;
         }
 
         if (mc.player.getMainHandStack().getItem() == Items.MACE) {
@@ -215,6 +234,12 @@ public class UAttack implements IMinecraft {
         if (!fallCheck) return true;
 
         if (AttackUtil.isPlayerInCriticalState()) return true;
+
+        // WillLand: касание земли в ближайших тиках — идеальный момент крита.
+        // Работает и при ручных прыжках с включёнными «Умными критами».
+        if (landingSoon) {
+            return true;
+        }
 
         boolean isCritState = AttackUtil.isPlayerInCriticalState();
         boolean isSmartCrit = AttackAura.get().others.getValue("Умные криты") && !mc.options.jumpKey.isPressed();

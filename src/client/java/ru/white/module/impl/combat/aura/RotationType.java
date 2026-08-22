@@ -15,7 +15,8 @@ public enum RotationType {
     NEURO("Neuro", new NeuroRotation()),
     HVH("HvH", new HvHRotation()),
     SPOOKY("SpookyTime 1.21", new MatrixRotation()),
-    CUSTOM("Custom", new CustomRotation());
+    CUSTOM("Custom", new CustomRotation()),
+    LEGIT("Legit", new LegitRotation());
 
 
     private final String name;
