@@ -47,6 +47,7 @@ import ru.white.utils.render.font.Fonts;
 
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.Iterator;
 
 public class Menu extends Screen implements IMinecraft {
 
@@ -170,6 +171,116 @@ public class Menu extends Screen implements IMinecraft {
     private final java.util.List<GuiParticle> particles = new java.util.ArrayList<>();
     private long lastParticle;
     private long particleDelay = 90;
+
+    // ── дождь на фоне меню: мягкие струи за «стеклом» + капли на самом блюре ──
+    private static final class RainStreak {
+        float x, y, len, speed;
+        final float wind = -0.05f + (float) Math.random() * 0.1f;
+
+        RainStreak(float x, float y) {
+            this.x = x;
+            this.y = y;
+            this.len = 60f + (float) Math.random() * 90f;
+            this.speed = 0.28f + (float) Math.random() * 0.22f;
+        }
+    }
+
+    private static final class GlassDrop {
+        float x, y, r;
+        double vy = 0;
+        boolean sliding;
+        float slideStartY;
+        final long born = System.currentTimeMillis();
+
+        GlassDrop(float x, float y) {
+            this.x = x;
+            this.y = y;
+            this.r = 1.4f + (float) Math.random() * 2.2f;
+        }
+    }
+
+    private final java.util.List<RainStreak> menuRain = new java.util.ArrayList<>();
+    private final java.util.List<GlassDrop> glassDrops = new java.util.ArrayList<>();
+    private long lastRainFrame;
+
+    /** Дождь в главном меню: струи за стеклом и капли, стекающие по блюру. */
+    private void renderMenuRain(float w, float h, float anim) {
+        if (anim <= 0.01F) return;
+        long now = System.currentTimeMillis();
+        long dt = Math.min(60L, Math.max(1L, now - lastRainFrame));
+        lastRainFrame = now;
+
+        // ── слой за стеклом: широкие полупрозрачные струи ──
+        int target = Math.min(110, (int) (w / 12));
+        while (menuRain.size() < target)
+            menuRain.add(new RainStreak((float) (Math.random() * w), (float) (Math.random() * h)));
+        if (menuRain.size() > target)
+            menuRain.subList(target, menuRain.size()).clear();
+
+        int streakTop = ColorUtil.getColor(185, 215, 255, 0);
+        for (RainStreak st : menuRain) {
+            st.y += st.speed * dt;
+            st.x += st.wind * dt;
+            if (st.y > h + st.len || st.x < -12 || st.x > w + 12) {
+                st.y = -st.len - (float) (Math.random() * 90);
+                st.x = (float) (Math.random() * w);
+            }
+            float sw = 2.6F * S;
+            Draw.gradientRect(st.x, st.y, sw, st.len,
+                    new int[]{
+                            streakTop, streakTop,
+                            ColorUtil.replAlpha(ColorUtil.getColor(185, 215, 255), (int) (anim * 50)),
+                            ColorUtil.replAlpha(ColorUtil.getColor(185, 215, 255), (int) (anim * 50))
+                    }, sw);
+        }
+
+        // ── капли на самом блюре: стоят, растут, иногда скатываются со следом ──
+        int targetDrops = Math.min(55, (int) (w / 26));
+        while (glassDrops.size() < targetDrops)
+            glassDrops.add(new GlassDrop((float) (Math.random() * w), (float) (Math.random() * h)));
+
+        Iterator<GlassDrop> dit = glassDrops.iterator();
+        while (dit.hasNext()) {
+            GlassDrop d = dit.next();
+            if (!d.sliding && Math.random() < 0.0011 * dt && d.r > 1.9f) {
+                d.sliding = true;
+                d.slideStartY = d.y;
+            }
+
+            if (d.sliding) {
+                d.vy += 0.00035 * dt;
+                d.y += d.vy * dt;
+                // след за каплей — тающий градиент от точки старта
+                float trailH = d.y - d.slideStartY;
+                if (trailH > 2F) {
+                    Draw.gradientRect(d.x - 1.1F * S, d.slideStartY, 2.2F * S, trailH,
+                            new int[]{
+                                    ColorUtil.getColor(205, 228, 255, 0),
+                                    ColorUtil.getColor(205, 228, 255, 0),
+                                    ColorUtil.replAlpha(ColorUtil.getColor(210, 232, 255), (int) (anim * 42)),
+                                    ColorUtil.replAlpha(ColorUtil.getColor(210, 232, 255), (int) (anim * 42))
+                            }, 2.2F * S);
+                }
+            } else {
+                // прилипшая капля медленно растёт
+                if (d.r < 3.0F) d.r += 0.0008 * dt;
+            }
+
+            float a = anim * (d.sliding ? 150 : 125);
+            int bodyCol = ColorUtil.replAlpha(ColorUtil.getColor(214, 234, 255), (int) a);
+            float dr = d.r * S;
+            RenderUtil.Render2D.rect(d.x - dr, d.y - dr, dr * 2, dr * 2, bodyCol, dr);
+            RenderUtil.Render2D.rect(d.x - dr * 0.32f, d.y - dr * 0.58f,
+                    dr * 0.62f, dr * 0.5f,
+                    ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (anim * 120)), dr * 0.3f);
+
+            if (d.y > h + 24) {
+                dit.remove();
+            }
+        }
+        while (glassDrops.size() < targetDrops)
+            glassDrops.add(new GlassDrop((float) (Math.random() * w), (float) (Math.random() * h * 0.7f)));
+    }
 
     private void spawnParticle(int screenWidth, int screenHeight) {
         if (System.currentTimeMillis() - lastParticle < particleDelay) return;
@@ -430,7 +541,7 @@ public class Menu extends Screen implements IMinecraft {
                 : globalAnim;
 
         if (effect("Серый фон")) grayscalePipeline.draw(bgAnim);
-        ScreenBlur.capture(1);
+        ScreenBlur.capture(2); // чуть сильнее размываем фон меню
         if (effect("Размывать фон")) {
             RenderUtil.Blur.blur(0, 0, screenWidth, screenHeight, bgAnim, 0, ColorUtil.getColor(0, 0));
         }
@@ -498,6 +609,10 @@ public class Menu extends Screen implements IMinecraft {
             renderParticles(bgAnim);
         } else if (!particles.isEmpty()) {
             particles.clear();
+        }
+
+        if (effect("Дождь")) {
+            renderMenuRain(screenWidth, screenHeight, bgAnim);
         }
 
         ScreenBlur.capture();
