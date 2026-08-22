@@ -1793,45 +1793,78 @@ public class RotationProcess extends Component {
             matrices.pop();
         }
 
-        // ── Pass 2: сами звенья — овалы из двух дуг и перемычек ──
+        // ── Pass 2: сами звенья — объёмные торы с плетением ──
         VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
-        final int SUB = 5;                               // сегментов на дугу
-        float edgeW = size * 0.42f;                      // толщина обода
-        int rimCol = ColorUtil.replAlpha(coreCol, (int) (alphaPC * 230));
+        int colTop = ColorUtil.replAlpha(ColorUtil.overCol(coreCol, ColorUtil.getColor(255), 0.55f),
+                (int) (alphaPC * 245));
+        int colSide = ColorUtil.replAlpha(coreCol, (int) (alphaPC * 205));
+        int colBot = ColorUtil.replAlpha(
+                ColorUtil.overCol(coreCol, ColorUtil.getColor(110, 120, 145), 0.5f),
+                (int) (alphaPC * 160));
 
         for (int i = 0; i < count; i++) {
-            float a0 = baseAng + i * step;
-            float a1 = a0 + span;
-            double offAmp = size * 0.55f * Math.sin(i * Math.PI);
-            float rIn = radius + (float) offAmp - size;
-            float rOut = radius + (float) offAmp + size;
+            double offAmp = Math.sin(i * Math.PI);
+            float midA = baseAng + i * step + span * 0.5f;
+            float cx = (float) Math.cos(Math.toRadians(midA)) * (radius + (float) (offAmp * size * 0.55));
+            float cz = (float) Math.sin(Math.toRadians(midA)) * (radius + (float) (offAmp * size * 0.55));
+            // плетение: соседние звенья чуть выше/ниже
+            float cy = (float) (offAmp * size * 0.5);
 
-            for (int sIdx = 0; sIdx < SUB; sIdx++) {
-                float t0 = a0 + (a1 - a0) * sIdx / SUB;
-                float t1 = a0 + (a1 - a0) * (sIdx + 1) / SUB;
-
-                pentagramRibbon(fillBuf, m,
-                        (float) Math.cos(Math.toRadians(t0)) * rOut, (float) Math.sin(Math.toRadians(t0)) * rOut,
-                        (float) Math.cos(Math.toRadians(t1)) * rOut, (float) Math.sin(Math.toRadians(t1)) * rOut,
-                        edgeW, rimCol, rimCol);
-                pentagramRibbon(fillBuf, m,
-                        (float) Math.cos(Math.toRadians(t0)) * rIn, (float) Math.sin(Math.toRadians(t0)) * rIn,
-                        (float) Math.cos(Math.toRadians(t1)) * rIn, (float) Math.sin(Math.toRadians(t1)) * rIn,
-                        edgeW, rimCol, rimCol);
-            }
-
-            // перемычки по торцам овала
-            pentagramRibbon(fillBuf, m,
-                    (float) Math.cos(Math.toRadians(a0)) * rIn, (float) Math.sin(Math.toRadians(a0)) * rIn,
-                    (float) Math.cos(Math.toRadians(a0)) * rOut, (float) Math.sin(Math.toRadians(a0)) * rOut,
-                    edgeW, rimCol, rimCol);
-            pentagramRibbon(fillBuf, m,
-                    (float) Math.cos(Math.toRadians(a1)) * rIn, (float) Math.sin(Math.toRadians(a1)) * rIn,
-                    (float) Math.cos(Math.toRadians(a1)) * rOut, (float) Math.sin(Math.toRadians(a1)) * rOut,
-                    edgeW, rimCol, rimCol);
+            drawTorusLink(fillBuf, m, cx, cy, cz, size, size * 0.40f, 16, 8,
+                    colTop, colSide, colBot);
         }
 
         matrices.pop();
+    }
+
+    /** Объёмное звено-тор в горизонтальной плоскости; шейдинг по высоте трубки. */
+    private static void drawTorusLink(VertexConsumer buf, Matrix4f m,
+                                      float cx, float cy, float cz,
+                                      float rMain, float rTube,
+                                      int segU, int segV,
+                                      int colTop, int colSide, int colBot) {
+        float[] px = new float[segU + 1];
+        float[] py = new float[segU + 1];
+        float[] pz = new float[segU + 1];
+        float[] dxs = new float[segU + 1];
+        float[] dzs = new float[segU + 1];
+
+        for (int u = 0; u <= segU; u++) {
+            double a = Math.PI * 2.0 * u / segU;
+            float dxc = (float) Math.cos(a);
+            float dzc = (float) Math.sin(a);
+            dxs[u] = dxc;
+            dzs[u] = dzc;
+            px[u] = cx + dxc * rMain;
+            py[u] = cy;
+            pz[u] = cz + dzc * rMain;
+        }
+
+        // цвет вершины трубки зависит только от её высоты на сечении
+        int[] vCols = new int[segV];
+        for (int v = 0; v < segV; v++) {
+            double b = Math.PI * 2.0 * v / segV;
+            float h = (float) Math.sin(b);
+            if (h > 0.35f) vCols[v] = colTop;
+            else if (h > -0.35f) vCols[v] = colSide;
+            else vCols[v] = colBot;
+        }
+
+        for (int u = 0; u < segU; u++) {
+            int u1 = u + 1;
+            for (int v = 0; v < segV; v++) {
+                double b0 = Math.PI * 2.0 * v / segV;
+                double b1 = Math.PI * 2.0 * (v + 1) / segV;
+
+                float o00 = (float) Math.cos(b0) * rTube, y00 = (float) Math.sin(b0) * rTube;
+                float o10 = (float) Math.cos(b1) * rTube, y10 = (float) Math.sin(b1) * rTube;
+
+                buf.vertex(m, px[u] + dxs[u] * o00, py[u] + y00, pz[u] + dzs[u] * o00).color(vCols[v]);
+                buf.vertex(m, px[u] + dxs[u] * o10, py[u] + y10, pz[u] + dzs[u] * o10).color(vCols[(v + 1) % segV]);
+                buf.vertex(m, px[u1] + dxs[u1] * o10, py[u1] + y10, pz[u1] + dzs[u1] * o10).color(vCols[(v + 1) % segV]);
+                buf.vertex(m, px[u1] + dxs[u1] * o00, py[u1] + y00, pz[u1] + dzs[u1] * o00).color(vCols[v]);
+            }
+        }
     }
 
     /**
