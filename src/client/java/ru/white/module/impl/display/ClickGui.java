@@ -8,6 +8,7 @@ import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
 import ru.white.module.api.settings.impl.BooleanSetting;
+import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.MultiBooleanSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.math.Keyboard;
@@ -35,6 +36,9 @@ public class ClickGui extends Module {
 
 
     public SliderSetting size = new SliderSetting(this,"Размер",1.0F,0.5F,1.5F,0.1F);
+
+    public ModeSetting dotsPattern = new ModeSetting(this, "Узор фона", "Сетка", "Соты")
+            .setVisible(() -> effect.getValue("Точки"));
 
     @EventHandler
     public void onKey(EventKey event) {

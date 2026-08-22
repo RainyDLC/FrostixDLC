@@ -2,15 +2,16 @@
 
 layout(std140) uniform HalftoneDotsData {
     vec4 screen;  // xy — размер экрана гуи, zw — размер области эффекта
-    vec4 params;  // x — шаг сетки, y — мин. радиус, z — макс. радиус, w — радиус влияния курсора
-    vec4 pointer; // xy — курсор в координатах гуи
-    vec4 tint;    // rgb — цвет точек, a — прозрачность
+    vec4 params;  // x — шаг узора, y/z — резерв, w — радиус влияния курсора
+    vec4 pointer; // xy — курсор, z — режим (0 сетка, 1 соты)
+    vec4 tint;    // rgb — цвет, a — прозрачность
 };
 
 out vec2 pixelCoord;
 out vec4 vParams;
 out vec2 vPointer;
 out vec4 vTint;
+out float vMode;
 
 void main() {
     vec2 positions[6] = vec2[](
@@ -34,4 +35,5 @@ void main() {
     vParams = params;
     vPointer = pointer.xy;
     vTint = tint;
+    vMode = pointer.z;
 }

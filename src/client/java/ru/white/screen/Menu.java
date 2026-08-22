@@ -54,7 +54,7 @@ public class Menu extends Screen implements IMinecraft {
     public static float S = 1.0F;
 
     public Menu() {
-        super(Text.literal("MenuNight"));
+        super(Text.literal("RainyDLC Menu"));
     }
 
     boolean exit = false;
@@ -209,7 +209,7 @@ public class Menu extends Screen implements IMinecraft {
     private final HashMap<String, Float> descHeights = new HashMap<>();
 
     private float descHeight(Font font, String desc) {
-        return descHeights.computeIfAbsent(desc + "_" + S, d -> font.getWrappedHeight(desc, 125 * S, 6 * S));
+        return descHeights.computeIfAbsent(desc + "_" + S, d -> font.getWrappedHeight(desc, 132 * S, 6 * S));
     }
 
     private final HashMap<String, float[]> smoothVals = new HashMap<>();
@@ -447,15 +447,41 @@ public class Menu extends Screen implements IMinecraft {
         }
 
         if (effect("Точки")) {
-            halftonePipeline.draw(screenWidth, screenHeight, shaderMouseX, shaderMouseY, bgAnim * 0.1F, ColorUtil.getColor(255), 6, 0.7F, 3, 100);
+            ClickGui guiModule = Client.get().moduleManager().get(ClickGui.class);
+            float patternMode = guiModule != null && guiModule.dotsPattern.is("Соты") ? 1.0F : 0.0F;
+            halftonePipeline.draw(screenWidth, screenHeight, shaderMouseX, shaderMouseY, bgAnim * 0.12F,
+                    ColorUtil.getColor(255), 7, 0.7F, 3, 130, patternMode);
         }
 
         if (effect("Скан линии")) drawScanLines(screenWidth, screenHeight, bgAnim);
 
         if (effect("Свечение")) {
-            int glowColor = ColorUtil.replAlpha(ColorUtil.client(), bgAnim * 0.5F);
-            RenderUtil.Images.texture(Identifier.of("client","textures/effects/circles_effect.png"), 0, 30 - 30 * bgAnim, screenWidth, screenHeight, glowColor);
-            RenderUtil.Images.texture(Identifier.of("client","textures/effects/top_glow.png"), 0, -30 + 30 * bgAnim, screenWidth, screenHeight, glowColor);
+            int glowCol = ColorUtil.client();
+
+            // мягкая светлая шапка сверху экрана
+            Draw.gradientRect(0, 0, screenWidth, Math.max(1F, screenHeight * 0.24F),
+                    new int[]{
+                            ColorUtil.replAlpha(glowCol, 0.16F * bgAnim),
+                            ColorUtil.replAlpha(glowCol, 0.16F * bgAnim),
+                            ColorUtil.getColor(0, 0),
+                            ColorUtil.getColor(0, 0)
+                    }, 0);
+
+            // медленно дышащие кольца у верхней кромки
+            float ringCx = screenWidth * 0.5F;
+            float ringCy = -screenHeight * 0.05F;
+            long ringMs = System.currentTimeMillis();
+            for (int i = 0; i < 3; i++) {
+                float fi = i;
+                float breathe = 0.5F + 0.5F * (float) Math.sin(ringMs / 2600.0 + fi * 2.1);
+                float radius = (90 + fi * 70) * S * (0.92F + 0.08F * breathe);
+                float ringA = bgAnim * (0.14F - fi * 0.035F) * (0.6F + 0.4F * breathe);
+
+                RenderUtil.Render2D.outline(ringCx - radius, ringCy - radius, radius * 2F, radius * 2F,
+                        1.1F * S, ColorUtil.replAlpha(glowCol, ringA), radius);
+                RenderUtil.Render2D.glow(ringCx - radius, ringCy - radius, radius * 2F, radius * 2F,
+                        ColorUtil.replAlpha(glowCol, ringA * 0.5F), radius, 9, 1);
+            }
 
             if (!exit && bgAnim > 0.01F && bgAnim < 0.99F) {
                 float pulse = (bgAnim > 0.5F ? 1F - bgAnim : bgAnim) * 2F;
@@ -478,8 +504,8 @@ public class Menu extends Screen implements IMinecraft {
 
         S = Client.get().moduleManager().get(ClickGui.class).size.getValue();
 
-        float w = 420 * S;
-        float h = 280 * S;
+        float w = 440 * S;
+        float h = 316 * S;
         float x = screenWidth / 2F - w / 2;
         // при сборке из осколков панель никуда не съезжает — она «остаётся на месте»
         float slide = shatter() ? 0F : (exit ? 60 * S - 60 * S * globalAnim : -60 * S + 60 * S * globalAnim);
@@ -515,17 +541,22 @@ public class Menu extends Screen implements IMinecraft {
 
         ScreenBlur.capture();
 
-        float ht = 20 * S;
-        float wt = 105 * S;
-        float xt = x + 6 * S;
-        float yt = y - 5 * S - ht;
+        // ── каркас ──
+        RenderUtil.Render2D.glow(x, y, w, h - 0.5F * S, ColorUtil.getColor(0, 0.15F * globalAnim), 8 * S, 15, 1);
+        RenderUtil.Blur.blur(x, y, w, h, globalAnim, 8 * S, ColorUtil.multAlpha(ColorUtil.multDark(ColorUtil.background(), 0.6F), globalAnim));
+        RenderUtil.Images.texture(Identifier.of("client","textures/frame/rectgui.png"), x, y, w, h, ColorUtil.multAlpha(ColorUtil.client(), globalAnim));
 
-        RenderUtil.Render2D.glow(xt, yt, wt, ht - 0.5F * S, ColorUtil.getColor(0, 0.15F * globalAnim), 7.5F * S, 15, 1);
-        RenderUtil.Blur.blur(xt, yt, wt, ht, globalAnim, 7.5F * S, ColorUtil.multAlpha(ColorUtil.multDark(ColorUtil.background(), 0.6F), globalAnim));
-        RenderUtil.Images.texture(Identifier.of("client","textures/frame/rectthemegui.png"), xt, yt, wt, ht, ColorUtil.multAlpha(ColorUtil.client(), globalAnim));
+        // ── строка 1: лого · точки тем справа ──
+        float rowY = y + 6 * S;
 
-        float xtd = x + 12.5F * S;
-        float ytd = yt + 6F * S;
+        icons.drawCentered("A", x + 15 * S, rowY + 8 * S, 9 * S, ColorUtil.multAlpha(ColorUtil.client(), globalAnim));
+        draw.draw("RainyDLC", x + 25 * S, rowY + 5.5F * S, 8 * S, ColorUtil.getColor(215, globalAnim * 0.9F));
+        draw.draw("5.0", x + 25 * S + draw.getWidth("RainyDLC", 8 * S) + 4 * S, rowY + 6.2F * S, 6.5F * S,
+                ColorUtil.replAlpha(ColorUtil.client(), globalAnim * 0.75F));
+
+        float dotsW = themes.length * 14 * S - 6 * S;
+        float xtd = x + w - 6 * S - dotsW;
+        float ytd = rowY + 5 * S;
 
         for (Theme theme : themes) {
             theme.animation.setDirection(theme == selectedTheme ? Direction.FORWARDS : Direction.BACKWARDS);
@@ -538,62 +569,8 @@ public class Menu extends Screen implements IMinecraft {
             xtd += 14 * S;
         }
 
-        RenderUtil.Render2D.glow(x, y, w, h - 0.5F * S, ColorUtil.getColor(0, 0.15F * globalAnim), 8 * S, 15, 1);
-        RenderUtil.Blur.blur(x, y, w, h, globalAnim, 8 * S, ColorUtil.multAlpha(ColorUtil.multDark(ColorUtil.background(), 0.6F), globalAnim));
-        RenderUtil.Images.texture(Identifier.of("client","textures/frame/rectgui.png"), x, y, w, h, ColorUtil.multAlpha(ColorUtil.client(), globalAnim));
-
-        RenderUtil.Render2D.glow(x + 6 * S, y + 6 * S, 30 * S, h - 12 * S, ColorUtil.getColor(0, 0.04F * globalAnim), 6 * S, 8, 1);
-        RenderUtil.Render2D.rect(x + 6 * S, y + 6 * S, 30 * S, h - 12 * S, ColorUtil.getColor(0, 0.15F * globalAnim), 6 * S);
-
-        float xPanelMini = x + 6 * S;
-        float yPanelMini = y + 6 * S;
-
-        boolean isLogoHov = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, xPanelMini + (30 * S) / 2 - (12 * S) / 2, yPanelMini + 7 * S, 12 * S, 12 * S);
-        animUserInfo.setDirection(isLogoHov ? Direction.FORWARDS : Direction.BACKWARDS);
-
-        float animL = animUserInfo.getOutput();
-        float xAnimADd2 = 16 * S - 16 * S * animL;
-        String sgff = "RainyDLC" + ColorFormatting.getColor(ColorUtil.replAlpha(ColorUtil.client(), globalAnim * animL)) + " 5.0";
-
-        RenderUtil.Render2D.glow(xPanelMini - draw.getWidth(sgff, 8 * S) - 4 * S + xAnimADd2, yPanelMini + 7 * S, 7 * S + draw.getWidth(sgff, 8 * S), 14 * S, ColorUtil.multAlpha(ColorUtil.getColor(0), globalAnim * animL * 0.1F), 4 * S, 6, 1);
-        RenderUtil.Blur.blur(xPanelMini - draw.getWidth(sgff, 8 * S) - 4 * S + xAnimADd2, yPanelMini + 7 * S, 7 * S + draw.getWidth(sgff, 8 * S), 14 * S, globalAnim * animL, 4 * S, ColorUtil.multAlpha(ColorUtil.background(), globalAnim * animL * 0.2F));
-        draw.draw(sgff, xPanelMini - draw.getWidth(sgff, 8 * S) + xAnimADd2, yPanelMini + 9 * S, 8 * S, ColorUtil.getColor(200, globalAnim * animL));
-
-        RenderUtil.Render2D.glow(xPanelMini + (30 * S) / 2 - (12 * S) / 2 + 5.5F * S, yPanelMini + 14 * S, 0.1F * S, 0.1F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * animL * 0.15F), 8 * S, 12, 1);
-        icons.drawCentered("A", xPanelMini + (30 * S) / 2, yPanelMini + 10 * S, 9 * S, ColorUtil.multAlpha(ColorUtil.client(), globalAnim));
-
-        float csgddd = 0;
-        for (Category category : Category.values()) {
-            csgddd += 20 * S;
-        }
-
-        float cy = y + h / 2 - csgddd / 2;
-
-        for (Category category : Category.values()) {
-            category.alphaS.setDirection(active == category ? Direction.FORWARDS : Direction.BACKWARDS);
-            float anim = category.alphaS.getOutput();
-            ru.white.utils.animation.satoshi.Animation animUF = category.alphaS2;
-
-            boolean isHv = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, xPanelMini + (30 * S) / 2 - (16 * S) / 2, cy, 16 * S, 16 * S);
-            animUF.setDirection(isHv ? Direction.FORWARDS : Direction.BACKWARDS);
-            float animL2 = animUF.getOutput();
-
-            String name = category.getIcon();
-            RenderUtil.Render2D.outline(xPanelMini + (30 * S) / 2 - (16 * S) / 2 - 1 * S * anim + 1 * S, cy - 1 * S * anim + 1 * S, 16 * S + 2 * S * anim - 2 * S, 16 * S + 2 * S * anim - 2 * S, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * anim), 5 * S);
-            RenderUtil.Render2D.glow(xPanelMini + (30 * S) / 2 - (12 * S) / 2 + 5.8F * S, cy + 7.8F * S, 0.1F * S, 0.1F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * animL2 * 0.15F * anim), 8 * S, 9, 1);
-            Fonts.rainydlc_2.drawCentered(name, xPanelMini + (30 * S) / 2, cy + 4.5F * S, 8 * S, ColorUtil.multAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 0.15F * globalAnim + 0.5F * animL2), ColorUtil.client(), anim), globalAnim));
-
-            String sgff2 = category.getName();
-            float xAnimADd = 16 * S - 16 * S * animL2;
-            RenderUtil.Render2D.glow(xPanelMini - draw.getWidth(sgff2, 8 * S) - 4 * S + xAnimADd, cy + 7 * S - 6 * S, 7 * S + draw.getWidth(sgff2, 8 * S), 14 * S, ColorUtil.multAlpha(ColorUtil.getColor(0), globalAnim * animL2 * 0.1F), 4 * S, 6, 1);
-            RenderUtil.Blur.blur(xPanelMini - draw.getWidth(sgff2, 8 * S) - 4 * S + xAnimADd, cy + 7 * S - 6 * S, 7 * S + draw.getWidth(sgff2, 8 * S), 14 * S, globalAnim * animL2, 4 * S, ColorUtil.multAlpha(ColorUtil.background(), globalAnim * animL2 * 0.2F));
-            draw.draw(sgff2, xPanelMini - draw.getWidth(sgff2, 8 * S) + xAnimADd, cy + 9 * S - 6 * S, 8 * S, ColorUtil.getColor(200, globalAnim * animL2));
-
-            cy += 20 * S;
-        }
-
-        float xps = x + 6 * S + 36 * S;
-        float yps = y + 6 * S;
+        float xps = x + (w - 140 * S) / 2F;
+        float yps = y + 24 * S;
 
         boolean searchHover = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, xps, yps, 140 * S, 20 * S);
         animation3.setDirection(searchHover || searchActive ? Direction.FORWARDS : Direction.BACKWARDS);
@@ -608,7 +585,7 @@ public class Menu extends Screen implements IMinecraft {
         RenderUtil.Render2D.rect(xps, yps, 140 * S, 20 * S, ColorUtil.overCol(ColorUtil.getColor(0, 0.15F * globalAnim), ColorUtil.getColor(25, 0.3F * globalAnim), Math.max(hvs, focus)), 6 * S);
         RenderUtil.Render2D.outline(xps, yps, 140 * S, 20 * S, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * focus), 6 * S);
 
-        guiicon.draw("A", xps + 7 * S, yps + 7 * S, 6 * S, ColorUtil.overCol(ColorUtil.getColor(255, globalAnim * (0.3F + 0.5F * hvs)), ColorUtil.replAlpha(ColorUtil.client(), globalAnim * (0.3F + 0.7F * hvs)), hvs));
+        guiicon.draw("A", xps + 7 * S, yps + 6 * S, 6 * S, ColorUtil.overCol(ColorUtil.getColor(255, globalAnim * (0.3F + 0.5F * hvs)), ColorUtil.replAlpha(ColorUtil.client(), globalAnim * (0.3F + 0.7F * hvs)), hvs));
 
         float xSearchText = xps + 6.5F * S + 11 * S;
         float wSearchText = 140 * S - (xSearchText - xps) - 8 * S;
@@ -628,35 +605,59 @@ public class Menu extends Screen implements IMinecraft {
 
         RenderUtil.Render2D.rect(caretX, yps + 6.5F * S, 0.6F * S, 6.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * caret), 0.3F * S);
 
-        float catPanX = x + 6 * S + 36 * S + 6 * S + 140 * S;
-        float catPanW = w + (6 * S - 36 * S - 6 * S - 140 * S - 12 * S - 6 * S);
+        // ── ряд 2: вкладки категорий по центру ──
+        float tabY = y + 50 * S;
+        float tabsTotal = -4 * S;
+        for (Category category : Category.values())
+            tabsTotal += 24 * S + category.alphaS.getOutput() * (draw.getWidth(category.getName(), 7 * S) + 10 * S) + 4 * S;
+        float tabX = x + (w - tabsTotal) / 2F;
+        for (Category category : Category.values()) {
+            category.alphaS.setDirection(active == category ? Direction.FORWARDS : Direction.BACKWARDS);
+            float act = category.alphaS.getOutput();
+            ru.white.utils.animation.satoshi.Animation animUF = category.alphaS2;
 
-        RenderUtil.Render2D.glow(catPanX, y + 6 * S, catPanW, 20 * S, ColorUtil.getColor(0, 0.04F * globalAnim), 6 * S, 8, 1);
-        RenderUtil.Render2D.rect(catPanX, y + 6 * S, catPanW, 20 * S, ColorUtil.getColor(0, 0.15F * globalAnim), 6 * S);
+            float tw = 24 * S + act * (draw.getWidth(category.getName(), 7 * S) + 10 * S);
+            boolean isHv = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, tabX, tabY, tw, 22 * S);
+            animUF.setDirection(isHv ? Direction.FORWARDS : Direction.BACKWARDS);
+            float hv = animUF.getOutput();
+            float mix = Math.max(act, hv * 0.55F);
 
-        String catName = active.getIcon();
-        Fonts.rainydlc_2.draw(catName, catPanX + 8 * S, y + 12.7F * S + 5 * S - 5 * S * animCategoryReset.getOutput(), 7 * S, ColorUtil.multAlpha(ColorUtil.client(), globalAnim * animCategoryReset.getOutput()));
-        draw.draw(active.getName(), catPanX + 20 * S, y + 11.8F * S + 5 * S - 5 * S * animCategoryReset.getOutput(), 7 * S, ColorUtil.getColor(200, globalAnim * animCategoryReset.getOutput()));
+            RenderUtil.Render2D.rect(tabX, tabY, tw, 22 * S, ColorUtil.overCol(ColorUtil.getColor(0, 0.12F * globalAnim), ColorUtil.replAlpha(ColorUtil.client(), 0.22F * globalAnim), mix), 5 * S);
+            if (act > 0.01F)
+                RenderUtil.Render2D.outline(tabX, tabY, tw, 22 * S, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * act * 0.8F), 5 * S);
+
+            Fonts.rainydlc_2.drawCentered(category.getIcon(), tabX + 12 * S, tabY + 6 * S, 8 * S,
+                    ColorUtil.multAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 0.35F * globalAnim + 0.45F * hv), ColorUtil.client(), Math.max(act, hv * 0.6F)), globalAnim));
+            if (act > 0.01F)
+                draw.draw(category.getName(), tabX + 21 * S, tabY + 7.5F * S, 7 * S, ColorUtil.getColor(220, globalAnim * act));
+
+            RenderUtil.Render2D.rect(tabX + 5 * S, tabY + 19.25F * S, (tw - 10 * S) * act, 1.25F * S,
+                    ColorUtil.replAlpha(ColorUtil.client(), globalAnim * act), 1 * S);
+
+            tabX += tw + 4 * S;
+        }
 
         int found = searchResults();
         String foundText = found + (found == 1 ? " result" : " results");
-        float xHeader = catPanX;
-        float wHeader = catPanW;
-        draw.draw(foundText, xHeader + wHeader - 8 * S - draw.getWidth(foundText, 6.5F * S), y + 12.2F * S + 5 * S - 5 * S * typed, 6.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * typed));
+        draw.draw(foundText, x + w - 8 * S - draw.getWidth(foundText, 6.5F * S), tabY + 7.5F * S, 6.5F * S,
+                ColorUtil.replAlpha(ColorUtil.client(), globalAnim * typed));
 
-        RenderUtil.Render2D.glow(x + 6 * S + 36 * S, y + 6 * S + 26 * S, 140 * S, h - 12 * S - 26 * S, ColorUtil.getColor(0, 0.04F * globalAnim), 7 * S, 8, 1);
-        RenderUtil.Render2D.rect(x + 6 * S + 36 * S, y + 6 * S + 26 * S, 140 * S, h - 12 * S - 26 * S, ColorUtil.getColor(0, 0.15F * globalAnim), 7 * S);
+        float listX = x + 6 * S;
+        float listW = 152 * S;
 
-        Scissor.enable(x + 6 * S + 36 * S, y + 6 * S + 26 * S, 140 * S, h - 12 * S - 26 * S, 2);
+        RenderUtil.Render2D.glow(listX, y + 76 * S, listW, h - 82 * S, ColorUtil.getColor(0, 0.04F * globalAnim), 7 * S, 8, 1);
+        RenderUtil.Render2D.rect(listX, y + 76 * S, listW, h - 82 * S, ColorUtil.getColor(0, 0.15F * globalAnim), 7 * S);
+
+        Scissor.enable(listX, y + 76 * S, listW, h - 82 * S, 2);
 
         scrollAnim += (scrollTarget - scrollAnim) * 0.2F;
 
-        float xModule = x + 6 * S + 36 * S + 5 * S;
-        float yModule = y + 6 * S + 30 * S - scrollAnim;
+        float xModule = listX + 5 * S;
+        float yModule = y + 80 * S - scrollAnim;
 
         float crs = animCategoryReset.getOutput();
-        float listTop = y + 6 * S + 26 * S;
-        float listBottom = listTop + (h - 12 * S - 26 * S);
+        float listTop = y + 76 * S;
+        float listBottom = listTop + (h - 82 * S);
 
         for (Module f : Client.get().moduleManager().values()) {
             f.getAnimation14().setDirection(moduleVisible(f) ? Direction.FORWARDS : Direction.BACKWARDS);
@@ -670,7 +671,7 @@ public class Menu extends Screen implements IMinecraft {
                 float moduleEnable = f.getAnimation16().getOutput();
 
                 boolean onScreen = yModule + moduleH >= listTop && yModule <= listBottom;
-                boolean isHover = onScreen && MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, xModule, yModule, 130 * S, moduleH);
+                boolean isHover = onScreen && MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, xModule, yModule, 142 * S, moduleH);
 
                 f.getAnimation12().setDirection(isHover ? Direction.FORWARDS : Direction.BACKWARDS);
                 float hanim = f.getAnimation12().getOutput();
@@ -682,11 +683,11 @@ public class Menu extends Screen implements IMinecraft {
                     continue;
                 }
 
-                RenderUtil.Render2D.rect(xModule, yModule, 130 * S, moduleH, ColorUtil.overCol(ColorUtil.getColor(0, 0.15F * globalAnim * canim1), ColorUtil.getColor(25, 0.3F * globalAnim * canim1), hanim), 5 * S);
-                RenderUtil.Render2D.outline(xModule - 1 * S * moduleEnable + 1 * S, yModule - 1 * S * moduleEnable + 1 * S, 130 * S + 2 * S * moduleEnable - 2 * S, moduleH + 2 * S * moduleEnable - 2 * S, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * canim1 * moduleEnable * (1.0F - 0.3F * hanim)), 5 * S);
+                RenderUtil.Render2D.rect(xModule, yModule, 142 * S, moduleH, ColorUtil.overCol(ColorUtil.getColor(0, 0.15F * globalAnim * canim1), ColorUtil.getColor(25, 0.3F * globalAnim * canim1), hanim), 5 * S);
+                RenderUtil.Render2D.outline(xModule - 1 * S * moduleEnable + 1 * S, yModule - 1 * S * moduleEnable + 1 * S, 142 * S + 2 * S * moduleEnable - 2 * S, moduleH + 2 * S * moduleEnable - 2 * S, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * canim1 * moduleEnable * (1.0F - 0.3F * hanim)), 5 * S);
 
-                RenderUtil.Render2D.rect(xModule + 130 * S - 14 * S - 5 * S, yModule + 5F * S, 14 * S, 8 * S, ColorUtil.overCol(ColorUtil.getColor(0, 0.2F * globalAnim * canim1), ColorUtil.replAlpha(ColorUtil.client(), globalAnim * canim1 * (1.0F - 0.3F * hanim)), moduleEnable), 4 * S);
-                RenderUtil.Render2D.rect(xModule + 130 * S - 14 * S - 5 * S + 1.5F * S + 5.5F * S * moduleEnable, yModule + 5F * S + 1.25F * S, 5.5F * S, 5.5F * S, ColorUtil.getColor(255, globalAnim * (0.3F + 0.7F * moduleEnable) * canim1), 4 * S);
+                RenderUtil.Render2D.rect(xModule + 142 * S - 14 * S - 5 * S, yModule + 5F * S, 14 * S, 8 * S, ColorUtil.overCol(ColorUtil.getColor(0, 0.2F * globalAnim * canim1), ColorUtil.replAlpha(ColorUtil.client(), globalAnim * canim1 * (1.0F - 0.3F * hanim)), moduleEnable), 4 * S);
+                RenderUtil.Render2D.rect(xModule + 142 * S - 14 * S - 5 * S + 1.5F * S + 5.5F * S * moduleEnable, yModule + 5F * S + 1.25F * S, 5.5F * S, 5.5F * S, ColorUtil.getColor(255, globalAnim * (0.3F + 0.7F * moduleEnable) * canim1), 4 * S);
 
                 boolean bindingNow = bindingModule == f;
                 ru.white.utils.animation.satoshi.Animation bindAct = chipAnim(f.getName() + ":modbind");
@@ -695,7 +696,7 @@ public class Menu extends Screen implements IMinecraft {
 
                 String keyName = bindingNow ? "..." : (f.getKey() == -1 ? "n/a" : Keyboard.keyName(f.getKey()).replace("NONE", "n/a"));
                 float keyW = smooth(f.getName() + ":modbindw", draw.getWidth(keyName, 6 * S) + 9 * S);
-                float keyX = xModule + 130 * S - 14 * S - 5 * S - 5 * S - keyW;
+                float keyX = xModule + 142 * S - 14 * S - 5 * S - 5 * S - keyW;
                 float keyY = yModule + 4F * S;
 
                 boolean keyHover = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, keyX, keyY, keyW, 10 * S);
@@ -713,9 +714,9 @@ public class Menu extends Screen implements IMinecraft {
                 regular.drawCentered(keyName, keyX + keyW / 2, keyY + 1.5F * S, 6 * S, ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255), ColorUtil.client(), Math.max(bindActive, moduleEnable)), globalAnim * canim1 * (0.35F + 0.35F * moduleEnable + 0.3F * Math.max(bindHover, bindActive))));
 
                 draw.draw(f.getBigName(), xModule + 5 * S, yModule + 5 * S, 7 * S, ColorUtil.getColor(255, globalAnim * canim1 * (0.2F + 0.6F * moduleEnable + 0.2F * hanim)));
-                draw.drawWrappedText(f.getDesc(), xModule + 5 * S, yModule + 4 * S + 12 * S, 125 * S, ColorUtil.getColor(255, globalAnim * canim1 * (0.1F + 0.5F * moduleEnable + 0.2F * hanim)), 6 * S);
+                draw.drawWrappedText(f.getDesc(), xModule + 5 * S, yModule + 4 * S + 12 * S, 132 * S, ColorUtil.getColor(255, globalAnim * canim1 * (0.1F + 0.5F * moduleEnable + 0.2F * hanim)), 6 * S);
 
-                RenderUtil.Render2D.rect(xModule, yModule, 130 * S, moduleH, ColorUtil.replAlpha(ColorUtil.client(), 0.3F * globalAnim * selectAnim * (0.2F + 0.5F * moduleEnable) * canim1), 5 * S);
+                RenderUtil.Render2D.rect(xModule, yModule, 142 * S, moduleH, ColorUtil.replAlpha(ColorUtil.client(), 0.3F * globalAnim * selectAnim * (0.2F + 0.5F * moduleEnable) * canim1), 5 * S);
 
                 yModule += (moduleH + 5 * S) * canim1;
             }
@@ -725,23 +726,23 @@ public class Menu extends Screen implements IMinecraft {
         float emptyAnim = animSearchEmpty.getOutput();
 
         if (emptyAnim > 0.01F) {
-            float xEmpty = x + 6 * S + 36 * S + 70 * S;
-            float yEmpty = y + 6 * S + 26 * S + (h - 12 * S - 26 * S) / 2 - 8 * S + 6 * S - 6 * S * emptyAnim;
+            float xEmpty = listX + listW / 2;
+            float yEmpty = y + 76 * S + (h - 82 * S) / 2 - 8 * S + 6 * S - 6 * S * emptyAnim;
             guiicon.drawCentered("A", xEmpty, yEmpty, 8 * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * emptyAnim * 0.4F));
             draw.drawCentered("Ничего не найдено", xEmpty, yEmpty + 14 * S, 7 * S, ColorUtil.getColor(255, globalAnim * emptyAnim * 0.5F));
         }
 
-        float contentHeight = yModule + scrollAnim - (y + 6 * S + 30 * S);
-        float viewHeight = h - 12 * S - 26 * S - 4 * S;
+        float contentHeight = yModule + scrollAnim - (y + 80 * S);
+        float viewHeight = h - 82 * S - 4 * S;
         maxScroll = Math.max(0, contentHeight - viewHeight);
         if (scrollTarget > maxScroll) scrollTarget = maxScroll;
 
         Scissor.reset();
 
-        float xSetBase = x + 6 * S + 36 * S + 140 * S + 6 * S;
-        float wSetBase = w - (6 * S + 36 * S + 6 * S + 140 * S + 6 * S);
-        float ySetBase = y + 6 * S + 26 * S;
-        float hSetBase = h - 12 * S - 26 * S;
+        float xSetBase = listX + listW + 6 * S;
+        float wSetBase = w - 12 * S - listW - 6 * S;
+        float ySetBase = y + 76 * S;
+        float hSetBase = h - 82 * S;
 
         RenderUtil.Render2D.glow(xSetBase, ySetBase, wSetBase, hSetBase, ColorUtil.getColor(0, 0.04F * globalAnim), 7 * S, 8, 1);
         RenderUtil.Render2D.rect(xSetBase, ySetBase, wSetBase, hSetBase, ColorUtil.getColor(0, 0.15F * globalAnim), 7 * S);
@@ -754,11 +755,12 @@ public class Menu extends Screen implements IMinecraft {
         float hSetting = hSetBase;
 
         animation2.setDirection(select != null ? Direction.FORWARDS : Direction.BACKWARDS);
-        draw.drawCentered("Выберите модуль", xSetting + wSetting / 2, ySetting + 140 * S + 30 * S * animation2.getOutput(), 7 * S, ColorUtil.getColor(255, (globalAnim - animation2.getOutput()) * 0.8F));
+        float phCenter = ySetting + hSetting / 2;
+        draw.drawCentered("Выберите модуль", xSetting + wSetting / 2, phCenter + 34 * S + 30 * S * animation2.getOutput(), 7 * S, ColorUtil.getColor(255, (globalAnim - animation2.getOutput()) * 0.8F));
 
         loadGif();
         if (gif != null) {
-            gif.draw(context, (int) (xSetting + wSetting / 2 - (78 * S) / 2 - 2 * S), (int) (ySetting + 35 * S + 30 * S - 30 * S * animation2.getOutput()), (int)(78 * S), (int)(70 * S), ColorUtil.replAlpha(ColorUtil.WHITE, globalAnim - animation2.getOutput()));
+            gif.draw(context, (int) (xSetting + wSetting / 2 - (78 * S) / 2), (int) (phCenter - 66 * S + 30 * S - 30 * S * animation2.getOutput()), (int)(78 * S), (int)(70 * S), ColorUtil.replAlpha(ColorUtil.WHITE, globalAnim - animation2.getOutput()));
         }
 
         settingScrollAnim += (settingScrollTarget - settingScrollAnim) * 0.2F;
@@ -1164,18 +1166,13 @@ public class Menu extends Screen implements IMinecraft {
         int screenWidth  = (int) (mc.getWindow().getScaledWidth()  / scaleFix);
         int screenHeight = (int) (mc.getWindow().getScaledHeight() / scaleFix);
 
-        float w = 420 * S;
-        float h = 280 * S;
+        float w = 440 * S;
+        float h = 316 * S;
         float x = screenWidth / 2F - w / 2;
         float y = screenHeight / 2F - h / 2;
 
-        float ht = 20 * S;
-        float wt = 78 * S;
-        float xt = x + 6 * S;
-        float yt = y - 5 * S - ht;
-
-        float xps = x + 6 * S + 36 * S;
-        float yps = y + 6 * S;
+        float xps = x + (w - 140 * S) / 2F;
+        float yps = y + 24 * S;
 
         if (MathUtil.isHovered(mouseX, mouseY, xps, yps, 140 * S, 20 * S)) {
             if (click.button() == 1) { clearSearch(); searchActive = false; GuiSounds.searchClear(); }
@@ -1185,8 +1182,9 @@ public class Menu extends Screen implements IMinecraft {
 
         searchActive = false;
 
-        float xtd = x + 12.5F * S;
-        float ytd = yt + 5.7F * S;
+        float dotsWc = themes.length * 14 * S - 6 * S;
+        float xtd = x + w - 6 * S - dotsWc;
+        float ytd = y + 11 * S;
         int themeIndex = 0;
 
         for (Theme theme : themes) {
@@ -1197,27 +1195,29 @@ public class Menu extends Screen implements IMinecraft {
             xtd += 14 * S; themeIndex++;
         }
 
-        float xPanelMini = x + 6 * S;
-        float yPanelMini = y + 6 * S;
-        float csgddd = 0;
-        for (Category category : Category.values()) { csgddd += 20 * S; }
-        float cy = y + h / 2 - csgddd / 2;
+        Font draw = Fonts.sf_regular;
+
+        float tabsTotalC = -4 * S;
+        for (Category category : Category.values())
+            tabsTotalC += 24 * S + category.alphaS.getOutput() * (draw.getWidth(category.getName(), 7 * S) + 10 * S) + 4 * S;
+        float tabXc = x + (w - tabsTotalC) / 2F;
+        float tabYc = y + 50 * S;
         int catIndex = 0;
 
         for (Category category : Category.values()) {
-            if (MathUtil.isHovered(mouseX, mouseY, xPanelMini + (30 * S) / 2 - (16 * S) / 2, cy, 16 * S, 16 * S) && click.button() == 0 && (active != category || searching())) {
+            float twc = 24 * S + category.alphaS.getOutput() * (draw.getWidth(category.getName(), 7 * S) + 10 * S);
+            if (MathUtil.isHovered(mouseX, mouseY, tabXc, tabYc, twc, 22 * S) && click.button() == 0 && (active != category || searching())) {
                 clearSearch();
                 if (active != category) { active = category; animCategoryReset.reset(); }
                 scrollTarget = 0; GuiSounds.category(catIndex, Category.values().length);
             }
-            cy += 20 * S; catIndex++;
+            tabXc += twc + 4 * S; catIndex++;
         }
 
-        Font draw = Fonts.sf_regular;
-        float xModule = x + 6 * S + 36 * S + 5 * S;
-        float yModule = y + 6 * S + 30 * S - scrollAnim;
+        float xModule = x + 11 * S;
+        float yModule = y + 80 * S - scrollAnim;
 
-        boolean insidePanel = MathUtil.isHovered(mouseX, mouseY, x + 6 * S + 36 * S, y + 6 * S + 26 * S, 140 * S, h - 12 * S - 26 * S);
+        boolean insidePanel = MathUtil.isHovered(mouseX, mouseY, x + 6 * S, y + 76 * S, 152 * S, h - 82 * S);
 
         for (Module f : Client.get().moduleManager().values()) {
             float canim1 = f.getAnimation14().getOutput();
@@ -1225,10 +1225,10 @@ public class Menu extends Screen implements IMinecraft {
                 float descH = descHeight(draw, f.getDesc()) ;
                 float moduleH = Math.max(20 * S, 16 * S + descH + 4 * S);
 
-                if (insidePanel && canim1 > 0.5F && MathUtil.isHovered(mouseX, mouseY, xModule, yModule, 130 * S, moduleH)) {
+                if (insidePanel && canim1 > 0.5F && MathUtil.isHovered(mouseX, mouseY, xModule, yModule, 142 * S, moduleH)) {
                     String keyName = bindingModule == f ? "..." : (f.getKey() == -1 ? "n/a" : Keyboard.keyName(f.getKey()).replace("NONE", "n/a"));
                     float keyW = draw.getWidth(keyName, 6 * S) + 9 * S;
-                    float keyX = xModule + 130 * S - 14 * S - 5 * S - 5 * S - keyW;
+                    float keyX = xModule + 142 * S - 14 * S - 5 * S - 5 * S - keyW;
 
                     if (MathUtil.isHovered(mouseX, mouseY, keyX - 2 * S, yModule + 2F * S, keyW + 4 * S, 14 * S) && click.button() == 0) {
                         bindingModule = f; GuiSounds.bindStart(); return true;
@@ -1241,10 +1241,10 @@ public class Menu extends Screen implements IMinecraft {
             }
         }
 
-        float xSetting = x + 6 * S + 36 * S + 140 * S + 6 * S;
-        float ySetting = y + 6 * S + 26 * S;
-        float wSetting = w - (6 * S + 36 * S + 6 * S + 140 * S + 6 * S);
-        float hSetting = h - 12 * S - 26 * S;
+        float xSetting = x + 164 * S;
+        float ySetting = y + 76 * S;
+        float wSetting = w - 170 * S;
+        float hSetting = h - 82 * S;
 
         if (MathUtil.isHovered(mouseX, mouseY, xSetting, ySetting, wSetting, hSetting) && select != null) {
             float xST = xSetting + 10 * S;
@@ -1437,18 +1437,18 @@ public class Menu extends Screen implements IMinecraft {
         int screenWidth  = (int) (mc.getWindow().getScaledWidth()  / scaleFix);
         int screenHeight = (int) (mc.getWindow().getScaledHeight() / scaleFix);
 
-        float w = 420 * S;
-        float h = 280 * S;
+        float w = 440 * S;
+        float h = 316 * S;
         float x = screenWidth / 2F - w / 2;
         float y = screenHeight / 2F - h / 2;
 
-        if (MathUtil.isHovered(mouseX, mouseY, x + 6 * S + 36 * S, y + 6 * S + 26 * S, 140 * S, h - 12 * S - 26 * S)) {
+        if (MathUtil.isHovered(mouseX, mouseY, x + 6 * S, y + 76 * S, 152 * S, h - 82 * S)) {
             float before = scrollTarget;
             scrollTarget = MathUtil.clamp((float) (scrollTarget - verticalAmount * 25 * S), 0, maxScroll);
             if (scrollTarget != before) GuiSounds.scroll(); return true;
         }
 
-        if (MathUtil.isHovered(mouseX, mouseY, x + 6 * S + 36 * S + 140 * S + 6 * S, y + 6 * S + 26 * S, w - (6 * S + 36 * S + 6 * S + 140 * S + 6 * S), h - 12 * S - 26 * S)) {
+        if (MathUtil.isHovered(mouseX, mouseY, x + 164 * S, y + 76 * S, w - 170 * S, h - 82 * S)) {
             float before = settingScrollTarget;
             settingScrollTarget = MathUtil.clamp((float) (settingScrollTarget - verticalAmount * 25 * S), 0, settingMaxScroll);
             if (settingScrollTarget != before) GuiSounds.scroll(); return true;

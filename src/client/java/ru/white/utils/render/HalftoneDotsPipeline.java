@@ -83,7 +83,7 @@ public class HalftoneDotsPipeline {
      * @param reach     на каком расстоянии от курсора точки успевают измельчать
      */
     public void draw(float width, float height, float mouseX, float mouseY, float alpha, int color,
-                     float spacing, float minRadius, float maxRadius, float reach) {
+                     float spacing, float minRadius, float maxRadius, float reach, float patternMode) {
         if (alpha <= 0.01f || width <= 0f || height <= 0f) return;
 
         MinecraftClient client = MinecraftClient.getInstance();
@@ -108,7 +108,7 @@ public class HalftoneDotsPipeline {
 
         dataBuffer.putFloat(mouseX);
         dataBuffer.putFloat(mouseY);
-        dataBuffer.putFloat(0f);
+        dataBuffer.putFloat(patternMode);
         dataBuffer.putFloat(0f);
 
         dataBuffer.putFloat(((color >> 16) & 0xFF) / 255.0f);

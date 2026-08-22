@@ -307,25 +307,26 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     private void drawMenuButtons(int screenWidth, int screenHeight, float alphaVal) {
         updateExitSlideProgress();
 
-        float gap = 4;
-        float panelWidth = Math.min(220, screenWidth - 36F);
+        float gap = 6;
+        float panelWidth = Math.min(264, screenWidth - 40F);
         float cardWidth = (panelWidth - gap) / 2F;
-        float cardHeight = 25;
+        float cardHeight = 27;
         float totalCardsWidth = cardWidth * 2F + gap;
 
-        float smallGap = 4;
+        float smallGap = 6;
         int smallCount = modsButton == null ? 2 : 3;
         float smallWidth = (totalCardsWidth - smallGap * (smallCount - 1)) / smallCount;
-        float smallHeight = 25;
+        float smallHeight = 27;
 
-        float exitWidth = Math.min(150F, totalCardsWidth * 0.65F);
-        float exitHeight = 25;
+        float exitWidth = totalCardsWidth;
+        float exitHeight = 24;
 
         // --- ВЫЧИСЛЕНИЕ ВЫСОТЫ БЛОКА ДЛЯ ОТЦЕНТРОВКИ ---
         float totalBlockHeight = cardHeight + gap + smallHeight + gap + exitHeight;
 
         float startX = screenWidth / 2F - totalCardsWidth / 2F;
-        float startY = screenHeight / 2F - totalBlockHeight / 2F;
+        // блок слегка смещён вниз относительно центра — воздух под заголовком
+        float startY = screenHeight / 2F - totalBlockHeight / 2F + 14F;
         float appearY = (1F - alphaVal) * 34F;
 
         float currentY = startY + appearY;
