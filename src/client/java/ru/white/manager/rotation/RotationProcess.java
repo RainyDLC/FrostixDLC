@@ -1371,6 +1371,10 @@ public class RotationProcess extends Component {
             renderTargetSwords(e, immediate, aura, target, alphaPC);
         }
 
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Цепь")) {
+            renderTargetChainRing(e, immediate, aura, target, alphaPC);
+        }
+
 
         immediate.draw();
 
@@ -1723,6 +1727,111 @@ public class RotationProcess extends Component {
         buf.vertex(m, x1 + nx, 0, z1 + nz).color(c1);
         buf.vertex(m, x1 - nx, 0, z1 - nz).color(c1);
         buf.vertex(m, x0 - nx, 0, z0 - nz).color(c0);
+    }
+
+    /**
+     * «Цепь»: светящееся кольцо из звеньев-овалов вокруг пояса цели.
+     * Соседние звенья смещены радиально в противоположные стороны — эффект плетения.
+     */
+    private void renderTargetChainRing(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                       AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
+        float atts = alpha_2.get();
+        // раскалённо-белые звенья как на референсе
+        int coreCol = ColorUtil.overCol(ColorUtil.overCol(
+                ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC),
+                ColorUtil.getColor(238, 244, 255), 0.75f), redColor, atts);
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
+        long timeDiff = currentTime - currentTimeSpirits;
+        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
+        currentTimeSpirits = currentTime;
+
+        int count = Math.max(6, aura.linkCount.getValue().intValue());
+        float speed = aura.linkSpeed.getValue();
+        float radius = aura.linkRadius.getValue() + target.getWidth() * 0.35f + 0.12f;
+        float size = aura.linkSize.getValue();          // полуширина овала звена
+        float bodyH = target.getHeight();
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
+        matrices.translate(0, bodyH * 0.47f
+                + 0.02f * (float) Math.sin(Math.toRadians(animationNurik * 1.4f)), 0);
+        Matrix4f m = matrices.peek().getPositionMatrix();
+
+        float step = 360f / count;
+        float span = step * 0.62f;                       // зазор между звеньями
+        float baseAng = animationNurik * 1.15f * speed;
+
+        // ── Pass 1: свечение под каждым звеном ──
+        VertexConsumer texBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_2.png")));
+        for (int i = 0; i < count; i++) {
+            float midA = baseAng + i * step + span * 0.5f;
+            double offAmp = size * 0.55f * Math.sin(i * Math.PI); // вплетение: чередование ±
+            float gx = (float) Math.cos(Math.toRadians(midA)) * (radius + (float) offAmp);
+            float gz = (float) Math.sin(Math.toRadians(midA)) * (radius + (float) offAmp);
+
+            matrices.push();
+            matrices.translate(gx, 0, gz);
+            matrices.multiply(mc.gameRenderer.getCamera().getRotation());
+            float g = size * 4.2f;
+            matrices.scale(g, g, g);
+            drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                    coreCol, coreCol, coreCol, coreCol, (int) (alphaPC * 80));
+            matrices.pop();
+        }
+
+        // ── Pass 2: сами звенья — овалы из двух дуг и перемычек ──
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+        final int SUB = 5;                               // сегментов на дугу
+        float edgeW = size * 0.42f;                      // толщина обода
+        int rimCol = ColorUtil.replAlpha(coreCol, (int) (alphaPC * 230));
+
+        for (int i = 0; i < count; i++) {
+            float a0 = baseAng + i * step;
+            float a1 = a0 + span;
+            double offAmp = size * 0.55f * Math.sin(i * Math.PI);
+            float rIn = radius + (float) offAmp - size;
+            float rOut = radius + (float) offAmp + size;
+
+            for (int sIdx = 0; sIdx < SUB; sIdx++) {
+                float t0 = a0 + (a1 - a0) * sIdx / SUB;
+                float t1 = a0 + (a1 - a0) * (sIdx + 1) / SUB;
+
+                pentagramRibbon(fillBuf, m,
+                        (float) Math.cos(Math.toRadians(t0)) * rOut, (float) Math.sin(Math.toRadians(t0)) * rOut,
+                        (float) Math.cos(Math.toRadians(t1)) * rOut, (float) Math.sin(Math.toRadians(t1)) * rOut,
+                        edgeW, rimCol, rimCol);
+                pentagramRibbon(fillBuf, m,
+                        (float) Math.cos(Math.toRadians(t0)) * rIn, (float) Math.sin(Math.toRadians(t0)) * rIn,
+                        (float) Math.cos(Math.toRadians(t1)) * rIn, (float) Math.sin(Math.toRadians(t1)) * rIn,
+                        edgeW, rimCol, rimCol);
+            }
+
+            // перемычки по торцам овала
+            pentagramRibbon(fillBuf, m,
+                    (float) Math.cos(Math.toRadians(a0)) * rIn, (float) Math.sin(Math.toRadians(a0)) * rIn,
+                    (float) Math.cos(Math.toRadians(a0)) * rOut, (float) Math.sin(Math.toRadians(a0)) * rOut,
+                    edgeW, rimCol, rimCol);
+            pentagramRibbon(fillBuf, m,
+                    (float) Math.cos(Math.toRadians(a1)) * rIn, (float) Math.sin(Math.toRadians(a1)) * rIn,
+                    (float) Math.cos(Math.toRadians(a1)) * rOut, (float) Math.sin(Math.toRadians(a1)) * rOut,
+                    edgeW, rimCol, rimCol);
+        }
+
+        matrices.pop();
     }
 
     /**

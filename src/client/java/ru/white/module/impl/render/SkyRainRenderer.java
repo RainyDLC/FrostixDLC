@@ -51,11 +51,10 @@ public final class SkyRainRenderer {
             RenderSetup.builder(RAIN_PIPELINE).translucent().expectedBufferSize(1 << 16).build());
 
     private static class Drop {
-        double x, y, z;
-        double speed = 13.0;
+        double x, y, prevY, z;
+        double speed;
         double floorTop;
-        float len = 0.6f;
-        float slantX, slantZ;
+        float len, slantX, slantZ;
         boolean water;
     }
 
@@ -103,6 +102,7 @@ public final class SkyRainRenderer {
         Iterator<Drop> it = drops.iterator();
         while (it.hasNext()) {
             Drop d = it.next();
+            d.prevY = d.y;
             d.y -= d.speed * 0.05; // тик 50 мс
 
             double dx = d.x - mc.player.getX();
@@ -162,6 +162,7 @@ public final class SkyRainRenderer {
 
         VertexConsumerProvider.Immediate consumers = mc.getBufferBuilders().getEntityVertexConsumers();
         Matrix4f matrix = e.getMatrixStack().peek().getPositionMatrix();
+        float pTicks = e.getTickDelta();
         float cullSq = 70f * 70f;
 
         // ── Pass 1: струи дождя ──
@@ -171,9 +172,11 @@ public final class SkyRainRenderer {
 
         for (Drop d : drops) {
             float px = (float) (d.x - camPos.x);
-            float py = (float) (d.y - camPos.y);
+            // интерполяция между тиками — движение плавное на любом FPS
+            double ry = d.prevY + (d.y - d.prevY) * pTicks;
+            float py = (float) (ry - camPos.y);
             float pz = (float) (d.z - camPos.z);
-            if (px * px + pz * pz > cullSq) continue;
+            if (px * px + pz * pz > cullSq || py < -8f) continue;
 
             float tx = px + d.slantX * d.len;
             float ty = py + d.len;
@@ -236,6 +239,7 @@ public final class SkyRainRenderer {
         d.slantX = (float) (Math.random() - 0.5) * 0.22f;
         d.slantZ = (float) (Math.random() - 0.5) * 0.22f;
         d.y = mc.player.getY() + 10.0 + Math.random() * 16.0;
+        d.prevY = d.y;
 
         int py = mc.player.getBlockY();
         d.water = false;

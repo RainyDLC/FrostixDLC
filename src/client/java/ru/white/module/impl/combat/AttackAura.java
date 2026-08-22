@@ -97,7 +97,7 @@ public class AttackAura extends Module {
     public ModeSetting typeSprint = new ModeSetting(this,"Тип спринта", "Packet","Silent","Legit");
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
 
-    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Огонь","Мечи","Не отображать");
+    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Огонь","Мечи","Цепь","Не отображать");
 
     public SliderSetting cubeSize = new SliderSetting(this,"Размер куба",1.15F,0.6F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
     public SliderSetting cubeRotateSpeed = new SliderSetting(this,"Скорость вращения куба",1.2F,0.2F,4.0F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
@@ -134,6 +134,11 @@ public class AttackAura extends Module {
     public SliderSetting swordsSpeed = new SliderSetting(this,"Скорость вращения",1.0F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Мечи"));
     public SliderSetting swordsRadius = new SliderSetting(this,"Радиус орбиты",0.8F,0.4F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Мечи"));
     public SliderSetting swordsSize = new SliderSetting(this,"Размер мечей",0.7F,0.3F,1.5F,0.05F).setVisible(() -> typeTargetESP.is("Мечи"));
+
+    public SliderSetting linkCount = new SliderSetting(this,"Кол-во звеньев",12,6,24,1).setVisible(() -> typeTargetESP.is("Цепь"));
+    public SliderSetting linkSpeed = new SliderSetting(this,"Скорость вращения",0.8F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Цепь"));
+    public SliderSetting linkRadius = new SliderSetting(this,"Радиус кольца",0.9F,0.5F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Цепь"));
+    public SliderSetting linkSize = new SliderSetting(this,"Размер звеньев",0.09F,0.04F,0.2F,0.01F).setVisible(() -> typeTargetESP.is("Цепь"));
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
             new BooleanSetting("Умные криты", false),
