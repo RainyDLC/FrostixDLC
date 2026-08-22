@@ -14,11 +14,18 @@ import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.render.GlassHandsRenderer;
 import lombok.Getter;
+import com.mojang.blaze3d.systems.ProjectionType;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.render.RawProjectionMatrix;
+import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Arm;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.Vec3d;
+import org.joml.Matrix4f;
+import org.joml.Matrix4fStack;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
+import ru.white.utils.render.RenderUtil;
 
 @Getter
 @ModuleInfo(name = "Glass Hands", category = Category.RENDER, desc = "Делает руки и предметы стеклянными")
@@ -212,23 +219,60 @@ public class GlassHands extends Module {
 
     // молнии вокруг предмета в руках — та же стилистика, что "Молнии" в Attack Aura
     private final LightningRenderer[] handLightning = {new LightningRenderer(), new LightningRenderer()};
+    private final boolean[] handHolding = new boolean[2];
+    /** Матрица мирового прохода этого кадра (из EventRender3D) — нужна для отрисовки после композита стекла. */
+    private MatrixStack frame3dStack;
+    /** UBO мировой проекции для отрисовки молний поверх рук (проекция восстанавливается на время вызова). */
+    private final RawProjectionMatrix lightningProjection = new RawProjectionMatrix("glass_hands_lightning");
 
     @EventHandler
     public void onRender3D(EventRender3D event) {
+        frame3dStack = event.getMatrixStack();
+
+        boolean active = isEnabled() && lightning.getValue() && mc.player != null && mc.world != null
+                && mc.options.getPerspective().isFirstPerson();
+        float spread = active ? lightningSize.getValue() : 0f;
+
+        handHolding[0] = active && !mc.player.getMainHandStack().isEmpty();
+        handHolding[1] = active && !mc.player.getOffHandStack().isEmpty();
+
+        // только спавн/обновление болтов — сама отрисовка идёт после рук и стекла,
+        // иначе молнии остаются под предметом в руке
+        handLightning[0].updatePointBolts(handHolding[0] ? getHeldItemPos(Hand.MAIN_HAND) : null, spread);
+        handLightning[1].updatePointBolts(handHolding[1] ? getHeldItemPos(Hand.OFF_HAND) : null, spread);
+    }
+
+    /** Молнии поверх рук и стеклянного эффекта — вызывается сразу после renderGlassEffect(). */
+    public void renderHandLightningPostHands() {
         if (!isEnabled() || !lightning.getValue() || mc.player == null || mc.world == null
-                || !mc.options.getPerspective().isFirstPerson()) {
-            handLightning[0].renderPoint(event, null, 0f, 0f);
-            handLightning[1].renderPoint(event, null, 0f, 0f);
+                || !mc.options.getPerspective().isFirstPerson() || frame3dStack == null) {
             return;
         }
+        if (!handHolding[0] && !handHolding[1]) return;
 
-        float spread = lightningSize.getValue();
-        if (!mc.player.getMainHandStack().isEmpty()) {
-            handLightning[0].renderPoint(event, getHeldItemPos(Hand.MAIN_HAND), spread, 1.0f);
+        // после фазы рук RenderSystem держит hud-проекцию (GameRenderer.renderWorld
+        // переключает её перед renderHand) — временно возвращаем мировую, как в мировом проходе
+        RenderSystem.backupProjectionMatrix();
+        try {
+            RenderSystem.setProjectionMatrix(
+                    lightningProjection.set(new Matrix4f(RenderUtil.Render3D.lastProjMat)),
+                    ProjectionType.PERSPECTIVE);
+            Matrix4fStack modelView = RenderSystem.getModelViewStack();
+            modelView.pushMatrix();
+            try {
+                modelView.set(RenderUtil.Render3D.lastModMat);
+                drawAllLightning(1.0f);
+            } finally {
+                modelView.popMatrix();
+            }
+        } finally {
+            RenderSystem.restoreProjectionMatrix();
         }
-        if (!mc.player.getOffHandStack().isEmpty()) {
-            handLightning[1].renderPoint(event, getHeldItemPos(Hand.OFF_HAND), spread, 1.0f);
-        }
+    }
+
+    private void drawAllLightning(float alpha) {
+        if (handHolding[0]) handLightning[0].drawPointBolts(frame3dStack, alpha);
+        if (handHolding[1]) handLightning[1].drawPointBolts(frame3dStack, alpha);
     }
 
     /** Мировая позиция предмета в руке: вью-пространственный оффект экипировки (как в HeldItemRenderer), повёрнутый камерой. */
