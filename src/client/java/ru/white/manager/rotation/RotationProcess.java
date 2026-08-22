@@ -1896,21 +1896,21 @@ public class RotationProcess extends Component {
         float speed = aura.catSpeed.getValue();
 
         int furA     = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 233, 206), redColor, atts),
-                (int) (alphaPC * 240));
+                (int) (alphaPC * 150));
         int furShade = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 205, 156), redColor, atts),
-                (int) (alphaPC * 235));
+                (int) (alphaPC * 160));
         int earInA   = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 165, 190), redColor, atts),
-                (int) (alphaPC * 225));
-        int blushC   = ColorUtil.replAlpha(ColorUtil.getColor(255, 148, 166), (int) (alphaPC * 95));
+                (int) (alphaPC * 145));
+        int blushC   = ColorUtil.replAlpha(ColorUtil.getColor(255, 148, 166), (int) (alphaPC * 65));
         int eyeW     = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(246, 251, 255), redColor, atts),
-                (int) (alphaPC * 255));
+                (int) (alphaPC * 200));
         int irisC    = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(1), 0.95f), redColor, atts),
-                (int) (alphaPC * 245));
-        int pupilW   = ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (alphaPC * 255));
-        int glintC   = ColorUtil.replAlpha(ColorUtil.getColor(255), 255);
+                (int) (alphaPC * 215));
+        int pupilW   = ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (alphaPC * 230));
+        int glintC   = ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (alphaPC * 240));
         int mouthC   = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 122, 150), redColor, atts),
-                (int) (alphaPC * 235));
-        int whiskC   = ColorUtil.replAlpha(ColorUtil.getColor(255, 246, 230), (int) (alphaPC * 175));
+                (int) (alphaPC * 180));
+        int whiskC   = ColorUtil.replAlpha(ColorUtil.getColor(255, 246, 230), (int) (alphaPC * 120));
 
         float breathe = 1f + 0.02f * (float) Math.sin(tSec * speed * 2.2f);
         float s = aura.catSize.getValue() * breathe;
@@ -1937,10 +1937,10 @@ public class RotationProcess extends Component {
         matrices.push();
         matrices.translate(0, headY, 0);
         matrices.multiply(mc.gameRenderer.getCamera().getRotation());
-        float g = s * 3.3f;
+        float g = s * 2.8f;
         matrices.scale(g, g, g);
         drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
-                furA, furA, furA, furA, (int) (alphaPC * 60));
+                furA, furA, furA, furA, (int) (alphaPC * 36));
         matrices.pop();
 
         // ── мордочка в единичном пространстве ──
@@ -1952,18 +1952,11 @@ public class RotationProcess extends Component {
         matrices.scale(s, s, s);
         Matrix4f m = matrices.peek().getPositionMatrix();
 
-        // шёрстка-кисточки по бокам
-        for (int sxI = 0; sxI < 2; sxI++) {
-            float sx = sxI == 0 ? -1f : 1f;
-            quad(buf, m, sx * 0.84f, -0.02f, sx * 1.26f, -0.16f, sx * 0.90f, -0.36f, furA);
-            quad(buf, m, sx * 0.86f, -0.34f, sx * 1.22f, -0.48f, sx * 0.84f, -0.64f, furA);
-        }
-
         // уши
-        quad(buf, m, -0.88f, 0.66f, -0.28f, 1.00f, -0.84f, 1.66f, furA);
-        quad(buf, m, 0.88f, 0.66f, 0.28f, 1.00f, 0.84f, 1.66f, furA);
-        quad(buf, m, -0.72f, 0.80f, -0.42f, 0.96f, -0.73f, 1.38f, earInA);
-        quad(buf, m, 0.72f, 0.80f, 0.42f, 0.96f, 0.73f, 1.38f, earInA);
+        quad(buf, m, -0.80f, 0.68f, -0.30f, 0.98f, -0.72f, 1.42f, furA);
+        quad(buf, m, 0.80f, 0.68f, 0.30f, 0.98f, 0.72f, 1.42f, furA);
+        quad(buf, m, -0.66f, 0.80f, -0.40f, 0.94f, -0.64f, 1.22f, earInA);
+        quad(buf, m, 0.66f, 0.80f, 0.40f, 0.94f, 0.64f, 1.22f, earInA);
 
         // полоски табби на лбу
         xyRibbon(buf, m, -0.20f, 0.88f, -0.22f, 0.58f, 0.095f, furShade);
@@ -2017,7 +2010,7 @@ public class RotationProcess extends Component {
             float hy = 0.05f + (float) Math.sin(tSec * speed * 2.0f + i * 2.1f) * 0.10f;
             float pulse = 0.72f + 0.28f * (float) Math.sin(tSec * speed * 3f + i * 1.9f);
             int hc = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 108, 138), redColor, atts),
-                    (int) (alphaPC * pulse * 210));
+                    (int) (alphaPC * pulse * 145));
             drawHeart(buf, m, hx, hy, 0.115f * (0.9f + 0.2f * pulse), 18, hc);
         }
 
