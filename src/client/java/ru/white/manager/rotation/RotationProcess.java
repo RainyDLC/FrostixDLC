@@ -1911,6 +1911,15 @@ public class RotationProcess extends Component {
         int mouthC   = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 122, 150), redColor, atts),
                 (int) (alphaPC * 180));
         int whiskC   = ColorUtil.replAlpha(ColorUtil.getColor(255, 246, 230), (int) (alphaPC * 120));
+        // производные для объёма: тени и светлые акценты
+        int furDeep  = ColorUtil.replAlpha(ColorUtil.multDark(ColorUtil.overCol(ColorUtil.getColor(255, 233, 206), redColor, atts), 0.55f),
+                (int) (alphaPC * 130));
+        int furLite  = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 244, 226), redColor, atts),
+                (int) (alphaPC * 195));
+        int irisDeep = ColorUtil.replAlpha(ColorUtil.multDark(ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(1), 0.95f), redColor, atts), 0.45f),
+                (int) (alphaPC * 185));
+        int noseDeep = ColorUtil.replAlpha(ColorUtil.multDark(ColorUtil.overCol(ColorUtil.getColor(255, 122, 150), redColor, atts), 0.5f),
+                (int) (alphaPC * 155));
 
         float breathe = 1f + 0.02f * (float) Math.sin(tSec * speed * 2.2f);
         float s = aura.catSize.getValue() * breathe;
@@ -1953,47 +1962,73 @@ public class RotationProcess extends Component {
         Matrix4f m = matrices.peek().getPositionMatrix();
 
         // уши
-        quad(buf, m, -0.80f, 0.68f, -0.30f, 0.98f, -0.72f, 1.42f, furA);
-        quad(buf, m, 0.80f, 0.68f, 0.30f, 0.98f, 0.72f, 1.42f, furA);
-        quad(buf, m, -0.66f, 0.80f, -0.40f, 0.94f, -0.64f, 1.22f, earInA);
-        quad(buf, m, 0.66f, 0.80f, 0.40f, 0.94f, 0.64f, 1.22f, earInA);
+        quad(buf, m, -0.80f, 0.68f, -0.26f, 0.99f, -0.74f, 1.46f, furA);
+        quad(buf, m, 0.80f, 0.68f, 0.26f, 0.99f, 0.74f, 1.46f, furA);
+        quad(buf, m, -0.66f, 0.80f, -0.38f, 0.94f, -0.64f, 1.24f, earInA);
+        quad(buf, m, 0.66f, 0.80f, 0.38f, 0.94f, 0.64f, 1.24f, earInA);
+        // шёрстка внутри ушей
+        xyRibbon(buf, m, -0.56f, 0.86f, -0.58f, 1.08f, 0.03f, furLite);
+        xyRibbon(buf, m, -0.47f, 0.88f, -0.50f, 1.04f, 0.025f, furLite);
+        xyRibbon(buf, m, 0.56f, 0.86f, 0.58f, 1.08f, 0.03f, furLite);
+        xyRibbon(buf, m, 0.47f, 0.88f, 0.50f, 1.04f, 0.025f, furLite);
 
-        // полоски табби на лбу
-        xyRibbon(buf, m, -0.20f, 0.88f, -0.22f, 0.58f, 0.095f, furShade);
-        xyRibbon(buf, m, 0.00f, 0.92f, 0.00f, 0.60f, 0.10f, furShade);
-        xyRibbon(buf, m, 0.20f, 0.88f, 0.22f, 0.58f, 0.095f, furShade);
-
-        // голова
+        // голова с объёмом: низ мягко затенён
         ellipseFan(buf, m, 0f, 0f, 1.0f, 0.94f, 40, furA);
+        ellipseFan(buf, m, 0f, 0.30f, 0.90f, 0.60f, 30, furDeep);
+
+        // светлая мордочка: подушечки и подбородок
+        ellipseFan(buf, m, -0.22f, -0.32f, 0.36f, 0.30f, 20, furLite);
+        ellipseFan(buf, m, 0.22f, -0.32f, 0.36f, 0.30f, 20, furLite);
+        ellipseFan(buf, m, 0f, -0.52f, 0.20f, 0.13f, 14, furLite);
+
+        // табби «M» на лбу — как у настоящей
+        xyRibbon(buf, m, 0.00f, 0.94f, 0.00f, 0.56f, 0.09f, furShade);
+        arcRibbon(buf, m, -0.32f, 0.94f, 0.27f, 170f, 290f, 6, 0.08f, furShade);
+        arcRibbon(buf, m, 0.32f, 0.94f, 0.27f, 250f, 370f, 6, 0.08f, furShade);
 
         // румянец
         ellipseFan(buf, m, -0.56f, -0.30f, 0.18f, 0.11f, 14, blushC);
         ellipseFan(buf, m, 0.56f, -0.30f, 0.18f, 0.11f, 14, blushC);
 
-        // глазки
+        // глазки: миндалёвые, с вертикальным зрачком и веком
         for (int sxI = 0; sxI < 2; sxI++) {
             float sx = sxI == 0 ? -1f : 1f;
             float ex = sx * 0.40f;
             float ey = 0.04f;
 
             if (!blinking) {
-                ellipseFan(buf, m, ex, ey, 0.215f, 0.30f, 22, eyeW);
-                ellipseFan(buf, m, ex - sx * 0.02f, ey - 0.01f, 0.14f, 0.155f, 18, irisC);
-                ellipseFan(buf, m, ex - sx * 0.02f, ey + 0.03f, 0.05f, 0.085f, 12, pupilW);
-                ellipseFan(buf, m, ex - sx * 0.08f, ey + 0.115f, 0.062f, 0.068f, 12, glintC);
-                ellipseFan(buf, m, ex + sx * 0.07f, ey - 0.09f, 0.03f, 0.033f, 8, glintC);
+                ellipseFan(buf, m, ex, ey, 0.215f, 0.29f, 22, eyeW);
+                ellipseFan(buf, m, ex - sx * 0.02f, ey - 0.01f, 0.15f, 0.165f, 18, irisC);
+                ellipseFan(buf, m, ex - sx * 0.02f, ey - 0.02f, 0.115f, 0.125f, 18, irisDeep);
+                // вертикальный кошачий зрачок
+                ellipseFan(buf, m, ex - sx * 0.02f, ey - 0.02f, 0.028f, 0.11f, 10, pupilW);
+                ellipseFan(buf, m, ex - sx * 0.075f, ey + 0.10f, 0.055f, 0.05f, 10, glintC);
+                ellipseFan(buf, m, ex + sx * 0.06f, ey - 0.10f, 0.026f, 0.028f, 8, glintC);
+                // верхнее веко — придаёт миндалевидность
+                xyRibbon(buf, m, ex - 0.21f, ey + 0.13f, ex + 0.21f, ey + 0.19f, 0.07f, furShade);
             } else {
                 arcRibbon(buf, m, ex, ey - 0.06f, 0.19f, 200f, 340f, 7, 0.05f, irisC);
             }
         }
 
-        // носик-сердечко
+        // носик-сердечко с ноздрями
         drawHeart(buf, m, 0f, -0.15f, 0.105f, 18, mouthC);
+        ellipseFan(buf, m, -0.042f, -0.175f, 0.022f, 0.015f, 8, noseDeep);
+        ellipseFan(buf, m, 0.042f, -0.175f, 0.022f, 0.015f, 8, noseDeep);
 
-        // ротик «ω» и клычок
+        // ротик «ω», подбородок и клычок
         arcRibbon(buf, m, -0.105f, -0.31f, 0.105f, 180f, 360f, 8, 0.03f, mouthC);
         arcRibbon(buf, m, 0.105f, -0.31f, 0.105f, 180f, 360f, 8, 0.03f, mouthC);
+        arcRibbon(buf, m, 0f, -0.46f, 0.15f, 200f, 340f, 6, 0.028f, furDeep);
         quad(buf, m, 0.155f, -0.40f, 0.215f, -0.395f, 0.185f, -0.475f, eyeW);
+
+        // точки усов — как у настоящей кошки
+        for (int sxI = 0; sxI < 2; sxI++) {
+            float sx = sxI == 0 ? -1f : 1f;
+            ellipseFan(buf, m, sx * 0.34f, -0.24f, 0.016f, 0.014f, 8, noseDeep);
+            ellipseFan(buf, m, sx * 0.45f, -0.29f, 0.016f, 0.014f, 8, noseDeep);
+            ellipseFan(buf, m, sx * 0.36f, -0.40f, 0.016f, 0.014f, 8, noseDeep);
+        }
 
         // усы: по три с каждой стороны
         for (int sxI = 0; sxI < 2; sxI++) {
