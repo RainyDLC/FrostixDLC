@@ -46,7 +46,8 @@
     "GameMenuScreenMixin",
     "RenderTickCounterDynamicMixin",
     "InventoryScreenMixin",
-    "BiomeEffectSoundPlayerMixin"
+    "BiomeEffectSoundPlayerMixin",
+    "SplashOverlayMixin"
   ],
   "injectors": {
     "defaultRequire": 1
