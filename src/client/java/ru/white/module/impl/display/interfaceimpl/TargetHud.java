@@ -215,8 +215,35 @@ public class TargetHud implements element {
         Fonts.sf_medium.drawCentered(String.format("%.0f", animHpText.get()),
                 ringCx, ringCy - 3.0F * S, 5.2F * S, ColorUtil.getColor(255, alpha));
 
-        // иконки активных эффектов цели — ряд под именем
-        float iconY = y + 17.5F * S;
+        // ── предметы цели: обе руки + броня — под ником ──
+        List<ItemStack> wornItems = new ArrayList<>();
+        wornItems.add(target.getEquippedStack(EquipmentSlot.MAINHAND));
+        wornItems.add(target.getEquippedStack(EquipmentSlot.OFFHAND));
+        wornItems.add(target.getEquippedStack(EquipmentSlot.HEAD));
+        wornItems.add(target.getEquippedStack(EquipmentSlot.CHEST));
+        wornItems.add(target.getEquippedStack(EquipmentSlot.LEGS));
+        wornItems.add(target.getEquippedStack(EquipmentSlot.FEET));
+
+        float itemY = y + 12.0F * S;
+        float itemSize = 8.5F * S;
+        float itemStep = itemSize + 1.5F * S;
+        float maxItemX = ringCx - ringR - 2F * S;
+        int wi = 0;
+        Matrix3x2fStack itemMatrix = eventDisplay.getDrawContext().getMatrices();
+        for (ItemStack stack : wornItems) {
+            if (stack == null || stack.isEmpty()) continue;
+            float ix = contentX + wi * itemStep;
+            if (ix + itemSize > maxItemX) break;
+            itemMatrix.pushMatrix();
+            itemMatrix.translate(ix + itemSize / 2f, itemY + itemSize / 2f);
+            itemMatrix.scale(0.5F * S, 0.5F * S);
+            ItemRender.drawItemWithContext(eventDisplay.getDrawContext(), stack, -8, -8, alpha, alpha);
+            itemMatrix.popMatrix();
+            wi++;
+        }
+
+        // иконки активных эффектов цели — ряд ниже
+        float iconY = y + 22.0F * S;
         float iconSize = 8F * S;
         float maxIconX = ringCx - ringR - 3F * S;
         int shown = 0;
@@ -230,39 +257,6 @@ public class TargetHud implements element {
                         ColorUtil.getColor(255, (int) (255F * alpha)));
                 shown++;
             }
-        }
-
-        renderArmor(eventDisplay, target, px + ARMOR_X, y - ARMOR_Y - ANIM_OFFSET + ANIM_OFFSET * alpha, alpha);
-    }
-
-    private void renderArmor(EventDisplay eventDisplay, LivingEntity entity, float armorX, float armorY, float alpha) {
-        List<ItemStack> armorItems = new ArrayList<>();
-        for (EquipmentSlot slot : new EquipmentSlot[]{
-                EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.FEET,
-                EquipmentSlot.LEGS, EquipmentSlot.CHEST, EquipmentSlot.HEAD
-        }) {
-            ItemStack stack = entity.getEquippedStack(slot);
-            if (!stack.isEmpty()) armorItems.add(stack);
-        }
-
-        if (armorItems.isEmpty()) return;
-
-        float bgX = armorX - ITEM_SIZE / 2 - ARMOR_PAD;
-        float bgY = armorY - ITEM_SIZE / 2 - ARMOR_PAD + 0.5F * S;
-        float bgW = armorItems.size() * ITEM_SIZE + ARMOR_PAD * 2;
-        float bgH = ITEM_SIZE + ARMOR_PAD * 2;
-
-        RenderUtil.Render2D.hudPlate(bgX, bgY, bgW, bgH, alpha, 4 * S, InterFace.getInstance().alphaHUD.getValue());
-
-        for (ItemStack stack : armorItems) {
-            Matrix3x2fStack matrix = eventDisplay.getDrawContext().getMatrices();
-            matrix.pushMatrix();
-            matrix.translate(armorX, armorY);
-            // Масштабируем отрисовку самого айтема пропорционально S
-            matrix.scale(0.5F * S, 0.5F * S);
-            ItemRender.drawItemWithContext(eventDisplay.getDrawContext(), stack, -8, -8, alpha, alpha);
-            matrix.popMatrix();
-            armorX += ITEM_SIZE;
         }
     }
 
