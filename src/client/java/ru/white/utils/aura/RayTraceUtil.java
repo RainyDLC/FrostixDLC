@@ -100,7 +100,10 @@ public class RayTraceUtil implements IMinecraft {
             return true;
         }
 
-        Box entityBox = entity.getBoundingBox();
+        // Допуск на квантование ротации (GCD): при быстром движении мыши/стрейфе
+        // точный луч по границе хитбокса промахивался, и аура срывала идеальный
+        // момент удара. Небольшое расширение бокса убирает эти ложные промахи.
+        Box entityBox = entity.getBoundingBox().expand(0.2);
         return entityBox.contains(eyeVec) || entityBox.raycast(eyeVec, endVec).isPresent();
     }
 
