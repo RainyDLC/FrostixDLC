@@ -157,7 +157,7 @@ public class AttackAura extends Module {
     public SliderSetting linkRadius = new SliderSetting(this,"Радиус кольца",0.9F,0.5F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Цепь"));
     public SliderSetting linkSize = new SliderSetting(this,"Размер звеньев",0.09F,0.04F,0.2F,0.01F).setVisible(() -> typeTargetESP.is("Цепь"));
 
-    public SliderSetting catSize = new SliderSetting(this,"Размер мордочки",0.55F,0.3F,1.0F,0.01F).setVisible(() -> typeTargetESP.is("Кошка"));
+    public SliderSetting catSize = new SliderSetting(this,"Размер мордочки",0.55F,0.15F,1.4F,0.01F).setVisible(() -> typeTargetESP.is("Кошка"));
     public SliderSetting catSpeed = new SliderSetting(this,"Скорость анимации",1.0F,0.3F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Кошка"));
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",

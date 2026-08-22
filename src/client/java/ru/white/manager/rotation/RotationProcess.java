@@ -1872,8 +1872,9 @@ public class RotationProcess extends Component {
     }
 
     /**
-     * «Кошка»: милая мордочка над целью — ушки, глазки с блеском и морганием,
-     * румянец, усы и ротик «ω». Мягко покачивается и дышит.
+     * «Кошка» v2: пухлая мордочка — шёрстка на щеках, полоски табби,
+     * большие аниме-глазки с двойным бликом и морганием, носик-сердечко,
+     * клычок, усы и летающие сердечки. Дышит, покачивается, моргает.
      */
     private void renderTargetCat(EventRender3D e, VertexConsumerProvider.Immediate immediate,
                                  AttackAura aura, LivingEntity target, float alphaPC) {
@@ -1894,35 +1895,38 @@ public class RotationProcess extends Component {
         float tSec = animationNurik / 60f;
         float speed = aura.catSpeed.getValue();
 
-        // все элементы яркие — блендинг аддитивный
-        int furA = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 226, 185), redColor, atts),
-                (int) (alphaPC * 235));
-        int earInA = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 150, 175), redColor, atts),
-                (int) (alphaPC * 220));
-        int blushC = ColorUtil.replAlpha(ColorUtil.getColor(255, 140, 160), (int) (alphaPC * 85));
-        int eyeW = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(238, 248, 255), redColor, atts),
-                (int) (alphaPC * 250));
-        int pupil = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(1), 0.9f), redColor, atts),
+        int furA     = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 233, 206), redColor, atts),
                 (int) (alphaPC * 240));
-        int glintC = ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (alphaPC * 250));
-        int pinkM = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 120, 148), redColor, atts),
-                (int) (alphaPC * 230));
-        int whiskC = ColorUtil.replAlpha(ColorUtil.getColor(242, 248, 255), (int) (alphaPC * 170));
+        int furShade = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 205, 156), redColor, atts),
+                (int) (alphaPC * 235));
+        int earInA   = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 165, 190), redColor, atts),
+                (int) (alphaPC * 225));
+        int blushC   = ColorUtil.replAlpha(ColorUtil.getColor(255, 148, 166), (int) (alphaPC * 95));
+        int eyeW     = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(246, 251, 255), redColor, atts),
+                (int) (alphaPC * 255));
+        int irisC    = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(1), 0.95f), redColor, atts),
+                (int) (alphaPC * 245));
+        int pupilW   = ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (alphaPC * 255));
+        int glintC   = ColorUtil.replAlpha(ColorUtil.getColor(255), 255);
+        int mouthC   = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 122, 150), redColor, atts),
+                (int) (alphaPC * 235));
+        int whiskC   = ColorUtil.replAlpha(ColorUtil.getColor(255, 246, 230), (int) (alphaPC * 175));
 
-        float s = aura.catSize.getValue();
+        float breathe = 1f + 0.02f * (float) Math.sin(tSec * speed * 2.2f);
+        float s = aura.catSize.getValue() * breathe;
         float bodyH = target.getHeight();
+
+        // моргание: период ~3.5 с
+        float blinkPhase = (tSec * speed / 3.5f) % 1f;
+        boolean blinking = blinkPhase > 0.90f;
+
+        float bob = 0.045f * (float) Math.sin(tSec * speed * 1.6f);
+        float swayDeg = 4.5f * (float) Math.sin(tSec * speed * 1.15f);
+        float headY = bodyH * 0.72f + bob;
 
         MatrixStack matrices = e.getMatrixStack();
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
-
-        // фаза моргания: период ~3.5 с, глаза закрыты ~10% цикла
-        float blinkPhase = (tSec * speed / 3.5f) % 1f;
-        boolean blinking = blinkPhase > 0.90f;
-
-        float bob = 0.04f * (float) Math.sin(tSec * speed * 1.6f);
-        float swayDeg = 4f * (float) Math.sin(tSec * speed * 1.15f);
-        float headY = bodyH * 0.72f + bob;
 
         matrices.push();
         matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
@@ -1933,13 +1937,13 @@ public class RotationProcess extends Component {
         matrices.push();
         matrices.translate(0, headY, 0);
         matrices.multiply(mc.gameRenderer.getCamera().getRotation());
-        float g = s * 3.2f;
+        float g = s * 3.3f;
         matrices.scale(g, g, g);
         drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
                 furA, furA, furA, furA, (int) (alphaPC * 60));
         matrices.pop();
 
-        // ── мордочка (единичное пространство, масштаб s) ──
+        // ── мордочка в единичном пространстве ──
         VertexConsumer buf = immediate.getBuffer(RING_FILL_LAYER);
         matrices.push();
         matrices.translate(0, headY, 0);
@@ -1948,48 +1952,73 @@ public class RotationProcess extends Component {
         matrices.scale(s, s, s);
         Matrix4f m = matrices.peek().getPositionMatrix();
 
-        // уши: внешние треугольники
-        quad(buf, m, -0.86f, 0.70f, -0.30f, 0.97f, -0.80f, 1.60f, furA);
-        quad(buf, m, 0.86f, 0.70f, 0.30f, 0.97f, 0.80f, 1.60f, furA);
-        // внутренние розовые
-        quad(buf, m, -0.72f, 0.80f, -0.40f, 0.95f, -0.71f, 1.32f, earInA);
-        quad(buf, m, 0.72f, 0.80f, 0.40f, 0.95f, 0.71f, 1.32f, earInA);
+        // шёрстка-кисточки по бокам
+        for (int sxI = 0; sxI < 2; sxI++) {
+            float sx = sxI == 0 ? -1f : 1f;
+            quad(buf, m, sx * 0.84f, -0.02f, sx * 1.26f, -0.16f, sx * 0.90f, -0.36f, furA);
+            quad(buf, m, sx * 0.86f, -0.34f, sx * 1.22f, -0.48f, sx * 0.84f, -0.64f, furA);
+        }
+
+        // уши
+        quad(buf, m, -0.88f, 0.66f, -0.28f, 1.00f, -0.84f, 1.66f, furA);
+        quad(buf, m, 0.88f, 0.66f, 0.28f, 1.00f, 0.84f, 1.66f, furA);
+        quad(buf, m, -0.72f, 0.80f, -0.42f, 0.96f, -0.73f, 1.38f, earInA);
+        quad(buf, m, 0.72f, 0.80f, 0.42f, 0.96f, 0.73f, 1.38f, earInA);
+
+        // полоски табби на лбу
+        xyRibbon(buf, m, -0.20f, 0.88f, -0.22f, 0.58f, 0.095f, furShade);
+        xyRibbon(buf, m, 0.00f, 0.92f, 0.00f, 0.60f, 0.10f, furShade);
+        xyRibbon(buf, m, 0.20f, 0.88f, 0.22f, 0.58f, 0.095f, furShade);
 
         // голова
-        ellipseFan(buf, m, 0f, 0f, 1.0f, 0.96f, 40, furA);
+        ellipseFan(buf, m, 0f, 0f, 1.0f, 0.94f, 40, furA);
 
         // румянец
-        ellipseFan(buf, m, -0.58f, -0.26f, 0.17f, 0.10f, 14, blushC);
-        ellipseFan(buf, m, 0.58f, -0.26f, 0.17f, 0.10f, 14, blushC);
+        ellipseFan(buf, m, -0.56f, -0.30f, 0.18f, 0.11f, 14, blushC);
+        ellipseFan(buf, m, 0.56f, -0.30f, 0.18f, 0.11f, 14, blushC);
 
         // глазки
         for (int sxI = 0; sxI < 2; sxI++) {
             float sx = sxI == 0 ? -1f : 1f;
-            float ex = sx * 0.42f;
-            float ey = 0.02f;
+            float ex = sx * 0.40f;
+            float ey = 0.04f;
 
             if (!blinking) {
-                ellipseFan(buf, m, ex, ey, 0.19f, 0.27f, 20, eyeW);
-                ellipseFan(buf, m, ex - sx * 0.03f, ey - 0.02f, 0.105f, 0.15f, 16, pupil);
-                ellipseFan(buf, m, ex - sx * 0.06f, ey + 0.09f, 0.05f, 0.055f, 10, glintC);
+                ellipseFan(buf, m, ex, ey, 0.215f, 0.30f, 22, eyeW);
+                ellipseFan(buf, m, ex - sx * 0.02f, ey - 0.01f, 0.14f, 0.155f, 18, irisC);
+                ellipseFan(buf, m, ex - sx * 0.02f, ey + 0.03f, 0.05f, 0.085f, 12, pupilW);
+                ellipseFan(buf, m, ex - sx * 0.08f, ey + 0.115f, 0.062f, 0.068f, 12, glintC);
+                ellipseFan(buf, m, ex + sx * 0.07f, ey - 0.09f, 0.03f, 0.033f, 8, glintC);
             } else {
-                // довольный прищур ^ ^
-                arcRibbon(buf, m, ex, ey - 0.06f, 0.17f, 200f, 340f, 7, 0.05f, eyeW);
+                arcRibbon(buf, m, ex, ey - 0.06f, 0.19f, 200f, 340f, 7, 0.05f, irisC);
             }
         }
 
-        // носик — ромбик
-        quad4(buf, m, 0f, -0.06f, -0.085f, -0.16f, 0f, -0.24f, 0.085f, -0.16f, pinkM);
+        // носик-сердечко
+        drawHeart(buf, m, 0f, -0.15f, 0.105f, 18, mouthC);
 
-        // ротик «ω»: две нижние дуги
-        arcRibbon(buf, m, -0.105f, -0.28f, 0.105f, 180f, 360f, 8, 0.032f, pinkM);
-        arcRibbon(buf, m, 0.105f, -0.28f, 0.105f, 180f, 360f, 8, 0.032f, pinkM);
+        // ротик «ω» и клычок
+        arcRibbon(buf, m, -0.105f, -0.31f, 0.105f, 180f, 360f, 8, 0.03f, mouthC);
+        arcRibbon(buf, m, 0.105f, -0.31f, 0.105f, 180f, 360f, 8, 0.03f, mouthC);
+        quad(buf, m, 0.155f, -0.40f, 0.215f, -0.395f, 0.185f, -0.475f, eyeW);
 
-        // усы
+        // усы: по три с каждой стороны
         for (int sxI = 0; sxI < 2; sxI++) {
             float sx = sxI == 0 ? -1f : 1f;
-            xyRibbon(buf, m, sx * 0.50f, -0.12f, sx * 1.18f, -0.02f, 0.022f, whiskC);
-            xyRibbon(buf, m, sx * 0.50f, -0.26f, sx * 1.15f, -0.34f, 0.022f, whiskC);
+            xyRibbon(buf, m, sx * 0.50f, -0.08f, sx * 1.14f, -0.02f, 0.02f, whiskC);
+            xyRibbon(buf, m, sx * 0.50f, -0.22f, sx * 1.18f, -0.22f, 0.02f, whiskC);
+            xyRibbon(buf, m, sx * 0.50f, -0.36f, sx * 1.12f, -0.44f, 0.02f, whiskC);
+        }
+
+        // летающие сердечки
+        for (int i = 0; i < 3; i++) {
+            double a = Math.toRadians(tSec * 55f * speed) + i * Math.PI * 2.0 / 3.0;
+            float hx = (float) Math.cos(a) * 1.32f;
+            float hy = 0.05f + (float) Math.sin(tSec * speed * 2.0f + i * 2.1f) * 0.10f;
+            float pulse = 0.72f + 0.28f * (float) Math.sin(tSec * speed * 3f + i * 1.9f);
+            int hc = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 108, 138), redColor, atts),
+                    (int) (alphaPC * pulse * 210));
+            drawHeart(buf, m, hx, hy, 0.115f * (0.9f + 0.2f * pulse), 18, hc);
         }
 
         matrices.pop();
@@ -2025,6 +2054,25 @@ public class RotationProcess extends Component {
             buf.vertex(m, cx + (float) Math.cos(a0) * rx, cy + (float) Math.sin(a0) * ry, 0).color(c);
             buf.vertex(m, cx + (float) Math.cos(a1) * rx, cy + (float) Math.sin(a1) * ry, 0).color(c);
             buf.vertex(m, cx + (float) Math.cos(a1) * rx, cy + (float) Math.sin(a1) * ry, 0).color(c);
+        }
+    }
+
+    /** Сердечко веером (параметрическая кривая, остриё вниз). */
+    private static void drawHeart(VertexConsumer buf, Matrix4f m,
+                                  float cx, float cy, float r, int segs, int c) {
+        for (int i = 0; i < segs; i++) {
+            double t0 = Math.PI * 2.0 * i / segs;
+            double t1 = Math.PI * 2.0 * (i + 1) / segs;
+            float x0 = (float) (16.0 * Math.pow(Math.sin(t0), 3)) / 17f * r;
+            float y0 = (float) (13.0 * Math.cos(t0) - 5.0 * Math.cos(2 * t0)
+                    - 2.0 * Math.cos(3 * t0) - Math.cos(4 * t0)) / 17f * r + 0.15f * r;
+            float x1 = (float) (16.0 * Math.pow(Math.sin(t1), 3)) / 17f * r;
+            float y1 = (float) (13.0 * Math.cos(t1) - 5.0 * Math.cos(2 * t1)
+                    - 2.0 * Math.cos(3 * t1) - Math.cos(4 * t1)) / 17f * r + 0.15f * r;
+            buf.vertex(m, cx, cy, 0).color(c);
+            buf.vertex(m, cx + x0, cy + y0, 0).color(c);
+            buf.vertex(m, cx + x1, cy + y1, 0).color(c);
+            buf.vertex(m, cx + x1, cy + y1, 0).color(c);
         }
     }
 
