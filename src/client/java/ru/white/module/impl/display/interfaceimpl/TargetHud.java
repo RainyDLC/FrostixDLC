@@ -1,6 +1,8 @@
 package ru.white.module.impl.display.interfaceimpl;
 
 import org.joml.Matrix3x2fStack;
+import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.entity.effect.StatusEffectInstance;
 import ru.white.Client;
 import ru.white.manager.event_impl.EventDisplay;
 import ru.white.manager.event_impl.MousePressEvent;
@@ -39,6 +41,8 @@ import net.minecraft.util.math.MathHelper;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
+
+import static net.minecraft.client.gui.hud.InGameHud.getEffectTexture;
 
 public class TargetHud implements element {
 
@@ -179,51 +183,71 @@ public class TargetHud implements element {
 
         drawFace(target, eventDisplay.getPartialTicks(), px + HEAD_OFFSET_X, y + HEAD_OFFSET_Y, alpha);
 
+        // ── компоновка: имя → полоска ХП → иконки эффектов → кольцо с числом ──
+        float contentX = px + CONTENT_OFFSET_X + BAR_OFFSET_X;
+        float ringR = 8.5F * S;
+        float ringCx = px + w - ringR - 6F * S;
+        float ringCy = y + h / 2F;
+
+        float hpNow = getHealth(target);
+        float hpMax = Math.max(1F, target.getMaxHealth() + target.getAbsorptionAmount());
+        float hpFrac = MathHelper.clamp(hpNow / hpMax, 0F, 1F);
+
         animHP.update();
-        float barW = w - CONTENT_OFFSET_X - BAR_MARGIN_R;
-        animHP.run(Math.round(getHealth(target) / target.getMaxHealth() * barW), 0.5F, Easings.BACK_OUT);
+        float barW = ringCx - 4F * S - contentX;
+        animHP.run(Math.round(barW * hpFrac), 0.5F, Easings.BACK_OUT);
 
         animHpText.update();
-        animHpText.run(getHealth(target), 0.15F, Easings.LINEAR);
+        animHpText.run(hpNow, 0.15F, Easings.LINEAR);
 
-        float barX = px + CONTENT_OFFSET_X + BAR_OFFSET_X;
-        float barY = y + h - BAR_OFFSET_Y;
+        int accent = ColorUtil.getClientColor1(1);
+        int redCol = ColorUtil.getColor(255, 80, 85);
+        int ringMain = ColorUtil.overCol(accent, redCol, 1F - hpFrac);
 
-        int hpColor = ColorUtil.getClientColor(1);
-
-        float displayHp = animHpText.get();
-        String hpText = ServerUtil.isCopyTime()
-                ? String.format("%.0f", displayHp)
-                : (target.isInvisible() ? "null" : String.format("%.0f", displayHp));
         String name = target.getName().getString().replace(mc.player.getName().getString(),
                 Client.get().moduleManager().get(NameProtect.class).isEnabled()
                         ? "rainydlc.fun"
                         : mc.player.getName().getString());
-
-        RenderUtil.Render2D.rect(barX, barY, barW, BAR_HEIGHT,
-                ColorUtil.multAlpha(ColorUtil.getColor(255,0.1F), alpha), 2);
-
-        RenderUtil.Render2D.gradientRect(
-                barX,
-                barY,
-                Math.min(barW, animHP.get()),
-                BAR_HEIGHT,
-                new int[]{
-                        ColorUtil.multDark(ColorUtil.replAlpha(hpColor, alpha), 0.5F),
-                        ColorUtil.replAlpha(hpColor, alpha),
-                        ColorUtil.replAlpha(hpColor, alpha),
-                        ColorUtil.multDark(ColorUtil.replAlpha(hpColor, alpha), 0.5F)
-                },
-                2
-        );
-
-        Fonts.sf_regular.drawFadingText(name, px + CONTENT_OFFSET_X + BAR_OFFSET_X, y + NAME_Y,
-                w - CONTENT_OFFSET_X - BAR_OFFSET_X,
+        Fonts.sf_regular.drawFadingText(name, contentX, y + NAME_Y,
+                ringCx - 4F * S - contentX,
                 ColorUtil.getColor(255, alpha), NAME_SIZE);
 
-        Fonts.sf_regular.draw("Здоровья: " + ColorFormatting.getColor(ColorUtil.replAlpha(ColorUtil.client(), alpha)) + hpText,
-                px + CONTENT_OFFSET_X + BAR_OFFSET_X,
-                y + HP_Y, HP_SIZE, ColorUtil.getColor(255, alpha));
+        // тонкая полоска здоровья под именем
+        RenderUtil.Render2D.rect(contentX, y + 13F * S, barW, BAR_HEIGHT,
+                ColorUtil.multAlpha(ColorUtil.getColor(255, 0.10F), alpha), 2);
+        RenderUtil.Render2D.gradientRect(
+                contentX, y + 13F * S, Math.min(barW, animHP.get()), BAR_HEIGHT,
+                new int[]{
+                        ColorUtil.multDark(ColorUtil.replAlpha(ringMain, alpha), 0.5F),
+                        ColorUtil.replAlpha(ringMain, alpha),
+                        ColorUtil.replAlpha(ringMain, alpha),
+                        ColorUtil.multDark(ColorUtil.replAlpha(ringMain, alpha), 0.5F)
+                }, 2);
+
+        // кольцо прогресса ХП с целым числом внутри
+        RenderUtil.Render2D.roundedCircleProgress(eventDisplay.getDrawContext(),
+                ringCx, ringCy, ringR, 2.1F * S, hpFrac,
+                ColorUtil.replAlpha(ColorUtil.getColor(255, 0.10F), alpha),
+                ColorUtil.replAlpha(ringMain, alpha), ColorUtil.replAlpha(ringMain, alpha));
+        Fonts.sf_medium.drawCentered(String.format("%.0f", animHpText.get()),
+                ringCx, ringCy - 3.0F * S, 5.2F * S, ColorUtil.getColor(255, alpha));
+
+        // иконки активных эффектов цели — ряд под полоской
+        float iconY = y + 19.5F * S;
+        float iconSize = 8F * S;
+        float maxIconX = ringCx - ringR - 3F * S;
+        int shown = 0;
+        if (!target.getStatusEffects().isEmpty()) {
+            for (StatusEffectInstance effect : target.getStatusEffects()) {
+                float ix = contentX + shown * (iconSize + 2.5F * S);
+                if (ix + iconSize > maxIconX || shown >= 8) break;
+                Identifier tex = getEffectTexture(effect.getEffectType());
+                eventDisplay.getDrawContext().drawGuiTexture(RenderPipelines.GUI_TEXTURED, tex,
+                        (int) ix, (int) iconY, (int) iconSize, (int) iconSize,
+                        ColorUtil.getColor(255, (int) (255F * alpha)));
+                shown++;
+            }
+        }
 
         renderArmor(eventDisplay, target, px + ARMOR_X, y - ARMOR_Y - ANIM_OFFSET + ANIM_OFFSET * alpha, alpha);
     }
