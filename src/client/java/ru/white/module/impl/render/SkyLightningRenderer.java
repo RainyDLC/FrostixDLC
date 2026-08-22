@@ -80,6 +80,10 @@ public final class SkyLightningRenderer {
         Vec3d impact;
         long born;
         float seed;
+        /** Время «бега» лидера от облака до земли. */
+        long propagateMs;
+        final int[] branchAttach = new int[4];
+        int branchCount;
     }
 
     private static final List<Strike> strikes = new ArrayList<>();
@@ -130,7 +134,7 @@ public final class SkyLightningRenderer {
         if (groundY == Integer.MIN_VALUE) return;
 
         Vec3d impact = new Vec3d(x, groundY + 1.01, z);
-        double skyH = 24 + random.nextInt(12);
+        double skyH = 55 + random.nextInt(30); // разряд идёт от самых облаков
         Vec3d start = new Vec3d(
                 x + (random.nextDouble() - 0.5) * 10.0,
                 impact.y + skyH,
@@ -144,6 +148,7 @@ public final class SkyLightningRenderer {
         s.born = System.currentTimeMillis();
         s.seed = random.nextFloat();
         s.impact = impact;
+        s.propagateMs = 130 + random.nextInt(60);
         s.pts.addAll(LightningPath.generate(start, end, 3, skyH * 0.09, random));
 
         // канал не должен нырять под землю
@@ -155,7 +160,7 @@ public final class SkyLightningRenderer {
 
         // ветвления от случайных точек основного канала
         for (int b = 0; b < 3; b++) {
-            if (s.pts.size() < 6) break;
+            if (s.pts.size() < 6 || s.branchCount >= 4) break;
             int idx = 2 + random.nextInt(Math.max(1, s.pts.size() - 4));
             Vec3d from = s.pts.get(idx);
             double blen = 2.5 + random.nextDouble() * 3.5;
@@ -164,6 +169,7 @@ public final class SkyLightningRenderer {
                     from.x + Math.cos(ba) * blen,
                     from.y - blen * (0.7 + random.nextDouble() * 0.6),
                     from.z + Math.sin(ba) * blen);
+            s.branchAttach[s.branchCount++] = idx;
             s.branches.add(LightningPath.generate(from, bend, 2, blen * 0.35, random));
         }
 
@@ -199,27 +205,47 @@ public final class SkyLightningRenderer {
         // ── Pass 1: свечение вдоль канала и вспышка удара ──
         VertexConsumer glowBuf = consumers.getBuffer(GLOW_LAYER);
         for (Strike s : strikes) {
-            float env = envelope(now - s.born);
+            long age = now - s.born;
+            float env = envelope(age);
             if (env <= 0.01f) continue;
             float flicker = flicker(now, s.seed);
-            int glowCol = argb(150, 195, 255, (int) (env * flicker * 90));
+            int glowCol = argb(150, 195, 255, (int) (Math.min(1f, env) * flicker * 90));
 
-            for (int i = 0; i < s.pts.size(); i += 2) {
+            // ступенчатый лидер: канал проявляется сверху вниз
+            float prog = Math.min(1f, age / (float) Math.max(1L, s.propagateMs));
+            int mainLim = Math.max(2, (int) Math.ceil(prog * (s.pts.size() - 1)) + 1);
+
+            // вспышка в «облаках» у старта канала
+            float head = 1f - Math.min(1f, age / 240f);
+            if (head > 0.01f) {
+                sprite(glowBuf, matrix, s.pts.get(0), camPos, right, up,
+                        7.5f + 3.5f * (1f - head),
+                        argb(205, 228, 255, (int) (head * env * 170)));
+            }
+
+            for (int i = 0; i < mainLim; i += 2) {
                 sprite(glowBuf, matrix, s.pts.get(i), camPos, right, up,
                         1.0f + 0.7f * flicker, glowCol);
             }
-            for (List<Vec3d> br : s.branches) {
-                for (int i = 0; i < br.size(); i += 2) {
+            for (int bi = 0; bi < s.branches.size(); bi++) {
+                float bp = (age - s.propagateMs * s.branchAttach[bi] / (float) Math.max(1, s.pts.size() - 1))
+                        / (float) Math.max(1L, s.propagateMs);
+                if (bp <= 0f) continue;
+                List<Vec3d> br = s.branches.get(bi);
+                int lim = Math.max(2, (int) Math.ceil(Math.min(1f, bp) * (br.size() - 1)) + 1);
+                for (int i = 0; i < lim; i += 2) {
                     sprite(glowBuf, matrix, br.get(i), camPos, right, up,
                             0.6f + 0.45f * flicker, glowCol);
                 }
             }
 
-            // вспышка в точке удара
-            float flash = flashEnv(now - s.born);
-            if (flash > 0.01f) {
-                sprite(glowBuf, matrix, s.impact.add(0, 0.8, 0), camPos, right, up,
-                        3.4f + 2.8f * (1f - flash), argb(200, 225, 255, (int) (flash * env * 200)));
+            // удар и вспышка в точке падения — когда лидер дошёл до земли
+            if (prog >= 1f) {
+                float flash = flashEnv(age - s.propagateMs);
+                if (flash > 0.01f) {
+                    sprite(glowBuf, matrix, s.impact.add(0, 0.8, 0), camPos, right, up,
+                            3.4f + 2.8f * (1f - flash), argb(200, 225, 255, (int) (flash * env * 200)));
+                }
             }
         }
         consumers.draw(GLOW_LAYER);
@@ -227,13 +253,21 @@ public final class SkyLightningRenderer {
         // ── Pass 2: внешняя лента канала ──
         VertexConsumer outerBuf = consumers.getBuffer(OUTER_LAYER);
         for (Strike s : strikes) {
-            float env = envelope(now - s.born);
+            long age = now - s.born;
+            float env = envelope(age);
             if (env <= 0.01f) continue;
             float flicker = flicker(now, s.seed);
-            int col = argb(120, 175, 255, (int) (env * flicker * 130));
-            ribbonPolyline(outerBuf, matrix, s.pts, camPos, 0.17f, col);
-            for (List<Vec3d> br : s.branches) {
-                ribbonPolyline(outerBuf, matrix, br, camPos, 0.115f, col);
+            int col = argb(120, 175, 255, (int) (Math.min(1f, env) * flicker * 130));
+            float prog = Math.min(1f, age / (float) Math.max(1L, s.propagateMs));
+            int mainLim = Math.max(2, (int) Math.ceil(prog * (s.pts.size() - 1)) + 1);
+            ribbonPolyline(outerBuf, matrix, s.pts, camPos, 0.17f, col, mainLim);
+            for (int bi = 0; bi < s.branches.size(); bi++) {
+                float bp = Math.min(1f, (age - s.propagateMs * s.branchAttach[bi]
+                        / (float) Math.max(1, s.pts.size() - 1)) / (float) Math.max(1L, s.propagateMs));
+                if (bp <= 0f) continue;
+                List<Vec3d> br = s.branches.get(bi);
+                ribbonPolyline(outerBuf, matrix, br, camPos, 0.115f, col,
+                        Math.max(2, (int) Math.ceil(bp * (br.size() - 1)) + 1));
             }
         }
         consumers.draw(OUTER_LAYER);
@@ -241,32 +275,52 @@ public final class SkyLightningRenderer {
         // ── Pass 3: яркое ядро + кольцо вспышки на земле ──
         VertexConsumer coreBuf = consumers.getBuffer(CORE_LAYER);
         for (Strike s : strikes) {
-            float env = envelope(now - s.born);
+            long age = now - s.born;
+            float env = envelope(age);
             if (env <= 0.01f) continue;
             float flicker = flicker(now, s.seed);
-            int core = argb(235, 245, 255, (int) (env * flicker * 235));
-            ribbonPolyline(coreBuf, matrix, s.pts, camPos, 0.072f, core);
-            for (List<Vec3d> br : s.branches) {
-                ribbonPolyline(coreBuf, matrix, br, camPos, 0.046f, core);
+            int core = argb(235, 245, 255, (int) (Math.min(1f, env) * flicker * 235));
+            float prog = Math.min(1f, age / (float) Math.max(1L, s.propagateMs));
+            int mainLim = Math.max(2, (int) Math.ceil(prog * (s.pts.size() - 1)) + 1);
+            ribbonPolyline(coreBuf, matrix, s.pts, camPos, 0.072f, core, mainLim);
+            for (int bi = 0; bi < s.branches.size(); bi++) {
+                float bp = Math.min(1f, (age - s.propagateMs * s.branchAttach[bi]
+                        / (float) Math.max(1, s.pts.size() - 1)) / (float) Math.max(1L, s.propagateMs));
+                if (bp <= 0f) continue;
+                List<Vec3d> br = s.branches.get(bi);
+                ribbonPolyline(coreBuf, matrix, br, camPos, 0.046f, core,
+                        Math.max(2, (int) Math.ceil(bp * (br.size() - 1)) + 1));
             }
 
-            // кольцо-волна от удара
-            float tR = (now - s.born) / FLASH_TIME;
-            if (tR < 1f) {
-                float ringR = 0.5f + 4.2f * (1f - (1f - tR) * (1f - tR));
-                int ringCol = argb(190, 220, 255, (int) ((1f - tR) * env * 150));
-                groundRing(coreBuf, matrix, s.impact, ringR, 0.24f, ringCol);
+            // кольцо-волна от удара — после прихода лидера на землю
+            if (prog >= 1f) {
+                float tR = (age - s.propagateMs) / FLASH_TIME;
+                if (tR >= 0f && tR < 1f) {
+                    float ringR = 0.5f + 4.2f * (1f - (1f - tR) * (1f - tR));
+                    int ringCol = argb(190, 220, 255, (int) ((1f - tR) * Math.min(1f, env) * 150));
+                    groundRing(coreBuf, matrix, s.impact, ringR, 0.24f, ringCol);
+                }
             }
         }
         consumers.draw(CORE_LAYER);
     }
 
+    /**
+     * Реалистичная огибающая: основной разряд + два повторных импульса
+     * по тому же каналу (настоящие молнии бьют 2–3 раза подряд).
+     */
     private static float envelope(long ageMs) {
+        if (ageMs < 0 || ageMs >= STRIKE_LIFE) return 0f;
+        double e = Math.exp(-ageMs / 260.0)
+                + 0.85 * Math.exp(-sq((ageMs - 290.0) / 95.0))
+                + 0.6 * Math.exp(-sq((ageMs - 480.0) / 85.0));
         float t = ageMs / (float) STRIKE_LIFE;
-        if (t >= 1f) return 0f;
-        if (t < 0.06f) return t / 0.06f;
-        if (t > 0.62f) return 1f - (t - 0.62f) / 0.38f;
-        return 1f;
+        float endFade = t > 0.82f ? (1f - t) / 0.18f : 1f;
+        return (float) Math.min(1.25, e) * endFade;
+    }
+
+    private static double sq(double v) {
+        return v * v;
     }
 
     private static float flashEnv(long ageMs) {
@@ -303,7 +357,13 @@ public final class SkyLightningRenderer {
     /** Лента-полилиния, повёрнутая к камере (перпендикуляр = dir × toCam). */
     private static void ribbonPolyline(VertexConsumer buf, Matrix4f matrix,
                                        List<Vec3d> pts, Vec3d camPos, float halfW, int color) {
-        for (int i = 0; i < pts.size() - 1; i++) {
+        ribbonPolyline(buf, matrix, pts, camPos, halfW, color, pts.size());
+    }
+
+    private static void ribbonPolyline(VertexConsumer buf, Matrix4f matrix,
+                                       List<Vec3d> pts, Vec3d camPos, float halfW, int color, int maxVerts) {
+        int segs = Math.min(pts.size(), maxVerts) - 1;
+        for (int i = 0; i < segs; i++) {
             Vec3d a = pts.get(i);
             Vec3d b = pts.get(i + 1);
             float ax = (float) (a.x - camPos.x), ay = (float) (a.y - camPos.y), az = (float) (a.z - camPos.z);
