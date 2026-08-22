@@ -299,13 +299,21 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             int dots = (int) (st.len / step);
             for (int k = dots; k >= 1; k--) {
                 float t = 1f - k / (float) dots;
-                float px = st.x - nx * step * k;
+                float px = st.x - nx * step * k + (float) Math.sin(k * 1.7f) * 0.9f * S;
                 float py = st.y - ny * step * k;
                 if (py > h + 4 || px < -6 || px > w + 6) continue;
                 float rr = (0.8f + t * 1.5f) * S;
                 int a = (int) (t * t * anim * 92);
                 RenderUtil.Render2D.rect(px - rr, py - rr, rr * 2, rr * 2,
                         ColorUtil.replAlpha(ColorUtil.getColor(185, 215, 255), a), rr);
+                // мини-хвостик у каждой капли — форма слезинки
+                if (t > 0.25f) {
+                    float trr = rr * 0.45f;
+                    RenderUtil.Render2D.rect(px - trr, py - rr - trr * 2.4f,
+                            trr * 2, trr * 3.4f,
+                            ColorUtil.replAlpha(ColorUtil.getColor(185, 215, 255), (int) (a * 0.45f)),
+                            trr);
+                }
             }
         }
 
@@ -360,13 +368,35 @@ public class MainMenuScreen extends Screen implements IMinecraft {
                 if (d.r < 3.0F) d.r += 0.0008 * dt;
             }
 
-            float a = anim * (d.sliding ? 145 : 118);
+            // капля-слезинка: хвостик вверх + тело + утяжелённый низ + блик
+            float aB = anim * (d.sliding ? 150 : 120);
             float dr = d.r * S;
-            RenderUtil.Render2D.rect(d.x - dr, d.y - dr, dr * 2, dr * 2,
-                    ColorUtil.replAlpha(ColorUtil.getColor(214, 234, 255), (int) a), dr);
-            RenderUtil.Render2D.rect(d.x - dr * 0.32f, d.y - dr * 0.58f,
-                    dr * 0.62f, dr * 0.5f,
-                    ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (anim * 115)), dr * 0.3f);
+            float stretch = d.sliding ? Math.min(1.7f, 1f + (float) d.vy * 6f) : 1f;
+
+            // хвостик, тянущийся вверх
+            float tailW = dr * 0.62f;
+            float tailH = dr * (d.sliding ? 2.1f : 1.15f);
+            RenderUtil.Render2D.rect(d.x - tailW * 0.5f, d.y - dr - tailH,
+                    tailW, tailH,
+                    ColorUtil.replAlpha(ColorUtil.getColor(200, 228, 255), (int) (aB * 0.5f)),
+                    tailW * 0.5f);
+
+            // тело: при скольжении вытягивается вниз
+            float bh = dr * stretch;
+            RenderUtil.Render2D.rect(d.x - dr, d.y - bh, dr * 2, bh * 2,
+                    ColorUtil.replAlpha(ColorUtil.getColor(214, 234, 255), (int) aB),
+                    Math.min(dr, bh));
+
+            // утяжелённый низ — капля «наливается»
+            RenderUtil.Render2D.rect(d.x - dr * 0.5f, d.y + bh * 0.18f, dr, dr * 0.9f,
+                    ColorUtil.replAlpha(ColorUtil.getColor(228, 244, 255), (int) (aB * 0.85f)),
+                    dr * 0.45f);
+
+            // блик сверху-слева от источника света
+            RenderUtil.Render2D.rect(d.x - dr * 0.55f, d.y - bh * 0.75f,
+                    dr * 0.5f, bh * 0.7f,
+                    ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (anim * 125)),
+                    dr * 0.22f);
 
             if (d.y > h + 24) {
                 dit.remove();
