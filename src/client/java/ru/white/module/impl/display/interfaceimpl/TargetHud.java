@@ -56,8 +56,8 @@ public class TargetHud implements element {
     private static float ARMOR_Y = 12F * S;
 
     /** Базовые размеры и отступы */
-    private static float W_BASE = 100F * S;
-    private static float H_BASE = 30F * S;
+    private static float W_BASE = 114F * S;
+    private static float H_BASE = 34F * S;
     private static float RADIUS = 6F * S;
     private static float ANIM_OFFSET = 8F * S;
 
@@ -105,8 +105,8 @@ public class TargetHud implements element {
         ARMOR_PAD = 2.5F * S;
         ARMOR_X = 10F * S;
         ARMOR_Y = 12F * S;
-        W_BASE = 100F * S;
-        H_BASE = 30F * S;
+        W_BASE = 114F * S;
+        H_BASE = 34F * S;
         RADIUS = 6F * S;
         ANIM_OFFSET = 8F * S;
         HEAD_CONTAINER_W = 30F * S;
