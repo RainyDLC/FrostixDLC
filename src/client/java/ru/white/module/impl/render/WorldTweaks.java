@@ -35,6 +35,10 @@ public class WorldTweaks extends Module {
     public SliderSetting lightningInterval = new SliderSetting(this,"Интервал молний",4F,1F,15F,0.5F).setVisible(() -> lightnings.getValue());
     public SliderSetting lightningRadius = new SliderSetting(this,"Дальность молний",40F,12F,80F,1F).setVisible(() -> lightnings.getValue());
 
+    public BooleanSetting rains = new BooleanSetting(this,"Дождь",false);
+    public SliderSetting rainDensity = new SliderSetting(this,"Плотность дождя",80,10,200,5).setVisible(() -> rains.getValue());
+    public SliderSetting rainRadius = new SliderSetting(this,"Радиус дождя",18F,6F,40F,1F).setVisible(() -> rains.getValue());
+
     public ColorSetting tintColor = new ColorSetting(this, "Цвет", 0xFF00FFFF).setVisible(() -> typeColor.is("Свой"));
 
     public int getColor() {
@@ -59,12 +63,17 @@ public class WorldTweaks extends Module {
     public void onTick(EventTick e) {
         SkyLightningRenderer.update(lightnings.getValue(), lightningInterval.getValue(),
                 lightningRadius.getValue());
+        SkyRainRenderer.update(rains.getValue(), rainDensity.getValue().intValue(),
+                rainRadius.getValue());
     }
 
     @EventHandler
     public void onRender3D(EventRender3D e) {
         if (lightnings.getValue()) {
             SkyLightningRenderer.render(e);
+        }
+        if (rains.getValue()) {
+            SkyRainRenderer.render(e);
         }
     }
 
