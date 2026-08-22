@@ -40,11 +40,15 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
         PRESETS.put("Snap",       new float[]{150, 220, 110, 160, 260, 230, 3f,   2.4f, -0.8f, 0.9f});
         PRESETS.put("HvH",        new float[]{170, 240, 120, 170, 280, 250, 3.5f, 3f,  -1.2f, 1.2f});
         PRESETS.put("Neuro",      new float[]{110, 170, 80,  120, 230, 205, 2.2f, 1.8f, 0.5f, 0.4f});
+        PRESETS.put("Custom",     new float[]{120, 180, 80,  120, 200, 180, 1f,   1f,   0f,    0f});
+        PRESETS.put("Legit",      new float[]{60,  90,  45,  70,  140, 120, 0.6f, 0.5f, -0.3f, 0.3f});
+        PRESETS.put("Sloth",      new float[]{35,  55,  25,  40,  110, 95,  0.15f,0.1f, 0.05f, 0.05f});
     }
 
     private static final float[] DEFAULTS = {120, 180, 80, 120, 200, 180, 1f, 1f, 0, 0};
 
     private int activeTab = 0;
+    private String activePreset = "FunTime";
     private float scaleFix = 1F;
     private float mouseX, mouseY;
 
@@ -123,7 +127,7 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
 
         // ── заголовок ──
         f.draw("Конструктор ротации", x + 14, y + 12, 9F, ColorUtil.getColor(235, a));
-        String presetLabel = "Профиль: Custom";
+        String presetLabel = "Профиль: " + activePreset;
         f.draw(presetLabel, x + 14, y + 27, 6F, ColorUtil.replAlpha(accent, a * 0.9F));
 
         float closeS = 16F;
@@ -135,35 +139,45 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
         RenderUtil.Render2D.outline(cx, cyC, closeS, closeS, 0.5F, ColorUtil.getColor(255, a * (cHov ? 0.45F : 0.15F)), 5F);
         f.drawCentered("X", cx + closeS / 2F, cyC + 5F, 6.5F, ColorUtil.getColor(255, a * (cHov ? 0.95F : 0.55F)));
 
-        // ── пресеты ──
+        // сброс — в шапке слева от крестика, чтобы не пересекался с пресетами
+        float resetW = 46F;
+        float resetX = cx - resetW - 6F;
+        resetRect = new float[]{resetX, cyC, resetW, closeS};
+        boolean rHovH = MathUtil.isHovered(mouseX, mouseY, resetX, cyC, resetW, closeS);
+        RenderUtil.Render2D.rect(resetX, cyC, resetW, closeS, ColorUtil.getColor(255, 60, 60, a * (rHovH ? 0.14F : 0.05F)), 5F);
+        RenderUtil.Render2D.outline(resetX, cyC, resetW, closeS, 0.5F, ColorUtil.getColor(255, 90, 90, a * (rHovH ? 0.65F : 0.28F)), 5F);
+        f.drawCentered("Сброс", resetX + resetW / 2F, cyC + 4.5F, 6F, ColorUtil.getColor(255, 130, 130, a * (rHovH ? 1F : 0.8F)));
+
+        // ── пресеты: переносятся на новую строку, если не влезают ──
         chipNames.clear();
         chipRects.clear();
         float chipY = y + 44F;
         float chipX = x + 12F;
+        float chipMaxX = x + w - 12F;
         for (String name : PRESETS.keySet()) {
             float tw = f.getWidth(name, 6F) + 12F;
+            if (chipX + tw > chipMaxX) {
+                chipX = x + 12F;
+                chipY += 20F;
+            }
             boolean hov = MathUtil.isHovered(mouseX, mouseY, chipX, chipY, tw, 16F);
+            boolean act = name.equals(activePreset);
             RenderUtil.Render2D.rect(chipX, chipY, tw, 16F, ColorUtil.overCol(
                     ColorUtil.getColor(255, a * (hov ? 0.09F : 0.04F)),
-                    ColorUtil.replAlpha(accent, a * 0.20F), hov ? 1F : 0F), 4F);
-            RenderUtil.Render2D.outline(chipX, chipY, tw, 16F, 0.5F, ColorUtil.replAlpha(accent, a * (hov ? 0.65F : 0.22F)), 4F);
-            f.draw(name, chipX + 6F, chipY + 4.5F, 6F, ColorUtil.getColor(225, a * (hov ? 1F : 0.75F)));
+                    ColorUtil.replAlpha(accent, a * (act ? 0.45F : 0.20F)), hov ? 1F : 0F), 4F);
+            RenderUtil.Render2D.outline(chipX, chipY, tw, 16F, 0.5F,
+                    ColorUtil.replAlpha(accent, a * (act ? 0.85F : (hov ? 0.65F : 0.22F))), 4F);
+            f.draw(name, chipX + 6F, chipY + 4.5F, 6F,
+                    ColorUtil.getColor(act ? 250 : 225, a * (hov ? 1F : (act ? 0.95F : 0.75F))));
             chipNames.add(name);
             chipRects.add(new float[]{chipX, chipY, tw, 16F});
             chipX += tw + 4F;
         }
-
-        float resetW = 52F;
-        float resetX = x + w - resetW - 12F;
-        resetRect = new float[]{resetX, chipY, resetW, 16F};
-        boolean rHov = MathUtil.isHovered(mouseX, mouseY, resetX, chipY, resetW, 16F);
-        RenderUtil.Render2D.rect(resetX, chipY, resetW, 16F, ColorUtil.getColor(255, 60, 60, a * (rHov ? 0.16F : 0.06F)), 4F);
-        RenderUtil.Render2D.outline(resetX, chipY, resetW, 16F, 0.5F, ColorUtil.getColor(255, 90, 90, a * (rHov ? 0.7F : 0.3F)), 4F);
-        f.drawCentered("Сброс", resetX + resetW / 2F, chipY + 4.5F, 6F, ColorUtil.getColor(255, 130, 130, a * (rHov ? 1F : 0.8F)));
+        float presetsBottom = chipY + 16F;
 
         // ── вкладки (левая колонка) ──
         float tabX = x + 12F;
-        float tabY = y + 72F;
+        float tabY = presetsBottom + 6F;
         float tabW = 104F;
         for (int i = 0; i < TABS.length; i++) {
             boolean act = i == activeTab;
@@ -281,13 +295,16 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
 
         if (resetRect != null && MathUtil.isHovered(mx, my, resetRect[0], resetRect[1], resetRect[2], resetRect[3])) {
             applyValues(DEFAULTS);
+            activePreset = "Custom";
             return true;
         }
 
         for (int i = 0; i < chipRects.size(); i++) {
             float[] r = chipRects.get(i);
             if (MathUtil.isHovered(mx, my, r[0], r[1], r[2], r[3])) {
-                applyValues(PRESETS.get(chipNames.get(i)));
+                String name = chipNames.get(i);
+                applyValues(PRESETS.get(name));
+                activePreset = name;
                 return true;
             }
         }
