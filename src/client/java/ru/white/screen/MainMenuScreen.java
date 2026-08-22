@@ -22,6 +22,7 @@ import net.minecraft.util.Identifier;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -182,6 +183,10 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         // дождливая атмосфера: градиент и мягкое холодное свечение
         drawRainyBackground(screenWidth, screenHeight, alphaVal, time);
 
+        // дождь по «стеклу» главного меню: наклонные струи, брызги об нижний край
+        renderMenuRain(screenWidth, screenHeight, alphaVal,
+                Math.max(0.8f, currentScale / 2f));
+
         // ЛОГОТИП — текстовый знак клиента заменён на фирменный R-логотип
         float logoSize = 19F;
         RenderUtil.Images.texture(ICON_LOGO, screenWidth / 2F - logoSize / 2F,
@@ -201,6 +206,175 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
         Render2D.endOverlay();
         if (context != null) context.getMatrices().popMatrix();
+    }
+
+    // ── дождь по «стеклу» меню: струи-капли, брызги об край, капли на блюре ──
+
+    private static final class RainStreak {
+        float x, y, len;
+        double vx, vy;
+
+        RainStreak(float x, float y) {
+            this.x = x;
+            this.y = y;
+            this.len = 55f + (float) Math.random() * 95f;
+            // наклон: вниз и вбок, у каждой струи свой угол ±20°
+            double ang = Math.toRadians(90.0 + (Math.random() * 40.0 - 20.0));
+            double sp = 0.30 + Math.random() * 0.25;
+            this.vx = Math.cos(ang) * sp;
+            this.vy = Math.abs(Math.sin(ang)) * sp;
+        }
+    }
+
+    private static final class Splash {
+        float x, y, vx, vy;
+        final long born = System.currentTimeMillis();
+
+        Splash(float x, float y, float vx, float vy) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+        }
+    }
+
+    private static final class GlassDrop {
+        float x, y, r;
+        double vy = 0;
+        boolean sliding;
+        float slideStartY;
+
+        GlassDrop(float x, float y) {
+            this.x = x;
+            this.y = y;
+            this.r = 1.4f + (float) Math.random() * 2.2f;
+        }
+    }
+
+    private final java.util.List<RainStreak> menuRain = new ArrayList<>();
+    private final java.util.List<Splash> menuSplashes = new ArrayList<>();
+    private final java.util.List<GlassDrop> glassDrops = new ArrayList<>();
+    private long lastRainFrame;
+
+    /** Дождь по «стеклу»: наклонные струи из капель + брызги об нижний край. */
+    private void renderMenuRain(float w, float h, float anim, float S) {
+        if (anim <= 0.01F) return;
+        long now = System.currentTimeMillis();
+        long dt = Math.min(60L, Math.max(1L, now - lastRainFrame));
+        lastRainFrame = now;
+
+        int target = Math.min(80, (int) (w / 16));
+        while (menuRain.size() < target)
+            menuRain.add(new RainStreak((float) (Math.random() * w * 1.15 - w * 0.07),
+                    (float) (Math.random() * h)));
+        if (menuRain.size() > target)
+            menuRain.subList(target, menuRain.size()).clear();
+
+        for (RainStreak st : menuRain) {
+            st.x += st.vx * dt;
+            st.y += st.vy * dt;
+
+            // удар о нижний край экрана — брызги
+            if (st.y >= h - 2f) {
+                if (menuSplashes.size() < 48) {
+                    float dir = st.vx >= 0 ? 1f : -1f;
+                    for (int k = 0; k < 3; k++) {
+                        menuSplashes.add(new Splash(st.x, h - 2f,
+                                dir * (0.04f + (float) Math.random() * 0.07f),
+                                -(0.10f + (float) Math.random() * 0.09f)));
+                    }
+                }
+                st.x = (float) (Math.random() * w * 1.25 - w * 0.18);
+                st.y = -st.len - (float) (Math.random() * 120);
+            } else if (st.x > w + 24 || st.x < -w * 0.22) {
+                st.x = (float) (Math.random() * w * 1.25 - w * 0.18);
+                st.y = -st.len - (float) (Math.random() * 120);
+            }
+
+            // струя — цепочка круглых капель вдоль направления, ярче к «голове»
+            double vlen = Math.sqrt(st.vx * st.vx + st.vy * st.vy);
+            float nx = (float) (st.vx / vlen);
+            float ny = (float) (st.vy / vlen);
+            float step = Math.max(5f, 6.5f * S);
+            int dots = (int) (st.len / step);
+            for (int k = dots; k >= 1; k--) {
+                float t = 1f - k / (float) dots;
+                float px = st.x - nx * step * k;
+                float py = st.y - ny * step * k;
+                if (py > h + 4 || px < -6 || px > w + 6) continue;
+                float rr = (0.8f + t * 1.5f) * S;
+                int a = (int) (t * t * anim * 92);
+                RenderUtil.Render2D.rect(px - rr, py - rr, rr * 2, rr * 2,
+                        ColorUtil.replAlpha(ColorUtil.getColor(185, 215, 255), a), rr);
+            }
+        }
+
+        // брызги: разлетаются и падают под гравитацией
+        Iterator<Splash> sit = menuSplashes.iterator();
+        while (sit.hasNext()) {
+            Splash sp = sit.next();
+            long age = now - sp.born;
+            if (age > 240L) {
+                sit.remove();
+                continue;
+            }
+            float t = age / 240f;
+            sp.x += sp.vx * dt;
+            sp.y += sp.vy * dt;
+            sp.vy += 0.0004 * dt;
+
+            float rr = (1f - t) * 1.9f * S;
+            int a = (int) ((1f - t) * (1f - t) * anim * 150);
+            RenderUtil.Render2D.rect(sp.x - rr, sp.y - rr, rr * 2, rr * 2,
+                    ColorUtil.replAlpha(ColorUtil.getColor(205, 232, 255), a), rr);
+        }
+
+        // ── капли на самом блюре: прилипают, растут, скалываются со следом ──
+        int targetDrops = Math.min(55, (int) (w / 26));
+        while (glassDrops.size() < targetDrops)
+            glassDrops.add(new GlassDrop((float) (Math.random() * w),
+                    (float) (Math.random() * h)));
+
+        Iterator<GlassDrop> dit = glassDrops.iterator();
+        while (dit.hasNext()) {
+            GlassDrop d = dit.next();
+            if (!d.sliding && Math.random() < 0.0011 * dt && d.r > 1.9f) {
+                d.sliding = true;
+                d.slideStartY = d.y;
+            }
+
+            if (d.sliding) {
+                d.vy += 0.00035 * dt;
+                d.y += d.vy * dt;
+                float trailH = d.y - d.slideStartY;
+                if (trailH > 2F) {
+                    Draw.gradientRect(d.x - 1.1F * S, d.slideStartY, 2.2F * S, trailH,
+                            new int[]{
+                                    ColorUtil.getColor(205, 228, 255, 0),
+                                    ColorUtil.getColor(205, 228, 255, 0),
+                                    ColorUtil.replAlpha(ColorUtil.getColor(210, 232, 255), (int) (anim * 42)),
+                                    ColorUtil.replAlpha(ColorUtil.getColor(210, 232, 255), (int) (anim * 42))
+                            }, 2.2F * S);
+                }
+            } else {
+                if (d.r < 3.0F) d.r += 0.0008 * dt;
+            }
+
+            float a = anim * (d.sliding ? 145 : 118);
+            float dr = d.r * S;
+            RenderUtil.Render2D.rect(d.x - dr, d.y - dr, dr * 2, dr * 2,
+                    ColorUtil.replAlpha(ColorUtil.getColor(214, 234, 255), (int) a), dr);
+            RenderUtil.Render2D.rect(d.x - dr * 0.32f, d.y - dr * 0.58f,
+                    dr * 0.62f, dr * 0.5f,
+                    ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (anim * 115)), dr * 0.3f);
+
+            if (d.y > h + 24) {
+                dit.remove();
+            }
+        }
+        while (glassDrops.size() < targetDrops)
+            glassDrops.add(new GlassDrop((float) (Math.random() * w),
+                    (float) (Math.random() * h * 0.7f)));
     }
 
     // ── дождевой фон ────────────────────────────────────────────────────
