@@ -97,7 +97,7 @@ public class AttackAura extends Module {
     public ModeSetting typeSprint = new ModeSetting(this,"Тип спринта", "Packet","Silent","Legit");
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
 
-    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Не отображать");
+    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Огонь","Мечи","Не отображать");
 
     public SliderSetting cubeSize = new SliderSetting(this,"Размер куба",1.15F,0.6F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
     public SliderSetting cubeRotateSpeed = new SliderSetting(this,"Скорость вращения куба",1.2F,0.2F,4.0F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
@@ -108,6 +108,32 @@ public class AttackAura extends Module {
     public SliderSetting lightningCount = new SliderSetting(this,"Кол-во молний",16,4,48,1).setVisible(() -> typeTargetESP.is("Молнии"));
     public SliderSetting lightningSpeed = new SliderSetting(this,"Скорость молний",42,10,120,1).setVisible(() -> typeTargetESP.is("Молнии"));
     public BooleanSetting lightningHit = new BooleanSetting(this,"Красный при ударе", false).setVisible(() -> typeTargetESP.is("Молнии"));
+
+    public SliderSetting crystalCount = new SliderSetting(this,"Кол-во кристаллов",14,4,32,1).setVisible(() -> typeTargetESP.is("Кристаллы"));
+    public SliderSetting crystalSpeed = new SliderSetting(this,"Скорость вращения",1.0F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Кристаллы"));
+    public SliderSetting crystalRadius = new SliderSetting(this,"Радиус орбиты",1.0F,0.4F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Кристаллы"));
+    public SliderSetting crystalSize = new SliderSetting(this,"Размер кристаллов",0.12F,0.04F,0.35F,0.01F).setVisible(() -> typeTargetESP.is("Кристаллы"));
+
+    public SliderSetting pentaRadius = new SliderSetting(this,"Радиус пентаграммы",1.4F,0.8F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Пентаграмма"));
+    public SliderSetting pentaSpeed = new SliderSetting(this,"Скорость вращения",0.6F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Пентаграмма"));
+
+    public SliderSetting snowCount = new SliderSetting(this,"Кол-во снежинок",12,4,24,1).setVisible(() -> typeTargetESP.is("Снег"));
+    public SliderSetting snowSpeed = new SliderSetting(this,"Скорость вращения",0.6F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Снег"));
+    public SliderSetting snowRadius = new SliderSetting(this,"Радиус орбиты",0.9F,0.4F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Снег"));
+    public SliderSetting snowSize = new SliderSetting(this,"Размер снежинок",0.18F,0.06F,0.35F,0.01F).setVisible(() -> typeTargetESP.is("Снег"));
+
+    public SliderSetting heartSize = new SliderSetting(this,"Размер сердца",0.9F,0.4F,1.8F,0.05F).setVisible(() -> typeTargetESP.is("Сердце"));
+    public SliderSetting heartSpeed = new SliderSetting(this,"Множитель пульса",1.0F,0.2F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Сердце"));
+
+    public SliderSetting fireCount = new SliderSetting(this,"Кол-во частиц",26,8,64,1).setVisible(() -> typeTargetESP.is("Огонь"));
+    public SliderSetting fireSpeed = new SliderSetting(this,"Скорость вращения",1.0F,0.2F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Огонь"));
+    public SliderSetting fireRadius = new SliderSetting(this,"Радиус вихря",0.7F,0.3F,1.5F,0.05F).setVisible(() -> typeTargetESP.is("Огонь"));
+    public SliderSetting fireHeight = new SliderSetting(this,"Сила пламени",1.0F,0.5F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Огонь"));
+
+    public SliderSetting swordsCount = new SliderSetting(this,"Кол-во мечей",4,2,10,1).setVisible(() -> typeTargetESP.is("Мечи"));
+    public SliderSetting swordsSpeed = new SliderSetting(this,"Скорость вращения",1.0F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Мечи"));
+    public SliderSetting swordsRadius = new SliderSetting(this,"Радиус орбиты",0.8F,0.4F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Мечи"));
+    public SliderSetting swordsSize = new SliderSetting(this,"Размер мечей",0.7F,0.3F,1.5F,0.05F).setVisible(() -> typeTargetESP.is("Мечи"));
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
             new BooleanSetting("Умные криты", false),

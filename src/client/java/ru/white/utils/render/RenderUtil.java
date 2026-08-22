@@ -160,6 +160,34 @@ public class RenderUtil implements IMinecraft {
             Draw.rect(x, y, width, height, color);
         }
 
+        /**
+         * Единая подложка худа: глубокое тёмное стекло с размытием и тонкая
+         * светлая обводка с бликом сверху. opacity — множитель слайдера прозрачности HUD.
+         */
+        public static void hudPlate(float x, float y, float width, float height,
+                                    float alpha, float radius, float opacity) {
+            float a = Math.max(0f, Math.min(1f, alpha));
+            int tint = ((int) (a * Math.max(0f, Math.min(1f, opacity)) * 255f) << 24) | 0x0A0B0F;
+
+            Blur.blur(x, y, width, height, a, radius, tint);
+            // приглушённая обводка: ниже общая яркость и блик сверху
+            glassOutline(x, y, width, height, 0.5f, radius, Math.min(1f, a) * 0.42f, 0.10f);
+        }
+
+        /** Вертикальная акцентная полоса цвета темы на левой кромке подложки. */
+        public static void hudAccent(float x, float y, float height, float alpha, float radius) {
+            float barW = Math.max(1.25f, radius * 0.22f);
+            float inset = Math.max(1.6f, radius * 0.55f);
+            float sy = y + radius * 0.7f;
+            float sh = height - radius * 1.4f;
+            if (sh < barW * 2f) return;
+
+            int acc = ColorUtil.replAlpha(ColorUtil.client(), Math.max(0f, Math.min(1f, alpha)));
+            gradientRect(x + inset, sy, barW, sh,
+                    new int[]{ColorUtil.multDark(acc, 0.55f), acc, acc, ColorUtil.multDark(acc, 0.55f)},
+                    barW);
+        }
+
         public static void rect(float x, float y, float width, float height, int color, float radius) {
             Draw.rect(x, y, width, height, color, radius);
         }

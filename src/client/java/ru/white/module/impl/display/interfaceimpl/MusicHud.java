@@ -148,9 +148,8 @@ public class MusicHud implements element {
         float x = dragSetting.position.x;
         float y = dragSetting.position.y;
 
-        RenderUtil.Render2D.glow(x, y, WIDTH, HEIGHT, ColorUtil.replAlpha(ColorUtil.getColor(0),0.1F * alpha), RADIUS, 12, 1);
-
-        RenderUtil.Blur.blur(x, y, WIDTH, HEIGHT, alpha, RADIUS, ColorUtil.replAlpha(ColorUtil.background(),InterFace.getInstance().alphaHUD.getValue() * alpha));
+        RenderUtil.Render2D.hudPlate(x, y, WIDTH, HEIGHT, alpha, RADIUS, InterFace.getInstance().alphaHUD.getValue());
+        RenderUtil.Render2D.hudAccent(x, y, HEIGHT, alpha, RADIUS);
 
         float artX = x + PAD;
         float artY = y + PAD;

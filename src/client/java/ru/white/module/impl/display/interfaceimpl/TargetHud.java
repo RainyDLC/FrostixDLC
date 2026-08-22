@@ -163,18 +163,21 @@ public class TargetHud implements element {
 
         float rad = RADIUS;
 
-        float addXHEADP = -ANIM_OFFSET + ANIM_OFFSET * alpha;
         float addALL = ANIM_OFFSET - ANIM_OFFSET * alpha;
 
-        RenderUtil.Render2D.glow(x + addXHEADP, y, HEAD_CONTAINER_W, h, ColorUtil.getColor(0, 0.1F * alpha), rad, GLOW_RADIUS, 1);
-        RenderUtil.Blur.glass(x + addXHEADP, y, HEAD_CONTAINER_W, h, alpha, rad,
-                ColorUtil.replAlpha(ColorUtil.background(), InterFace.getInstance().alphaHUD.getValue() * alpha), BLUR_RADIUS, 1, 1, 4);
+        float hudOpacity = InterFace.getInstance().alphaHUD.getValue();
 
-        RenderUtil.Render2D.glow(x + CONTENT_OFFSET_X + addALL, y, w - CONTENT_OFFSET_X, h, ColorUtil.getColor(0, 0.1F * alpha), rad, GLOW_RADIUS, 1);
-        RenderUtil.Blur.glass(x + CONTENT_OFFSET_X + addALL, y, w - CONTENT_OFFSET_X, h, alpha, rad,
-                ColorUtil.replAlpha(ColorUtil.background(), InterFace.getInstance().alphaHUD.getValue() * alpha), BLUR_RADIUS, 1, 1, 4);
+        // Единая панель: лицо и информация в одной подложке
+        float px = x + addALL;
 
-        drawFace(target, eventDisplay.getPartialTicks(), x + HEAD_OFFSET_X + addXHEADP, y + HEAD_OFFSET_Y, alpha);
+        RenderUtil.Render2D.hudPlate(px, y, w, h, alpha, rad, hudOpacity);
+        RenderUtil.Render2D.hudAccent(px, y, h, alpha, rad);
+
+        // Тонкая вертикальная линия между лицом и блоком информации
+        RenderUtil.Render2D.rect(px + HEAD_CONTAINER_W, y + HEAD_OFFSET_Y,
+                0.5F * S, h - HEAD_OFFSET_Y * 2, ColorUtil.getColor(255, 0.07F * alpha), 0.25F);
+
+        drawFace(target, eventDisplay.getPartialTicks(), px + HEAD_OFFSET_X, y + HEAD_OFFSET_Y, alpha);
 
         animHP.update();
         float barW = w - CONTENT_OFFSET_X - BAR_MARGIN_R;
@@ -183,7 +186,7 @@ public class TargetHud implements element {
         animHpText.update();
         animHpText.run(getHealth(target), 0.15F, Easings.LINEAR);
 
-        float barX = x + CONTENT_OFFSET_X + BAR_OFFSET_X + addALL;
+        float barX = px + CONTENT_OFFSET_X + BAR_OFFSET_X;
         float barY = y + h - BAR_OFFSET_Y;
 
         int hpColor = ColorUtil.getClientColor(1);
@@ -214,15 +217,15 @@ public class TargetHud implements element {
                 2
         );
 
-        Fonts.sf_regular.drawFadingText(name, x + addALL + CONTENT_OFFSET_X + BAR_OFFSET_X, y + NAME_Y,
+        Fonts.sf_regular.drawFadingText(name, px + CONTENT_OFFSET_X + BAR_OFFSET_X, y + NAME_Y,
                 w - CONTENT_OFFSET_X - BAR_OFFSET_X,
                 ColorUtil.getColor(255, alpha), NAME_SIZE);
 
         Fonts.sf_regular.draw("Здоровья: " + ColorFormatting.getColor(ColorUtil.replAlpha(ColorUtil.client(), alpha)) + hpText,
-                x + addALL + CONTENT_OFFSET_X + BAR_OFFSET_X,
+                px + CONTENT_OFFSET_X + BAR_OFFSET_X,
                 y + HP_Y, HP_SIZE, ColorUtil.getColor(255, alpha));
 
-        renderArmor(eventDisplay, target, x + ARMOR_X, y - ARMOR_Y - ANIM_OFFSET + ANIM_OFFSET * alpha, alpha);
+        renderArmor(eventDisplay, target, px + ARMOR_X, y - ARMOR_Y - ANIM_OFFSET + ANIM_OFFSET * alpha, alpha);
     }
 
     private void renderArmor(EventDisplay eventDisplay, LivingEntity entity, float armorX, float armorY, float alpha) {
@@ -242,9 +245,7 @@ public class TargetHud implements element {
         float bgW = armorItems.size() * ITEM_SIZE + ARMOR_PAD * 2;
         float bgH = ITEM_SIZE + ARMOR_PAD * 2;
 
-        RenderUtil.Render2D.glow(bgX, bgY, bgW, bgH - 0.5F * S, ColorUtil.getColor(0, 0.1F * alpha), 4 * S, GLOW_RADIUS, 1);
-        RenderUtil.Blur.glass(bgX, bgY, bgW, bgH, alpha, 4 * S,
-                ColorUtil.replAlpha(ColorUtil.background(), InterFace.getInstance().alphaHUD.getValue() * alpha), BLUR_RADIUS, 1, 1, 4);
+        RenderUtil.Render2D.hudPlate(bgX, bgY, bgW, bgH, alpha, 4 * S, InterFace.getInstance().alphaHUD.getValue());
 
         for (ItemStack stack : armorItems) {
             Matrix3x2fStack matrix = eventDisplay.getDrawContext().getMatrices();

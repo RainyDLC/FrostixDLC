@@ -189,6 +189,19 @@ public class RotationProcess extends Component {
     }
     private float animationNurik = 0.0F;
     private long currentTimeSpirits = 0;
+    /** Фаза сердцебиения для режима «Сердце»: интеграл частоты по времени. */
+    private long heartLastTime = 0L;
+    private float heartPhase = 0f;
+
+    // ── скретч-буферы кадра для ESP-режимов: ноль аллокаций в цикле рендера ──
+    private static final float[] SNOW_PX = new float[24], SNOW_PY = new float[24],
+            SNOW_PZ = new float[24], SNOW_SPIN = new float[24];
+    private static final float[] SWORD_PX = new float[16], SWORD_PY = new float[16],
+            SWORD_PZ = new float[16], SWORD_TILT = new float[16];
+    private static final float[] FIRE_OX = new float[64], FIRE_OY = new float[64], FIRE_OZ = new float[64],
+            FIRE_ALPHA = new float[64], FIRE_H = new float[64];
+    private static final int[] FIRE_RGB_OUT = new int[64], FIRE_RGB_CORE = new int[64];
+    private static final float[] HEART_HX = new float[48], HEART_HY = new float[48];
     public LivingEntity target = null;
     public Animation alpha = new Animation();
     public Animation alpha_2 = new Animation();
@@ -1334,6 +1347,30 @@ public class RotationProcess extends Component {
             lightningRenderer.render(e, immediate, target, alphaPC);
         }
 
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Кристаллы")) {
+            renderTargetCrystals(e, immediate, aura, target, alphaPC);
+        }
+
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Пентаграмма")) {
+            renderTargetPentagram(e, immediate, aura, target, alphaPC);
+        }
+
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Снег")) {
+            renderTargetSnow(e, immediate, aura, target, alphaPC);
+        }
+
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Сердце")) {
+            renderTargetHeart(e, immediate, aura, target, alphaPC);
+        }
+
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Огонь")) {
+            renderTargetFire(e, immediate, aura, target, alphaPC);
+        }
+
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Мечи")) {
+            renderTargetSwords(e, immediate, aura, target, alphaPC);
+        }
+
 
         immediate.draw();
 
@@ -1377,6 +1414,836 @@ public class RotationProcess extends Component {
         buf.vertex(m,  s, -s,  s).color(color); buf.vertex(m,  s,  s,  s).color(color);
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m, -s,  s,  s).color(color);
     }
+
+    /** Рой кристаллов-октаэдров, вращающихся вокруг таргета. */
+    private void renderTargetCrystals(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                      AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
+        int color = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC), redColor, alpha_2.get());
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
+        long timeDiff = currentTime - currentTimeSpirits;
+        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
+        currentTimeSpirits = currentTime;
+
+        float count = Math.max(1, aura.crystalCount.getValue().intValue());
+        float orbitSpeed = aura.crystalSpeed.getValue();
+        float radius = aura.crystalRadius.getValue() + target.getWidth() * 0.3f + 0.15f;
+        float size = aura.crystalSize.getValue();
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+
+        float centerY = target.getHeight() * 0.55f;
+        float heightSpread = target.getHeight() * 0.28f;
+
+        int glowColor = ColorUtil.multAlpha(color, 0.3f);
+        int fillTop = ColorUtil.replAlpha(color, (int) (alphaPC * 80));
+        int fillBottom = ColorUtil.replAlpha(color, (int) (alphaPC * 40));
+        int lineColor = ColorUtil.replAlpha(color, (int) (alphaPC * 235));
+
+        for (int pass = 0; pass < 3; pass++) {
+            VertexConsumer buf = switch (pass) {
+                case 0 -> immediate.getBuffer(ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+                case 1 -> immediate.getBuffer(RING_FILL_LAYER);
+                default -> immediate.getBuffer(RING_LINE_LAYER);
+            };
+
+            for (int i = 0; i < (int) count; i++) {
+                float baseAngle = i * (360f / count) + animationNurik * 2.0f * orbitSpeed;
+
+                float sin = (float) Math.sin(Math.toRadians(baseAngle));
+                float cos = (float) Math.cos(Math.toRadians(baseAngle));
+                double x = targetPos.x + cos * radius;
+                double z = targetPos.z + sin * radius;
+                double y = targetPos.y + centerY
+                        + Math.sin(Math.toRadians(baseAngle * 3.0f + i * 53.0f)) * heightSpread;
+
+                matrices.push();
+                matrices.translate(x - cameraPos.x, y - cameraPos.y, z - cameraPos.z);
+
+                if (pass == 0) {
+                    matrices.multiply(mc.gameRenderer.getCamera().getRotation());
+                    float gs = size * 5.0f;
+                    matrices.scale(gs, gs, gs);
+                    drawGradientQuad(buf, matrices.peek().getPositionMatrix(),
+                            glowColor, glowColor, glowColor, glowColor,
+                            (int) (alphaPC * 0.35f * 255));
+                } else {
+                    matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(animationNurik * 4.0f * orbitSpeed + i * 37.0f));
+                    matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(24.0f
+                            + 8.0f * (float) Math.sin(Math.toRadians(animationNurik * 1.7f + i * 29.0f))));
+                    Matrix4f matrix = matrices.peek().getPositionMatrix();
+
+                    if (pass == 1) {
+                        drawCrystalFill(buf, matrix, size, size * 1.7f, fillTop, fillBottom);
+                    } else {
+                        drawCrystalOutline(buf, matrix, size, size * 1.7f, lineColor);
+                    }
+                }
+
+                matrices.pop();
+            }
+        }
+    }
+
+    /** Октаэдр: 8 треугольных граней (в QUADS дублируем последнюю вершину). */
+    private static void drawCrystalFill(VertexConsumer buf, Matrix4f m, float r, float h, int topColor, int bottomColor) {
+        float ax = r, az = 0;
+        float bx = 0, bz = r;
+        float cx = -r, cz = 0;
+        float dx = 0, dz = -r;
+
+        buf.vertex(m, 0, h, 0).color(topColor);  buf.vertex(m, ax, 0, az).color(topColor);
+        buf.vertex(m, bx, 0, bz).color(topColor); buf.vertex(m, bx, 0, bz).color(topColor);
+
+        buf.vertex(m, 0, h, 0).color(topColor);  buf.vertex(m, bx, 0, bz).color(topColor);
+        buf.vertex(m, cx, 0, cz).color(topColor); buf.vertex(m, cx, 0, cz).color(topColor);
+
+        buf.vertex(m, 0, h, 0).color(topColor);  buf.vertex(m, cx, 0, cz).color(topColor);
+        buf.vertex(m, dx, 0, dz).color(topColor); buf.vertex(m, dx, 0, dz).color(topColor);
+
+        buf.vertex(m, 0, h, 0).color(topColor);  buf.vertex(m, dx, 0, dz).color(topColor);
+        buf.vertex(m, ax, 0, az).color(topColor); buf.vertex(m, ax, 0, az).color(topColor);
+
+        buf.vertex(m, 0, -h, 0).color(bottomColor); buf.vertex(m, bx, 0, bz).color(bottomColor);
+        buf.vertex(m, ax, 0, az).color(bottomColor); buf.vertex(m, ax, 0, az).color(bottomColor);
+
+        buf.vertex(m, 0, -h, 0).color(bottomColor); buf.vertex(m, cx, 0, cz).color(bottomColor);
+        buf.vertex(m, bx, 0, bz).color(bottomColor); buf.vertex(m, bx, 0, bz).color(bottomColor);
+
+        buf.vertex(m, 0, -h, 0).color(bottomColor); buf.vertex(m, dx, 0, dz).color(bottomColor);
+        buf.vertex(m, cx, 0, cz).color(bottomColor); buf.vertex(m, cx, 0, cz).color(bottomColor);
+
+        buf.vertex(m, 0, -h, 0).color(bottomColor); buf.vertex(m, ax, 0, az).color(bottomColor);
+        buf.vertex(m, dx, 0, dz).color(bottomColor); buf.vertex(m, dx, 0, dz).color(bottomColor);
+    }
+
+    /** Рёбра октаэдра для DEBUG_LINES: парами вершин. */
+    private static void drawCrystalOutline(VertexConsumer buf, Matrix4f m, float r, float h, int color) {
+        float[][] eq = {{r, 0}, {0, r}, {-r, 0}, {0, -r}};
+        for (int k = 0; k < 4; k++) {
+            float[] cur = eq[k];
+            float[] next = eq[(k + 1) % 4];
+
+            buf.vertex(m, 0, h, 0).color(color);
+            buf.vertex(m, cur[0], 0, cur[1]).color(color);
+
+            buf.vertex(m, 0, -h, 0).color(color);
+            buf.vertex(m, cur[0], 0, cur[1]).color(color);
+
+            buf.vertex(m, cur[0], 0, cur[1]).color(color);
+            buf.vertex(m, next[0], 0, next[1]).color(color);
+        }
+    }
+
+    /** Светящаяся пентаграмма на земле под целью. */
+    private void renderTargetPentagram(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                       AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
+        int base = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC), redColor, alpha_2.get());
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
+        long timeDiff = currentTime - currentTimeSpirits;
+        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
+        currentTimeSpirits = currentTime;
+
+        float speed = aura.pentaSpeed.getValue();
+        float r = (aura.pentaRadius.getValue() + target.getWidth() * 0.35f)
+                * (1.0f + 0.04f * (float) Math.sin(Math.toRadians(animationNurik * 6.0f)));
+        float spin = animationNurik * 2.2f * speed;
+        int aSoft = (int) (alphaPC * 36);
+        int aRibbon = (int) (alphaPC * 150);
+        int aCore = (int) (alphaPC * 235);
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x,
+                targetPos.y - cameraPos.y + 0.06f,
+                targetPos.z - cameraPos.z);
+        Matrix4f m = matrices.peek().getPositionMatrix();
+
+        // вершины пентакля
+        float[] tipX = new float[5];
+        float[] tipZ = new float[5];
+        for (int k = 0; k < 5; k++) {
+            double a = Math.toRadians(spin + k * 72.0);
+            tipX[k] = (float) (Math.cos(a) * r);
+            tipZ[k] = (float) (Math.sin(a) * r);
+        }
+
+        // --- Pass 1: свечение (текстурные квады лежат на земле) ---
+        VertexConsumer texBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+
+        matrices.push();
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90.0f));
+        float cg = r * 1.6f;
+        matrices.scale(cg, cg, cg);
+        drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                base, base, base, base, aSoft * 2);
+        matrices.pop();
+
+        for (int k = 0; k < 5; k++) {
+            matrices.push();
+            matrices.translate(tipX[k], 0, tipZ[k]);
+            matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90.0f));
+            float gs = r * 0.34f;
+            matrices.scale(gs, gs, gs);
+            int tipCol = ColorUtil.overCol(ColorUtil.fade(k * 48), redColor, alpha_2.get());
+            drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                    tipCol, tipCol, tipCol, tipCol, (int) (alphaPC * 110));
+            matrices.pop();
+        }
+
+        // --- Pass 2: заливки-ленты ---
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+
+        // мягкий диск под сигилой: центр ярче, край растворяется
+        int discSegs = 64;
+        for (int i = 0; i < discSegs; i++) {
+            float a0 = (float) (Math.PI * 2.0 * i / discSegs);
+            float a1 = (float) (Math.PI * 2.0 * (i + 1) / discSegs);
+            float x0 = (float) Math.cos(a0) * r * 1.32f;
+            float z0 = (float) Math.sin(a0) * r * 1.32f;
+            float x1 = (float) Math.cos(a1) * r * 1.32f;
+            float z1 = (float) Math.sin(a1) * r * 1.32f;
+            fillBuf.vertex(m, 0, 0, 0).color(ColorUtil.replAlpha(base, aSoft));
+            fillBuf.vertex(m, x0, 0, z0).color(ColorUtil.replAlpha(base, 0));
+            fillBuf.vertex(m, x1, 0, z1).color(ColorUtil.replAlpha(base, 0));
+            fillBuf.vertex(m, x1, 0, z1).color(ColorUtil.replAlpha(base, 0));
+        }
+
+        float w = r * 0.032f + 0.008f;
+
+        // классический пентакль: хорды 0-2-4-1-3 с градиентом по кончикам
+        for (int k = 0; k < 5; k++) {
+            int nk = (k + 2) % 5;
+            int c0 = ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(k * 48), 0.85F), redColor, alpha_2.get());
+            int c1 = ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(nk * 48), 0.85F), redColor, alpha_2.get());
+            pentagramRibbon(fillBuf, m, tipX[k], tipZ[k], tipX[nk], tipZ[nk], w,
+                    ColorUtil.replAlpha(c0, aRibbon), ColorUtil.replAlpha(c1, aRibbon));
+        }
+
+        // внутренний пятиугольник (пересечения хорд)
+        for (int k = 0; k < 5; k++) {
+            int nk = (k + 1) % 5;
+            pentagramRibbon(fillBuf, m,
+                    tipX[k] * 0.382f, tipZ[k] * 0.382f,
+                    tipX[nk] * 0.382f, tipZ[nk] * 0.382f,
+                    w * 0.7f,
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 110)),
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 110)));
+        }
+
+        // круги через кончики и внешний контур
+        for (int i = 0; i < discSegs; i++) {
+            float a0 = (float) (Math.PI * 2.0 * i / discSegs);
+            float a1 = (float) (Math.PI * 2.0 * (i + 1) / discSegs);
+            pentagramRibbon(fillBuf, m,
+                    (float) Math.cos(a0) * r, (float) Math.sin(a0) * r,
+                    (float) Math.cos(a1) * r, (float) Math.sin(a1) * r,
+                    w * 0.75f,
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 130)),
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 130)));
+            pentagramRibbon(fillBuf, m,
+                    (float) Math.cos(a0) * r * 1.16f, (float) Math.sin(a0) * r * 1.16f,
+                    (float) Math.cos(a1) * r * 1.16f, (float) Math.sin(a1) * r * 1.16f,
+                    w * 0.55f,
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 80)),
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 80)));
+        }
+
+        // внешняя контр-вращающаяся пентаграмма
+        float rOuter = r * 1.32f;
+        int faint = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(180), 0.8F), redColor, alpha_2.get()),
+                (int) (alphaPC * 60));
+        float spin2 = -spin * 0.7f + 36.0f;
+        for (int k = 0; k < 5; k++) {
+            double a0 = Math.toRadians(spin2 + k * 72.0);
+            double a1 = Math.toRadians(spin2 + ((k + 2) % 5) * 72.0);
+            pentagramRibbon(fillBuf, m,
+                    (float) (Math.cos(a0) * rOuter), (float) (Math.sin(a0) * rOuter),
+                    (float) (Math.cos(a1) * rOuter), (float) (Math.sin(a1) * rOuter),
+                    w * 0.5f, faint, faint);
+        }
+
+        // --- Pass 3: тонкие яркие сердцевины линий ---
+        VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
+        int coreCol = ColorUtil.replAlpha(base, aCore);
+        for (int i = 0; i < discSegs; i++) {
+            float a0 = (float) (Math.PI * 2.0 * i / discSegs);
+            float a1 = (float) (Math.PI * 2.0 * (i + 1) / discSegs);
+            lineBuf.vertex(m, (float) Math.cos(a0) * r, 0, (float) Math.sin(a0) * r).color(coreCol);
+            lineBuf.vertex(m, (float) Math.cos(a1) * r, 0, (float) Math.sin(a1) * r).color(coreCol);
+        }
+        for (int k = 0; k < 5; k++) {
+            int nk = (k + 2) % 5;
+            lineBuf.vertex(m, tipX[k], 0, tipZ[k]).color(coreCol);
+            lineBuf.vertex(m, tipX[nk], 0, tipZ[nk]).color(coreCol);
+        }
+        for (int k = 0; k < 5; k++) {
+            int nk = (k + 1) % 5;
+            lineBuf.vertex(m, tipX[k] * 0.382f, 0, tipZ[k] * 0.382f).color(coreCol);
+            lineBuf.vertex(m, tipX[nk] * 0.382f, 0, tipZ[nk] * 0.382f).color(coreCol);
+        }
+
+        matrices.pop();
+    }
+
+    /** Отрезок на плоскости XZ как тонкая лента-квад шириной width. */
+    private static void pentagramRibbon(VertexConsumer buf, Matrix4f m,
+                                        float x0, float z0, float x1, float z1,
+                                        float width, int c0, int c1) {
+        float dx = x1 - x0, dz = z1 - z0;
+        float len = (float) Math.sqrt(dx * dx + dz * dz);
+        if (len < 1e-5f) return;
+        float nx = (dz / len) * width;
+        float nz = (-dx / len) * width;
+
+        buf.vertex(m, x0 + nx, 0, z0 + nz).color(c0);
+        buf.vertex(m, x1 + nx, 0, z1 + nz).color(c1);
+        buf.vertex(m, x1 - nx, 0, z1 - nz).color(c1);
+        buf.vertex(m, x0 - nx, 0, z0 - nz).color(c0);
+    }
+
+    /**
+     * Снег вокруг цели: снежинки-биллборды на орбитах.
+     * Каждая — шесть заострённых лучей (три перекрестия) + мягкое свечение,
+     * крутится вокруг своей оси и плавно покачивается по высоте.
+     * Слои рисуются строго последовательно: сначала всё свечение, потом все лучи.
+     */
+    private void renderTargetSnow(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                  AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
+        int snowWhite = ColorUtil.getColor(235, 245, 255);
+        int color = ColorUtil.overCol(
+                ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC), snowWhite, 0.55f),
+                redColor, alpha_2.get());
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
+        long timeDiff = currentTime - currentTimeSpirits;
+        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
+        currentTimeSpirits = currentTime;
+
+        int count = Math.max(1, aura.snowCount.getValue().intValue());
+        float speed = aura.snowSpeed.getValue();
+        float radius = aura.snowRadius.getValue() + target.getWidth() * 0.35f + 0.1f;
+        float size = aura.snowSize.getValue();
+        float bodyH = target.getHeight();
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+
+        // геометрия считаем один раз, используем в обоих проходах (буферы без аллокаций)
+        float[] pxArr = SNOW_PX;
+        float[] pyArr = SNOW_PY;
+        float[] pzArr = SNOW_PZ;
+        float[] spinArr = SNOW_SPIN;
+
+        for (int i = 0; i < count; i++) {
+            // золотое сечение — равномерный разброс высот без «рядов»
+            float heightFrac = 0.22f + 0.6f * ((i * 0.618f) % 1f);
+            double orbA = Math.toRadians(
+                    animationNurik * 1.4f * speed * ((i % 2 == 0) ? 1f : -1f) + i * (360.0 / count));
+
+            pxArr[i] = (float) Math.cos(orbA) * radius;
+            pzArr[i] = (float) Math.sin(orbA) * radius;
+            pyArr[i] = bodyH * heightFrac
+                    + (float) Math.sin(Math.toRadians(animationNurik * 1.3f + i * 61.0)) * bodyH * 0.08f;
+            spinArr[i] = animationNurik * 2.6f * speed * ((i % 2 == 0) ? 1f : -1f) + i * 53f;
+        }
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
+
+        // --- Pass 1: мягкое свечение под каждой снежинкой ---
+        VertexConsumer texBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+
+        for (int i = 0; i < count; i++) {
+            matrices.push();
+            matrices.translate(pxArr[i], pyArr[i], pzArr[i]);
+            matrices.multiply(mc.gameRenderer.getCamera().getRotation());
+            float g = size * 4.5f;
+            matrices.scale(g, g, g);
+            drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                    color, color, color, color, (int) (alphaPC * 110));
+            matrices.pop();
+        }
+
+        // --- Pass 2: сами снежинки — три перекрестия заострённых лучей ---
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+
+        float L = size * 1.5f;
+        float W = Math.max(size * 0.24f, 0.012f);
+        int col = ColorUtil.replAlpha(color, (int) (alphaPC * 230));
+        int dotCol = ColorUtil.replAlpha(snowWhite, (int) (alphaPC * 255));
+
+        for (int i = 0; i < count; i++) {
+            matrices.push();
+            matrices.translate(pxArr[i], pyArr[i], pzArr[i]);
+            matrices.multiply(mc.gameRenderer.getCamera().getRotation());
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(spinArr[i]));
+
+            for (int k = 0; k < 3; k++) {
+                matrices.push();
+                matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(k * 60f));
+                Matrix4f bm = matrices.peek().getPositionMatrix();
+
+                // луч-«шип»: вытянутый шестиугольник из двух квадов
+                fillBuf.vertex(bm, -L, -W * 0.45f, 0).color(col);
+                fillBuf.vertex(bm, -L * 0.42f, -W, 0).color(col);
+                fillBuf.vertex(bm, L * 0.42f, -W, 0).color(col);
+                fillBuf.vertex(bm, L, -W * 0.45f, 0).color(col);
+
+                fillBuf.vertex(bm, L, W * 0.45f, 0).color(col);
+                fillBuf.vertex(bm, L * 0.42f, W, 0).color(col);
+                fillBuf.vertex(bm, -L * 0.42f, W, 0).color(col);
+                fillBuf.vertex(bm, -L, W * 0.45f, 0).color(col);
+
+                matrices.pop();
+            }
+
+            // яркая сердцевина
+            Matrix4f dm = matrices.peek().getPositionMatrix();
+            fillBuf.vertex(dm, -W, -W, 0).color(dotCol);
+            fillBuf.vertex(dm, W, -W, 0).color(dotCol);
+            fillBuf.vertex(dm, W, W, 0).color(dotCol);
+            fillBuf.vertex(dm, -W, W, 0).color(dotCol);
+
+            matrices.pop();
+        }
+
+        matrices.pop();
+    }
+
+    /**
+     * Сердце над целью: бьётся тем быстрее, чем меньше здоровья у противника.
+     * «Тук-тук» — два толчка за цикл, на каждом ударе расходится кольцо-волна.
+     */
+    private void renderTargetHeart(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                   AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 20.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        // доля здоровья цели
+        float hpMax = target.getMaxHealth() + target.getAbsorptionAmount();
+        float hpNow = target.getHealth() + target.getAbsorptionAmount();
+        float hpFrac = hpMax <= 0f ? 1f : Math.min(hpNow / hpMax, 1f);
+        float lowHp = 1f - hpFrac;
+
+        // фаза сердцебиения: интегрируем частоту по времени (при низком ХП — быстрее)
+        long now = System.currentTimeMillis();
+        if (heartLastTime == 0L) heartLastTime = now;
+        long dtMs = now - heartLastTime;
+        heartLastTime = now;
+        float bpm = (55f + 170f * lowHp * lowHp) * aura.heartSpeed.getValue();
+        heartPhase += dtMs / 1000f * (bpm / 60f);
+
+        float f = heartPhase % 1f;
+        // «тук-тук»: основной толчок + второй слабее
+        float pulse = (float) (Math.exp(-7.0 * f) + 0.5 * Math.exp(-11.0 * Math.abs(f - 0.24)));
+        pulse = Math.min(pulse, 1.4f);
+
+        float beatScale = 1f + 0.20f * pulse;
+
+        int hurtRed = ColorUtil.getColor(255, 90, 90, (int) (255.0f * alphaPC));
+        int baseCol = ColorUtil.overCol(ColorUtil.getColor(255, 92, 120),
+                ColorUtil.getColor(255, 34, 56), lowHp);
+        int col = ColorUtil.overCol(ColorUtil.multAlpha(baseCol, alphaPC), hurtRed, alpha_2.get());
+        int hotCol = ColorUtil.replAlpha(
+                ColorUtil.overCol(ColorUtil.getColor(255, 195, 210), ColorUtil.getColor(255, 125, 145), lowHp),
+                (int) (alphaPC * 235));
+        int fillCol = ColorUtil.replAlpha(col, (int) (alphaPC * (70 + 50 * pulse)));
+
+        float size = aura.heartSize.getValue();
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
+        matrices.push();
+        matrices.translate(0,
+                target.getHeight() * 0.62f + 0.05f * (float) Math.sin(now / 420.0),
+                0);
+        matrices.multiply(mc.gameRenderer.getCamera().getRotation());
+
+        float k = size / 34f * beatScale;
+
+        // контур сердца: классическая параметрическая кривая (буферы без аллокаций)
+        final int SEGS = 48;
+        float[] hxArr = HEART_HX;
+        float[] hyArr = HEART_HY;
+        for (int i = 0; i < SEGS; i++) {
+            double t = Math.PI * 2.0 * i / SEGS;
+            hxArr[i] = (float) (16.0 * Math.pow(Math.sin(t), 3)) * k;
+            hyArr[i] = (float) (13.0 * Math.cos(t) - 5.0 * Math.cos(2 * t)
+                    - 2.0 * Math.cos(3 * t) - Math.cos(4 * t)) * k
+                    + 6f * k;   // вертикальное центрирование
+        }
+
+        // --- Pass 1: свечение ---
+        VertexConsumer texBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+        matrices.push();
+        float g = size * beatScale * (1.6f + 0.5f * pulse);
+        matrices.scale(g, g, g);
+        drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                col, col, col, col, (int) (alphaPC * (85 + 55 * pulse)));
+        matrices.pop();
+
+        // --- Pass 2: заливка сердца веером ---
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+        Matrix4f m = matrices.peek().getPositionMatrix();
+        for (int i = 0; i < SEGS; i++) {
+            int j = (i + 1) % SEGS;
+            fillBuf.vertex(m, 0, 0, 0).color(fillCol);
+            fillBuf.vertex(m, hxArr[i], hyArr[i], 0).color(fillCol);
+            fillBuf.vertex(m, hxArr[j], hyArr[j], 0).color(fillCol);
+            fillBuf.vertex(m, hxArr[j], hyArr[j], 0).color(fillCol);
+        }
+
+        // волна от удара: расширяющееся кольцо в плоскости биллборда
+        if (f < 0.38f) {
+            float rf = f / 0.38f;
+            float ringR = size * (0.65f + 0.85f * rf) * beatScale;
+            float ringW = size * 0.05f;
+            int ringCol = ColorUtil.replAlpha(col, (int) (alphaPC * (1f - rf) * 120));
+            for (int i = 0; i < SEGS; i++) {
+                double a0 = Math.PI * 2.0 * i / SEGS;
+                double a1 = Math.PI * 2.0 * (i + 1) / SEGS;
+                fillBuf.vertex(m, (float) Math.cos(a0) * ringR, (float) Math.sin(a0) * ringR, 0).color(ringCol);
+                fillBuf.vertex(m, (float) Math.cos(a1) * ringR, (float) Math.sin(a1) * ringR, 0).color(ringCol);
+                fillBuf.vertex(m, (float) Math.cos(a1) * (ringR - ringW), (float) Math.sin(a1) * (ringR - ringW), 0).color(ringCol);
+                fillBuf.vertex(m, (float) Math.cos(a0) * (ringR - ringW), (float) Math.sin(a0) * (ringR - ringW), 0).color(ringCol);
+            }
+        }
+
+        // --- Pass 3: яркий контур ---
+        VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
+        for (int i = 0; i < SEGS; i++) {
+            int j = (i + 1) % SEGS;
+            lineBuf.vertex(m, hxArr[i], hyArr[i], 0).color(hotCol);
+            lineBuf.vertex(m, hxArr[j], hyArr[j], 0).color(hotCol);
+        }
+
+        matrices.pop();
+        matrices.pop();
+    }
+
+    /**
+     * Огненный вихрь вокруг цели: частицы закручиваются по спирали и поднимаются
+     * вверх, меняя цвет красный → оранжевый → жёлтый и сужаясь к вершине.
+     * Слои рисуются строго последовательно: сначала внешнее свечение, потом ядра.
+     */
+    private void renderTargetFire(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                  AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int hurtRed = ColorUtil.getColor(255, 60, 40);
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
+        long timeDiff = currentTime - currentTimeSpirits;
+        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
+        currentTimeSpirits = currentTime;
+
+        int count = Math.max(4, aura.fireCount.getValue().intValue());
+        float speed = aura.fireSpeed.getValue();
+        float radiusMul = aura.fireRadius.getValue();
+        float heightMul = aura.fireHeight.getValue();
+        float atts = alpha_2.get();
+
+        float bodyH = target.getHeight();
+        float baseR = (target.getWidth() * 0.55f + 0.22f) * radiusMul;
+        float riseH = bodyH * 0.95f * heightMul;
+        float tSec = animationNurik / 60f;
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+        var camRot = mc.gameRenderer.getCamera().getRotation();
+
+        // предрасчёт частиц кадра (буферы без аллокаций)
+        float[] oxArr = FIRE_OX;
+        float[] oyArr = FIRE_OY;
+        float[] ozArr = FIRE_OZ;
+        int[] outRgb = FIRE_RGB_OUT;
+        int[] coreRgb = FIRE_RGB_CORE;
+        float[] outAlpha = FIRE_ALPHA;
+        float[] outH = FIRE_H;
+
+        for (int i = 0; i < count; i++) {
+            float seed = (i * 0.618034f) % 1f;
+            float cyc = (tSec * 0.85f * speed + seed * 13.7f) % 1f;   // цикл жизни частицы
+
+            // вихрь: подъём с докручиванием, сужение кверху
+            float ang = seed * (float) Math.PI * 2f + tSec * 1.5f * speed + cyc * 2.6f;
+            float r = baseR * (1f - 0.45f * cyc) * (0.82f + 0.36f * (float) Math.sin(seed * 41f));
+            oxArr[i] = (float) Math.cos(ang) * r;
+            ozArr[i] = (float) Math.sin(ang) * r;
+            oyArr[i] = 0.05f + cyc * riseH
+                    + 0.03f * (float) Math.sin(tSec * 3f + seed * 31f);
+
+            // появление/затухание за цикл
+            float fadeIn = smooth01(cyc / 0.14f);
+            float fadeOut = 1f - smooth01((cyc - 0.7f) / 0.3f);
+            float env = Math.max(0f, fadeIn * fadeOut);
+            float flicker = 0.72f + 0.28f * (float) Math.sin(tSec * 13f + seed * 97f);
+
+            // цвет по высоте пламени: красный → оранжевый → жёлтый
+            int rgb;
+            if (cyc < 0.5f) rgb = fireLerp(0xFF3C0A, 0xFF8C19, cyc * 2f);
+            else rgb = fireLerp(0xFF8C19, 0xFFE16E, (cyc - 0.5f) * 2f);
+            outRgb[i] = ColorUtil.overCol(rgb, hurtRed, atts);
+            coreRgb[i] = ColorUtil.overCol(fireLerp(rgb, 0xFFF0B4, 0.55f), hurtRed, atts);
+
+            outAlpha[i] = alphaPC * env * flicker;
+            outH[i] = bodyH * (0.10f + 0.13f * cyc) * heightMul * (0.85f + 0.3f * flicker);
+        }
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
+
+        // --- Pass 1: мягкое внешнее свечение ---
+        VertexConsumer glowBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_2.png")));
+        for (int i = 0; i < count; i++) {
+            if (outAlpha[i] <= 0.02f) continue;
+            float h = outH[i] * 1.6f;
+
+            matrices.push();
+            matrices.translate(oxArr[i], oyArr[i], ozArr[i]);
+            matrices.multiply(camRot);
+            float s = h * 2f;
+            matrices.scale(s, s, s);
+            Matrix4f mm = matrices.peek().getPositionMatrix();
+            drawGradientQuad(glowBuf, mm, outRgb[i], outRgb[i], outRgb[i], outRgb[i],
+                    (int) (outAlpha[i] * 105));
+            matrices.pop();
+        }
+
+        // --- Pass 2: яркие ядра языков ---
+        VertexConsumer coreBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+        for (int i = 0; i < count; i++) {
+            if (outAlpha[i] <= 0.02f) continue;
+            float h = outH[i] * 0.75f;
+
+            matrices.push();
+            matrices.translate(oxArr[i], oyArr[i], ozArr[i]);
+            matrices.multiply(camRot);
+            float s = h * 2f;
+            matrices.scale(s, s, s);
+            Matrix4f mm = matrices.peek().getPositionMatrix();
+            drawGradientQuad(coreBuf, mm, coreRgb[i], coreRgb[i], coreRgb[i], coreRgb[i],
+                    (int) (outAlpha[i] * 220));
+            matrices.pop();
+        }
+
+        matrices.pop();
+    }
+
+    /** Плавный step 0..1 с клампом. */
+    private static float smooth01(float x) {
+        x = Math.max(0f, Math.min(1f, x));
+        return x * x * (3f - 2f * x);
+    }
+
+    private static int fireLerp(int a, int b, float t) {
+        t = Math.max(0f, Math.min(1f, t));
+        int ra = (a >> 16) & 0xFF, ga = (a >> 8) & 0xFF, ba = a & 0xFF;
+        int rb = (b >> 16) & 0xFF, gb = (b >> 8) & 0xFF, bb = b & 0xFF;
+        return ((int) (ra + (rb - ra) * t) << 16)
+                | ((int) (ga + (gb - ga) * t) << 8)
+                | (int) (ba + (bb - ba) * t);
+    }
+
+    /** Лента-отрезок в плоскости XY (для билбордов: мечи и т.п.). */
+    private static void xyRibbon(VertexConsumer buf, Matrix4f m,
+                                 float x0, float y0, float x1, float y1,
+                                 float w, int c) {
+        float dx = x1 - x0, dy = y1 - y0;
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-5f) return;
+        float nx = (-dy / len) * w;
+        float ny = (dx / len) * w;
+
+        buf.vertex(m, x0 + nx, y0 + ny, 0).color(c);
+        buf.vertex(m, x1 + nx, y1 + ny, 0).color(c);
+        buf.vertex(m, x1 - nx, y1 - ny, 0).color(c);
+        buf.vertex(m, x0 - nx, y0 - ny, 0).color(c);
+    }
+
+    /**
+     * Мечи вокруг цели: пары клинков остриём вниз кружат по орбите.
+     * Каждый меч — биллборд: заострённый клинок, гарда, рукоять, навершие;
+     * лёгкое покачивание и вертикальный дрейф. Слои строго последовательные.
+     */
+    private void renderTargetSwords(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                    AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
+        int color = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC), redColor, alpha_2.get());
+        float atts = alpha_2.get();
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
+        long timeDiff = currentTime - currentTimeSpirits;
+        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
+        currentTimeSpirits = currentTime;
+
+        int count = Math.max(2, aura.swordsCount.getValue().intValue());
+        float speed = aura.swordsSpeed.getValue();
+        float radius = aura.swordsRadius.getValue() + target.getWidth() * 0.35f + 0.1f;
+        float size = aura.swordsSize.getValue();
+        float bodyH = target.getHeight();
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+
+        // геометрия кадра (переиспользуемые буферы)
+        float[] pxArr = SWORD_PX;
+        float[] pyArr = SWORD_PY;
+        float[] pzArr = SWORD_PZ;
+        float[] tiltArr = SWORD_TILT;
+
+        for (int i = 0; i < count; i++) {
+            double orbA = Math.toRadians(
+                    animationNurik * 1.5f * speed * ((i % 2 == 0) ? 1f : -1f) + i * (360.0 / count));
+            pxArr[i] = (float) (Math.cos(orbA) * radius);
+            pzArr[i] = (float) (Math.sin(orbA) * radius);
+            pyArr[i] = bodyH * 0.55f
+                    + (float) Math.sin(Math.toRadians(animationNurik * 1.2f + i * 71.0)) * bodyH * 0.06f;
+            // лёгкий наклон в сторону вращения
+            tiltArr[i] = 10f * (float) Math.sin(Math.toRadians(animationNurik * 1.8f + i * 47f))
+                    * ((i % 2 == 0) ? 1f : -1f);
+        }
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
+
+        // ── Pass 1: мягкое свечение под каждым мечом ──
+        VertexConsumer texBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_2.png")));
+        for (int i = 0; i < count; i++) {
+            matrices.push();
+            matrices.translate(pxArr[i], pyArr[i], pzArr[i]);
+            matrices.multiply(mc.gameRenderer.getCamera().getRotation());
+            float g = size * 2.6f;
+            matrices.scale(g, g, g);
+            drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                    color, color, color, color, (int) (alphaPC * 70));
+            matrices.pop();
+        }
+
+        // ── Pass 2: сам меч ──
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+
+        for (int i = 0; i < count; i++) {
+            matrices.push();
+            matrices.translate(pxArr[i], pyArr[i], pzArr[i]);
+            matrices.multiply(mc.gameRenderer.getCamera().getRotation());
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(tiltArr[i]));
+
+            Matrix4f m = matrices.peek().getPositionMatrix();
+
+            // пропорции меча (остриё вниз): s — полная длина
+            float bladeTipY = -size * 0.50f;   // остриё
+            float bladeBaseY = size * 0.18f;   // основание клинка у гарды
+            float wb = size * 0.055f;          // полуширина клинка
+            float shoulderY = -size * 0.30f;   // начало скоса к острию
+
+            int bladeCol = ColorUtil.replAlpha(
+                    ColorUtil.overCol(ColorUtil.getColor(225, 232, 245), redColor, atts),
+                    (int) (alphaPC * 200));
+            int edgeCol = ColorUtil.replAlpha(color, (int) (alphaPC * 160));
+            int guardCol = ColorUtil.replAlpha(
+                    ColorUtil.overCol(ColorUtil.fade(90), redColor, atts), (int) (alphaPC * 220));
+            int gripCol = ColorUtil.replAlpha(
+                    ColorUtil.overCol(ColorUtil.getColor(120, 90, 60), redColor, atts), (int) (alphaPC * 210));
+            int pommelCol = guardCol;
+
+            // клинок: вытянутый шестиугольник остриём вниз (2 квада)
+            fillBuf.vertex(m, 0, bladeTipY, 0).color(bladeCol);
+            fillBuf.vertex(m, -wb, shoulderY, 0).color(edgeCol);
+            fillBuf.vertex(m, -wb, bladeBaseY, 0).color(bladeCol);
+            fillBuf.vertex(m, -wb * 0.4f, bladeBaseY, 0).color(bladeCol);
+
+            fillBuf.vertex(m, wb * 0.4f, bladeBaseY, 0).color(bladeCol);
+            fillBuf.vertex(m, wb, bladeBaseY, 0).color(bladeCol);
+            fillBuf.vertex(m, wb, shoulderY, 0).color(edgeCol);
+            fillBuf.vertex(m, 0, bladeTipY, 0).color(bladeCol);
+
+            // дол: тонкая светлая линия вдоль середины клинка
+            xyRibbon(fillBuf, m, 0, bladeTipY + size * 0.06f, 0, bladeBaseY - size * 0.02f,
+                    size * 0.012f, ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (alphaPC * 150)));
+
+            // гарда: горизонтальная перекладина
+            xyRibbon(fillBuf, m, -size * 0.13f, bladeBaseY + size * 0.02f,
+                    size * 0.13f, bladeBaseY + size * 0.02f, size * 0.032f, guardCol);
+
+            // рукоять
+            xyRibbon(fillBuf, m, 0, bladeBaseY + size * 0.04f,
+                    0, bladeBaseY + size * 0.17f, size * 0.024f, gripCol);
+
+            // навершие
+            float py = bladeBaseY + size * 0.20f;
+            float pq = size * 0.028f;
+            fillBuf.vertex(m, -pq, py - pq, 0).color(pommelCol);
+            fillBuf.vertex(m, pq, py - pq, 0).color(pommelCol);
+            fillBuf.vertex(m, pq, py + pq, 0).color(pommelCol);
+            fillBuf.vertex(m, -pq, py + pq, 0).color(pommelCol);
+
+            matrices.pop();
+        }
+
+        matrices.pop();
+    }
+
+
 
 
     private static void drawGradientQuad(VertexConsumer buffer, Matrix4f matrix,int color,int color2,int color3,int color4, int alpha) {

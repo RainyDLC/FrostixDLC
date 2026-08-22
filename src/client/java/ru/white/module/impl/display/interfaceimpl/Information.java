@@ -90,8 +90,8 @@ public class Information implements element {
         // 15 + 5 + 15 + 3 + 4 + 15 отступов исходной вёрстки
         float w2 = 57F * S + coordsW + bpsW + tpsW;
 
-        RenderUtil.Render2D.glow(x,y,w2,H - 0.5F,ColorUtil.getColor(0,0.1F),RADIUS,8,1);
-        RenderUtil.Blur.blur(x,y,w2,H,1,RADIUS, ColorUtil.replAlpha(ColorUtil.background(),InterFace.getInstance().alphaHUD.getValue()));
+        RenderUtil.Render2D.hudPlate(x, y, w2, H, 1, RADIUS, InterFace.getInstance().alphaHUD.getValue());
+        RenderUtil.Render2D.hudAccent(x, y, H, 1, RADIUS);
 
         Fonts.rainydlc_2.draw("W",x + ICON_X,y + ICON_Y,ICON,ColorUtil.getClientColor(1));
 

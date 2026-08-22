@@ -62,8 +62,10 @@ public class WaterMark implements element {
 
         Font fonts = Fonts.sf_medium;
 
-        RenderUtil.Render2D.glow(x,y,H,H - 0.5F,ColorUtil.getColor(0,0.1F),RADIUS,8,1);
-        RenderUtil.Blur.blur(x,y,H,H,1,RADIUS,ColorUtil.replAlpha(ColorUtil.background(),InterFace.getInstance().alphaHUD.getValue()));
+        float opacity = InterFace.getInstance().alphaHUD.getValue();
+
+        // бейдж-логотип
+        RenderUtil.Render2D.hudPlate(x, y, H, H, 1, RADIUS, opacity);
 
         Fonts.rainydlc_2.drawCentered("G",x  + H / 2,y + 5.1F * S,LOGO,ColorUtil.getClientColor(1));
 
@@ -93,8 +95,8 @@ public class WaterMark implements element {
         // 15 + 5 + 15 + 3 + 4 + 15 отступов исходной вёрстки
         float w2 = 57F * S + fonts.getWidth(user,TEXT) + fpsW + pingW;
 
-        RenderUtil.Render2D.glow(x,y,w2,H - 0.5F,ColorUtil.getColor(0,0.1F),RADIUS,8,1);
-        RenderUtil.Blur.blur(x,y,w2,H,1,RADIUS, ColorUtil.replAlpha(ColorUtil.background(),InterFace.getInstance().alphaHUD.getValue()));
+        RenderUtil.Render2D.hudPlate(x, y, w2, H, 1, RADIUS, opacity);
+        RenderUtil.Render2D.hudAccent(x, y, H, 1, RADIUS);
 
         Fonts.rainydlc_2.draw("N",x + ICON_X,y + ICON_Y,ICON,ColorUtil.getClientColor(1));
 
