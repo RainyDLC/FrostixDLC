@@ -29,7 +29,6 @@ public class ClickGui extends Module {
             new BooleanSetting("Размывать фон", true),
             new BooleanSetting("Шейдер", false),
             new BooleanSetting("Частицы", true),
-            new BooleanSetting("Дождь", true),
             new BooleanSetting("Скан линии", true),
             new BooleanSetting("Свечение", true),
             new BooleanSetting("Точки", true),

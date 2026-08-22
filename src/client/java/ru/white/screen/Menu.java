@@ -611,9 +611,8 @@ public class Menu extends Screen implements IMinecraft {
             particles.clear();
         }
 
-        if (effect("Дождь")) {
-            renderMenuRain(screenWidth, screenHeight, bgAnim);
-        }
+        // дождь только в главном меню: наклонные струи + брызги об край экрана
+        renderMenuRain(screenWidth, screenHeight, bgAnim);
 
         ScreenBlur.capture();
 
