@@ -337,6 +337,11 @@ public class UAttack implements IMinecraft {
         if (distanceCheck && livingTarget != null && !AuraUtil.validDistance(livingTarget, ranges[0], true))
             return false;
 
+        // Инвуль-тики цели: удар во время hurtTime не наносит урона («фотка»).
+        // Небольшой запас компенсирует задержку пакета в пути.
+        if (livingTarget != null && livingTarget.hurtTime > 3)
+            return false;
+
         // cooldown
         if (!UAttack.msCooldownReached(cooldownMSOffset))
             return false;
