@@ -258,4 +258,109 @@ public class LightningRenderer implements IMinecraft {
         int glowColor;
         int coreColor;
     }
+
+    // ── молнии вокруг точки (для Glass Hands: предмет в руках) ──
+
+    private final List<Bolt> pointBolts = new ArrayList<>();
+    private long pointLastSpawn;
+
+    /**
+     * Короткие разряды вокруг произвольной точки мира — та же стилистика,
+     * что и у обводки цели (свечение-билборды + линии). Слои строго последовательные,
+     * после отрисовки буферы сбрасываются через consumers.draw(...).
+     */
+    public void renderPoint(EventRender3D e, Vec3d center, float spread, float animAlpha) {
+        if (center == null || animAlpha <= 0.03f) {
+            pointBolts.clear();
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        pointBolts.removeIf(b -> now - b.spawnTime > b.lifetimeMs);
+
+        if (now - pointLastSpawn > 60L && pointBolts.size() < 8) {
+            pointLastSpawn = now;
+            pointBolts.add(spawnPointBolt(center, spread));
+            if (random.nextBoolean()) pointBolts.add(spawnPointBolt(center, spread));
+        }
+        if (pointBolts.isEmpty()) return;
+
+        var consumers = mc.getBufferBuilders().getEntityVertexConsumers();
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Quaternionf cameraRotation = mc.gameRenderer.getCamera().getRotation();
+
+        // ФАЗА 1: свечение-билборды
+        VertexConsumer glowBuf = consumers.getBuffer(LIGHTNING_GLOW.apply(GLOW));
+        for (Bolt b : pointBolts) {
+            float fade = 1f - (now - b.spawnTime) / (float) b.lifetimeMs;
+            int col = withAlpha(0x96C3FF, (int) (fade * animAlpha * 145));
+            for (Vec3d point : b.points) {
+                float h = 0.08f + random.nextFloat() * 0.07f;
+
+                matrices.push();
+                matrices.translate(point.x - cameraPos.x, point.y - cameraPos.y, point.z - cameraPos.z);
+                matrices.multiply(cameraRotation);
+                Matrix4f m = matrices.peek().getPositionMatrix();
+
+                glowBuf.vertex(m, -h, -h, 0.0f).color(((col >> 16) & 0xFF) / 255f, ((col >> 8) & 0xFF) / 255f,
+                                (col & 0xFF) / 255f, ((col >>> 24) & 0xFF) / 255f)
+                        .texture(0.0F, 1.0F).overlay(net.minecraft.client.render.OverlayTexture.DEFAULT_UV)
+                        .light(0xF000F0).normal(0, 0, 1);
+                glowBuf.vertex(m, h, -h, 0.0f).color(((col >> 16) & 0xFF) / 255f, ((col >> 8) & 0xFF) / 255f,
+                                (col & 0xFF) / 255f, ((col >>> 24) & 0xFF) / 255f)
+                        .texture(1.0F, 1.0F).overlay(net.minecraft.client.render.OverlayTexture.DEFAULT_UV)
+                        .light(0xF000F0).normal(0, 0, 1);
+                glowBuf.vertex(m, h, h, 0.0f).color(((col >> 16) & 0xFF) / 255f, ((col >> 8) & 0xFF) / 255f,
+                                (col & 0xFF) / 255f, ((col >>> 24) & 0xFF) / 255f)
+                        .texture(1.0F, 0.0F).overlay(net.minecraft.client.render.OverlayTexture.DEFAULT_UV)
+                        .light(0xF000F0).normal(0, 0, 1);
+                glowBuf.vertex(m, -h, h, 0.0f).color(((col >> 16) & 0xFF) / 255f, ((col >> 8) & 0xFF) / 255f,
+                                (col & 0xFF) / 255f, ((col >>> 24) & 0xFF) / 255f)
+                        .texture(0.0F, 0.0F).overlay(net.minecraft.client.render.OverlayTexture.DEFAULT_UV)
+                        .light(0xF000F0).normal(0, 0, 1);
+
+                matrices.pop();
+            }
+        }
+        consumers.draw(LIGHTNING_GLOW.apply(GLOW));
+
+        // ФАЗА 2: линии ядра
+        VertexConsumer lineBuf = consumers.getBuffer(LIGHTNING_LINE_LAYER);
+        Matrix4f lm = matrices.peek().getPositionMatrix();
+        for (Bolt b : pointBolts) {
+            float fade = 1f - (now - b.spawnTime) / (float) b.lifetimeMs;
+            int ccol = withAlpha(0xEBF5FF, (int) (fade * animAlpha * 235));
+
+            List<Vec3d> pts = b.points;
+            for (int sIdx = 0; sIdx < pts.size() - 1; sIdx++) {
+                Vec3d a = pts.get(sIdx).subtract(cameraPos);
+                Vec3d b2 = pts.get(sIdx + 1).subtract(cameraPos);
+                lineBuf.vertex(lm, (float) a.x, (float) a.y, (float) a.z).color(ccol);
+                lineBuf.vertex(lm, (float) b2.x, (float) b2.y, (float) b2.z).color(ccol);
+            }
+        }
+        consumers.draw(LIGHTNING_LINE_LAYER);
+    }
+
+    private Bolt spawnPointBolt(Vec3d c, float spread) {
+        double ang = random.nextDouble() * Math.PI * 2;
+        double ph = (random.nextDouble() - 0.5) * Math.PI;
+        double r = spread * (0.35 + random.nextDouble() * 0.65);
+
+        Vec3d start = c.add(
+                Math.cos(ang) * Math.cos(ph) * r,
+                Math.sin(ph) * r,
+                Math.sin(ang) * Math.cos(ph) * r);
+        Vec3d end = start.add(
+                (random.nextDouble() - 0.5) * spread,
+                -(0.2 + random.nextDouble() * 0.5) * spread,
+                (random.nextDouble() - 0.5) * spread);
+
+        Bolt bolt = new Bolt();
+        bolt.points = LightningPath.generate(start, end, 2, r * 0.5, random);
+        bolt.spawnTime = System.currentTimeMillis();
+        bolt.lifetimeMs = 90 + random.nextInt(110);
+        return bolt;
+    }
 }
