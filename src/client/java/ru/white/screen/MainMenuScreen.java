@@ -37,8 +37,9 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     private static final int TXT_R = 218, TXT_G = 235, TXT_B = 250;    // светлый текст
 
     private static final Identifier MENU_BG = Identifier.of("client", "textures/frame/menu.png");
-    /** Тёмный фон с ветками сакуры: положи menu_sakura.png рядом с menu.png. */
-    private static final Identifier SAKURA_BG = Identifier.of("client", "textures/frame/menu_sakura.png");
+    /** Тёмный фон с ветками сакуры: положи menu_sakura.png или menu_sakura.jpg рядом с menu.png. */
+    private static final Identifier SAKURA_PNG = Identifier.of("client", "textures/frame/menu_sakura.png");
+    private static final Identifier SAKURA_JPG = Identifier.of("client", "textures/frame/menu_sakura.jpg");
     /** Фирменный логотип (R с листом) — иконка окна, худ-ватермарка и главное меню. */
     private static final Identifier ICON_LOGO = Identifier.of("client", "textures/icon.png");
     private static final Identifier GLOW_TEX = Identifier.of("client", "textures/particles/glow.png");
@@ -174,12 +175,12 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         float bgX = (screenWidth - bgW) / 2F + offsetX;
         float bgY = (screenHeight - bgH) / 2F + offsetY;
 
-        // фон-картинка: сакура, если текстура добавлена, иначе стандартная
-        Identifier bgId = SAKURA_BG;
+        // фон-картинка: сакура (png или jpg), если текстура добавлена, иначе стандартная
+        Identifier bgId = MENU_BG;
         try {
-            if (!mc.getResourceManager().getResource(bgId).isPresent()) bgId = MENU_BG;
+            if (mc.getResourceManager().getResource(SAKURA_PNG).isPresent()) bgId = SAKURA_PNG;
+            else if (mc.getResourceManager().getResource(SAKURA_JPG).isPresent()) bgId = SAKURA_JPG;
         } catch (Exception ignored) {
-            bgId = MENU_BG;
         }
         RenderUtil.Images.texture(bgId, bgX, bgY, bgW, bgH, ColorUtil.getColor(255, 255, 255, alphaVal));
 
