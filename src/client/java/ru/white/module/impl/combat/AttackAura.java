@@ -90,7 +90,7 @@ public class AttackAura extends Module {
             new BooleanSetting("Мобов", false),
             new BooleanSetting("Друзей", false));
 
-    public ModeSetting typeRotation = new ModeSetting(this,"Тип наведения", "FunTime","SpookyTime","Default","Snap","HvH","Custom","Legit");
+    public ModeSetting typeRotation = new ModeSetting(this,"Тип наведения", "FunTime","SpookyTime","Default","Snap","HvH","Custom","Legit","Sloth");
     public ModeSetting typeSnap = new ModeSetting(this,"Режим снапа", "360","Fov").setVisible(() -> typeRotation.is("Snap"));
     public SliderSetting fov = new SliderSetting(this, "Fov", 50.0F, 25.0F, 90.0F, 1.0F).setVisible(() -> typeRotation.is("Snap") && typeSnap.is("Fov"));
 

@@ -16,7 +16,8 @@ public enum RotationType {
     HVH("HvH", new HvHRotation()),
     SPOOKY("SpookyTime 1.21", new MatrixRotation()),
     CUSTOM("Custom", new CustomRotation()),
-    LEGIT("Legit", new LegitRotation());
+    LEGIT("Legit", new LegitRotation()),
+    SLOTH("Sloth", new SlothRotation());
 
 
     private final String name;
