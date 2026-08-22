@@ -1,4 +1,4 @@
-.gradle/
+﻿.gradle/
 build/
 run/
 
@@ -12,3 +12,14 @@ Thumbs.db
 .claude/settings.local.json
 
 bin/
+
+# --- сайт (деплой через wrangler из папки website; убери строку ниже, если деплой через GitHub) ---
+website/
+
+# --- прочий мусор ---
+decoded_tmp/
+*.log
+.dev.vars
+.cookies.txt
+.t1.json
+.t2.json
