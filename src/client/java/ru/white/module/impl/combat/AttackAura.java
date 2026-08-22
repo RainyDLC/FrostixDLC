@@ -34,10 +34,12 @@ import ru.white.module.impl.combat.aura.RotationType;
 import ru.white.module.impl.utils.FakePlayer;
 import ru.white.module.api.ModuleInfo;
 import ru.white.module.api.settings.impl.BooleanSetting;
+import ru.white.module.api.settings.impl.ButtonSetting;
 import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.MultiBooleanSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.screen.Menu;
+import ru.white.screen.RotationBuilderScreen;
 import ru.white.utils.aura.AttackUtil;
 import ru.white.utils.aura.AuraUtil;
 import ru.white.utils.aura.UAttack;
@@ -88,11 +90,26 @@ public class AttackAura extends Module {
             new BooleanSetting("Мобов", false),
             new BooleanSetting("Друзей", false));
 
-    public ModeSetting typeRotation = new ModeSetting(this,"Тип наведения", "FunTime","SpookyTime","Default","Snap","HvH");
+    public ModeSetting typeRotation = new ModeSetting(this,"Тип наведения", "FunTime","SpookyTime","Default","Snap","HvH","Custom");
     public ModeSetting typeSnap = new ModeSetting(this,"Режим снапа", "360","Fov").setVisible(() -> typeRotation.is("Snap"));
     public SliderSetting fov = new SliderSetting(this, "Fov", 50.0F, 25.0F, 90.0F, 1.0F).setVisible(() -> typeRotation.is("Snap") && typeSnap.is("Fov"));
 
     public BooleanSetting fovRender = new BooleanSetting(this,"Отображать Fov",false).setVisible(() -> typeRotation.is("Snap") && typeSnap.is("Fov"));
+
+    // ── Конструктор ротации (режим Custom) ──
+    public ButtonSetting rotationBuilder = new ButtonSetting(this, "Конструктор ротации", () ->
+            mc.setScreen(new RotationBuilderScreen())).setVisible(() -> typeRotation.is("Custom"));
+
+    public SliderSetting cYawMin = new SliderSetting(this, "Скорость Yaw мин", 120F, 1F, 360F, 1F).setVisible(() -> typeRotation.is("Custom"));
+    public SliderSetting cYawMax = new SliderSetting(this, "Скорость Yaw макс", 180F, 1F, 360F, 1F).setVisible(() -> typeRotation.is("Custom"));
+    public SliderSetting cPitchMin = new SliderSetting(this, "Скорость Pitch мин", 80F, 1F, 180F, 1F).setVisible(() -> typeRotation.is("Custom"));
+    public SliderSetting cPitchMax = new SliderSetting(this, "Скорость Pitch макс", 120F, 1F, 180F, 1F).setVisible(() -> typeRotation.is("Custom"));
+    public SliderSetting cHitYaw = new SliderSetting(this, "Скорость удара Yaw", 200F, 50F, 400F, 5F).setVisible(() -> typeRotation.is("Custom"));
+    public SliderSetting cHitPitch = new SliderSetting(this, "Скорость удара Pitch", 180F, 50F, 400F, 5F).setVisible(() -> typeRotation.is("Custom"));
+    public SliderSetting cRandomYaw = new SliderSetting(this, "Рандом Yaw", 1.0F, 0F, 10F, 0.05F).setVisible(() -> typeRotation.is("Custom"));
+    public SliderSetting cRandomPitch = new SliderSetting(this, "Рандом Pitch", 1.0F, 0F, 10F, 0.05F).setVisible(() -> typeRotation.is("Custom"));
+    public SliderSetting cOscX = new SliderSetting(this, "Осцилляция X", 0.0F, -3F, 3F, 0.05F).setVisible(() -> typeRotation.is("Custom"));
+    public SliderSetting cOscY = new SliderSetting(this, "Осцилляция Y", 0.0F, -3F, 3F, 0.05F).setVisible(() -> typeRotation.is("Custom"));
 
     public ModeSetting typeSprint = new ModeSetting(this,"Тип спринта", "Packet","Silent","Legit");
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
