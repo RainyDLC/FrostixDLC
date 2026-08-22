@@ -243,11 +243,13 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         double vy = 0;
         boolean sliding;
         float slideStartY;
+        final long born = System.currentTimeMillis();
+        final long lifeMs = 9000 + (long) (Math.random() * 13000);
 
-        GlassDrop(float x, float y) {
+        GlassDrop(float x, float y, float r) {
             this.x = x;
             this.y = y;
-            this.r = 1.4f + (float) Math.random() * 2.2f;
+            this.r = r;
         }
     }
 
@@ -337,74 +339,101 @@ public class MainMenuScreen extends Screen implements IMinecraft {
                     ColorUtil.replAlpha(ColorUtil.getColor(205, 232, 255), a), rr);
         }
 
-        // ── капли на самом блюре: прилипают, растут, скалываются со следом ──
-        int targetDrops = Math.min(55, (int) (w / 26));
+        // ── капли на стекле: тёмные капли с бликом, как на настоящем окне ──
+        int targetDrops = Math.min(230, Math.max(90, (int) (w / 6)));
         while (glassDrops.size() < targetDrops)
-            glassDrops.add(new GlassDrop((float) (Math.random() * w),
-                    (float) (Math.random() * h)));
+            glassDrops.add(spawnGlassDrop(w, h));
 
         Iterator<GlassDrop> dit = glassDrops.iterator();
         while (dit.hasNext()) {
             GlassDrop d = dit.next();
-            if (!d.sliding && Math.random() < 0.0011 * dt && d.r > 1.9f) {
+
+            // мелкие капли живут своей жизнью и «испаряются» в другом месте
+            if (!d.sliding && now - d.born > d.lifeMs) {
+                dit.remove();
+                continue;
+            }
+
+            if (!d.sliding && d.r > 2.6f && Math.random() < 0.0009 * dt) {
                 d.sliding = true;
                 d.slideStartY = d.y;
             }
 
+            float bh = d.r * S;
             if (d.sliding) {
+                bh *= Math.min(1.8f, 1f + (float) d.vy * 7f);
                 d.vy += 0.00035 * dt;
                 d.y += d.vy * dt;
+
+                // мокрый след — тёмная дорожка за каплей
                 float trailH = d.y - d.slideStartY;
                 if (trailH > 2F) {
-                    Draw.gradientRect(d.x - 1.1F * S, d.slideStartY, 2.2F * S, trailH,
+                    Draw.gradientRect(d.x - d.r * S * 0.7f, d.slideStartY,
+                            d.r * S * 1.4f, trailH,
                             new int[]{
-                                    ColorUtil.getColor(205, 228, 255, 0),
-                                    ColorUtil.getColor(205, 228, 255, 0),
-                                    ColorUtil.replAlpha(ColorUtil.getColor(210, 232, 255), (int) (anim * 42)),
-                                    ColorUtil.replAlpha(ColorUtil.getColor(210, 232, 255), (int) (anim * 42))
-                            }, 2.2F * S);
+                                    ColorUtil.getColor(10, 24, 46, 0),
+                                    ColorUtil.getColor(10, 24, 46, 0),
+                                    ColorUtil.replAlpha(ColorUtil.getColor(10, 24, 46), (int) (anim * 70)),
+                                    ColorUtil.replAlpha(ColorUtil.getColor(10, 24, 46), (int) (anim * 70))
+                            }, d.r * S * 1.4f);
+                }
+                if (d.y > h + 30) {
+                    dit.remove();
+                    continue;
                 }
             } else {
-                if (d.r < 3.0F) d.r += 0.0008 * dt;
+                // капля медленно наливается
+                if (d.r < 3.4F) d.r += 0.00035 * dt;
             }
 
-            // капля-слезинка: хвостик вверх + тело + утяжелённый низ + блик
-            float aB = anim * (d.sliding ? 150 : 120);
-            float dr = d.r * S;
-            float stretch = d.sliding ? Math.min(1.7f, 1f + (float) d.vy * 6f) : 1f;
-
-            // хвостик, тянущийся вверх
-            float tailW = dr * 0.62f;
-            float tailH = dr * (d.sliding ? 2.1f : 1.15f);
-            RenderUtil.Render2D.rect(d.x - tailW * 0.5f, d.y - dr - tailH,
-                    tailW, tailH,
-                    ColorUtil.replAlpha(ColorUtil.getColor(200, 228, 255), (int) (aB * 0.5f)),
-                    tailW * 0.5f);
-
-            // тело: при скольжении вытягивается вниз
-            float bh = dr * stretch;
-            RenderUtil.Render2D.rect(d.x - dr, d.y - bh, dr * 2, bh * 2,
-                    ColorUtil.replAlpha(ColorUtil.getColor(214, 234, 255), (int) aB),
-                    Math.min(dr, bh));
-
-            // утяжелённый низ — капля «наливается»
-            RenderUtil.Render2D.rect(d.x - dr * 0.5f, d.y + bh * 0.18f, dr, dr * 0.9f,
-                    ColorUtil.replAlpha(ColorUtil.getColor(228, 244, 255), (int) (aB * 0.85f)),
-                    dr * 0.45f);
-
-            // блик сверху-слева от источника света
-            RenderUtil.Render2D.rect(d.x - dr * 0.55f, d.y - bh * 0.75f,
-                    dr * 0.5f, bh * 0.7f,
-                    ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (anim * 125)),
-                    dr * 0.22f);
-
-            if (d.y > h + 24) {
-                dit.remove();
-            }
+            drawGlassDrop(d, anim, S);
         }
         while (glassDrops.size() < targetDrops)
-            glassDrops.add(new GlassDrop((float) (Math.random() * w),
-                    (float) (Math.random() * h * 0.7f)));
+            glassDrops.add(spawnGlassDrop(w, h));
+    }
+
+    private GlassDrop spawnGlassDrop(float w, float h) {
+        float t = (float) Math.random();
+        float r;
+        if (t < 0.72f) r = 0.7f + (float) Math.random() * 0.8f;        // микроскопические
+        else if (t < 0.95f) r = 1.5f + (float) Math.random() * 1.1f;   // средние
+        else r = 2.7f + (float) Math.random() * 1.5f;                  // крупные
+        return new GlassDrop((float) (Math.random() * w), (float) (Math.random() * h), r);
+    }
+
+    /** Реалистичная капля на стекле: тёмное тело, ядро, рефракция снизу, блик. */
+    private void drawGlassDrop(GlassDrop d, float anim, float S) {
+        float dr = d.r * S;
+        float stretch = d.sliding ? Math.min(1.7f, 1f + (float) d.vy * 6f) : 1f;
+        float bh = dr * stretch;
+
+        // тело капли — полупрозрачное тёмное стекло
+        RenderUtil.Render2D.rect(d.x - dr, d.y - bh, dr * 2, bh * 2,
+                ColorUtil.replAlpha(ColorUtil.getColor(12, 26, 48), (int) (anim * 125)),
+                Math.min(dr, bh));
+
+        // ядро темнее, смещено чуть вниз-вправо
+        RenderUtil.Render2D.rect(d.x - dr * 0.42f, d.y - bh * 0.25f, dr * 1.02f, bh * 1.05f,
+                ColorUtil.replAlpha(ColorUtil.getColor(6, 14, 30), (int) (anim * 95)),
+                dr * 0.5f);
+
+        // рефракция: свет собирается у нижней кромки
+        RenderUtil.Render2D.rect(d.x - dr * 0.66f, d.y + bh * 0.32f, dr * 1.32f, bh * 0.36f,
+                ColorUtil.replAlpha(ColorUtil.getColor(150, 195, 240), (int) (anim * 75)),
+                dr * 0.34f);
+
+        if (dr > 1.1f) {
+            // блик сверху-слева
+            RenderUtil.Render2D.rect(d.x - dr * 0.62f, d.y - bh * 0.76f,
+                    dr * 0.5f, bh * 0.32f,
+                    ColorUtil.replAlpha(ColorUtil.getColor(238, 249, 255), (int) (anim * 185)),
+                    dr * 0.17f);
+            // микро-точка блика рядом
+            RenderUtil.Render2D.rect(d.x + dr * 0.05f, d.y - bh * 0.42f,
+                    dr * 0.15f, bh * 0.12f,
+                    ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (anim * 155)),
+                    dr * 0.07f);
+        }
     }
 
     // ── дождевой фон ────────────────────────────────────────────────────
