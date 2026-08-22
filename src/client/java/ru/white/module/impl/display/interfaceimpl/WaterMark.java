@@ -99,7 +99,6 @@ public class WaterMark implements element {
         float w2 = 57F * S + fonts.getWidth(user,TEXT) + fpsW + pingW;
 
         RenderUtil.Render2D.hudPlate(x, y, w2, H, 1, RADIUS, opacity);
-        RenderUtil.Render2D.hudAccent(x, y, H, 1, RADIUS);
 
         Fonts.rainydlc_2.draw("N",x + ICON_X,y + ICON_Y,ICON,ColorUtil.getClientColor(1));
 

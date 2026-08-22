@@ -207,7 +207,6 @@ public class Notify implements element {
                 float actualY = ny;
 
                 RenderUtil.Render2D.hudPlate(nx, actualY, nw, ITEM_H, a, RADIUS, InterFace.getInstance().alphaHUD.getValue());
-                RenderUtil.Render2D.hudAccent(nx, actualY, ITEM_H, a, RADIUS);
 
                 // drawIcon(eventDisplay, e, nx, actualY, a, scaleFix);
 

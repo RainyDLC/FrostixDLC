@@ -149,7 +149,6 @@ public class MusicHud implements element {
         float y = dragSetting.position.y;
 
         RenderUtil.Render2D.hudPlate(x, y, WIDTH, HEIGHT, alpha, RADIUS, InterFace.getInstance().alphaHUD.getValue());
-        RenderUtil.Render2D.hudAccent(x, y, HEIGHT, alpha, RADIUS);
 
         float artX = x + PAD;
         float artY = y + PAD;

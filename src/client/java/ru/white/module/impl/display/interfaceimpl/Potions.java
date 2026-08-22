@@ -128,7 +128,6 @@ public class Potions implements IMinecraft {
 
         // Отрисовка состояния пустого списка (чат)
         RenderUtil.Render2D.hudPlate(x, y, MIN_W, H, alpha2, RADIUS, InterFace.getInstance().alphaHUD.getValue());
-        RenderUtil.Render2D.hudAccent(x, y, H, alpha2, RADIUS);
 
         Font font = Fonts.sf_regular;
 
@@ -166,7 +165,6 @@ public class Potions implements IMinecraft {
 
         // Отрисовка фона списка
         RenderUtil.Render2D.hudPlate(x, y, w, h, alpha, RADIUS, InterFace.getInstance().alphaHUD.getValue());
-        RenderUtil.Render2D.hudAccent(x, y, h, alpha, RADIUS);
 
         float offsetY = y + ROW_START_Y;
         float offsetY2 = 0;

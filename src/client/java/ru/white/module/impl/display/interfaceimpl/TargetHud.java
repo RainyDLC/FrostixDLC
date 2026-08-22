@@ -175,7 +175,6 @@ public class TargetHud implements element {
         float px = x + addALL;
 
         RenderUtil.Render2D.hudPlate(px, y, w, h, alpha, rad, hudOpacity);
-        RenderUtil.Render2D.hudAccent(px, y, h, alpha, rad);
 
         // Тонкая вертикальная линия между лицом и блоком информации
         RenderUtil.Render2D.rect(px + HEAD_CONTAINER_W, y + HEAD_OFFSET_Y,
@@ -183,7 +182,7 @@ public class TargetHud implements element {
 
         drawFace(target, eventDisplay.getPartialTicks(), px + HEAD_OFFSET_X, y + HEAD_OFFSET_Y, alpha);
 
-        // ── компоновка: имя → полоска ХП → иконки эффектов → кольцо с числом ──
+        // ── компоновка: имя → иконки эффектов → кольцо ХП с числом ──
         float contentX = px + CONTENT_OFFSET_X + BAR_OFFSET_X;
         float ringR = 8.5F * S;
         float ringCx = px + w - ringR - 6F * S;
@@ -192,10 +191,6 @@ public class TargetHud implements element {
         float hpNow = getHealth(target);
         float hpMax = Math.max(1F, target.getMaxHealth() + target.getAbsorptionAmount());
         float hpFrac = MathHelper.clamp(hpNow / hpMax, 0F, 1F);
-
-        animHP.update();
-        float barW = ringCx - 4F * S - contentX;
-        animHP.run(Math.round(barW * hpFrac), 0.5F, Easings.BACK_OUT);
 
         animHpText.update();
         animHpText.run(hpNow, 0.15F, Easings.LINEAR);
@@ -212,18 +207,6 @@ public class TargetHud implements element {
                 ringCx - 4F * S - contentX,
                 ColorUtil.getColor(255, alpha), NAME_SIZE);
 
-        // тонкая полоска здоровья под именем
-        RenderUtil.Render2D.rect(contentX, y + 13F * S, barW, BAR_HEIGHT,
-                ColorUtil.multAlpha(ColorUtil.getColor(255, 0.10F), alpha), 2);
-        RenderUtil.Render2D.gradientRect(
-                contentX, y + 13F * S, Math.min(barW, animHP.get()), BAR_HEIGHT,
-                new int[]{
-                        ColorUtil.multDark(ColorUtil.replAlpha(ringMain, alpha), 0.5F),
-                        ColorUtil.replAlpha(ringMain, alpha),
-                        ColorUtil.replAlpha(ringMain, alpha),
-                        ColorUtil.multDark(ColorUtil.replAlpha(ringMain, alpha), 0.5F)
-                }, 2);
-
         // кольцо прогресса ХП с целым числом внутри
         RenderUtil.Render2D.roundedCircleProgress(eventDisplay.getDrawContext(),
                 ringCx, ringCy, ringR, 2.1F * S, hpFrac,
@@ -232,8 +215,8 @@ public class TargetHud implements element {
         Fonts.sf_medium.drawCentered(String.format("%.0f", animHpText.get()),
                 ringCx, ringCy - 3.0F * S, 5.2F * S, ColorUtil.getColor(255, alpha));
 
-        // иконки активных эффектов цели — ряд под полоской
-        float iconY = y + 19.5F * S;
+        // иконки активных эффектов цели — ряд под именем
+        float iconY = y + 17.5F * S;
         float iconSize = 8F * S;
         float maxIconX = ringCx - ringR - 3F * S;
         int shown = 0;
