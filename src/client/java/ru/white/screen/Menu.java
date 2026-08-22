@@ -172,16 +172,32 @@ public class Menu extends Screen implements IMinecraft {
     private long lastParticle;
     private long particleDelay = 90;
 
-    // ── дождь на фоне меню: мягкие струи за «стеклом» + капли на самом блюре ──
+    // ── дождь на фоне меню: наклонные струи-капли + брызги об край экрана ──
     private static final class RainStreak {
-        float x, y, len, speed;
-        final float wind = -0.05f + (float) Math.random() * 0.1f;
+        float x, y, len;
+        double vx, vy;
 
         RainStreak(float x, float y) {
             this.x = x;
             this.y = y;
-            this.len = 60f + (float) Math.random() * 90f;
-            this.speed = 0.28f + (float) Math.random() * 0.22f;
+            this.len = 55f + (float) Math.random() * 95f;
+            // падает вниз и вбок: у каждой струи свой угол ±20° от вертикали
+            double ang = Math.toRadians(90.0 + (Math.random() * 40.0 - 20.0));
+            double sp = 0.30 + Math.random() * 0.25;
+            this.vx = Math.cos(ang) * sp;
+            this.vy = Math.abs(Math.sin(ang)) * sp;
+        }
+    }
+
+    private static final class Splash {
+        float x, y, vx, vy;
+        final long born = System.currentTimeMillis();
+
+        Splash(float x, float y, float vx, float vy) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
         }
     }
 
@@ -200,6 +216,7 @@ public class Menu extends Screen implements IMinecraft {
     }
 
     private final java.util.List<RainStreak> menuRain = new java.util.ArrayList<>();
+    private final java.util.List<Splash> menuSplashes = new java.util.ArrayList<>();
     private final java.util.List<GlassDrop> glassDrops = new java.util.ArrayList<>();
     private long lastRainFrame;
 
@@ -210,28 +227,71 @@ public class Menu extends Screen implements IMinecraft {
         long dt = Math.min(60L, Math.max(1L, now - lastRainFrame));
         lastRainFrame = now;
 
-        // ── слой за стеклом: широкие полупрозрачные струи ──
-        int target = Math.min(110, (int) (w / 12));
+        // ── слой за стеклом: наклонные струи из круглых капель ──
+        int target = Math.min(80, (int) (w / 16));
         while (menuRain.size() < target)
-            menuRain.add(new RainStreak((float) (Math.random() * w), (float) (Math.random() * h)));
+            menuRain.add(new RainStreak((float) (Math.random() * w * 1.15 - w * 0.07),
+                    (float) (Math.random() * h)));
         if (menuRain.size() > target)
             menuRain.subList(target, menuRain.size()).clear();
 
-        int streakTop = ColorUtil.getColor(185, 215, 255, 0);
         for (RainStreak st : menuRain) {
-            st.y += st.speed * dt;
-            st.x += st.wind * dt;
-            if (st.y > h + st.len || st.x < -12 || st.x > w + 12) {
-                st.y = -st.len - (float) (Math.random() * 90);
-                st.x = (float) (Math.random() * w);
+            st.x += st.vx * dt;
+            st.y += st.vy * dt;
+
+            // удар о нижний край экрана — брызги
+            if (st.y >= h - 2f) {
+                if (menuSplashes.size() < 48) {
+                    float dir = st.vx >= 0 ? 1f : -1f;
+                    for (int k = 0; k < 3; k++) {
+                        menuSplashes.add(new Splash(st.x, h - 2f,
+                                dir * (0.04f + (float) Math.random() * 0.07f),
+                                -(0.10f + (float) Math.random() * 0.09f)));
+                    }
+                }
+                st.x = (float) (Math.random() * w * 1.25 - w * 0.18);
+                st.y = -st.len - (float) (Math.random() * 120);
+            } else if (st.x > w + 24 || st.x < -w * 0.22) {
+                st.x = (float) (Math.random() * w * 1.25 - w * 0.18);
+                st.y = -st.len - (float) (Math.random() * 120);
             }
-            float sw = 2.6F * S;
-            Draw.gradientRect(st.x, st.y, sw, st.len,
-                    new int[]{
-                            streakTop, streakTop,
-                            ColorUtil.replAlpha(ColorUtil.getColor(185, 215, 255), (int) (anim * 50)),
-                            ColorUtil.replAlpha(ColorUtil.getColor(185, 215, 255), (int) (anim * 50))
-                    }, sw);
+
+            // струя — цепочка круглых капель вдоль направления, ярче к голове
+            double vlen = Math.sqrt(st.vx * st.vx + st.vy * st.vy);
+            float nx = (float) (st.vx / vlen);
+            float ny = (float) (st.vy / vlen);
+            float step = Math.max(5f, 6.5f * S);
+            int dots = (int) (st.len / step);
+            for (int k = dots; k >= 1; k--) {
+                float t = 1f - k / (float) dots;
+                float px = st.x - nx * step * k;
+                float py = st.y - ny * step * k;
+                if (py > h + 4 || px < -6 || px > w + 6) continue;
+                float rr = (0.8f + t * 1.5f) * S;
+                int a = (int) (t * t * anim * 92);
+                RenderUtil.Render2D.rect(px - rr, py - rr, rr * 2, rr * 2,
+                        ColorUtil.replAlpha(ColorUtil.getColor(185, 215, 255), a), rr);
+            }
+        }
+
+        // брызги: разлетаются и падают с гравитацией
+        Iterator<Splash> sit = menuSplashes.iterator();
+        while (sit.hasNext()) {
+            Splash sp = sit.next();
+            long age = now - sp.born;
+            if (age > 240L) {
+                sit.remove();
+                continue;
+            }
+            sp.x += sp.vx * dt;
+            sp.y += sp.vy * dt;
+            sp.vy += 0.0004 * dt;
+
+            float t = age / 240f;
+            float rr = (1f - t) * 1.9f * S;
+            int a = (int) ((1f - t) * (1f - t) * anim * 150);
+            RenderUtil.Render2D.rect(sp.x - rr, sp.y - rr, rr * 2, rr * 2,
+                    ColorUtil.replAlpha(ColorUtil.getColor(205, 232, 255), a), rr);
         }
 
         // ── капли на самом блюре: стоят, растут, иногда скатываются со следом ──
