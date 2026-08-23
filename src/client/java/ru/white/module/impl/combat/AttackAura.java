@@ -123,7 +123,13 @@ public class AttackAura extends Module {
     public ModeSetting typeSprint = new ModeSetting(this,"Тип спринта", "Packet","Silent","Legit");
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
 
-    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Огонь","Мечи","Цепь","Не отображать");
+    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Фантомы","Души","Астрал","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Огонь","Мечи","Цепь","Не отображать");
+
+    public SliderSetting phantomCount = new SliderSetting(this,"Кол-во фантомов",6,3,10,1).setVisible(() -> typeTargetESP.is("Фантомы"));
+    public SliderSetting phantomSpeed = new SliderSetting(this,"Скорость полёта",0.6F,0.2F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Фантомы"));
+    public SliderSetting soulsCount = new SliderSetting(this,"Кол-во потоков",3,2,6,1).setVisible(() -> typeTargetESP.is("Души"));
+    public SliderSetting soulsSpeed = new SliderSetting(this,"Скорость восхождения",0.8F,0.2F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Души"));
+    public SliderSetting astralSpeed = new SliderSetting(this,"Скорость вращения",0.5F,0.2F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Астрал"));
 
     public SliderSetting cubeSize = new SliderSetting(this,"Размер куба",1.15F,0.6F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
     public SliderSetting cubeRotateSpeed = new SliderSetting(this,"Скорость вращения куба",1.2F,0.2F,4.0F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));

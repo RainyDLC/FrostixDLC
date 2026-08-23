@@ -1220,6 +1220,18 @@ public class RotationProcess extends Component {
 
         }
 
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Фантомы")) {
+            renderTargetPhantoms(e, immediate, aura, target, alphaPC);
+        }
+
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Души")) {
+            renderTargetSouls(e, immediate, aura, target, alphaPC);
+        }
+
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Астрал")) {
+            renderTargetAstral(e, immediate, aura, target, alphaPC);
+        }
+
         if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Кубики")) {
             int hurtTicks = target.hurtTime;
             float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
@@ -1547,6 +1559,317 @@ public class RotationProcess extends Component {
             buf.vertex(m, cur[0], 0, cur[1]).color(color);
             buf.vertex(m, next[0], 0, next[1]).color(color);
         }
+    }
+
+    /** «Фантомы»: маленькие призрачки с глазками кружат вокруг корпуса цели. */
+    private void renderTargetPhantoms(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                      AttackAura aura, LivingEntity target, float alphaPC) {
+        float t = System.currentTimeMillis() / 1000.0F;
+
+        alpha_2.update();
+        float hurtPC = (float) Math.sin(target.hurtTime * (Math.PI / 10.0));
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
+        float atts = alpha_2.get();
+
+        int count = Math.max(3, aura.phantomCount.getValue().intValue());
+        float speed = aura.phantomSpeed.getValue();
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+        float bodyH = target.getHeight();
+        Camera camera = mc.gameRenderer.getCamera();
+
+        VertexConsumer texBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+        VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
+
+        for (int i = 0; i < count; i++) {
+            float ang = t * 55F * speed + i * (360F / count);
+            double rad = Math.toRadians(ang);
+            float orbit = 0.55F + 0.12F * (float) Math.sin(t * 0.9 + i * 1.9);
+            float bob = 0.09F * (float) Math.sin(t * 2.2 + i * 1.7);
+            float gx = targetPos.x - cameraPos.x + (float) Math.cos(rad) * orbit;
+            float gz = targetPos.z - cameraPos.z + (float) Math.sin(rad) * orbit;
+            float gy = targetPos.y - cameraPos.y
+                    + bodyH * (0.52F + 0.05F * (float) Math.sin(t * 1.3 + i * 2.3)) + bob;
+
+            float pulse = 0.62F + 0.38F * (float) Math.sin(t * 2.6 + i * 2.1);
+            float gAlpha = alphaPC * pulse;
+
+            int bodyCol = ColorUtil.replAlpha(
+                    ColorUtil.overCol(ColorUtil.getColor(205, 240, 255), redColor, atts),
+                    (int) (gAlpha * 120));
+            int eyeCol = ColorUtil.replAlpha(ColorUtil.getColor(35, 55, 95), (int) (gAlpha * 190));
+            int coreCol = ColorUtil.replAlpha(
+                    ColorUtil.overCol(ColorUtil.getColor(235, 250, 255), redColor, atts),
+                    (int) (gAlpha * 200));
+            int glowCol = ColorUtil.replAlpha(
+                    ColorUtil.overCol(ColorUtil.getColor(150, 215, 255), redColor, atts),
+                    (int) (gAlpha * 70));
+
+            matrices.push();
+            matrices.translate(gx, gy, gz);
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-camera.getYaw()));
+            matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
+
+            float gs = 0.42F * pulse + 0.10F;
+            matrices.push();
+            matrices.scale(gs, gs, gs);
+            drawTexQuad(texBuf, matrices.peek().getPositionMatrix(), 1.0F, glowCol);
+            matrices.pop();
+
+            Matrix4f m = matrices.peek().getPositionMatrix();
+            ghostSilhouette(fillBuf, m, 0.16F, bodyCol, eyeCol);
+            ghostOutline(lineBuf, m, 0.16F, coreCol);
+
+            matrices.pop();
+        }
+    }
+
+    /** «Души»: потоки холодного посмертного пламени поднимаются вокруг цели. */
+    private void renderTargetSouls(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                   AttackAura aura, LivingEntity target, float alphaPC) {
+        float t = System.currentTimeMillis() / 1000.0F;
+
+        alpha_2.update();
+        float hurtPC = (float) Math.sin(target.hurtTime * (Math.PI / 10.0));
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
+        float atts = alpha_2.get();
+
+        int streams = Math.max(2, aura.soulsCount.getValue().intValue());
+        float speed = aura.soulsSpeed.getValue();
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+        float bodyH = target.getHeight();
+        Camera camera = mc.gameRenderer.getCamera();
+
+        VertexConsumer softBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+        VertexConsumer coreBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_4.png")));
+
+        int soulSoft = ColorUtil.overCol(ColorUtil.getColor(90, 200, 255), redColor, atts);
+        int soulCore = ColorUtil.overCol(ColorUtil.getColor(195, 245, 255), redColor, atts);
+
+        for (int s = 0; s < streams; s++) {
+            for (int k = 0; k < 10; k++) {
+                float u = (t * 0.35F * speed + k * 0.1F + s * 0.37F) % 1.0F;
+                float wave = (float) Math.sin(u * Math.PI);
+                if (wave <= 0.02F) continue;
+
+                float y = 0.05F + u * bodyH * 1.1F;
+                float radius = (0.32F + 0.14F * (float) Math.sin(t * 1.1 + s * 2.4)) * (1.0F - 0.4F * u);
+                float ang = t * 70F * speed + s * 137.5F + k * 24.0F + u * 160.0F;
+                double rad = Math.toRadians(ang);
+
+                float px = targetPos.x - cameraPos.x + (float) Math.cos(rad) * radius;
+                float pz = targetPos.z - cameraPos.z + (float) Math.sin(rad) * radius;
+                float py = targetPos.y - cameraPos.y + y;
+
+                matrices.push();
+                matrices.translate(px, py, pz);
+                matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-camera.getYaw()));
+                matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
+
+                float gs = 0.16F * (1.0F + u * 0.8F);
+                matrices.push();
+                matrices.scale(gs, gs, gs);
+                drawTexQuad(softBuf, matrices.peek().getPositionMatrix(), 1.0F,
+                        ColorUtil.replAlpha(soulSoft, (int) (alphaPC * wave * 60)));
+                matrices.pop();
+
+                float cs = 0.05F * (1.0F + u);
+                matrices.push();
+                matrices.scale(cs, cs, cs);
+                drawTexQuad(coreBuf, matrices.peek().getPositionMatrix(), 1.0F,
+                        ColorUtil.replAlpha(soulCore, (int) (alphaPC * wave * 220)));
+                matrices.pop();
+
+                matrices.pop();
+            }
+        }
+    }
+
+    /** «Астрал»: световой столп и две спиральные ленты обвивают цель. */
+    private void renderTargetAstral(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                    AttackAura aura, LivingEntity target, float alphaPC) {
+        float t = System.currentTimeMillis() / 1000.0F;
+
+        alpha_2.update();
+        float hurtPC = (float) Math.sin(target.hurtTime * (Math.PI / 10.0));
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
+        float atts = alpha_2.get();
+        float speed = aura.astralSpeed.getValue();
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+        float bodyH = target.getHeight();
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x,
+                targetPos.y - cameraPos.y,
+                targetPos.z - cameraPos.z);
+
+        VertexConsumer texBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+
+        // свечение у ног
+        matrices.push();
+        matrices.translate(0, 0.02F, 0);
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90.0f));
+        float cg = bodyH * 0.55F;
+        matrices.scale(cg, cg, cg);
+        drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                ColorUtil.getColor(160, 235, 255),
+                ColorUtil.getColor(160, 235, 255),
+                ColorUtil.getColor(160, 235, 255),
+                ColorUtil.getColor(160, 235, 255),
+                (int) (alphaPC * 45));
+        matrices.pop();
+
+        // столп света: два скрещённых вертикальных квада с затуханием кверху
+        int colA = ColorUtil.overCol(ColorUtil.getColor(175, 240, 255), redColor, atts);
+        for (int j = 0; j < 2; j++) {
+            matrices.push();
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(j * 90.0F));
+            Matrix4f pm = matrices.peek().getPositionMatrix();
+            float halfW = 0.26F;
+            int aBot = (int) (alphaPC * 70);
+            int aTop = 0;
+            fillBuf.vertex(pm, -halfW, 0, 0).color(ColorUtil.replAlpha(colA, aBot));
+            fillBuf.vertex(pm, halfW, 0, 0).color(ColorUtil.replAlpha(colA, aBot));
+            fillBuf.vertex(pm, halfW, bodyH * 1.05F, 0).color(ColorUtil.replAlpha(colA, aTop));
+            fillBuf.vertex(pm, -halfW, bodyH * 1.05F, 0).color(ColorUtil.replAlpha(colA, aTop));
+            matrices.pop();
+        }
+
+        // спиральные ленты
+        Matrix4f m = matrices.peek().getPositionMatrix();
+        int band = ColorUtil.overCol(ColorUtil.getColor(160, 235, 255), redColor, atts);
+        int segs = 26;
+        float w = 0.05F;
+        for (int j = 0; j < 2; j++) {
+            float dir = (j == 0) ? 1.0F : -1.0F;
+            float r = 0.34F + 0.05F * (float) Math.sin(t * 1.7 + j * 2.1);
+
+            float prevA = t * 80F * speed * dir + j * 180.0F;
+            float prevF = 0.0F;
+            float prevX = (float) Math.cos(Math.toRadians(prevA)) * r;
+            float prevZ = (float) Math.sin(Math.toRadians(prevA)) * r;
+            float prevY = 0.06F;
+
+            for (int i = 1; i <= segs; i++) {
+                float f = (float) i / segs;
+                float a = prevA + dir * (300.0F / segs);
+                float x = (float) Math.cos(Math.toRadians(a)) * r;
+                float z = (float) Math.sin(Math.toRadians(a)) * r;
+                float y = 0.06F + f * bodyH * 1.02F;
+
+                int a0 = Math.max(0, (int) (alphaPC * (55 + 45 * (float) Math.sin(prevF * 9.0 - t * 4.0 + j))));
+                int a1 = Math.max(0, (int) (alphaPC * (55 + 45 * (float) Math.sin(f * 9.0 - t * 4.0 + j))));
+
+                fillBuf.vertex(m, prevX, prevY, prevZ).color(ColorUtil.replAlpha(band, a0));
+                fillBuf.vertex(m, x, y, z).color(ColorUtil.replAlpha(band, a1));
+                fillBuf.vertex(m, x, y + w, z).color(ColorUtil.replAlpha(band, a1));
+                fillBuf.vertex(m, prevX, prevY + w, prevZ).color(ColorUtil.replAlpha(band, a0));
+
+                prevA = a;
+                prevX = x;
+                prevY = y;
+                prevZ = z;
+                prevF = f;
+            }
+        }
+
+        matrices.pop();
+    }
+
+    /** Текстурный квад с центром в origin (для билбордов). */
+    private static void drawTexQuad(VertexConsumer buf, Matrix4f m, float s, int color) {
+        buf.vertex(m, -s,  s, 0).color(color).texture(0.0F, 1.0F)
+                .overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+        buf.vertex(m,  s,  s, 0).color(color).texture(1.0F, 1.0F)
+                .overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+        buf.vertex(m,  s, -s, 0).color(color).texture(1.0F, 0.0F)
+                .overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+        buf.vertex(m, -s, -s, 0).color(color).texture(0.0F, 0.0F)
+                .overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+    }
+
+    /** Силуэт призрачка: купол, корпус и волнистая юбка. */
+    private static void ghostSilhouette(VertexConsumer buf, Matrix4f m, float s, int bodyCol, int eyeCol) {
+        float cy = 1.05F * s;
+        int segs = 8;
+        for (int i = 0; i < segs; i++) {
+            float a0 = (float) Math.PI * i / segs;
+            float a1 = (float) Math.PI * (i + 1) / segs;
+            buf.vertex(m, 0, cy, 0).color(bodyCol);
+            buf.vertex(m, (float) Math.cos(a0) * s, cy + (float) Math.sin(a0) * s, 0).color(bodyCol);
+            buf.vertex(m, (float) Math.cos(a1) * s, cy + (float) Math.sin(a1) * s, 0).color(bodyCol);
+            buf.vertex(m, 0, cy, 0).color(bodyCol);
+        }
+
+        float skirtY = -0.55F * s;
+        buf.vertex(m, -s, cy, 0).color(bodyCol);
+        buf.vertex(m, s, cy, 0).color(bodyCol);
+        buf.vertex(m, s, skirtY, 0).color(bodyCol);
+        buf.vertex(m, -s, skirtY, 0).color(bodyCol);
+
+        for (int k = 0; k < 3; k++) {
+            float cxk = -s + (k + 0.5F) * (2.0F * s / 3.0F);
+            float rr = s / 3.0F;
+            int ksegs = 6;
+            for (int i = 0; i < ksegs; i++) {
+                float a0 = (float) Math.PI + (float) Math.PI * i / ksegs;
+                float a1 = (float) Math.PI + (float) Math.PI * (i + 1) / ksegs;
+                buf.vertex(m, cxk, skirtY, 0).color(bodyCol);
+                buf.vertex(m, cxk + (float) Math.cos(a0) * rr, skirtY + (float) Math.sin(a0) * rr, 0).color(bodyCol);
+                buf.vertex(m, cxk + (float) Math.cos(a1) * rr, skirtY + (float) Math.sin(a1) * rr, 0).color(bodyCol);
+                buf.vertex(m, cxk, skirtY, 0).color(bodyCol);
+            }
+        }
+
+        ghostEye(buf, m, -0.34F * s, cy + 0.12F * s, 0.10F * s, 0.15F * s, eyeCol);
+        ghostEye(buf, m, 0.34F * s, cy + 0.12F * s, 0.10F * s, 0.15F * s, eyeCol);
+    }
+
+    private static void ghostEye(VertexConsumer buf, Matrix4f m, float x, float y, float w, float h, int col) {
+        buf.vertex(m, x - w, y + h, 0).color(col);
+        buf.vertex(m, x + w, y + h, 0).color(col);
+        buf.vertex(m, x + w, y - h, 0).color(col);
+        buf.vertex(m, x - w, y - h, 0).color(col);
+    }
+
+    /** Контур призрачка яркими линиями. */
+    private static void ghostOutline(VertexConsumer buf, Matrix4f m, float s, int col) {
+        float cy = 1.05F * s;
+        int segs = 8;
+        float px = s, py = cy;
+        for (int i = 1; i <= segs; i++) {
+            float a = (float) Math.PI * i / segs;
+            float nx = (float) Math.cos(a) * s;
+            float ny = cy + (float) Math.sin(a) * s;
+            buf.vertex(m, px, py, 0).color(col);
+            buf.vertex(m, nx, ny, 0).color(col);
+            px = nx;
+            py = ny;
+        }
+        buf.vertex(m, -s, cy, 0).color(col);
+        buf.vertex(m, -s, -0.55F * s, 0).color(col);
+        buf.vertex(m, s, cy, 0).color(col);
+        buf.vertex(m, s, -0.55F * s, 0).color(col);
     }
 
     /** Светящаяся пентаграмма на земле под целью. */
