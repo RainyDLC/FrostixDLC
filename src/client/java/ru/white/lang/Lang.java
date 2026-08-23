@@ -30,8 +30,15 @@ public final class Lang {
 
     private Lang() {}
 
-    /** Оставлено для совместимости со старым вызовом в Client — теперь ничего не грузит. */
+    /** Оставлено для совместимости со старым вызовом в Client. */
     public static void init() {
+        // первый запуск (нет сохранённого файла) — стартуем с языка самой игры
+        if (!Files.exists(LANG_FILE)) {
+            String game = gameLanguageCode();
+            boolean en = game != null && game.toLowerCase(java.util.Locale.ROOT).startsWith("en");
+            current = en ? Language.ENGLISH : Language.RUSSIAN;
+            saveLanguage();
+        }
         System.out.println("[Lang] переводов в словаре: " + DICT.size() + ", язык: " + tag());
     }
 
@@ -52,10 +59,42 @@ public final class Lang {
         if (language == null || language == current) return;
         current = language;
         saveLanguage();
+        applyToGame();
     }
 
     public static void toggle() {
         setLanguage(current == Language.ENGLISH ? Language.RUSSIAN : Language.ENGLISH);
+    }
+
+    /**
+     * Применяет выбранный язык к самой игре: меняет язык в настройках Minecraft
+     * и перезагружает ресурсы — как это делает ванильный экран выбора языка.
+     */
+    private static void applyToGame() {
+        try {
+            var client = net.minecraft.client.MinecraftClient.getInstance();
+            if (client == null || client.getLanguageManager() == null || client.options == null) return;
+
+            String code = current == Language.ENGLISH ? "en_us" : "ru_ru";
+            if (code.equalsIgnoreCase(client.getLanguageManager().getLanguage())) return;
+
+            client.getLanguageManager().setLanguage(code);
+            client.options.language = code;
+            client.reloadResources();
+        } catch (Exception ignored) {
+            // игра ещё не готова — язык применится при следующем переключении
+        }
+    }
+
+    /** Текущий код языка игры (например «ru_ru») или null, если клиент ещё не создан. */
+    private static String gameLanguageCode() {
+        try {
+            var client = net.minecraft.client.MinecraftClient.getInstance();
+            if (client == null || client.getLanguageManager() == null) return null;
+            return client.getLanguageManager().getLanguage();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** Совместимость: словарь зашит в код, перечитывать нечего. */

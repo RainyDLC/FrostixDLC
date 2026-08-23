@@ -632,7 +632,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             this.hoverAnim.set(0);
         }
 
-        private String text() { return textRu; }
+        private String text() { return ru.white.lang.Lang.pick(textRu, textEn); }
         private String description() { return ru.white.lang.Lang.pick(descRu, descEn); }
 
         public float getWidth() {
@@ -911,7 +911,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
             Fonts.icon.drawCentered("i", knobX + knobSize / 2F, y + height / 2F - 3, 7,
                     ColorUtil.replAlpha(accent, (int) (globalAlpha * 255 * (0.25F + hp * 0.2F + progress * 0.55F))));
-            Fonts.sf_regular.drawCentered(ru.white.lang.Lang.pick("Сдвиньте, чтобы выйти", "Сдвиньте, чтобы выйти"), x + width / 2F + 8F,
+            Fonts.sf_regular.drawCentered(ru.white.lang.Lang.pick("Сдвиньте, чтобы выйти", "Drag to exit"), x + width / 2F + 8F,
                     y + height / 2F - 4.4F, 7,
                     ColorUtil.getColor(TXT_R, TXT_G, TXT_B, globalAlpha * (0.10F + hp * 0.25F - progress * 0.15F)));
         }
