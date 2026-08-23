@@ -26,34 +26,21 @@ import static net.minecraft.client.gui.hud.InGameHud.getEffectTexture;
 public class Potions implements IMinecraft {
 
     /** Общий масштаб плашки: один множитель на шрифты, иконки и все отступы. */
-    private static  float S = 1.0F;
+    private static float S = 1.0F;
 
-    private static  float H = 16F * S;
-    private static  float MIN_W = 44F * S;
-    private static  float RADIUS = 5F * S;
+    private static float H = 12F * S;
+    private static float MIN_W = 34F * S;
+    private static float RADIUS = 4F * S;
 
+    private static float ROW_TEXT = 6F * S;
+    private static float ICON = 6.5F * S;
 
-    private static  float TITLE_TEXT = 7F * S;
-    private static  float TITLE_ICON = 5F * S;
-    private static  float ROW_TEXT = 6.5F * S;
-    private static  float ICON = 7F * S;
-
-    private static  float TITLE_ICON_X = 5F * S;
-    private static  float TITLE_ICON_Y = 5.5F * S;
-    private static  float TITLE_TEXT_X = 12.5F * S;
-    private static  float TITLE_TEXT_Y = 3.4F * S;
-
-
-    private static  float ROW_HEIGHT = 14F * S;
-    private static  float ROW_BASE_W = 27F * S; // 22 + 5 из оригинального кода
-    private static  float ROW_PADDING_X = 5F * S;
-    private static  float ROW_START_Y = 5F * S;
-    private static  float ROW_ANIM_OFFSET = 15F * S;
-
-    private static  float ICON_PADDING = 4F * S;
-    private static  float SEP_PADDING_X = 4F * S;
-    private static  float SEP_OFFSET_Y = 3.2F * S;
-    private static  float SCROLL_OFFSET_Y = 4F * S;
+    private static float ROW_HEIGHT = 12F * S;
+    private static float PAD_X = 4.5F * S;
+    private static float ICON_GAP = 3.5F * S;
+    private static float NAME_TIME_GAP = 8F * S;
+    private static float ROW_START_Y = 4F * S;
+    private static float SCROLL_OFFSET_Y = 4F * S;
 
 
     private ru.white.utils.animation.satoshi.Animation animation1 = new EaseInOutQuad(300,1);
@@ -70,25 +57,16 @@ public class Potions implements IMinecraft {
         Collection<StatusEffectInstance> currentEffects = mc.player.getStatusEffects();
         displayedEffects.values().forEach(data -> data.active = false);
         S = InterFace.getInstance().sizeHud.getValue();
-        H = 16F * S;
-        MIN_W = 44F * S;
-        RADIUS = 5F * S;
-        TITLE_TEXT = 7F * S;
-        TITLE_ICON = 5F * S;
-        ROW_TEXT = 6.5F * S;
-        ICON = 7F * S;
-        TITLE_ICON_X = 5F * S;
-        TITLE_ICON_Y = 5.5F * S;
-        TITLE_TEXT_X = 12.5F * S;
-        TITLE_TEXT_Y = 3.4F * S;
-        ROW_HEIGHT = 14F * S;
-        ROW_BASE_W = 27F * S; // 22 + 5 из оригинального кода
-        ROW_PADDING_X = 5F * S;
-        ROW_START_Y = 5F * S;
-        ROW_ANIM_OFFSET = 15F * S;
-        ICON_PADDING = 4F * S;
-        SEP_PADDING_X = 4F * S;
-        SEP_OFFSET_Y = 3.2F * S;
+        H = 12F * S;
+        MIN_W = 34F * S;
+        RADIUS = 4F * S;
+        ROW_TEXT = 6F * S;
+        ICON = 6.5F * S;
+        ROW_HEIGHT = 12F * S;
+        PAD_X = 4.5F * S;
+        ICON_GAP = 3.5F * S;
+        NAME_TIME_GAP = 8F * S;
+        ROW_START_Y = 4F * S;
         SCROLL_OFFSET_Y = 4F * S;
 
         for (StatusEffectInstance effect : currentEffects) {
@@ -135,13 +113,12 @@ public class Potions implements IMinecraft {
 
         float alpha2 = animation2.getOutput();
 
-        // Отрисовка состояния пустого списка (чат)
+        // Пустое состояние: мини-плашка с глифом, чтобы элемент находился в редакторе HUD
         RenderUtil.Render2D.hudPlate(x, y, MIN_W, H, alpha2, RADIUS, InterFace.getInstance().alphaHUD.getValue());
+        Fonts.rainydlc_2.drawCentered("P", x + MIN_W / 2F, y + (H - 5F * S) / 2F, 5F * S,
+                ColorUtil.replAlpha(ColorUtil.client(), alpha2 * 0.85F));
 
         Font font = Fonts.sf_regular;
-
-        Fonts.rainydlc_2.draw("P", x + TITLE_ICON_X, y + TITLE_ICON_Y, TITLE_ICON, ColorUtil.replAlpha(ColorUtil.client(), alpha2));
-        font.draw("Potions", x + TITLE_TEXT_X, y + TITLE_TEXT_Y, TITLE_TEXT, ColorUtil.multAlpha(ColorUtil.getColor(240), alpha2));
 
         // сортировка раз в 50 мс в переиспользуемый список вместо стрима каждый кадр
         long nowMs = System.currentTimeMillis();
@@ -154,7 +131,7 @@ public class Potions implements IMinecraft {
             ).reversed());
         }
 
-        float h = 4 * S;
+        float h = ROW_START_Y * 2;
         float w = 0;
 
         toRemove.clear();
@@ -171,7 +148,10 @@ public class Potions implements IMinecraft {
                 continue;
             }
 
-            float rowW = ROW_BASE_W + font.getWidth(label(data), ROW_TEXT) + font.getWidth(data.duration, ROW_TEXT) + ICON;
+            float rowW = PAD_X * 2 + ICON + ICON_GAP
+                    + font.getWidth(label(data), ROW_TEXT)
+                    + NAME_TIME_GAP
+                    + font.getWidth(data.duration, ROW_TEXT);
 
             w = Math.max(w, rowW * a);
             h += ROW_HEIGHT * a;
@@ -183,14 +163,10 @@ public class Potions implements IMinecraft {
         float offsetY = y + ROW_START_Y;
         float offsetY2 = 0;
 
-        boolean firstRow = true;
-
         for (EffectData data : sortedEffects) {
 
             float a = data.animation.get();
             if (a <= 0.01f && !data.active) continue;
-
-            float addX =0;
 
             int lvl = data.effectInstance.getAmplifier() + 1;
 
@@ -199,7 +175,7 @@ public class Potions implements IMinecraft {
 
             int nameColor = bad ? ColorUtil.getColor(235, 70, 70, alpha * a) : ColorUtil.getColor(240, alpha * a);
             int lvlColor  = bad ? ColorUtil.getColor(170, 55, 55, alpha * a) : ColorUtil.getColor(150, alpha * a);
-            int timeColor = bad ? ColorUtil.getColor(200, 60, 60, alpha * a) : ColorUtil.getColor(200, alpha * a);
+            int timeColor = bad ? ColorUtil.getColor(200, 60, 60, alpha * a) : ColorUtil.getColor(185, alpha * a);
 
             // кэш строки с уровнем: конкатенация только при смене уровня/типа эффекта
             if (data.coloredLabelLvl != lvl || data.coloredLabelBad != bad) {
@@ -209,25 +185,18 @@ public class Potions implements IMinecraft {
             }
             String effectname = data.coloredLabel;
 
-            // Отрисовка названия
-            font.draw(effectname, x + ROW_PADDING_X - addX, offsetY, ROW_TEXT, nameColor);
+            float textY = offsetY + (ROW_HEIGHT - ROW_TEXT) / 2F;
 
+            // иконка эффекта слева
+            drawEffectIcon(eventDisplay, data, x + PAD_X, offsetY + (ROW_HEIGHT - ICON) / 2F, alpha * a);
+
+            // название с уровнем
+            font.draw(effectname, x + PAD_X + ICON + ICON_GAP, textY, ROW_TEXT, nameColor);
+
+            // время прижато к правому краю
             String key = data.duration;
             float timeWidth = font.getWidth(key, ROW_TEXT);
-
-            // Отрисовка времени (с прокруткой)
-            drawDuration(font, data, x + addX - ROW_PADDING_X + w - timeWidth - ICON - ICON_PADDING, offsetY, ROW_TEXT, timeColor);
-
-            // Отрисовка иконки
-            drawEffectIcon(eventDisplay, data, x + addX - ROW_PADDING_X + w - ICON, offsetY, alpha * a);
-
-            // Отрисовка разделителя
-            if (!firstRow) {
-                RenderUtil.Render2D.rect(x + SEP_PADDING_X + addX, offsetY - SEP_OFFSET_Y, w - (SEP_PADDING_X * 2) - addX, 0.5F,
-                        ColorUtil.getColor(255, 0.05F * alpha * a), 1);
-            }
-
-            firstRow = false;
+            drawDuration(font, data, x + w - PAD_X - timeWidth, textY, ROW_TEXT, timeColor);
 
             offsetY += ROW_HEIGHT * a;
             offsetY2 += ROW_HEIGHT * a;
