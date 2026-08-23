@@ -91,17 +91,23 @@ public class Menu extends Screen implements IMinecraft {
     public static ru.white.manager.Theme[] themes;
 
     // ── попап выбора тем: открывается кликом по иконке клиента в шапке.
-    //    Тем много, поэтому они показываются сеткой свотчей ──
+    //    Тем много, поэтому они показываются сеткой свотчей; последняя ячейка —
+    //    «Палитра»: свой цвет через HSB-бары прямо под сеткой ──
     private static final float POP_PAD = 6F;
     private static final float POP_HEAD_H = 11F;
     private static final int POP_COLS = 5;
     private static final float POP_CELL_W = 14F;
     private static final float POP_CELL_H = 13F;
+    private static final float POP_PAL_H = 36F;
     private boolean themePopupOpen = false;
     private final ru.white.utils.animation.satoshi.Animation animThemePopup = new EaseInOutQuad(250, 1, Direction.BACKWARDS);
+    private final ru.white.utils.animation.satoshi.Animation animThemePal = new EaseInOutQuad(250, 1, Direction.BACKWARDS);
     /** Геометрия иконки и попапа из последнего кадра — для обработки кликов. */
     private float[] logoIconRect = null;
     private float[] themePopupRect = null;
+    private float[] themePalRect = null;
+    /** Какой HSB-бар палитры тащим мышью: 0 - оттенок, 1 - насыщенность, 2 - яркость. */
+    private int draggingPalBar = -1;
 
     public static ru.white.utils.animation.satoshi.Animation animation14 = new EaseInOutQuad(300, 1);
     public static ru.white.utils.animation.satoshi.Animation animCategoryReset = new EaseInOutQuad(300, 1);
@@ -378,6 +384,8 @@ public class Menu extends Screen implements IMinecraft {
         themes = ru.white.manager.Theme.values();
         themePopupOpen = false;
         themePopupRect = null;
+        themePalRect = null;
+        draggingPalBar = -1;
         logoIconRect = null;
     }
 
@@ -1214,17 +1222,23 @@ public class Menu extends Screen implements IMinecraft {
         float open = animThemePopup.getOutput();
         if (open <= 0.01F) {
             themePopupRect = null;
+            themePalRect = null;
             return;
         }
 
-        int rows = (themes.length + POP_COLS - 1) / POP_COLS;
+        // +1 ячейка — «Палитра»
+        boolean palSel = selectedTheme == Theme.CUSTOM;
+        animThemePal.setDirection(palSel ? Direction.FORWARDS : Direction.BACKWARDS);
+        float palOpen = animThemePal.getOutput();
+
+        int rows = (themes.length + 1 + POP_COLS - 1) / POP_COLS;
         float pad = POP_PAD * S;
         float headH = POP_HEAD_H * S;
         float cellW = POP_CELL_W * S;
         float cellH = POP_CELL_H * S;
 
         float popW = pad * 2 + POP_COLS * cellW;
-        float popH = pad + headH + 3 * S + rows * cellH + pad;
+        float popH = pad + headH + 3 * S + rows * cellH + pad + palOpen * (POP_PAL_H * S + 4 * S);
 
         float slide = (1F - open) * 6 * S;
         float pX = px, pY = py + slide;
@@ -1238,8 +1252,13 @@ public class Menu extends Screen implements IMinecraft {
         String headLabel = "Темы";
 
         float gridTop = pY + pad + headH + 3 * S;
-        for (int i = 0; i < themes.length; i++) {
-            Theme t = themes[i];
+        int total = themes.length + 1; // + «Палитра»
+        for (int i = 0; i < total; i++) {
+            boolean customCell = i == themes.length;
+            Theme t = customCell ? Theme.CUSTOM : themes[i];
+            String key = customCell ? "CUSTOM" : t.getName();
+            int accent = customCell ? 0xFFFFFFFF : t.getClient();
+
             int col = i % POP_COLS, row = i / POP_COLS;
             float cX = pX + pad + col * cellW;
             float cY = gridTop + row * cellH;
@@ -1247,13 +1266,15 @@ public class Menu extends Screen implements IMinecraft {
             boolean sel = t == selectedTheme;
             boolean hov = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cX, cY, cellW, cellH);
 
-            ru.white.utils.animation.satoshi.Animation hovAnim = chipAnim("theme:" + t.getName());
+            ru.white.utils.animation.satoshi.Animation hovAnim = chipAnim("theme:" + key);
             hovAnim.setDirection(hov || sel ? Direction.FORWARDS : Direction.BACKWARDS);
             float act = hovAnim.getOutput();
-            ru.white.utils.animation.satoshi.Animation selAnim = chipAnim("themeSel:" + t.getName());
+            ru.white.utils.animation.satoshi.Animation selAnim = chipAnim("themeSel:" + key);
             selAnim.setDirection(sel ? Direction.FORWARDS : Direction.BACKWARDS);
             float sAct = selAnim.getOutput();
-            if (hov) headLabel = t.getName();
+            if (hov) headLabel = customCell ? "Палитра" : t.getName();
+
+            if (customCell && palSel) headLabel = "Палитра";
 
             float size = (8.5F + 2F * sAct) * S;
             float sX = cX + (cellW - size) / 2;
@@ -1261,9 +1282,36 @@ public class Menu extends Screen implements IMinecraft {
 
             if (act > 0.01F)
                 RenderUtil.Render2D.glow(sX, sY, size, size,
-                        ColorUtil.replAlpha(t.getClient(), 0.35F * globalAnim * open * act), size, 6, 1);
-            RenderUtil.Render2D.rect(sX, sY, size, size,
-                    ColorUtil.replAlpha(t.getClient(), (0.75F + 0.25F * act) * globalAnim * open), 3 * S);
+                        ColorUtil.replAlpha(accent, 0.35F * globalAnim * open * act), size, 6, 1);
+
+            if (customCell) {
+                // радужный свотч палитры
+                int segsC = 10;
+                float segC = size / segsC;
+                for (int sIdx = 0; sIdx < segsC; sIdx++) {
+                    float h0 = sIdx / (float) segsC, h1 = (sIdx + 1) / (float) segsC;
+                    int c0 = java.awt.Color.HSBtoRGB(h0, 1F, 1F);
+                    int c1 = java.awt.Color.HSBtoRGB(h1, 1F, 1F);
+                    RenderUtil.Render2D.gradientRect(sX + sIdx * segC, sY,
+                            segC + (sIdx == segsC - 1 ? 0 : 0.5F * S), size,
+                            new int[]{
+                                    ColorUtil.replAlpha(c0, (0.75F + 0.25F * act) * globalAnim * open),
+                                    ColorUtil.replAlpha(c1, (0.75F + 0.25F * act) * globalAnim * open),
+                                    ColorUtil.replAlpha(c1, (0.75F + 0.25F * act) * globalAnim * open),
+                                    ColorUtil.replAlpha(c0, (0.75F + 0.25F * act) * globalAnim * open)
+                            },
+                            sIdx == 0 ? 3 * S : 0, sIdx == segsC - 1 ? 3 * S : 0, sIdx == segsC - 1 ? 3 * S : 0, sIdx == 0 ? 3 * S : 0);
+                }
+                if (!palSel)
+                    RenderUtil.Render2D.rect(sX, sY, size, size, ColorUtil.getColor(0, 0.45F * globalAnim * open), 3 * S);
+                else
+                    RenderUtil.Render2D.rect(sX, sY, size, size,
+                            ColorUtil.replAlpha(Theme.customAccent, 0.35F * globalAnim * open), 3 * S);
+            } else {
+                RenderUtil.Render2D.rect(sX, sY, size, size,
+                        ColorUtil.replAlpha(accent, (0.75F + 0.25F * act) * globalAnim * open), 3 * S);
+            }
+
             if (sAct > 0.01F)
                 RenderUtil.Render2D.outline(sX - 1.25F * S * sAct, sY - 1.25F * S * sAct,
                         size + 2.5F * S * sAct, size + 2.5F * S * sAct, 0.5F * S,
@@ -1278,6 +1326,67 @@ public class Menu extends Screen implements IMinecraft {
                 ColorUtil.getColor(255, 0.4F * globalAnim * open));
 
         themePopupRect = new float[]{pX, pY, popW, popH};
+
+        // ── палитра: HSB-бары под сеткой, видны когда выбрана тема «Палитра» ──
+        themePalRect = null;
+        if (palOpen > 0.01F) {
+            float palW = popW - pad * 2;
+            float palX = pX + pad;
+            float palTop = gridTop + rows * cellH + 4 * S;
+
+            RenderUtil.Render2D.rect(palX - 2 * S, palTop - 3 * S, palW + 4 * S, (POP_PAL_H * S + 4 * S) * palOpen,
+                    ColorUtil.getColor(255, 0.04F * globalAnim * palOpen), 5 * S);
+
+            int colC = Theme.customAccent;
+            float[] hsb = java.awt.Color.RGBtoHSB((colC >> 16) & 0xFF, (colC >> 8) & 0xFF, colC & 0xFF, null);
+            float bh = 4.5F * S;
+            int segs = 16;
+            float seg = palW / segs;
+
+            for (int bar = 0; bar < 3; bar++) {
+                float by = palTop + bar * 10 * S;
+                for (int i2 = 0; i2 < segs; i2++) {
+                    float t0 = i2 / (float) segs, t1 = (i2 + 1) / (float) segs;
+                    int c0 = switch (bar) {
+                        case 0 -> java.awt.Color.HSBtoRGB(t0, 1F, 1F);
+                        case 1 -> java.awt.Color.HSBtoRGB(hsb[0], t0, hsb[2]);
+                        default -> java.awt.Color.HSBtoRGB(hsb[0], hsb[1], t0);
+                    };
+                    int c1 = switch (bar) {
+                        case 0 -> java.awt.Color.HSBtoRGB(t1, 1F, 1F);
+                        case 1 -> java.awt.Color.HSBtoRGB(hsb[0], t1, hsb[2]);
+                        default -> java.awt.Color.HSBtoRGB(hsb[0], hsb[1], t1);
+                    };
+                    RenderUtil.Render2D.gradientRect(palX + i2 * seg, by, seg + (i2 == segs - 1 ? 0 : 0.5F * S), bh,
+                            new int[]{
+                                    ColorUtil.replAlpha(c0, globalAnim * palOpen),
+                                    ColorUtil.replAlpha(c1, globalAnim * palOpen),
+                                    ColorUtil.replAlpha(c1, globalAnim * palOpen),
+                                    ColorUtil.replAlpha(c0, globalAnim * palOpen)
+                            },
+                            i2 == 0 ? 2 * S : 0, i2 == segs - 1 ? 2 * S : 0, i2 == segs - 1 ? 2 * S : 0, i2 == 0 ? 2 * S : 0);
+                }
+
+                float kx = palX + palW * MathHelper.clamp(hsb[bar], 0F, 1F);
+                int kc = bar == 0 ? java.awt.Color.HSBtoRGB(hsb[0], 1F, 1F) : colC;
+                RenderUtil.Render2D.rect(kx - 3 * S, by - 1 * S, 6 * S, bh + 2 * S,
+                        ColorUtil.getColor(255, globalAnim * palOpen), 6 * S);
+                RenderUtil.Render2D.rect(kx - 2 * S, by, 4 * S, bh,
+                        ColorUtil.replAlpha(kc, globalAnim * palOpen), 6 * S);
+            }
+
+            // перетаскивание бара — цвет меняется на лету во всей теме
+            if (draggingPalBar >= 0 && draggingPalBar < 3) {
+                float t = MathHelper.clamp(((float) lastMouseX - palX) / palW, 0F, 1F);
+                float[] nh = {hsb[0], hsb[1], hsb[2]};
+                nh[draggingPalBar] = t;
+                int rgb = java.awt.Color.HSBtoRGB(nh[0], nh[1], nh[2]);
+                Theme.customAccent = 0xFF000000 | rgb;
+                GuiSounds.colorTick(t);
+            }
+
+            themePalRect = new float[]{palX, palTop, palW, POP_PAL_H * S};
+        }
     }
 
     public void openPreviewEditor(Module target) { beforeEditorOpen(); PreviewEditor.getInstance().open(target); GuiSounds.editor(); }
@@ -1370,23 +1479,39 @@ public class Menu extends Screen implements IMinecraft {
         if (themePopupOpen) {
             if (themePopupRect != null
                     && MathUtil.isHovered(mouseX, mouseY, themePopupRect[0], themePopupRect[1], themePopupRect[2], themePopupRect[3])) {
+                // клик по HSB-бару палитры — начинаем перетаскивание
+                if (themePalRect != null
+                        && MathUtil.isHovered(mouseX, mouseY, themePalRect[0] - 3 * S, themePalRect[1] - 3 * S,
+                                themePalRect[2] + 6 * S, themePalRect[3] + 6 * S)) {
+                    for (int bar = 0; bar < 3; bar++) {
+                        float by = themePalRect[1] + bar * 10 * S;
+                        if (MathUtil.isHovered(mouseX, mouseY, themePalRect[0], by - 3 * S, themePalRect[2], 13 * S)) {
+                            draggingPalBar = bar;
+                            GuiSounds.sliderGrab();
+                            break;
+                        }
+                    }
+                    return true;
+                }
+
                 float relX = mouseX - (themePopupRect[0] + POP_PAD * S);
                 float relY = mouseY - (themePopupRect[1] + POP_PAD * S + POP_HEAD_H * S + 3 * S);
                 int colIdx = (int) (relX / (POP_CELL_W * S));
                 int rowIdx = (int) (relY / (POP_CELL_H * S));
                 if (colIdx >= 0 && colIdx < POP_COLS && rowIdx >= 0) {
                     int idx = rowIdx * POP_COLS + colIdx;
-                    if (idx < themes.length) {
-                        Theme chosen = themes[idx];
+                    if (idx <= themes.length) { // последняя ячейка — «Палитра»
+                        Theme chosen = idx == themes.length ? Theme.CUSTOM : themes[idx];
                         if (chosen != selectedTheme) {
                             animation14.reset(); preSelectedTheme = selectedTheme; selectedTheme = chosen;
                             Client.get().guiManager().setGuiTheme(chosen);
-                            GuiSounds.theme(idx, themes.length);
+                            GuiSounds.theme(idx, themes.length + 1);
                         }
                     }
                 }
                 return true;
             }
+            draggingPalBar = -1;
             themePopupOpen = false;
             return true;
         }
@@ -1593,6 +1718,11 @@ public class Menu extends Screen implements IMinecraft {
         if (editor != null) { return editor.mouseReleased(click.button()); }
         if (draggingSlider != null || draggingColor != null) GuiSounds.sliderRelease();
         draggingSlider = null; draggingColor = null;
+        // закончили тащить бар палитры — сохраняем кастомный цвет в конфиг
+        if (draggingPalBar != -1) {
+            draggingPalBar = -1;
+            Client.get().guiManager().setGuiTheme(selectedTheme);
+        }
         return super.mouseReleased(click);
     }
 

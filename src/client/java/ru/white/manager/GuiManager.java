@@ -44,6 +44,7 @@ public class GuiManager {
         try (FileWriter writer = new FileWriter(file)) {
             Properties props = new Properties();
             props.setProperty("theme", currentTheme.name());
+            props.setProperty("custom", Integer.toHexString(Theme.customAccent));
             props.store(writer, "GUI Settings");
         } catch (IOException e) {
             e.printStackTrace();
@@ -55,6 +56,13 @@ public class GuiManager {
             Properties props = new Properties();
             props.load(reader);
             currentTheme = Theme.valueOf(props.getProperty("theme", Theme.NIGHT.name()));
+            String custom = props.getProperty("custom");
+            if (custom != null) {
+                try {
+                    Theme.customAccent = (int) Long.parseLong(custom, 16);
+                } catch (NumberFormatException ignored) {
+                }
+            }
         } catch (IOException | IllegalArgumentException e) {
             e.printStackTrace();
         }

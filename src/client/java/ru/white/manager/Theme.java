@@ -350,7 +350,38 @@ public enum Theme {
             , ColorUtil.getColor(240)
                     ,ColorUtil.getColor(160)
                     ,ColorUtil.getColor(24,24,27),
-                    new Color(0x9BA3AE).getRGB());
+                    new Color(0x9BA3AE).getRGB()),
+
+    // ── кастомная тема «Палитра»: цвет задаётся пользователем в попапе тем ──
+    CUSTOM("Палитра",
+            new Color(0x88AAFF).getRGB()
+            ,   new Color(0x99101624, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xAFC6FF).getRGB()) {
+        @Override
+        public int getClient() {
+            return customAccent;
+        }
+
+        @Override
+        public int getRect() {
+            int r = (customAccent >> 16) & 0xFF, g = (customAccent >> 8) & 0xFF, b = customAccent & 0xFF;
+            int rr = Math.max(4, (int) (r * 0.12F)), gr = Math.max(4, (int) (g * 0.12F)), br = Math.max(4, (int) (b * 0.12F));
+            return (0x99 << 24) | (rr << 16) | (gr << 8) | br;
+        }
+
+        @Override
+        public int getText_client_c() {
+            int r = (customAccent >> 16) & 0xFF, g = (customAccent >> 8) & 0xFF, b = customAccent & 0xFF;
+            int rr = r + (255 - r) * 40 / 100, gr = g + (255 - g) * 40 / 100, br = b + (255 - b) * 40 / 100;
+            return (255 << 24) | (rr << 16) | (gr << 8) | br;
+        }
+    };
+
+    /** Акцент кастомной темы «Палитра» — меняется на лету, сохраняется в конфиге. */
+    public static int customAccent = 0xFF88AAFF;
     private final String name;
     private final int client;
     private final int rect;
