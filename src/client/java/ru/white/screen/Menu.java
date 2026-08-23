@@ -118,6 +118,11 @@ public class Menu extends Screen implements IMinecraft {
     /** Кнопка «Добавить модуль» внизу списка (геометрия из последнего кадра). */
     private float[] addModuleRect = null;
 
+    /** Кнопка удаления Lua-модуля в панели настроек + состояние подтверждения. */
+    private float[] deleteRect = null;
+    private Module deleteArmModule = null;
+    private long deleteArmUntil = 0L;
+
     private StringSetting activeString = null;
     private String stringBuffer = "";
 
@@ -1133,6 +1138,32 @@ public class Menu extends Screen implements IMinecraft {
             }
         }
 
+        // ── кнопка удаления для Lua-модулей ──
+        deleteRect = null;
+        if (select instanceof ru.white.script.LuaModule) {
+            float sa = select.animation3.getOutput();
+            if (sa > 0.01F) {
+                boolean armed = deleteArmModule == select && System.currentTimeMillis() < deleteArmUntil;
+                float blink = armed ? (float) Math.abs(Math.sin(System.currentTimeMillis() / 170.0)) : 0F;
+                float dh = 16 * S;
+                float dx = xST, dy = yST + 2 * S, dw = wST;
+
+                RenderUtil.Render2D.rect(dx, dy, dw, dh,
+                        ColorUtil.overCol(
+                                ColorUtil.getColor(255, 70, 70, (globalAnim * sa) * (armed ? 0.16F + 0.14F * blink : 0.07F)),
+                                ColorUtil.getColor(255, 90, 90, (globalAnim * sa) * (armed ? 0.35F + 0.2F * blink : 0.18F)),
+                                Math.max(blink, 0F)), 5 * S);
+                RenderUtil.Render2D.outline(dx, dy, dw, dh, 0.5F * S,
+                        ColorUtil.getColor(255, 100, 100, (globalAnim * sa) * (armed ? 0.9F : 0.45F)), 5 * S);
+                String dLabel = armed ? "Точно удалить?" : "Удалить модуль";
+                regular.drawCentered(dLabel, dx + dw / 2, dy + 4.5F * S, 6.5F * S,
+                        ColorUtil.getColor(255, 130, 130, globalAnim * sa * (armed ? 1F : 0.85F)));
+
+                deleteRect = new float[]{dx, dy, dw, dh};
+                yST += (dh + 5 * S) * sa;
+            }
+        }
+
         float contentHS = yST + settingScrollAnim - (ySetting + 10 * S);
         settingMaxScroll = Math.max(0, contentHS - (hSetting - 14 * S));
         if (settingScrollTarget > settingMaxScroll) settingScrollTarget = settingMaxScroll;
@@ -1406,6 +1437,29 @@ public class Menu extends Screen implements IMinecraft {
                 }
             }
         }
+        // ── удаление Lua-модуля: два клика для подтверждения ──
+        if (deleteRect != null && select instanceof ru.white.script.LuaModule luaDelete
+                && click.button() == 0
+                && MathUtil.isHovered(mouseX, mouseY, deleteRect[0], deleteRect[1], deleteRect[2], deleteRect[3])) {
+            long nowMs = System.currentTimeMillis();
+            if (deleteArmModule != select || nowMs > deleteArmUntil) {
+                deleteArmModule = select;
+                deleteArmUntil = nowMs + 3000L;
+                GuiSounds.editStart();
+            } else {
+                String name = select.getBigName();
+                if (ru.white.script.LuaScriptManager.get().delete(luaDelete)) {
+                    ru.white.utils.math.ChatUtils.addChatMessage("§7[Lua] §fмодуль «" + name + "» удалён");
+                }
+                select = null;
+                deleteArmModule = null;
+                settingScrollTarget = 0;
+                settingScrollAnim = 0;
+                GuiSounds.button();
+            }
+            return true;
+        }
+
         return super.mouseClicked(click, doubled);
     }
 

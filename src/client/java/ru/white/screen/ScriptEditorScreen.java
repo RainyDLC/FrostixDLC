@@ -48,6 +48,8 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         String name = "";
         final List<String> lines = new ArrayList<>();
         int row, col;
+        /** Якорь выделения; -1 — выделения нет. */
+        int anchorRow = -1, anchorCol = -1;
         float scrollY, scrollYTarget;
         float scrollX, scrollXTarget;
         Path file;
@@ -282,13 +284,39 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
 
         for (int i = firstRow; i < lastRow; i++) {
             float rowY = codeY + 5F + i * LINE_H - cur.scrollY;
+            String line = cur.lines.get(i);
             String num = String.valueOf(i + 1);
             f.draw(num, codeX + gutterW - 7F - f.getWidth(num, 5.5F), rowY + 1.5F, 5.5F,
                     i == cur.row ? ColorUtil.replAlpha(accent, a * 0.95F) : ColorUtil.getColor(140, a * 0.4F));
             if (i == cur.row)
                 RenderUtil.Render2D.rect(codeX + gutterW + 2F, rowY - 0.5F, codeW - gutterW - 4F, LINE_H,
                         ColorUtil.getColor(255, a * 0.03F), 3F);
-            drawHighlighted(f, cur.lines.get(i), lx, rowY, a);
+
+            // подсветка выделения
+            if (hasSel(cur)) {
+                int[] sP = selStart(cur), eP = selEnd(cur);
+                int c0 = -1, c1 = -1;
+                if (i > sP[0] && i < eP[0]) {
+                    c0 = 0;
+                    c1 = line.length();
+                } else if (i == sP[0] && i == eP[0]) {
+                    c0 = sP[1];
+                    c1 = eP[1];
+                } else if (i == sP[0]) {
+                    c0 = sP[1];
+                    c1 = line.length();
+                } else if (i == eP[0]) {
+                    c0 = 0;
+                    c1 = eP[1];
+                }
+                if (c1 > c0) {
+                    float x0 = lx + f.getWidth(substring(line, c0), 6.5F);
+                    float ww = f.getWidth(line.substring(c0, c1), 6.5F);
+                    RenderUtil.Render2D.rect(x0, rowY, ww, LINE_H - 1F, ColorUtil.replAlpha(accent, a * 0.30F), 2F);
+                }
+            }
+
+            drawHighlighted(f, line, lx, rowY, a);
         }
 
         if (!nameFocus && nameTextFocused()) {
@@ -410,6 +438,55 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         tab().dirty = true;
     }
 
+    // ── выделение ──
+
+    private boolean hasSel(Tab t) {
+        return t.anchorRow != -1 && (t.anchorRow != t.row || t.anchorCol != t.col);
+    }
+
+    /** Лексикографически первая точка выделения: {row, col}. */
+    private int[] selStart(Tab t) {
+        if (t.anchorRow < t.row || (t.anchorRow == t.row && t.anchorCol <= t.col))
+            return new int[]{t.anchorRow, t.anchorCol};
+        return new int[]{t.row, t.col};
+    }
+
+    private int[] selEnd(Tab t) {
+        int[] s = selStart(t);
+        if (s[0] == t.anchorRow && s[1] == t.anchorCol) return new int[]{t.row, t.col};
+        return new int[]{t.anchorRow, t.anchorCol};
+    }
+
+    private String selectedText(Tab t) {
+        int[] s = selStart(t), e = selEnd(t);
+        if (s[0] == e[0]) return t.lines.get(s[0]).substring(s[1], e[1]);
+        StringBuilder sb = new StringBuilder();
+        sb.append(t.lines.get(s[0]).substring(s[1]));
+        for (int r = s[0] + 1; r < e[0]; r++) sb.append('\n').append(t.lines.get(r));
+        sb.append('\n').append(t.lines.get(e[0]), 0, e[1]);
+        return sb.toString();
+    }
+
+    /** Удаляет выделенный диапазон, курсор — в начало бывшего выделения. */
+    private void deleteSelection() {
+        Tab t = tab();
+        if (!hasSel(t)) return;
+        int[] s = selStart(t), e = selEnd(t);
+        if (s[0] == e[0]) {
+            String line = t.lines.get(s[0]);
+            t.lines.set(s[0], line.substring(0, s[1]) + line.substring(e[1]));
+        } else {
+            String head = t.lines.get(s[0]).substring(0, s[1]);
+            String tail = t.lines.get(e[0]).substring(e[1]);
+            t.lines.set(s[0], head + tail);
+            for (int r = e[0]; r >= s[0] + 1; r--) t.lines.remove(r);
+        }
+        t.anchorRow = -1;
+        t.row = s[0];
+        t.col = s[1];
+        markDirty();
+    }
+
     /** Каретка всегда остаётся в пределах видимой области (по обеим осям). */
     private void ensureCaretVisible() {
         Font f = Fonts.sf_regular;
@@ -504,6 +581,7 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         }
         if (ctrl) return true;
 
+        if (hasSel(tab())) deleteSelection();
         insertText(str);
         ensureCaretVisible();
         GuiSounds.type();
@@ -535,6 +613,66 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         boolean ctrl = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
                 || InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
 
+        // ── буфер обмена: Ctrl+V вставка, Ctrl+C строка, Ctrl+X вырезать строку ──
+        if (ctrl && key == GLFW.GLFW_KEY_V) {
+            String clip;
+            try {
+                clip = mc.keyboard.getClipboard();
+            } catch (Exception e) {
+                clip = null;
+            }
+            if (clip != null && !clip.isEmpty()) {
+                if (nameFocus) {
+                    String clean = clip.replace("\r", " ").replace("\n", " ");
+                    t.name = t.name + clean;
+                    if (t.name.length() > 24) t.name = t.name.substring(0, 24);
+                    t.dirty = true;
+                } else {
+                    if (hasSel(t)) deleteSelection();
+                    insertText(clip);
+                    ensureCaretVisible();
+                }
+                GuiSounds.type();
+            }
+            return true;
+        }
+        if (ctrl && key == GLFW.GLFW_KEY_C && !nameFocus) {
+            try {
+                mc.keyboard.setClipboard(hasSel(t) ? selectedText(t) : t.lines.get(t.row));
+                GuiSounds.editCommit();
+            } catch (Exception ignored) {
+            }
+            return true;
+        }
+        if (ctrl && key == GLFW.GLFW_KEY_X && !nameFocus) {
+            try {
+                mc.keyboard.setClipboard(hasSel(t) ? selectedText(t) : t.lines.get(t.row));
+                if (hasSel(t)) {
+                    deleteSelection();
+                } else {
+                    t.lines.remove(t.row);
+                    if (t.lines.isEmpty()) t.lines.add("");
+                    t.row = clampInt(t.row, 0, t.lines.size() - 1);
+                    t.col = 0;
+                }
+                markDirty();
+                ensureCaretVisible();
+                GuiSounds.erase();
+            } catch (Exception ignored) {
+            }
+            return true;
+        }
+        // Ctrl+A — выделить весь код
+        if (ctrl && key == GLFW.GLFW_KEY_A && !nameFocus) {
+            t.anchorRow = 0;
+            t.anchorCol = 0;
+            t.row = t.lines.size() - 1;
+            t.col = t.lines.get(t.row).length();
+            ensureCaretVisible();
+            GuiSounds.type();
+            return true;
+        }
+
         // Ctrl+Tab / Ctrl+Shift+Tab — переключение вкладок
         if (ctrl && key == GLFW.GLFW_KEY_TAB && !tabs.isEmpty()) {
             int dir = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
@@ -550,34 +688,57 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         }
 
         ensureCursor(t);
+        boolean shift = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
+                || InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+        int oldRow = t.row, oldCol = t.col;
+        boolean edited = false;
+
         switch (key) {
             case GLFW.GLFW_KEY_BACKSPACE -> {
-                String line = t.lines.get(t.row);
-                if (t.col > 0) {
-                    t.lines.set(t.row, line.substring(0, t.col - 1) + line.substring(t.col));
-                    t.col--;
-                } else if (t.row > 0) {
-                    String prev = t.lines.get(t.row - 1);
-                    t.col = prev.length();
-                    t.lines.set(t.row - 1, prev + line);
-                    t.lines.remove(t.row);
-                    t.row--;
+                if (hasSel(t)) {
+                    deleteSelection();
+                } else {
+                    String line = t.lines.get(t.row);
+                    if (t.col > 0) {
+                        t.lines.set(t.row, line.substring(0, t.col - 1) + line.substring(t.col));
+                        t.col--;
+                    } else if (t.row > 0) {
+                        String prev = t.lines.get(t.row - 1);
+                        t.col = prev.length();
+                        t.lines.set(t.row - 1, prev + line);
+                        t.lines.remove(t.row);
+                        t.row--;
+                    }
                 }
+                edited = true;
                 markDirty();
                 GuiSounds.erase();
             }
             case GLFW.GLFW_KEY_DELETE -> {
-                String line = t.lines.get(t.row);
-                if (t.col < line.length()) {
-                    t.lines.set(t.row, line.substring(0, t.col) + line.substring(t.col + 1));
-                } else if (t.row < t.lines.size() - 1) {
-                    t.lines.set(t.row, line + t.lines.get(t.row + 1));
-                    t.lines.remove(t.row + 1);
+                if (hasSel(t)) {
+                    deleteSelection();
+                } else {
+                    String line = t.lines.get(t.row);
+                    if (t.col < line.length()) {
+                        t.lines.set(t.row, line.substring(0, t.col) + line.substring(t.col + 1));
+                    } else if (t.row < t.lines.size() - 1) {
+                        t.lines.set(t.row, line + t.lines.get(t.row + 1));
+                        t.lines.remove(t.row + 1);
+                    }
+                    markDirty();
                 }
-                markDirty();
+                edited = true;
             }
-            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> newlineWithIndent();
-            case GLFW.GLFW_KEY_TAB -> insertText("  ");
+            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
+                if (hasSel(t)) deleteSelection();
+                newlineWithIndent();
+                edited = true;
+            }
+            case GLFW.GLFW_KEY_TAB -> {
+                if (hasSel(t)) deleteSelection();
+                insertText("  ");
+                edited = true;
+            }
             case GLFW.GLFW_KEY_LEFT -> {
                 if (t.col > 0) t.col--;
                 else if (t.row > 0) {
@@ -601,6 +762,16 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
             default -> {
                 return super.keyPressed(input);
             }
+        }
+
+        // Shift+движение — расширяет выделение; движение без Shift — схлопывает
+        if (shift && !edited) {
+            if (!hasSel(t)) {
+                t.anchorRow = oldRow;
+                t.anchorCol = oldCol;
+            }
+        } else if (!edited) {
+            t.anchorRow = -1;
         }
 
         ensureCaretVisible();
@@ -661,20 +832,34 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         nameFocus = false;
 
         if (MathUtil.isHovered(mx, my, codeX, codeY, codeW, codeH)) {
-            int row = Math.round((my - codeY - 5F + t.scrollY) / LINE_H);
-            t.row = clampInt(row, 0, t.lines.size() - 1);
+            int newRow = Math.round((my - codeY - 5F + t.scrollY) / LINE_H);
+            newRow = clampInt(newRow, 0, t.lines.size() - 1);
 
-            String line = t.lines.get(t.row);
+            String line = t.lines.get(newRow);
             Font f = Fonts.sf_regular;
             float relX = mx - (codeX + gutterW + 8F) + t.scrollX;
-            int col = 0;
+            int newCol = 0;
             for (int i = 0; i <= line.length(); i++) {
                 if (i == line.length() || f.getWidth(line.substring(0, i + 1), 6.5F) > relX) {
-                    col = i;
+                    newCol = i;
                     break;
                 }
             }
-            t.col = clampInt(col, 0, line.length());
+            newCol = clampInt(newCol, 0, line.length());
+
+            // Shift+клик — расширяет выделение от прежнего курсора
+            boolean shiftClick = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
+                    || InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+            if (shiftClick) {
+                if (!hasSel(t) && t.anchorRow == -1) {
+                    t.anchorRow = t.row;
+                    t.anchorCol = t.col;
+                }
+            } else {
+                t.anchorRow = -1;
+            }
+            t.row = newRow;
+            t.col = newCol;
             nameFocus = false;
             return true;
         }

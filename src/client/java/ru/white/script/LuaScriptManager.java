@@ -148,6 +148,23 @@ public final class LuaScriptManager {
         return loaded.get(file);
     }
 
+    /** Удаление модуля: снять с регистрации и стереть .lua-файл с диска. */
+    public synchronized boolean delete(LuaModule module) {
+        Path file = module.getFile();
+        unload(file);
+        if (file == null) return true;
+        try {
+            boolean removed = Files.deleteIfExists(file);
+            if (!removed) {
+                ChatUtils.addChatMessage("§7[Lua] §cфайл не найден: " + file.getFileName());
+            }
+            return removed;
+        } catch (IOException e) {
+            ChatUtils.addChatMessage("§c[Lua] не удалось удалить файл: " + e.getMessage());
+            return false;
+        }
+    }
+
     private synchronized LuaModule register(Path file, String code, Category category) {
         unload(file);
 
