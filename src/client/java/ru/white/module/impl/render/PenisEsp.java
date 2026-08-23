@@ -37,6 +37,11 @@ import java.util.Map;
  * при прыжке якорь улетает вверх, яички запаздывают и растягиваются, на приземлении
  * дают отскок от земли и пару затухающих колебаний. При беге качаются в противофазе.
  */
+@ModuleInfo(
+        name = "Penis Esp",
+        desc = "Реалистичная физика яичек при прыжке и беге",
+        category = Category.RENDER
+)
 public class PenisEsp extends Module implements IMinecraft {
 
     public SliderSetting length = new SliderSetting(this, "Длина", 0.38F, 0.15F, 0.9F, 0.01F);
