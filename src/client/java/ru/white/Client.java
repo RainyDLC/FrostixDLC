@@ -17,6 +17,7 @@ import ru.white.rpc.RPC;
 import ru.white.screen.Menu;
 import ru.white.utils.render.Render2D;
 import ru.white.utils.render.font.FontInitializer;
+import ru.white.script.LuaScriptManager;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;
@@ -113,6 +114,9 @@ public class Client implements ClientModInitializer {
 
         this.moduleManager = new ModuleManager();
         this.moduleManager.init();
+
+        // пользовательские Lua-модули — после основных модулей
+        LuaScriptManager.get().loadAll();
 
         this.componentManager = new ComponentManager();
         this.componentManager.init();

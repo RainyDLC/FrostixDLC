@@ -48,6 +48,8 @@ def bundleLibsInJar = true
 def mediaPlayerInfo = "dev.redstones.mediaplayerinfo:media-player-info:${media_player_info_version}"
 def kotlinStdlib = "org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}"
 def kotlinxSerialization = "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:${kotlinx_serialization_version}"
+// Lua для пользовательских скриптов-модулей
+def luaj = "org.luaj:luaj-jse:3.0.1"
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -62,14 +64,17 @@ dependencies {
         modImplementation include(mediaPlayerInfo)
         modImplementation include(kotlinStdlib)
         modImplementation include(kotlinxSerialization)
+        modImplementation include(luaj)
     } else {
         compileOnly mediaPlayerInfo
         compileOnly kotlinStdlib
         compileOnly kotlinxSerialization
+        compileOnly luaj
 
         modLocalRuntime mediaPlayerInfo
         modLocalRuntime kotlinStdlib
         modLocalRuntime kotlinxSerialization
+        modLocalRuntime luaj
     }
 }
 

@@ -115,6 +115,9 @@ public class Menu extends Screen implements IMinecraft {
     /** Модуль, которому сейчас назначают клавишу прямо из списка. */
     private Module bindingModule = null;
 
+    /** Кнопка «Добавить модуль» внизу списка (геометрия из последнего кадра). */
+    private float[] addModuleRect = null;
+
     private StringSetting activeString = null;
     private String stringBuffer = "";
 
@@ -730,6 +733,32 @@ public class Menu extends Screen implements IMinecraft {
             }
         }
 
+        // ── кнопка «Добавить модуль» внизу списка ──
+        addModuleRect = null;
+        if (!searching()) {
+            float abW = 142 * S;
+            float abH = 18 * S;
+            float abX = xModule;
+            float abY = yModule + 2 * S;
+            boolean abHover = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, abX, abY, abW, abH);
+            ru.white.utils.animation.satoshi.Animation addAnim = chipAnim("lua:addmodule");
+            addAnim.setDirection(abHover ? Direction.FORWARDS : Direction.BACKWARDS);
+            float aa = addAnim.getOutput();
+
+            RenderUtil.Render2D.rect(abX, abY, abW, abH,
+                    ColorUtil.overCol(ColorUtil.getColor(0, 0.12F * globalAnim), ColorUtil.replAlpha(ColorUtil.client(), 0.10F * globalAnim), aa), 5 * S);
+            RenderUtil.Render2D.outline(abX, abY, abW, abH, 0.5F * S,
+                    ColorUtil.replAlpha(ColorUtil.client(), globalAnim * (0.25F + 0.45F * aa)), 5 * S);
+
+            String addText = "+ Добавить модуль";
+            draw.drawCentered(addText, abX + abW / 2F, abY + 5.5F * S, 6.5F * S,
+                    ColorUtil.overCol(ColorUtil.getColor(200, globalAnim * (0.55F + 0.35F * aa)),
+                            ColorUtil.replAlpha(ColorUtil.client(), globalAnim * (0.6F + 0.4F * aa)), Math.max(aa, abHover ? 1F : 0F)));
+
+            addModuleRect = new float[]{abX, abY, abW, abH};
+            yModule += abH + 5 * S;
+        }
+
         animSearchEmpty.setDirection(searching() && found == 0 ? Direction.FORWARDS : Direction.BACKWARDS);
         float emptyAnim = animSearchEmpty.getOutput();
 
@@ -1258,6 +1287,14 @@ public class Menu extends Screen implements IMinecraft {
                 }
                 yModule += (moduleH + 5 * S) * canim1;
             }
+        }
+
+        // ── «Добавить модуль» → редактор Lua-скрипта ──
+        if (!searchActive && addModuleRect != null && click.button() == 0
+                && MathUtil.isHovered(mouseX, mouseY, addModuleRect[0], addModuleRect[1], addModuleRect[2], addModuleRect[3])) {
+            GuiSounds.button();
+            mc.setScreen(new ScriptEditorScreen(this, active));
+            return true;
         }
 
         float xSetting = x + 164 * S;

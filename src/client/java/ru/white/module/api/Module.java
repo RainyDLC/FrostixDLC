@@ -49,22 +49,37 @@ public abstract class Module implements IMinecraft {
     public ru.white.utils.animation.satoshi.Animation animation16 = new EaseInOutQuad(300, 1);
 
     public Module() {
+        this(false);
+    }
+
+    /**
+     * @param dynamic true — модуль без аннотации {@link ModuleInfo}
+     *                (динамические Lua-модули): имя/категорию задаёт менеджер.
+     */
+    protected Module(boolean dynamic) {
         Class<? extends Module> clazz = this.getClass();
         ModuleInfo moduleInfo = clazz.getAnnotation(ModuleInfo.class);
 
-        if (moduleInfo == null) {
-            throw new NotImplementedException("@ModuleInfo annotation not found on " + clazz.getSimpleName());
+        if (!dynamic) {
+            if (moduleInfo == null) {
+                throw new NotImplementedException("@ModuleInfo annotation not found on " + clazz.getSimpleName());
+            }
         }
 
-        this.moduleInfo = moduleInfo;
-        this.name = moduleInfo.name().trim().replaceAll(" ", "");
-        this.bigName =  moduleInfo.name();
-        this.desc = moduleInfo.desc();
-        this.category = moduleInfo.category();
-        this.autoEnabled = moduleInfo.autoEnabled();
-        this.allowDisable = moduleInfo.allowDisable();
-        this.hidden = moduleInfo.hidden();
-        this.key = moduleInfo.key();
+        if (moduleInfo != null) {
+            this.moduleInfo = moduleInfo;
+            this.name = moduleInfo.name().trim().replaceAll(" ", "");
+            this.bigName =  moduleInfo.name();
+            this.desc = moduleInfo.desc();
+            this.category = moduleInfo.category();
+            this.autoEnabled = moduleInfo.autoEnabled();
+            this.allowDisable = moduleInfo.allowDisable();
+            this.hidden = moduleInfo.hidden();
+            this.key = moduleInfo.key();
+        } else {
+            // значения для динамических модулей — перезаписываются после инициализации
+            this.allowDisable = true;
+        }
         setup();
     }
 
