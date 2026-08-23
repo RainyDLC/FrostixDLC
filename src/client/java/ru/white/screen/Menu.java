@@ -532,6 +532,9 @@ public class Menu extends Screen implements IMinecraft {
         // меню постояло на месте — теперь подменяем его мозаикой и рассыпаем
         if (exit && !dissolveStarted && System.currentTimeMillis() - exitHoldStart >= SHATTER_HOLD_MS) {
             dissolveStarted = true;
+            // предыдущий кадр ещё показывал целую панель — фиксируем её в текстуру,
+            // чтобы осколки разлетелись с настоящими кусками интерфейса
+            shards.capturePanel(x, y, w, h);
             shards.dissolve(x, y, w, h, 8 * S, screenWidth, screenHeight, S);
             glomalAnim.run(0, 0.1F, Easings.SINE_IN);
         }

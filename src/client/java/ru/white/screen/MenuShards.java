@@ -1,9 +1,17 @@
 package ru.white.screen;
 
+import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.blaze3d.textures.TextureFormat;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.Framebuffer;
 import ru.white.Client;
 import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.render.DrawBatcher;
 import ru.white.utils.render.ShardPipeline;
+import ru.white.utils.render.ShardTexturePipeline;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -52,11 +60,27 @@ public final class MenuShards {
         float fall;
         float delay, span;  // доли общей длительности
         float shade;
+        /** UV вершин в захваченной панели: по 2 float на вершину. */
+        float[] localUv;
+        /** Цвет стеклянного фолбэка (RGB): тема клиента с градиентом и бликами. */
+        int tint;
     }
 
     private final List<Shard> shards = new ArrayList<>();
     private final Random random = new Random();
     private final float[] faces = new float[12];
+    /** 24 float: (x, y, u, v) на вершину для пары граней. */
+    private final float[] faceXyuv = new float[24];
+
+    private final ShardTexturePipeline texturedPipeline = new ShardTexturePipeline();
+
+    // захваченная панель — общий ресурс между открытиями/закрытиями
+    private static GpuTexture panelTexture;
+    private static GpuTextureView panelView;
+    private static int panelTexW, panelTexH;
+
+    // прямоугольник панели в fixed-координатах — для расчёта UV
+    private float panelPx, panelPy, panelPw, panelPh;
 
     private Phase phase = Phase.IDLE;
     private long startTime;
@@ -94,6 +118,56 @@ public final class MenuShards {
         shards.clear();
     }
 
+    /**
+     * Захват собранной панели в текстуру: вызывается в момент начала распада,
+     * когда предыдущий кадр ещё показывает целое меню. Осколки потом летят
+     * с настоящими кусками интерфейса.
+     */
+    public void capturePanel(float x, float y, float w, float h) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null || client.getFramebuffer() == null
+                || client.getFramebuffer().getColorAttachment() == null) {
+            return;
+        }
+
+        Framebuffer fb = client.getFramebuffer();
+        // fixed-2x GUI → пиксели фреймбуфера
+        int srcX = Math.round(x * 2F);
+        int srcY = Math.round(y * 2F);
+        int sizeW = Math.max(1, Math.round(w * 2F));
+        int sizeH = Math.max(1, Math.round(h * 2F));
+        if (srcX < 0 || srcY < 0
+                || srcX + sizeW > fb.textureWidth
+                || srcY + sizeH > fb.textureHeight) {
+            return;
+        }
+
+        if (panelTexture == null || panelTexW != sizeW || panelTexH != sizeH) {
+            if (panelView != null) { panelView.close(); panelView = null; }
+            if (panelTexture != null) { panelTexture.close(); panelTexture = null; }
+            panelTexture = RenderSystem.getDevice().createTexture(
+                    () -> "client:menu_shard_panel",
+                    GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING,
+                    TextureFormat.RGBA8,
+                    sizeW, sizeH, 1, 1
+            );
+            panelView = RenderSystem.getDevice().createTextureView(panelTexture);
+            panelTexW = sizeW;
+            panelTexH = sizeH;
+        }
+
+        CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+        encoder.copyTextureToTexture(
+                fb.getColorAttachment(), panelTexture,
+                0, 0, 0,
+                srcX, srcY, sizeW, sizeH
+        );
+    }
+
+    private boolean hasCapture() {
+        return panelView != null;
+    }
+
     /** Осколки летят из-за краёв экрана и собираются в панель. */
     public void assemble(float px, float py, float pw, float ph, float radius,
                          float screenWidth, float screenHeight, float scale) {
@@ -125,6 +199,10 @@ public final class MenuShards {
         screenH = screenHeight;
         scaleFactor = scale;
         incoming = assembling;
+        panelPx = px;
+        panelPy = py;
+        panelPw = pw;
+        panelPh = ph;
 
         // неравномерные границы столбцов и строк — ячейки заведомо разного размера
         float[] bx = boundaries(px, pw, COLS);
@@ -299,9 +377,15 @@ public final class MenuShards {
         s.cy = sumY / points;
 
         s.local = new float[verts.length];
+        s.localUv = new float[verts.length];
         for (int k = 0; k < points; k++) {
-            s.local[k * 2] = verts[k * 2] - s.cx;
-            s.local[k * 2 + 1] = verts[k * 2 + 1] - s.cy;
+            float ax = verts[k * 2];
+            float ay = verts[k * 2 + 1];
+            s.local[k * 2] = ax - s.cx;
+            s.local[k * 2 + 1] = ay - s.cy;
+            // UV — «родное» место куска в захваченной панели
+            s.localUv[k * 2] = panelPw <= 0F ? 0F : (ax - panelPx) / panelPw;
+            s.localUv[k * 2 + 1] = panelPh <= 0F ? 0F : (ay - panelPy) / panelPh;
         }
 
         float dx = s.cx - centerX;
@@ -309,9 +393,17 @@ public final class MenuShards {
         float dist = (float) Math.hypot(dx, dy);
         float distPc = maxDist <= 0F ? 0F : clamp01(dist / maxDist);
 
-        // осколки чёрные; плотность чуть разная — грани читаются в полёте,
-        // а к собранному состоянию она подтягивается к единице
+        // осколки в цвете темы клиента: градиент от центра к краям — грани
+        // читаются в полёте, а мозаика выглядит как настоящее стекло клик-гуи
         s.shade = rand(0.72F, 1F);
+
+        int accent = ColorUtil.client();
+        float posMix = clamp01(distPc * 0.85F + rand(-0.15F, 0.15F));
+        s.tint = ColorUtil.overCol(accent, ColorUtil.multDark(accent, 0.45F), posMix);
+        // редкие светлые грани — блик стекла
+        if (random.nextFloat() < 0.18F) {
+            s.tint = ColorUtil.overCol(s.tint, ColorUtil.getColor(255), rand(0.25F, 0.55F));
+        }
 
         if (incoming) {
             float[] spawn = offScreenPoint(s.cx, s.cy);
@@ -379,7 +471,11 @@ public final class MenuShards {
         }
 
         boolean assembling = phase == Phase.ASSEMBLE;
+        boolean textured = hasCapture();
         ShardPipeline pipeline = Client.get().render2D().getShardPipeline();
+        if (textured) {
+            texturedPipeline.setPanel(panelView);
+        }
 
         // вся мозаика — один батч вместо сотни пассов
         boolean batchHere = !DrawBatcher.isEnabled();
@@ -412,7 +508,7 @@ public final class MenuShards {
                 float ox = s.cx + s.offX * k;
                 float oy = s.cy + s.offY * k + s.fall * k * k;
 
-                int color = ColorUtil.getColor(0, alpha);
+                int color = ColorUtil.replAlpha(s.tint, alpha);
                 int faceCount = s.local.length / 6;
 
                 for (int f = 0; f < faceCount; f += 2) {
@@ -431,7 +527,24 @@ public final class MenuShards {
                         faces[v * 2] = ox + (lx * cos - ly * sin) * squish * scale;
                         faces[v * 2 + 1] = oy + (lx * sin + ly * cos) * scale;
                     }
-                    pipeline.drawFaces(faces, color);
+
+                    if (textured) {
+                        // кусок настоящего меню: позиции летят, UV остаются на месте
+                        int realVerts = pair ? 6 : 3;
+                        for (int v = 0; v < 6; v++) {
+                            int vi = Math.min(v, realVerts - 1);
+                            faceXyuv[v * 4] = faces[v * 2];
+                            faceXyuv[v * 4 + 1] = faces[v * 2 + 1];
+                            faceXyuv[v * 4 + 2] = s.localUv[f * 6 + vi * 2];
+                            faceXyuv[v * 4 + 3] = s.localUv[f * 6 + vi * 2 + 1];
+                        }
+                        // лёгкое затемнение грани в полёте — мозаика читается глубиной
+                        float bright = lerp(0.78F, 1F, move);
+                        int texCol = ColorUtil.getColorRaw(bright, bright, bright, alpha);
+                        texturedPipeline.drawFacePair(faceXyuv, texCol);
+                    } else {
+                        pipeline.drawFaces(faces, color);
+                    }
                 }
             }
         } finally {
