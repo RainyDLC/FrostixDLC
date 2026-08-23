@@ -40,6 +40,7 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
         PRESETS.put("Snap",       new float[]{150, 220, 110, 160, 260, 230, 3f,   2.4f, -0.8f, 0.9f});
         PRESETS.put("HvH",        new float[]{170, 240, 120, 170, 280, 250, 3.5f, 3f,  -1.2f, 1.2f});
         PRESETS.put("Neuro",      new float[]{110, 170, 80,  120, 230, 205, 2.2f, 1.8f, 0.5f, 0.4f});
+        PRESETS.put("Grim",       new float[]{95,  135, 65, 95,  170, 155, 0.8f, 0.6f, 0f,   0f});
         PRESETS.put("Custom",     new float[]{120, 180, 80,  120, 200, 180, 1f,   1f,   0f,    0f});
         PRESETS.put("Legit",      new float[]{60,  90,  45,  70,  140, 120, 0.6f, 0.5f, -0.3f, 0.3f});
         PRESETS.put("Sloth",      new float[]{35,  55,  25,  40,  110, 95,  0.15f,0.1f, 0.05f, 0.05f});
@@ -346,5 +347,28 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
             SliderSetting s = all[i];
             s.set(MathUtil.clamp(v[i], s.min, s.max));
         }
+    }
+
+    /**
+     * Применяет пресет конструктора по имени к настройкам AttackAura.
+     * Вызывается при переключении типа наведения на Matrix / Neuro / Grim.
+     */
+    public static boolean applyPreset(String name) {
+        float[] v = PRESETS.get(name);
+        if (v == null) return false;
+
+        AttackAura aura = AttackAura.get();
+        if (aura == null) return false;
+
+        SliderSetting[] all = {
+                aura.cYawMin, aura.cYawMax, aura.cPitchMin, aura.cPitchMax,
+                aura.cHitYaw, aura.cHitPitch, aura.cRandomYaw, aura.cRandomPitch,
+                aura.cOscX, aura.cOscY
+        };
+        for (int i = 0; i < all.length && i < v.length; i++) {
+            SliderSetting s = all[i];
+            s.set((float) MathUtil.clamp(v[i], s.min, s.max));
+        }
+        return true;
     }
 }

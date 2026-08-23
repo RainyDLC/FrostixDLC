@@ -12,12 +12,14 @@ public enum RotationType {
     SPOOKYTIME("SpookyTime", new SpookyTimeRotation()),
     MATRIX("Default", new MatrixRotation()),
     SNAP("Snap", new SnapRotation()),
-    NEURO("Neuro", new NeuroRotation()),
+    NEURO("Neuro", new ConstructorRotation(ConstructorRotation.Profile.NEURO)),
     HVH("HvH", new HvHRotation()),
     SPOOKY("SpookyTime 1.21", new MatrixRotation()),
     CUSTOM("Custom", new CustomRotation()),
     LEGIT("Legit", new LegitRotation()),
-    SLOTH("Sloth", new SlothRotation());
+    SLOTH("Sloth", new SlothRotation()),
+    CONSTRUCTOR_MATRIX("Matrix", new ConstructorRotation(ConstructorRotation.Profile.MATRIX)),
+    GRIM("Grim", new ConstructorRotation(ConstructorRotation.Profile.GRIM));
 
 
     private final String name;
