@@ -166,8 +166,8 @@ public class AttackAura extends Module {
     public SliderSetting linkRadius = new SliderSetting(this,"Радиус кольца",0.9F,0.5F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Цепь"));
     public SliderSetting linkSize = new SliderSetting(this,"Размер звеньев",0.09F,0.04F,0.2F,0.01F).setVisible(() -> typeTargetESP.is("Цепь"));
 
-    public SliderSetting swastonRadius = new SliderSetting(this,"Радиус свастики",1.4F,0.8F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Свастон"));
-    public SliderSetting swastonSpeed = new SliderSetting(this,"Скорость вращения",0.6F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Свастон"));
+    public SliderSetting swastonRadius = new SliderSetting(this,"Размер свастики",1.2F,0.6F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Свастон"));
+    public SliderSetting swastonSpeed = new SliderSetting(this,"Скорость переворота",1.0F,0.2F,4.0F,0.05F).setVisible(() -> typeTargetESP.is("Свастон"));
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
             new BooleanSetting("Умные криты", false),

@@ -189,8 +189,10 @@ public class RotationProcess extends Component {
     }
     private float animationNurik = 0.0F;
     private long currentTimeSpirits = 0;
-    /** Направление вращения «Свастона»: меняется на противоположное при каждом ударе ауры. */
-    private float swastonDir = 1F;
+    /** «Свастон»: угол фигуры на цели. При каждом ударе ауры доворачивается на 180°. */
+    private float swastonAngle = 0F;
+    private float swastonTarget = 0F;
+    private long swastonLastMs = 0L;
     private int swastonLastHit = -1;
     /** Фаза сердцебиения для режима «Сердце»: интеграл частоты по времени. */
     private long heartLastTime = 0L;
@@ -1737,9 +1739,9 @@ public class RotationProcess extends Component {
     }
 
     /**
-     * «Свастон»: светящийся сигил на земле вокруг цели из центрального кольца
-     * и четырёх рук с загибами. Постоянно крутится, а при каждом ударе ауры
-     * меняет направление вращения и зеркалит загибы на другой бок.
+     * «Свастон»: неподвижная светящаяся фигура на корпусе цели, всегда смотрит
+     * в одну сторону. При каждом ударе ауры плавно доворачивается на 180°,
+     * показывая другой бок.
      */
     private void renderTargetSwaston(EventRender3D e, VertexConsumerProvider.Immediate immediate,
                                      AttackAura aura, LivingEntity target, float alphaPC) {
@@ -1754,73 +1756,63 @@ public class RotationProcess extends Component {
 
         if (aura.hitCount != swastonLastHit) {
             if (swastonLastHit != -1) {
-                swastonDir = -swastonDir;
+                swastonTarget += 180F;
             }
             swastonLastHit = aura.hitCount;
         }
 
-        long currentTime = System.currentTimeMillis();
-        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
-        long timeDiff = currentTime - currentTimeSpirits;
-        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
-        currentTimeSpirits = currentTime;
+        long nowMs = System.currentTimeMillis();
+        if (swastonLastMs == 0L) swastonLastMs = nowMs;
+        float dt = Math.min((nowMs - swastonLastMs) / 1000F, 0.05F);
+        swastonLastMs = nowMs;
 
-        float speed = aura.swastonSpeed.getValue();
-        float r = aura.swastonRadius.getValue() + target.getWidth() * 0.35f;
-        float spin = animationNurik * 2.2f * speed * swastonDir;
+        float flipSpeed = 540F * Math.max(aura.swastonSpeed.getValue(), 0.05F);
+        float diff = swastonTarget - swastonAngle;
+        float step = flipSpeed * dt;
+        if (Math.abs(diff) <= step) {
+            swastonAngle = swastonTarget;
+        } else {
+            swastonAngle += Math.signum(diff) * step;
+        }
 
-        int aSoft = (int) (alphaPC * 36);
+        float r = aura.swastonRadius.getValue();
+        float rc = r * 0.34f;
+        float hookLen = r * 0.36f;
+        float w = r * 0.075f + 0.01f;
         int aRibbon = (int) (alphaPC * 150);
-        int aCore = (int) (alphaPC * 235);
+        int segs = 40;
 
         MatrixStack matrices = e.getMatrixStack();
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+        float bodyH = target.getHeight();
 
         matrices.push();
         matrices.translate(targetPos.x - cameraPos.x,
-                targetPos.y - cameraPos.y + 0.06f,
+                targetPos.y + bodyH * 0.55f - cameraPos.y,
                 targetPos.z - cameraPos.z);
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(swastonAngle));
+
         Matrix4f m = matrices.peek().getPositionMatrix();
 
-        float rc = r * 0.38f;
-        float hookLen = r * 0.34f;
-        float w = r * 0.032f + 0.008f;
-        int segs = 48;
-
-        // --- Pass 1: свечение под сигилой ---
+        // --- свечение за фигурой ---
         VertexConsumer texBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
         matrices.push();
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90.0f));
-        float cg = r * 1.5f;
+        matrices.translate(0, 0, -0.02f);
+        float cg = r * 1.35f;
         matrices.scale(cg, cg, cg);
         drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
-                base, base, base, base, aSoft * 2);
+                base, base, base, base, (int) (alphaPC * 60));
         matrices.pop();
 
-        // --- Pass 2: заливки-ленты ---
+        // --- заливки-ленты ---
         VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
 
-        // мягкий диск под сигилой: центр ярче, край растворяется
         for (int i = 0; i < segs; i++) {
-            float a0 = (float) (Math.PI * 2.0 * i / segs);
-            float a1 = (float) (Math.PI * 2.0 * (i + 1) / segs);
-            float x0 = (float) Math.cos(a0) * r * 1.25f;
-            float z0 = (float) Math.sin(a0) * r * 1.25f;
-            float x1 = (float) Math.cos(a1) * r * 1.25f;
-            float z1 = (float) Math.sin(a1) * r * 1.25f;
-            fillBuf.vertex(m, 0, 0, 0).color(ColorUtil.replAlpha(base, aSoft));
-            fillBuf.vertex(m, x0, 0, z0).color(ColorUtil.replAlpha(base, 0));
-            fillBuf.vertex(m, x1, 0, z1).color(ColorUtil.replAlpha(base, 0));
-            fillBuf.vertex(m, x1, 0, z1).color(ColorUtil.replAlpha(base, 0));
-        }
-
-        // центральное кольцо
-        for (int i = 0; i < segs; i++) {
-            float a0 = (float) (Math.PI * 2.0 * i / segs);
-            float a1 = (float) (Math.PI * 2.0 * (i + 1) / segs);
-            pentagramRibbon(fillBuf, m,
+            double a0 = Math.PI * 2.0 * i / segs;
+            double a1 = Math.PI * 2.0 * (i + 1) / segs;
+            swastonRibbonV(fillBuf, m,
                     (float) Math.cos(a0) * rc, (float) Math.sin(a0) * rc,
                     (float) Math.cos(a1) * rc, (float) Math.sin(a1) * rc,
                     w * 0.8f,
@@ -1828,44 +1820,60 @@ public class RotationProcess extends Component {
                     ColorUtil.replAlpha(base, (int) (alphaPC * 130)));
         }
 
-        // четыре руки с загибами: сторона загиба идёт за направлением вращения
         for (int k = 0; k < 4; k++) {
-            double a = Math.toRadians(spin + k * 90.0);
+            double a = Math.toRadians(k * 90.0);
             float ca = (float) Math.cos(a), sa = (float) Math.sin(a);
-            float armX0 = ca * rc * 0.85f, armZ0 = sa * rc * 0.85f;
-            float tipX = ca * r, tipZ = sa * r;
+            float armX0 = ca * rc * 0.9f, armY0 = sa * rc * 0.9f;
+            float tipX = ca * r, tipY = sa * r;
 
             int cArm = ColorUtil.overCol(
                     ColorUtil.multBright(ColorUtil.fade(k * 64), 0.9F), redColor, alpha_2.get());
             int cArmTip = ColorUtil.replAlpha(ColorUtil.multBright(cArm, 1.15F), aRibbon);
 
-            pentagramRibbon(fillBuf, m, armX0, armZ0, tipX, tipZ, w,
-                    ColorUtil.replAlpha(cArm, aRibbon), ColorUtil.replAlpha(cArm, aRibbon));
+            swastonRibbonV(fillBuf, m, armX0, armY0, tipX, tipY, w,
+                    ColorUtil.replAlpha(cArm, aRibbon),
+                    ColorUtil.replAlpha(cArm, aRibbon));
 
-            float hx = -sa * swastonDir, hz = ca * swastonDir;
-            pentagramRibbon(fillBuf, m, tipX, tipZ, tipX + hx * hookLen, tipZ + hz * hookLen, w,
+            float hx = -sa, hy = ca;
+            swastonRibbonV(fillBuf, m, tipX, tipY, tipX + hx * hookLen, tipY + hy * hookLen, w,
                     ColorUtil.replAlpha(cArm, aRibbon), cArmTip);
         }
 
-        // --- Pass 3: тонкие яркие сердцевины линий ---
+        // --- тонкие яркие сердцевины ---
         VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
-        int coreCol = ColorUtil.replAlpha(base, aCore);
+        int coreCol = ColorUtil.replAlpha(base, (int) (alphaPC * 235));
         for (int i = 0; i < segs; i++) {
-            float a0 = (float) (Math.PI * 2.0 * i / segs);
-            float a1 = (float) (Math.PI * 2.0 * (i + 1) / segs);
-            lineBuf.vertex(m, (float) Math.cos(a0) * rc, 0, (float) Math.sin(a0) * rc).color(coreCol);
-            lineBuf.vertex(m, (float) Math.cos(a1) * rc, 0, (float) Math.sin(a1) * rc).color(coreCol);
+            double a0 = Math.PI * 2.0 * i / segs;
+            double a1 = Math.PI * 2.0 * (i + 1) / segs;
+            lineBuf.vertex(m, (float) Math.cos(a0) * rc, (float) Math.sin(a0) * rc, 0).color(coreCol);
+            lineBuf.vertex(m, (float) Math.cos(a1) * rc, (float) Math.sin(a1) * rc, 0).color(coreCol);
         }
         for (int k = 0; k < 4; k++) {
-            double a = Math.toRadians(spin + k * 90.0);
+            double a = Math.toRadians(k * 90.0);
             float ca = (float) Math.cos(a), sa = (float) Math.sin(a);
-            lineBuf.vertex(m, ca * rc * 0.85f, 0, sa * rc * 0.85f).color(coreCol);
-            lineBuf.vertex(m, ca * r, 0, sa * r).color(coreCol);
-            float hx = -sa * swastonDir, hz = ca * swastonDir;
-            lineBuf.vertex(m, ca * r + hx * hookLen, 0, sa * r + hz * hookLen).color(coreCol);
+            float hx = -sa, hy = ca;
+            lineBuf.vertex(m, ca * rc * 0.9f, sa * rc * 0.9f, 0).color(coreCol);
+            lineBuf.vertex(m, ca * r, sa * r, 0).color(coreCol);
+            lineBuf.vertex(m, ca * r + hx * hookLen, sa * r + hy * hookLen, 0).color(coreCol);
         }
 
         matrices.pop();
+    }
+
+    /** Отрезок в вертикальной плоскости XY как лента-квад шириной width. */
+    private static void swastonRibbonV(VertexConsumer buf, Matrix4f m,
+                                       float x0, float y0, float x1, float y1,
+                                       float width, int c0, int c1) {
+        float dx = x1 - x0, dy = y1 - y0;
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-5f) return;
+        float nx = (dy / len) * width;
+        float ny = (-dx / len) * width;
+
+        buf.vertex(m, x0 + nx, y0 + ny, 0).color(c0);
+        buf.vertex(m, x1 + nx, y1 + ny, 0).color(c1);
+        buf.vertex(m, x1 - nx, y1 - ny, 0).color(c1);
+        buf.vertex(m, x0 - nx, y0 - ny, 0).color(c0);
     }
 
     /**
