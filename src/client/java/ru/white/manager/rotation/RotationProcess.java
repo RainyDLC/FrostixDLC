@@ -189,11 +189,6 @@ public class RotationProcess extends Component {
     }
     private float animationNurik = 0.0F;
     private long currentTimeSpirits = 0;
-    /** «Свастон»: угол фигуры на цели. При каждом ударе ауры доворачивается на 180°. */
-    private float swastonAngle = 0F;
-    private float swastonTarget = 0F;
-    private long swastonLastMs = 0L;
-    private int swastonLastHit = -1;
     /** Фаза сердцебиения для режима «Сердце»: интеграл частоты по времени. */
     private long heartLastTime = 0L;
     private float heartPhase = 0f;
@@ -1380,10 +1375,6 @@ public class RotationProcess extends Component {
             renderTargetChainRing(e, immediate, aura, target, alphaPC);
         }
 
-        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Свастон")) {
-            renderTargetSwaston(e, immediate, aura, target, alphaPC);
-        }
-
 
         immediate.draw();
 
@@ -1736,144 +1727,6 @@ public class RotationProcess extends Component {
         buf.vertex(m, x1 + nx, 0, z1 + nz).color(c1);
         buf.vertex(m, x1 - nx, 0, z1 - nz).color(c1);
         buf.vertex(m, x0 - nx, 0, z0 - nz).color(c0);
-    }
-
-    /**
-     * «Свастон»: неподвижная светящаяся фигура на корпусе цели, всегда смотрит
-     * в одну сторону. При каждом ударе ауры плавно доворачивается на 180°,
-     * показывая другой бок.
-     */
-    private void renderTargetSwaston(EventRender3D e, VertexConsumerProvider.Immediate immediate,
-                                     AttackAura aura, LivingEntity target, float alphaPC) {
-        int hurtTicks = target.hurtTime;
-        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
-
-        alpha_2.update();
-        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
-
-        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
-        int base = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC), redColor, alpha_2.get());
-
-        if (aura.hitCount != swastonLastHit) {
-            if (swastonLastHit != -1) {
-                swastonTarget += 180F;
-            }
-            swastonLastHit = aura.hitCount;
-        }
-
-        long nowMs = System.currentTimeMillis();
-        if (swastonLastMs == 0L) swastonLastMs = nowMs;
-        float dt = Math.min((nowMs - swastonLastMs) / 1000F, 0.05F);
-        swastonLastMs = nowMs;
-
-        float flipSpeed = 540F * Math.max(aura.swastonSpeed.getValue(), 0.05F);
-        float diff = swastonTarget - swastonAngle;
-        float step = flipSpeed * dt;
-        if (Math.abs(diff) <= step) {
-            swastonAngle = swastonTarget;
-        } else {
-            swastonAngle += Math.signum(diff) * step;
-        }
-
-        float r = aura.swastonRadius.getValue();
-        float rc = r * 0.34f;
-        float hookLen = r * 0.36f;
-        float w = r * 0.075f + 0.01f;
-        int aRibbon = (int) (alphaPC * 150);
-        int segs = 40;
-
-        MatrixStack matrices = e.getMatrixStack();
-        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
-        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
-        float bodyH = target.getHeight();
-
-        matrices.push();
-        matrices.translate(targetPos.x - cameraPos.x,
-                targetPos.y + bodyH * 0.55f - cameraPos.y,
-                targetPos.z - cameraPos.z);
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(swastonAngle));
-
-        Matrix4f m = matrices.peek().getPositionMatrix();
-
-        // --- свечение за фигурой ---
-        VertexConsumer texBuf = immediate.getBuffer(
-                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
-        matrices.push();
-        matrices.translate(0, 0, -0.02f);
-        float cg = r * 1.35f;
-        matrices.scale(cg, cg, cg);
-        drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
-                base, base, base, base, (int) (alphaPC * 60));
-        matrices.pop();
-
-        // --- заливки-ленты ---
-        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
-
-        for (int i = 0; i < segs; i++) {
-            double a0 = Math.PI * 2.0 * i / segs;
-            double a1 = Math.PI * 2.0 * (i + 1) / segs;
-            swastonRibbonV(fillBuf, m,
-                    (float) Math.cos(a0) * rc, (float) Math.sin(a0) * rc,
-                    (float) Math.cos(a1) * rc, (float) Math.sin(a1) * rc,
-                    w * 0.8f,
-                    ColorUtil.replAlpha(base, (int) (alphaPC * 130)),
-                    ColorUtil.replAlpha(base, (int) (alphaPC * 130)));
-        }
-
-        for (int k = 0; k < 4; k++) {
-            double a = Math.toRadians(k * 90.0);
-            float ca = (float) Math.cos(a), sa = (float) Math.sin(a);
-            float armX0 = ca * rc * 0.9f, armY0 = sa * rc * 0.9f;
-            float tipX = ca * r, tipY = sa * r;
-
-            int cArm = ColorUtil.overCol(
-                    ColorUtil.multBright(ColorUtil.fade(k * 64), 0.9F), redColor, alpha_2.get());
-            int cArmTip = ColorUtil.replAlpha(ColorUtil.multBright(cArm, 1.15F), aRibbon);
-
-            swastonRibbonV(fillBuf, m, armX0, armY0, tipX, tipY, w,
-                    ColorUtil.replAlpha(cArm, aRibbon),
-                    ColorUtil.replAlpha(cArm, aRibbon));
-
-            float hx = -sa, hy = ca;
-            swastonRibbonV(fillBuf, m, tipX, tipY, tipX + hx * hookLen, tipY + hy * hookLen, w,
-                    ColorUtil.replAlpha(cArm, aRibbon), cArmTip);
-        }
-
-        // --- тонкие яркие сердцевины ---
-        VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
-        int coreCol = ColorUtil.replAlpha(base, (int) (alphaPC * 235));
-        for (int i = 0; i < segs; i++) {
-            double a0 = Math.PI * 2.0 * i / segs;
-            double a1 = Math.PI * 2.0 * (i + 1) / segs;
-            lineBuf.vertex(m, (float) Math.cos(a0) * rc, (float) Math.sin(a0) * rc, 0).color(coreCol);
-            lineBuf.vertex(m, (float) Math.cos(a1) * rc, (float) Math.sin(a1) * rc, 0).color(coreCol);
-        }
-        for (int k = 0; k < 4; k++) {
-            double a = Math.toRadians(k * 90.0);
-            float ca = (float) Math.cos(a), sa = (float) Math.sin(a);
-            float hx = -sa, hy = ca;
-            lineBuf.vertex(m, ca * rc * 0.9f, sa * rc * 0.9f, 0).color(coreCol);
-            lineBuf.vertex(m, ca * r, sa * r, 0).color(coreCol);
-            lineBuf.vertex(m, ca * r + hx * hookLen, sa * r + hy * hookLen, 0).color(coreCol);
-        }
-
-        matrices.pop();
-    }
-
-    /** Отрезок в вертикальной плоскости XY как лента-квад шириной width. */
-    private static void swastonRibbonV(VertexConsumer buf, Matrix4f m,
-                                       float x0, float y0, float x1, float y1,
-                                       float width, int c0, int c1) {
-        float dx = x1 - x0, dy = y1 - y0;
-        float len = (float) Math.sqrt(dx * dx + dy * dy);
-        if (len < 1e-5f) return;
-        float nx = (dy / len) * width;
-        float ny = (-dx / len) * width;
-
-        buf.vertex(m, x0 + nx, y0 + ny, 0).color(c0);
-        buf.vertex(m, x1 + nx, y1 + ny, 0).color(c1);
-        buf.vertex(m, x1 - nx, y1 - ny, 0).color(c1);
-        buf.vertex(m, x0 - nx, y0 - ny, 0).color(c0);
     }
 
     /**
