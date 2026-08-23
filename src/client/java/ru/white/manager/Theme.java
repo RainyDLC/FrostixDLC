@@ -54,9 +54,37 @@ public enum Theme {
             new Color(216, 68, 234).getRGB()
             ,   new Color(0x99240D2B, true).getRGB()
             , ColorUtil.getColor(240)
-            ,ColorUtil.getColor(160)
-            ,ColorUtil.getColor(24,24,27),
-            new Color(216, 68, 234).getRGB());;;;
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(216, 68, 234).getRGB()),
+    AMBER("Amber",
+            new Color(0xFFB347).getRGB()
+            ,   new Color(0x99281C08, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xFFD28A).getRGB()),
+    ROSE("Rose",
+            new Color(0xFF7EB6).getRGB()
+            ,   new Color(0x99280D1A, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xFFADCB).getRGB()),
+    LIME("Lime",
+            new Color(0xA8FF57).getRGB()
+            ,   new Color(0x99172008, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xC9FF96).getRGB()),
+    ICE("Ice",
+            new Color(0x7FD9FF).getRGB()
+            ,   new Color(0x990D2028, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xB4E9FF).getRGB());
     private final String name;
     private final int client;
     private final int rect;
