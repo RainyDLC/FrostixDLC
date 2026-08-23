@@ -41,6 +41,11 @@ public class Information implements element {
     private final RollingText bpsText = new RollingText(3F);
     private final RollingText tpsText = new RollingText(3F);
 
+    // последние закэшированные значения — строки пересобираются только при изменении
+    private int lastX = Integer.MIN_VALUE, lastY = Integer.MIN_VALUE, lastZ = Integer.MIN_VALUE;
+    private int lastBpsTenths = Integer.MIN_VALUE;
+    private int lastTpsTenths = Integer.MIN_VALUE;
+
     @Override
     public void onRender(DragSetting dragSetting, InterFace interFace) {
 
@@ -71,12 +76,24 @@ public class Information implements element {
         Font fonts = Fonts.sf_regular;
 
 
-        coordX.set(String.valueOf((int) mc.player.getX()));
-        coordY.set(String.valueOf((int) mc.player.getY()));
-        coordZ.set(String.valueOf((int) mc.player.getZ()));
+        int xi = (int) mc.player.getX();
+        if (xi != lastX) { coordX.set(String.valueOf(xi)); lastX = xi; }
+        int yi = (int) mc.player.getY();
+        if (yi != lastY) { coordY.set(String.valueOf(yi)); lastY = yi; }
+        int zi = (int) mc.player.getZ();
+        if (zi != lastZ) { coordZ.set(String.valueOf(zi)); lastZ = zi; }
 
-        bpsText.set(String.format(java.util.Locale.US, "%.1f", bps));
-        tpsText.set(String.format(java.util.Locale.US, "%.1f", ServerUtil.TPS));
+        // %.1f — достаточно точности до десятых: сравниваем округлённое, чтобы не строить строку каждый кадр
+        int bpsT = Math.round(bps * 10F);
+        if (bpsT != lastBpsTenths) {
+            bpsText.set(String.format(java.util.Locale.US, "%.1f", bpsT / 10F));
+            lastBpsTenths = bpsT;
+        }
+        int tpsT = Math.round(ServerUtil.TPS * 10F);
+        if (tpsT != lastTpsTenths) {
+            tpsText.set(String.format(java.util.Locale.US, "%.1f", tpsT / 10F));
+            lastTpsTenths = tpsT;
+        }
 
         float coordsW = coordX.width(fonts, TEXT) + coordY.width(fonts, TEXT) + coordZ.width(fonts, TEXT)
                 + fonts.getWidth("xyz", TEXT) + fonts.getWidth(SEPARATOR, TEXT) * 2;

@@ -232,6 +232,27 @@ public class ClickHelper extends Module {
     /** Плавная высота красной заливки кулдауна по предметам. */
     private final Map<Item, Animation> cdAnimations = new HashMap<>();
 
+    // кэши item-hud: без new ItemStack и полного обхода инвентаря на каждом кадре
+    private final Map<Item, ItemStack> defaultStacks = new HashMap<>();
+    private final Map<Item, Integer> itemCounts = new HashMap<>();
+    private final Map<Item, String> countTexts = new HashMap<>();
+    private long lastCountMs;
+
+    private ItemStack defaultStack(Item item) {
+        return defaultStacks.computeIfAbsent(item, Item::getDefaultStack);
+    }
+
+    /** Счётчик предметов пересобирается не чаще раза в 250 мс. */
+    private int itemCountCached(Item item) {
+        long now = System.currentTimeMillis();
+        if (now - lastCountMs >= 250L) {
+            lastCountMs = now;
+            itemCounts.clear();
+            countTexts.clear();
+        }
+        return itemCounts.computeIfAbsent(item, this::countItem);
+    }
+
     private static final Item[] CD_ITEMS = {
             Items.ENDER_EYE, Items.SUGAR, Items.SNOWBALL, Items.DRIED_KELP,
             Items.NETHERITE_SCRAP, Items.WIND_CHARGE, Items.PHANTOM_MEMBRANE,
@@ -593,7 +614,7 @@ public class ClickHelper extends Module {
             // красная заливка опускается вместе с кулдауном
             Animation cdAnim = cdAnimations.computeIfAbsent(item, i -> new Animation());
             cdAnim.update();
-            cdAnim.run(mc.player.getItemCooldownManager().getCooldownProgress(item.getDefaultStack(), 0F), 0.12F, Easings.LINEAR);
+            cdAnim.run(mc.player.getItemCooldownManager().getCooldownProgress(defaultStack(item), 0F), 0.12F, Easings.LINEAR);
 
             float fill = MathUtil.clamp(cdAnim.get(), 0F, 1F);
 
@@ -615,10 +636,15 @@ public class ClickHelper extends Module {
             // Применяем масштаб S к сдвигу и итоговому размеру предмета
             ctx.getMatrices().translate((cx + CW / 2f) * scaleFix, (cy + CH / 2f - 1f * S) * scaleFix);
             ctx.getMatrices().scale(scaleFix * 0.5F * S, scaleFix * 0.5F * S);
-            ctx.drawItem(new ItemStack(item), -8, -9);
+            ctx.drawItem(defaultStack(item), -8, -9);
             ctx.getMatrices().popMatrix();
 
-            String cnt  = "x" + countItem(item);
+            int cnt_n = itemCountCached(item);
+            String cnt = countTexts.get(item);
+            if (cnt == null) {
+                cnt = "x" + cnt_n;
+                countTexts.put(item, cnt);
+            }
             float cntSize = 5f * S;
             float cntW = Fonts.sf_regular.getWidth(cnt, cntSize);
             Fonts.sf_regular.draw(cnt, cx + CW - cntW - 3f * S, cy + CH - 8f * S, cntSize, ThemeColor.getTextColor());
@@ -627,13 +653,13 @@ public class ClickHelper extends Module {
             float ty = cy + CH + GAP;
             RenderUtil.Render2D.rect(cx, ty, CW, TH, 0xCC181920, 2f * S);
 
-            boolean onCD   = mc.player.getItemCooldownManager().isCoolingDown(item.getDefaultStack());
+            boolean onCD   = mc.player.getItemCooldownManager().isCoolingDown(defaultStack(item));
             float   remain = 0f;
             float   maxSec = 0f;
             if (onCD) {
                 long[] info = cdTracker.get(item);
                 if (info != null && info[1] > 0) {
-                    float progress = mc.player.getItemCooldownManager().getCooldownProgress(item.getDefaultStack(), 0f);
+                    float progress = mc.player.getItemCooldownManager().getCooldownProgress(defaultStack(item), 0f);
                     maxSec = info[1] / 20f;
                     remain = progress * maxSec;
                 }

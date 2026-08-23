@@ -1,6 +1,5 @@
 package ru.white.module.impl.render;
 
-import ru.white.manager.event_impl.EventRender3D;
 import ru.white.manager.event_impl.GlassHandsRenderEvent;
 import ru.white.manager.event_impl.WorldLoadEvent;
 import ru.white.manager.events.orbit.EventHandler;
@@ -14,18 +13,6 @@ import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.render.GlassHandsRenderer;
 import lombok.Getter;
-import com.mojang.blaze3d.systems.ProjectionType;
-import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.render.RawProjectionMatrix;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.Arm;
-import net.minecraft.util.Hand;
-import net.minecraft.util.math.Vec3d;
-import org.joml.Matrix4f;
-import org.joml.Matrix4fStack;
-import org.joml.Quaternionf;
-import org.joml.Vector3f;
-import ru.white.utils.render.RenderUtil;
 
 @Getter
 @ModuleInfo(name = "Glass Hands", category = Category.RENDER, desc = "Делает руки и предметы стеклянными")
@@ -98,13 +85,6 @@ public class GlassHands extends Module {
             .setVisible(() -> enableEdgeGlow.getValue() && shimmer.getValue());
     public SliderSetting shimmerPeriod = new SliderSetting(this, "Период шиммера", 5f, 1f, 15f, 0.5f)
             .setVisible(() -> enableEdgeGlow.getValue() && shimmer.getValue());
-
-    public BooleanSetting lightning = new BooleanSetting(this, "Молнии", false);
-    public SliderSetting lightningSize = new SliderSetting(this, "Размер молний", 0.4f, 0.15f, 0.8f, 0.05f)
-            .setVisible(() -> lightning.getValue());
-    /** Подъём центра разрядов от якоря руки к визуальному центру предмета. */
-    public SliderSetting lightningOffset = new SliderSetting(this, "Смещение молний", 0.35f, -0.2f, 0.8f, 0.05f)
-            .setVisible(() -> lightning.getValue());
 
     public GlassHands() {
         instance = this;
@@ -218,76 +198,5 @@ public class GlassHands extends Module {
             renderer.setShimmerPeriodSec(shimmerPeriod.getValue());
         }
 
-    }
-
-    // молнии вокруг предмета в руках — та же стилистика, что "Молнии" в Attack Aura
-    private final LightningRenderer[] handLightning = {new LightningRenderer(), new LightningRenderer()};
-    private final boolean[] handHolding = new boolean[2];
-    /** Матрица мирового прохода этого кадра (из EventRender3D) — нужна для отрисовки после композита стекла. */
-    private MatrixStack frame3dStack;
-    /** UBO мировой проекции для отрисовки молний поверх рук. Создаётся лениво: при старте модуля GpuDevice ещё не инициализирован. */
-    private RawProjectionMatrix lightningProjection;
-
-    @EventHandler
-    public void onRender3D(EventRender3D event) {
-        frame3dStack = event.getMatrixStack();
-
-        boolean active = isEnabled() && lightning.getValue() && mc.player != null && mc.world != null
-                && mc.options.getPerspective().isFirstPerson();
-        float spread = active ? lightningSize.getValue() : 0f;
-
-        handHolding[0] = active && !mc.player.getMainHandStack().isEmpty();
-        handHolding[1] = active && !mc.player.getOffHandStack().isEmpty();
-
-        // только спавн/обновление болтов — сама отрисовка идёт после рук и стекла,
-        // иначе молнии остаются под предметом в руке
-        handLightning[0].updatePointBolts(handHolding[0] ? getHeldItemPos(Hand.MAIN_HAND) : null, spread);
-        handLightning[1].updatePointBolts(handHolding[1] ? getHeldItemPos(Hand.OFF_HAND) : null, spread);
-    }
-
-    /** Молнии поверх рук и стеклянного эффекта — вызывается сразу после renderGlassEffect(). */
-    public void renderHandLightningPostHands() {
-        if (!isEnabled() || !lightning.getValue() || mc.player == null || mc.world == null
-                || !mc.options.getPerspective().isFirstPerson() || frame3dStack == null) {
-            return;
-        }
-        if (!handHolding[0] && !handHolding[1]) return;
-
-        // после фазы рук RenderSystem держит hud-проекцию (GameRenderer.renderWorld
-        // переключает её перед renderHand) — временно возвращаем мировую, как в мировом проходе
-        if (lightningProjection == null) {
-            lightningProjection = new RawProjectionMatrix("glass_hands_lightning");
-        }
-        RenderSystem.backupProjectionMatrix();
-        try {
-            RenderSystem.setProjectionMatrix(
-                    lightningProjection.set(new Matrix4f(RenderUtil.Render3D.lastProjMat)),
-                    ProjectionType.PERSPECTIVE);
-            Matrix4fStack modelView = RenderSystem.getModelViewStack();
-            modelView.pushMatrix();
-            try {
-                modelView.set(RenderUtil.Render3D.lastModMat);
-                drawAllLightning(1.0f);
-            } finally {
-                modelView.popMatrix();
-            }
-        } finally {
-            RenderSystem.restoreProjectionMatrix();
-        }
-    }
-
-    private void drawAllLightning(float alpha) {
-        if (handHolding[0]) handLightning[0].drawPointBolts(frame3dStack, alpha);
-        if (handHolding[1]) handLightning[1].drawPointBolts(frame3dStack, alpha);
-    }
-
-    /** Мировая позиция центра предмета в руке: оффект экипировки (±0.56, -0.52, -0.72) + подъём к центру модели, повёрнутый камерой. */
-    private Vec3d getHeldItemPos(Hand hand) {
-        boolean mainSide = (hand == Hand.MAIN_HAND) == (mc.player.getMainArm() == Arm.RIGHT);
-        float side = mainSide ? 0.56f : -0.56f;
-        Vector3f local = new Vector3f(side, -0.52f + lightningOffset.getValue(), -0.72f);
-        local.rotate(mc.gameRenderer.getCamera().getRotation().conjugate(new Quaternionf()));
-        Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
-        return camPos.add(local.x, local.y, local.z);
     }
 }

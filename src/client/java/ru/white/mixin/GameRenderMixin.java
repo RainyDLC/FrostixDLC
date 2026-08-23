@@ -180,8 +180,6 @@ public abstract class GameRenderMixin {
             if (renderer.isCapturing()) {
                 renderer.captureSceneAfterHands();
                 renderer.renderGlassEffect();
-                // молнии поверх рук и стекла
-                glassHands.renderHandLightningPostHands();
             }
         }
     }

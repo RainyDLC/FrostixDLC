@@ -16,11 +16,19 @@ import ru.white.utils.render.RenderUtil;
 import ru.white.utils.render.font.Font;
 import ru.white.utils.render.font.Fonts;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class KeyBinds implements element {
+
+    /**
+     * Кэш отфильтрованного/отсортированного списка модулей: пересобирается максимум
+     * раз в 50 мс (раз в тик), а не каждый кадр — сортировка ~80 модулей в стриме
+     * на каждом кадре давала заметный CPU-оверхед и мусор.
+     */
+    private final List<Module> cachedModules = new ArrayList<>();
+    private long lastRebuildMs;
 
     /** Общий масштаб плашки: один множитель на шрифты, иконки и все отступы. */
     private static  float S = 1.0F;
@@ -81,14 +89,22 @@ public class KeyBinds implements element {
         SEP_PADDING_X = 4F * S;
         SEP_OFFSET_Y = 3.2F * S;
 
-        List<ru.white.module.api.Module> modules = Client.get().moduleManager().values().stream()
-                .filter(m -> m.getKey() > 0
+        long now = System.currentTimeMillis();
+        if (now - lastRebuildMs >= 50L) {
+            lastRebuildMs = now;
+            cachedModules.clear();
+            for (Module m : Client.get().moduleManager().values()) {
+                if (m.getKey() > 0
                         && !m.getName().equalsIgnoreCase("ClickGui")
-                        && (m.isEnabled() || m.getAnimation().getOutput() > 0))
-                .sorted(Comparator.comparingInt((ru.white.module.api.Module m) ->
-                        m.getName().length() + Keyboard.keyName(m.getKey()).length()
-                ).reversed())
-                .collect(Collectors.toList());
+                        && (m.isEnabled() || m.getAnimation().getOutput() > 0)) {
+                    cachedModules.add(m);
+                }
+            }
+            cachedModules.sort(Comparator.comparingInt((Module m) ->
+                    m.getName().length() + Keyboard.keyName(m.getKey()).length()
+            ).reversed());
+        }
+        List<Module> modules = cachedModules;
 
         boolean isEmpty = modules.isEmpty();
 

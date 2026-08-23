@@ -20,7 +20,6 @@ import ru.white.utils.render.font.Font;
 import ru.white.utils.render.font.Fonts;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static net.minecraft.client.gui.hud.InGameHud.getEffectTexture;
 
@@ -62,6 +61,11 @@ public class Potions implements IMinecraft {
 
     private final Map<String, EffectData> displayedEffects = new LinkedHashMap<>();
 
+    // кэши: отсортированный список пересобирается раз в 50 мс, toRemove переиспользуется
+    private final List<EffectData> sortedEffects = new ArrayList<>();
+    private final List<String> toRemove = new ArrayList<>();
+    private long lastSortMs;
+
     public void onRender(DragSetting dragSetting, InterFace interFace, EventDisplay eventDisplay) {
         Collection<StatusEffectInstance> currentEffects = mc.player.getStatusEffects();
         displayedEffects.values().forEach(data -> data.active = false);
@@ -90,16 +94,21 @@ public class Potions implements IMinecraft {
         for (StatusEffectInstance effect : currentEffects) {
             String name = effect.getEffectType().value().getName().getString();
             int amplifier = effect.getAmplifier() + 1;
-            String duration = getDurationString(effect);
             boolean isNegative = effect.getEffectType().value().getCategory() == StatusEffectCategory.HARMFUL;
-            EffectData data = displayedEffects.computeIfAbsent(name, k -> new EffectData(name, duration, amplifier, isNegative, effect.getDuration(), effect));
+            EffectData data = displayedEffects.computeIfAbsent(name, k -> new EffectData(name, getDurationString(effect), amplifier, isNegative, effect.getDuration(), effect));
 
-            // время сменилось — запускаем прокрутку цифр
-            if (!duration.equals(data.duration)) {
-                data.prevDuration = data.duration;
-                data.duration = duration;
-                data.digitAnim.set(0);
-                data.digitAnim.run(1, 0.18, Easings.QUAD_OUT);
+            // строка времени меняется раз в секунду — пересобираем только при смене секунды,
+            // а не String.format на каждом кадре
+            int secs = effect.isInfinite() ? Integer.MIN_VALUE : effect.getDuration() / 20;
+            if (secs != data.lastSeconds) {
+                String duration = getDurationString(effect);
+                if (!duration.equals(data.duration)) {
+                    data.prevDuration = data.duration;
+                    data.duration = duration;
+                    data.digitAnim.set(0);
+                    data.digitAnim.run(1, 0.18, Easings.QUAD_OUT);
+                }
+                data.lastSeconds = secs;
             }
 
             data.durationTicks = effect.getDuration();
@@ -134,16 +143,21 @@ public class Potions implements IMinecraft {
         Fonts.rainydlc_2.draw("P", x + TITLE_ICON_X, y + TITLE_ICON_Y, TITLE_ICON, ColorUtil.replAlpha(ColorUtil.client(), alpha2));
         font.draw("Potions", x + TITLE_TEXT_X, y + TITLE_TEXT_Y, TITLE_TEXT, ColorUtil.multAlpha(ColorUtil.getColor(240), alpha2));
 
-        List<EffectData> sortedEffects = displayedEffects.values().stream()
-                .sorted(Comparator.comparingInt((EffectData data) ->
-                        data.name.length() + data.duration.length()
-                ).reversed())
-                .collect(Collectors.toList());
+        // сортировка раз в 50 мс в переиспользуемый список вместо стрима каждый кадр
+        long nowMs = System.currentTimeMillis();
+        if (nowMs - lastSortMs >= 50L) {
+            lastSortMs = nowMs;
+            sortedEffects.clear();
+            sortedEffects.addAll(displayedEffects.values());
+            sortedEffects.sort(Comparator.comparingInt((EffectData data) ->
+                    data.name.length() + data.duration.length()
+            ).reversed());
+        }
 
         float h = 4 * S;
         float w = 0;
 
-        List<String> toRemove = new ArrayList<>();
+        toRemove.clear();
 
         for (EffectData data : sortedEffects) {
             data.animation.update();
@@ -187,7 +201,13 @@ public class Potions implements IMinecraft {
             int lvlColor  = bad ? ColorUtil.getColor(170, 55, 55, alpha * a) : ColorUtil.getColor(150, alpha * a);
             int timeColor = bad ? ColorUtil.getColor(200, 60, 60, alpha * a) : ColorUtil.getColor(200, alpha * a);
 
-            String effectname = data.name + (lvl > 1 ? " " + ColorFormatting.getColor(lvlColor) + lvl : "");
+            // кэш строки с уровнем: конкатенация только при смене уровня/типа эффекта
+            if (data.coloredLabelLvl != lvl || data.coloredLabelBad != bad) {
+                data.coloredLabel = data.name + (lvl > 1 ? " " + ColorFormatting.getColor(lvlColor) + lvl : "");
+                data.coloredLabelLvl = lvl;
+                data.coloredLabelBad = bad;
+            }
+            String effectname = data.coloredLabel;
 
             // Отрисовка названия
             font.draw(effectname, x + ROW_PADDING_X - addX, offsetY, ROW_TEXT, nameColor);
@@ -229,6 +249,12 @@ public class Potions implements IMinecraft {
         String now = data.duration;
         String was = data.prevDuration == null ? now : data.prevDuration;
 
+        // таймер не анимируется — рисуем целиком, без посимвольных substring каждый кадр
+        if (t >= 1F) {
+            font.draw(now, x, y, size, color);
+            return;
+        }
+
         float cx = x;
 
         for (int i = 0; i < now.length(); i++) {
@@ -252,7 +278,11 @@ public class Potions implements IMinecraft {
     /** Строка без цветовых кодов — для замера ширины (коды каждый кадр засоряют кэш ширин). */
     private String label(EffectData data) {
         int lvl = data.effectInstance.getAmplifier() + 1;
-        return lvl > 1 ? data.name + " " + lvl : data.name;
+        if (data.plainLabelLvl != lvl) {
+            data.plainLabel = lvl > 1 ? data.name + " " + lvl : data.name;
+            data.plainLabelLvl = lvl;
+        }
+        return data.plainLabel;
     }
 
     private void drawEffectIcon(EventDisplay eventDisplay, EffectData data, float x, float y, float alpha) {
@@ -289,6 +319,14 @@ public class Potions implements IMinecraft {
         int durationTicks;
         int lvl;
         StatusEffectInstance effectInstance;
+
+        // кэши для оптимизации: секунда последнего пересчёта строки времени + подписи с уровнем
+        int lastSeconds = Integer.MIN_VALUE;
+        String plainLabel;
+        int plainLabelLvl = -1;
+        String coloredLabel;
+        int coloredLabelLvl = -1;
+        boolean coloredLabelBad;
 
         public EffectData(String name, String duration, int lvl, boolean negative, int durationTicks, StatusEffectInstance effectInstance) {
             this.name = name;

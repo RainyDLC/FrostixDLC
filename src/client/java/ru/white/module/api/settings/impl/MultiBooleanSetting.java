@@ -26,7 +26,12 @@ public class MultiBooleanSetting extends Setting<Map<String, BooleanSetting>> {
     }
 
     public BooleanSetting get(String name) {
-        return settingsMap.get(name.toLowerCase());
+        // без toLowerCase(): он создавал новую строку на каждом вызове,
+        // а getValue(name) дёргается из HUD много раз за кадр
+        for (Map.Entry<String, BooleanSetting> e : settingsMap.entrySet()) {
+            if (e.getKey().equalsIgnoreCase(name)) return e.getValue();
+        }
+        return null;
     }
 
     public boolean getValue(String name) {

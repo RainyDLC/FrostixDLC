@@ -175,10 +175,17 @@ public class Notify implements element {
 
             float ny = drag.position.y;
 
-            boolean showGhost = mc.currentScreen instanceof ChatScreen
-                    && notifs.stream().noneMatch(e -> e.anim.get() > 0.01f);
+            boolean anyVisible = false;
+            for (NotificationManager.Entry e : notifs) {
+                if (e.anim.get() > 0.01f) {
+                    anyVisible = true;
+                    break;
+                }
+            }
 
-            drag.active = showGhost || notifs.stream().anyMatch(e -> e.anim.get() > 0.01f);
+            boolean showGhost = mc.currentScreen instanceof ChatScreen && !anyVisible;
+
+            drag.active = showGhost || anyVisible;
 
             notifyGhostAnim.update();
             notifyGhostAnim.run(showGhost ? 1 : 0, 0.2, Easings.BACK_OUT, true);
@@ -212,7 +219,8 @@ public class Notify implements element {
 
                 float textX = nx + nw / 2 ;
 
-                Client.get().render2D().flushAll();
+                // flushAll() здесь сбрасывал ВСЕ батчи на каждое уведомление и убивал
+                // батчинг — порядок слоёв и так обеспечивает DrawBatcher
 
                 //    Fonts.icon.draw("C", nx + 14.5F * S, actualY + 5.25F * S, 5 * S, ColorUtil.getColor(255,a * 0.1F));
                 //    textX += 4 * S;

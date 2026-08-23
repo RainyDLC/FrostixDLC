@@ -19,6 +19,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.util.Identifier;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @ModuleInfo(name = "Arrows", category = Category.RENDER, desc = "Стрелки на игроков")
@@ -29,6 +30,8 @@ public class Arrows extends Module {
     public SliderSetting radius = new SliderSetting(this,"Радиус от прицела",50,20,80,1);
 
     private final Animation animation = new Animation();
+    /** Переиспользуемый список игроков для отрисовки — без аллокации списка каждый кадр. */
+    private final List<AbstractClientPlayerEntity> cachedPlayers = new ArrayList<>();
     private static final Identifier ARROW_TEX = Identifier.of("client", "textures/arrow.png");
 
     @EventHandler
@@ -44,12 +47,15 @@ public class Arrows extends Module {
         if (mc.player == null || mc.world == null) return;
         if (mc.options.hudHidden || !mc.options.getPerspective().equals(Perspective.FIRST_PERSON)) return;
 
-        List<AbstractClientPlayerEntity> players = mc.world.getPlayers().stream()
-                .filter(p -> p != mc.player)
-                .filter(p -> !onlyArmored.getValue() || hasArmor(p))
-                .toList();
+        // обычный цикл вместо stream().filter().filter().toList() каждый кадр
+        cachedPlayers.clear();
+        for (AbstractClientPlayerEntity p : mc.world.getPlayers()) {
+            if (p != mc.player && (!onlyArmored.getValue() || hasArmor(p))) {
+                cachedPlayers.add(p);
+            }
+        }
 
-        if (players.isEmpty()) return;
+        if (cachedPlayers.isEmpty()) return;
 
         animation.update();
 
@@ -67,7 +73,7 @@ public class Arrows extends Module {
         float posY = middleH - radius.getValue() - (radius.getValue() / 4) * animation.get();
         float offset = posY + size / 2f - middleH; // negative: arrow is above center
 
-        for (AbstractClientPlayerEntity player : players) {
+        for (AbstractClientPlayerEntity player : cachedPlayers) {
             int color = Client.get().friendManager().isFriend(player.getName().getString())
                     ? ColorUtil.GREEN
                     : ColorUtil.fade(1);

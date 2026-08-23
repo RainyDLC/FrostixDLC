@@ -266,18 +266,11 @@ public class LightningRenderer implements IMinecraft {
 
     /**
      * Короткие разряды вокруг произвольной точки мира — та же стилистика,
-     * что и у обводки цели (свечение-билборды + линии).
+     * что и у обводки цели (свечение-билборды + линии). Слои строго последовательные,
+     * после отрисовки буферы сбрасываются через consumers.draw(...).
      */
     public void renderPoint(EventRender3D e, Vec3d center, float spread, float animAlpha) {
-        updatePointBolts(center, spread);
-        if (center != null && animAlpha > 0.03f) {
-            drawPointBolts(e.getMatrixStack(), animAlpha);
-        }
-    }
-
-    /** Спавн/чистка болтов вокруг точки. Вызывается каждый кадр во время мирового прохода. */
-    public void updatePointBolts(Vec3d center, float spread) {
-        if (center == null) {
+        if (center == null || animAlpha <= 0.03f) {
             pointBolts.clear();
             return;
         }
@@ -290,14 +283,10 @@ public class LightningRenderer implements IMinecraft {
             pointBolts.add(spawnPointBolt(center, spread));
             if (random.nextBoolean()) pointBolts.add(spawnPointBolt(center, spread));
         }
-    }
+        if (pointBolts.isEmpty()) return;
 
-    /** Отрисовка уже заспавненных болтов. Можно вызывать в любой фазе кадра. */
-    public void drawPointBolts(MatrixStack matrices, float animAlpha) {
-        if (pointBolts.isEmpty() || animAlpha <= 0.03f) return;
-
-        long now = System.currentTimeMillis();
         var consumers = mc.getBufferBuilders().getEntityVertexConsumers();
+        MatrixStack matrices = e.getMatrixStack();
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Quaternionf cameraRotation = mc.gameRenderer.getCamera().getRotation();
 
@@ -355,23 +344,18 @@ public class LightningRenderer implements IMinecraft {
     }
 
     private Bolt spawnPointBolt(Vec3d c, float spread) {
-        // равномерная точка на сфере вокруг центра предмета — облако обхватывает его со всех сторон
         double ang = random.nextDouble() * Math.PI * 2;
-        double ph = Math.acos(2 * random.nextDouble() - 1);
-        double r = spread * (0.45 + random.nextDouble() * 0.55);
+        double ph = (random.nextDouble() - 0.5) * Math.PI;
+        double r = spread * (0.35 + random.nextDouble() * 0.65);
 
         Vec3d start = c.add(
-                Math.cos(ang) * Math.sin(ph) * r,
-                Math.cos(ph) * r,
-                Math.sin(ang) * Math.sin(ph) * r);
-
-        double theta = random.nextDouble() * Math.PI * 2;
-        double phi = Math.toRadians((random.nextDouble() - 0.5) * 140.0);
-        double spike = spread * (0.35 + random.nextDouble() * 0.45);
+                Math.cos(ang) * Math.cos(ph) * r,
+                Math.sin(ph) * r,
+                Math.sin(ang) * Math.cos(ph) * r);
         Vec3d end = start.add(
-                Math.cos(phi) * Math.cos(theta) * spike,
-                Math.sin(phi) * spike,
-                Math.cos(phi) * Math.sin(theta) * spike);
+                (random.nextDouble() - 0.5) * spread,
+                -(0.2 + random.nextDouble() * 0.5) * spread,
+                (random.nextDouble() - 0.5) * spread);
 
         Bolt bolt = new Bolt();
         bolt.points = LightningPath.generate(start, end, 2, r * 0.5, random);

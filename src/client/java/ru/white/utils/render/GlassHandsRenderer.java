@@ -135,6 +135,12 @@ public class GlassHandsRenderer {
 
     public boolean isEnabled() { return enabled; }
 
+    /** Есть ли хоть один активный эффект: если нет — весь пайплайн (копии кадра + маска) пропускается. */
+    private boolean hasAnyEffect() {
+        return blurEnabled || iceIntensity > 0.001f || smokeAmount > 0.001f
+                || outlineEnabled || fireEnabled;
+    }
+
     public void setBlurEnabled(boolean enabled) { this.blurEnabled = enabled; }
     public void setBlurRadius(float radius) { this.blurRadius = radius; }
     public void setBlurIterations(int iterations) { this.blurIterations = Math.max(1, Math.min(8, iterations)); }
@@ -265,6 +271,12 @@ public class GlassHandsRenderer {
 
     public void captureSceneBeforeHands() {
         if (!enabled) return;
+        // все эффекты выключены — не делаем 4 копии текстур полного разрешения и проход маски впустую.
+        // Исключение: редактор рук, которому нужен снимок кадра независимо от эффектов.
+        if (!hasAnyEffect() && !ru.white.screen.HandsEditor.getInstance().isActive()) {
+            capturing = false;
+            return;
+        }
         ensureInitialized();
 
         Framebuffer fb = client.getFramebuffer();

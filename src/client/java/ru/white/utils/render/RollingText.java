@@ -50,6 +50,13 @@ public class RollingText {
 
         float t = animation.get();
 
+        // строка не анимируется — рисуем целиком, без посимвольных substring каждый кадр
+        // (при t >= 1 старые символы всё равно не выводятся)
+        if (t >= 1F) {
+            font.draw(value, x, y, size, color);
+            return;
+        }
+
         float cx = x;
 
         for (int i = 0; i < value.length(); i++) {

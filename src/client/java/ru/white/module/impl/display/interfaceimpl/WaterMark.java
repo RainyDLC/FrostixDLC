@@ -41,6 +41,12 @@ public class WaterMark implements element {
     private final RollingText fpsText = new RollingText(3F);
     private final RollingText pingText = new RollingText(3F);
 
+    private static final Identifier LOGO_TEXTURE = Identifier.of("client", "textures/icon.png");
+
+    // кэш значений — строки пересобираются только при изменении
+    private int lastFps = Integer.MIN_VALUE;
+    private int lastPing = Integer.MIN_VALUE;
+
     @Override
     public void onRender(DragSetting dragSetting, InterFace interFace) {
 
@@ -69,7 +75,7 @@ public class WaterMark implements element {
         RenderUtil.Render2D.hudPlate(x, y, H, H, 1, RADIUS, opacity);
 
         float logoS = Math.min(H - 6F * S, LOGO * 1.2F);
-        RenderUtil.Images.texture(Identifier.of("client", "textures/icon.png"),
+        RenderUtil.Images.texture(LOGO_TEXTURE,
                 x + (H - logoS) / 2F, y + (H - logoS) / 2F, logoS, logoS, ColorUtil.getClientColor(1));
 
         //RenderUtil.Render2D.rect(x + 16 / 2  - 2,y + 14.5F,4,1.5F,ColorUtil.getClientColor1(1),2,2,0,0);
@@ -87,8 +93,9 @@ public class WaterMark implements element {
             }
         }
 
-        fpsText.set(String.valueOf(mc.getCurrentFps()));
-        pingText.set(String.valueOf(pings));
+        int fps = mc.getCurrentFps();
+        if (fps != lastFps) { fpsText.set(String.valueOf(fps)); lastFps = fps; }
+        if (pings != lastPing) { pingText.set(String.valueOf(pings)); lastPing = pings; }
 
         float fpsW = fpsText.width(fonts, TEXT) + fonts.getWidth("fps", TEXT);
         float pingW = pingText.width(fonts, TEXT) + fonts.getWidth("ms", TEXT);

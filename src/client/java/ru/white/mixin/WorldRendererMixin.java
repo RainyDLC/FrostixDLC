@@ -81,8 +81,9 @@ public class WorldRendererMixin {
     ) {
 
         MatrixStack stack = new MatrixStack();
-        Matrix4f basePositionMatrix = new Matrix4f(positionMatrix);
-        stack.multiplyPositionMatrix(new Matrix4f(basePositionMatrix));
+        // защитная копия positionMatrix (ванилла может переиспользовать матрицу),
+        // второй дублирующий copy был лишним
+        stack.multiplyPositionMatrix(new Matrix4f(positionMatrix));
 
 
 
