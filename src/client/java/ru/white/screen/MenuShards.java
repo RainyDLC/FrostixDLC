@@ -79,6 +79,12 @@ public final class MenuShards {
     private static GpuTextureView panelView;
     private static int panelTexW, panelTexH;
 
+    /** Захваченный прямоугольник в fixed-координатах (выровнен наружу по пикселям). */
+    private static float capX0, capY0, capW, capH;
+
+    /** Текстура совпадает с текущей панелью — можно собирать из кусков. */
+    private boolean texturedRun;
+
     // прямоугольник панели в fixed-координатах — для расчёта UV
     private float panelPx, panelPy, panelPw, panelPh;
 
@@ -131,11 +137,16 @@ public final class MenuShards {
         }
 
         Framebuffer fb = client.getFramebuffer();
-        // fixed-2x GUI → пиксели фреймбуфера
-        int srcX = Math.round(x * 2F);
-        int srcY = Math.round(y * 2F);
-        int sizeW = Math.max(1, Math.round(w * 2F));
-        int sizeH = Math.max(1, Math.round(h * 2F));
+        // fixed-2x GUI → пиксели фреймбуфера; границы выравниваем наружу
+        // до целых пикселей, чтобы UV не расходились с геометрией на дробь пикселя
+        float fx0 = (float) Math.floor(x * 2F);
+        float fy0 = (float) Math.floor(y * 2F);
+        float fx1 = (float) Math.ceil((x + w) * 2F);
+        float fy1 = (float) Math.ceil((y + h) * 2F);
+        int srcX = (int) fx0;
+        int srcY = (int) fy0;
+        int sizeW = Math.max(1, (int) (fx1 - fx0));
+        int sizeH = Math.max(1, (int) (fy1 - fy0));
         if (srcX < 0 || srcY < 0
                 || srcX + sizeW > fb.textureWidth
                 || srcY + sizeH > fb.textureHeight) {
@@ -155,6 +166,13 @@ public final class MenuShards {
             panelTexW = sizeW;
             panelTexH = sizeH;
         }
+
+        // запоминаем, какой именно прямоугольник экрана в этой текстуре —
+        // UV осколков считаются относительно него, а не относительно панели
+        capX0 = fx0 / 2F;
+        capY0 = fy0 / 2F;
+        capW = sizeW / 2F;
+        capH = sizeH / 2F;
 
         CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
         encoder.copyTextureToTexture(
@@ -203,6 +221,14 @@ public final class MenuShards {
         panelPy = py;
         panelPw = pw;
         panelPh = ph;
+
+        // текстуру используем только если она снята с этой же панели
+        // (размер окна и слайдер «Размер» могли поменяться между закрытием и открытием)
+        texturedRun = hasCapture()
+                && Math.abs(capX0 - px) <= 2F
+                && Math.abs(capY0 - py) <= 2F
+                && Math.abs(capW - pw) <= 2F
+                && Math.abs(capH - ph) <= 2F;
 
         // неравномерные границы столбцов и строк — ячейки заведомо разного размера
         float[] bx = boundaries(px, pw, COLS);
@@ -383,9 +409,13 @@ public final class MenuShards {
             float ay = verts[k * 2 + 1];
             s.local[k * 2] = ax - s.cx;
             s.local[k * 2 + 1] = ay - s.cy;
-            // UV — «родное» место куска в захваченной панели
-            s.localUv[k * 2] = panelPw <= 0F ? 0F : (ax - panelPx) / panelPw;
-            s.localUv[k * 2 + 1] = panelPh <= 0F ? 0F : (ay - panelPy) / panelPh;
+            // UV - «родное» место куска в захваченной текстуре.
+            // Считаем от захваченного прямоугольника (он на пиксель шире панели),
+            // V инвертирован: у копии фреймбуфера ноль строк снизу
+            float u = capW <= 0F ? 0F : (ax - capX0) / capW;
+            float v = capH <= 0F ? 0F : 1F - (ay - capY0) / capH;
+            s.localUv[k * 2] = clamp01(u);
+            s.localUv[k * 2 + 1] = clamp01(v);
         }
 
         float dx = s.cx - centerX;
@@ -471,7 +501,7 @@ public final class MenuShards {
         }
 
         boolean assembling = phase == Phase.ASSEMBLE;
-        boolean textured = hasCapture();
+        boolean textured = texturedRun && hasCapture();
         ShardPipeline pipeline = Client.get().render2D().getShardPipeline();
         if (textured) {
             texturedPipeline.setPanel(panelView);
@@ -539,8 +569,10 @@ public final class MenuShards {
                             faceXyuv[v * 4 + 3] = s.localUv[f * 6 + vi * 2 + 1];
                         }
                         // лёгкое затемнение грани в полёте — мозаика читается глубиной
+                        // ВАЖНО: getColorRaw(float...) ждёт масштаб 0..255,
+                        // поэтому собираем цвет через перегрузку (brightness, floatAlpha)
                         float bright = lerp(0.78F, 1F, move);
-                        int texCol = ColorUtil.getColorRaw(bright, bright, bright, alpha);
+                        int texCol = ColorUtil.getColor((int) (bright * 255F), alpha);
                         texturedPipeline.drawFacePair(faceXyuv, texCol);
                     } else {
                         pipeline.drawFaces(faces, color);

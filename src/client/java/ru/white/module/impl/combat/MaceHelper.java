@@ -1,7 +1,6 @@
 package ru.white.module.impl.combat;
 
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -15,8 +14,6 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import ru.white.manager.event_impl.EventTick;
 import ru.white.manager.events.orbit.EventHandler;
-import ru.white.manager.rotation.Rotation;
-import ru.white.manager.rotation.RotationProcess;
 import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
@@ -28,8 +25,8 @@ import ru.white.utils.aura.UAttack;
 
 /**
  * Mace Helper: во время падения заранее берёт булаву и бьёт цель в нужный тайминг.
- * Работает поверх наведения AttackAura (или целится сам, если аура выключена),
- * не бьёт по кулдауну/hurtTime вслепую и ретраит удар до попадания.
+ * Сам не наводится — цель берёт только от AttackAura, без включённой ауры не бьёт.
+ * Не бьёт по кулдауну/hurtTime вслепую и ретраит удар до попадания.
  */
 @ModuleInfo(
         name = "Mace Helper",
@@ -90,12 +87,6 @@ public class MaceHelper extends Module {
         // и не сбивала общий кулдаун перед нашим окном
         if (!struck) {
             AttackAura.stoptick = 3;
-        }
-
-        // если аура не даёт наведение — целимся сами
-        AttackAura aura = AttackAura.get();
-        if (aura == null || !aura.isEnabled()) {
-            aimAt(target);
         }
 
         if (swapMode.is("Пакетный")) {
@@ -164,27 +155,6 @@ public class MaceHelper extends Module {
         if (!UAttack.msCooldownReached(0L)) return false;
 
         return UAttack.useEntity(target, null, null, Hand.MAIN_HAND, false);
-    }
-
-    private void aimAt(LivingEntity target) {
-        if (mc.player == null) return;
-
-        Vec3d eye = mc.player.getEyePos();
-        Box box = target.getBoundingBox();
-        Vec3d point = new Vec3d(
-                MathHelper.clamp(eye.x, box.minX, box.maxX),
-                MathHelper.clamp(eye.y, box.minY, box.maxY),
-                MathHelper.clamp(eye.z, box.minZ, box.maxZ)
-        );
-
-        Vec3d delta = point.subtract(eye);
-        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
-        float pitch = (float) MathHelper.clamp(
-                -Math.toDegrees(Math.atan2(delta.y, Math.hypot(delta.x, delta.z))),
-                -90F, 90F
-        );
-
-        RotationProcess.update(new Rotation(yaw, pitch), 65F, 75F, 40F, 40F, 5, 10, false);
     }
 
     private boolean withinReach(LivingEntity target) {
@@ -296,7 +266,7 @@ public class MaceHelper extends Module {
         return stack.getItem() == Items.MACE;
     }
 
-    /** Цель: приоритет — таргет Attack Aura, иначе ближайшая живая сущность в радиусе удара. */
+    /** Цель: только таргет Attack Aura — без включённой ауры хелпер не бьёт. */
     private LivingEntity findTarget() {
         AttackAura aura = AttackAura.get();
         if (aura != null && aura.isEnabled() && AttackAura.target != null) {
@@ -305,22 +275,6 @@ public class MaceHelper extends Module {
                 return t;
             }
         }
-
-        LivingEntity best = null;
-        double bestSq = REACH * REACH;
-        for (Entity entity : mc.world.getEntities()) {
-            if (!(entity instanceof LivingEntity living)
-                    || entity == mc.player
-                    || !living.isAlive()
-                    || living.isSpectator()) {
-                continue;
-            }
-            double sq = mc.player.squaredDistanceTo(entity);
-            if (sq < bestSq) {
-                bestSq = sq;
-                best = living;
-            }
-        }
-        return best;
+        return null;
     }
 }

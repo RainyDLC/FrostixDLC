@@ -76,6 +76,8 @@ public class Menu extends Screen implements IMinecraft {
     private static final long SHATTER_HOLD_MS = 240;
     private long exitHoldStart;
     private boolean dissolveStarted = true;
+    /** Панель захвачена в конце кадра — в следующем запускаем распад. */
+    private boolean pendingDissolveSwap = false;
 
     private final HandsEditor handsEditor = HandsEditor.getInstance();
 
@@ -334,6 +336,7 @@ public class Menu extends Screen implements IMinecraft {
         bindingModule = null;
         toggleArmed = false;
         dissolveStarted = true;
+        pendingDissolveSwap = false;
         GuiSounds.open();
         GuiMusicPlayer.start(0.15F);
         if (shatter()) {
@@ -529,14 +532,13 @@ public class Menu extends Screen implements IMinecraft {
             panelAnimStarted = true;
             glomalAnim.run(1, 0.2F, Easings.SINE_OUT);
         }
-        // меню постояло на месте — теперь подменяем его мозаикой и рассыпаем
+        // меню постояло на месте — начинаем смену панели мозаикой.
+        // Сам захват делаем в конце ЭТОГО кадра (после endOverlay), потому что
+        // батчер сбрасывает панель на экран только там, а фреймбуфер каждый
+        // кадр очищается — «прошлого кадра» в момент обработки уже нет
         if (exit && !dissolveStarted && System.currentTimeMillis() - exitHoldStart >= SHATTER_HOLD_MS) {
             dissolveStarted = true;
-            // предыдущий кадр ещё показывал целую панель — фиксируем её в текстуру,
-            // чтобы осколки разлетелись с настоящими кусками интерфейса
-            shards.capturePanel(x, y, w, h);
-            shards.dissolve(x, y, w, h, 8 * S, screenWidth, screenHeight, S);
-            glomalAnim.run(0, 0.1F, Easings.SINE_IN);
+            pendingDissolveSwap = true;
         }
 
         Font draw = Fonts.sf_regular;
@@ -1110,6 +1112,17 @@ public class Menu extends Screen implements IMinecraft {
         shards.render();
         Render2D.endOverlay();
         if (context != null) context.getMatrices().popMatrix();
+
+        // панель этого кадра уже сброшена батчером на экран — фиксируем её
+        // в текстуру и только теперь запускаем распад (задержка в 1 кадр)
+        if (pendingDissolveSwap) {
+            pendingDissolveSwap = false;
+            if (panelKnown) {
+                shards.capturePanel(panelX, panelY, panelW, panelH);
+                shards.dissolve(panelX, panelY, panelW, panelH, 8 * S, panelScreenW, panelScreenH, S);
+                glomalAnim.run(0, 0.1F, Easings.SINE_IN);
+            }
+        }
     }
 
     public void openHandsEditor() { beforeEditorOpen(); handsEditor.open(); GuiSounds.editor(); }

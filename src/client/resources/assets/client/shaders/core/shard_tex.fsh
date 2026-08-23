@@ -1,7 +1,9 @@
 #version 150
 
-// Кусочек настоящего меню: сэмпл панели, умноженный на цвет осколка
-// (rgb затемняет для глубины, a - альфа полёта).
+// Кусочек настоящего меню: цвет сэмплим из захваченной панели,
+// а альфу берём строго из цвета осколка - в главном фреймбуфере
+// альфа не равна единице (фон очищается нулём), и умножение
+// tex.a на color.a делало осколки невидимыми.
 
 in vec4 shardColor;
 in vec2 shardUv;
@@ -14,5 +16,7 @@ void main() {
     if (shardColor.a <= 0.0) {
         discard;
     }
-    fragColor = texture(PanelTex, shardUv) * shardColor;
+    float alpha = clamp(shardColor.a, 0.0, 1.0);
+    vec3 rgb = texture(PanelTex, shardUv).rgb * shardColor.rgb;
+    fragColor = vec4(rgb, alpha);
 }

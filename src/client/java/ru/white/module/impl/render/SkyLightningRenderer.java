@@ -34,6 +34,7 @@ public final class SkyLightningRenderer {
     private static final Identifier GLOW_TEX =
             Identifier.of("client", "textures/particles/glow.png");
     private static final long STRIKE_LIFE = 950L;
+    private static final long EMBER_LIFE = 2400L;
     private static final float FLASH_TIME = 450F;
 
     private static final RenderPipeline COLOR_PIPELINE = RenderPipelines.register(
@@ -101,7 +102,7 @@ public final class SkyLightningRenderer {
     public static void update(boolean enabled, float intervalSec, float radius) {
         MinecraftClient mc = MinecraftClient.getInstance();
         long now = System.currentTimeMillis();
-        strikes.removeIf(s -> now - s.born > STRIKE_LIFE);
+        strikes.removeIf(s -> now - s.born > STRIKE_LIFE + EMBER_LIFE);
 
         if (!enabled || mc.player == null || mc.world == null) return;
         if (now < nextStrikeAt) return;
@@ -113,6 +114,24 @@ public final class SkyLightningRenderer {
 
     public static void clear() {
         strikes.clear();
+    }
+
+    /**
+     * Текущий уровень засветки мира от недавних разрядов (0..1).
+     * Используется дождём (подсветка капель) и WorldTweaks (вспышка тумана).
+     */
+    public static float flashLevel() {
+        long now = System.currentTimeMillis();
+        float f = 0f;
+        for (Strike s : strikes) {
+            long ms = now - s.born - s.propagateMs;
+            if (ms < 0 || ms > FLASH_TIME + 420L) continue;
+            double e = Math.exp(-ms / 150.0)
+                    + 0.75 * Math.exp(-sq((ms - 280.0) / 80.0))
+                    + 0.5 * Math.exp(-sq((ms - 470.0) / 70.0));
+            f += (float) Math.min(1.2, e);
+        }
+        return Math.min(1f, f);
     }
 
     private static void spawn(float radius) {
@@ -206,13 +225,22 @@ public final class SkyLightningRenderer {
         VertexConsumer glowBuf = consumers.getBuffer(GLOW_LAYER);
         for (Strike s : strikes) {
             long age = now - s.born;
+            float prog = Math.min(1f, age / (float) Math.max(1L, s.propagateMs));
+
+            // тлеющие угли в точке удара — канал «дышит» ещё пару секунд после разряда
+            float tE = (age - s.propagateMs) / (float) EMBER_LIFE;
+            if (tE >= 0f && tE < 1f) {
+                float eA = (1f - tE) * (1f - tE) * flicker((long) (now * 0.6f), s.seed);
+                sprite(glowBuf, matrix, s.impact.add(0, 0.35 + 0.85 * tE, 0), camPos, right, up,
+                        0.75f + 0.85f * tE, argb(190, 218, 255, (int) (eA * 90)));
+            }
+
             float env = envelope(age);
             if (env <= 0.01f) continue;
             float flicker = flicker(now, s.seed);
             int glowCol = argb(150, 195, 255, (int) (Math.min(1f, env) * flicker * 90));
 
             // ступенчатый лидер: канал проявляется сверху вниз
-            float prog = Math.min(1f, age / (float) Math.max(1L, s.propagateMs));
             int mainLim = Math.max(2, (int) Math.ceil(prog * (s.pts.size() - 1)) + 1);
 
             // вспышка в «облаках» у старта канала
@@ -221,6 +249,10 @@ public final class SkyLightningRenderer {
                 sprite(glowBuf, matrix, s.pts.get(0), camPos, right, up,
                         7.5f + 3.5f * (1f - head),
                         argb(205, 228, 255, (int) (head * env * 170)));
+                // широкая засветка облачной базы — небо «включается» на мгновение
+                sprite(glowBuf, matrix, s.pts.get(0), camPos, right, up,
+                        21f + 8f * (1f - head),
+                        argb(185, 212, 255, (int) (head * env * 78)));
             }
 
             for (int i = 0; i < mainLim; i += 2) {
