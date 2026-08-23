@@ -189,6 +189,9 @@ public class RotationProcess extends Component {
     }
     private float animationNurik = 0.0F;
     private long currentTimeSpirits = 0;
+    /** Направление вращения «Свастона»: меняется на противоположное при каждом ударе ауры. */
+    private float swastonDir = 1F;
+    private int swastonLastHit = -1;
     /** Фаза сердцебиения для режима «Сердце»: интеграл частоты по времени. */
     private long heartLastTime = 0L;
     private float heartPhase = 0f;
@@ -1375,6 +1378,10 @@ public class RotationProcess extends Component {
             renderTargetChainRing(e, immediate, aura, target, alphaPC);
         }
 
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Свастон")) {
+            renderTargetSwaston(e, immediate, aura, target, alphaPC);
+        }
+
 
         immediate.draw();
 
@@ -1727,6 +1734,138 @@ public class RotationProcess extends Component {
         buf.vertex(m, x1 + nx, 0, z1 + nz).color(c1);
         buf.vertex(m, x1 - nx, 0, z1 - nz).color(c1);
         buf.vertex(m, x0 - nx, 0, z0 - nz).color(c0);
+    }
+
+    /**
+     * «Свастон»: светящийся сигил на земле вокруг цели из центрального кольца
+     * и четырёх рук с загибами. Постоянно крутится, а при каждом ударе ауры
+     * меняет направление вращения и зеркалит загибы на другой бок.
+     */
+    private void renderTargetSwaston(EventRender3D e, VertexConsumerProvider.Immediate immediate,
+                                     AttackAura aura, LivingEntity target, float alphaPC) {
+        int hurtTicks = target.hurtTime;
+        float hurtPC = (float) Math.sin(hurtTicks * (Math.PI / 10.0));
+
+        alpha_2.update();
+        alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
+
+        int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
+        int base = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC), redColor, alpha_2.get());
+
+        if (aura.hitCount != swastonLastHit) {
+            if (swastonLastHit != -1) {
+                swastonDir = -swastonDir;
+            }
+            swastonLastHit = aura.hitCount;
+        }
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
+        long timeDiff = currentTime - currentTimeSpirits;
+        if (timeDiff > 0) animationNurik += timeDiff / 16.666F;
+        currentTimeSpirits = currentTime;
+
+        float speed = aura.swastonSpeed.getValue();
+        float r = aura.swastonRadius.getValue() + target.getWidth() * 0.35f;
+        float spin = animationNurik * 2.2f * speed * swastonDir;
+
+        int aSoft = (int) (alphaPC * 36);
+        int aRibbon = (int) (alphaPC * 150);
+        int aCore = (int) (alphaPC * 235);
+
+        MatrixStack matrices = e.getMatrixStack();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
+
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x,
+                targetPos.y - cameraPos.y + 0.06f,
+                targetPos.z - cameraPos.z);
+        Matrix4f m = matrices.peek().getPositionMatrix();
+
+        float rc = r * 0.38f;
+        float hookLen = r * 0.34f;
+        float w = r * 0.032f + 0.008f;
+        int segs = 48;
+
+        // --- Pass 1: свечение под сигилой ---
+        VertexConsumer texBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
+        matrices.push();
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90.0f));
+        float cg = r * 1.5f;
+        matrices.scale(cg, cg, cg);
+        drawGradientQuad(texBuf, matrices.peek().getPositionMatrix(),
+                base, base, base, base, aSoft * 2);
+        matrices.pop();
+
+        // --- Pass 2: заливки-ленты ---
+        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+
+        // мягкий диск под сигилой: центр ярче, край растворяется
+        for (int i = 0; i < segs; i++) {
+            float a0 = (float) (Math.PI * 2.0 * i / segs);
+            float a1 = (float) (Math.PI * 2.0 * (i + 1) / segs);
+            float x0 = (float) Math.cos(a0) * r * 1.25f;
+            float z0 = (float) Math.sin(a0) * r * 1.25f;
+            float x1 = (float) Math.cos(a1) * r * 1.25f;
+            float z1 = (float) Math.sin(a1) * r * 1.25f;
+            fillBuf.vertex(m, 0, 0, 0).color(ColorUtil.replAlpha(base, aSoft));
+            fillBuf.vertex(m, x0, 0, z0).color(ColorUtil.replAlpha(base, 0));
+            fillBuf.vertex(m, x1, 0, z1).color(ColorUtil.replAlpha(base, 0));
+            fillBuf.vertex(m, x1, 0, z1).color(ColorUtil.replAlpha(base, 0));
+        }
+
+        // центральное кольцо
+        for (int i = 0; i < segs; i++) {
+            float a0 = (float) (Math.PI * 2.0 * i / segs);
+            float a1 = (float) (Math.PI * 2.0 * (i + 1) / segs);
+            pentagramRibbon(fillBuf, m,
+                    (float) Math.cos(a0) * rc, (float) Math.sin(a0) * rc,
+                    (float) Math.cos(a1) * rc, (float) Math.sin(a1) * rc,
+                    w * 0.8f,
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 130)),
+                    ColorUtil.replAlpha(base, (int) (alphaPC * 130)));
+        }
+
+        // четыре руки с загибами: сторона загиба идёт за направлением вращения
+        for (int k = 0; k < 4; k++) {
+            double a = Math.toRadians(spin + k * 90.0);
+            float ca = (float) Math.cos(a), sa = (float) Math.sin(a);
+            float armX0 = ca * rc * 0.85f, armZ0 = sa * rc * 0.85f;
+            float tipX = ca * r, tipZ = sa * r;
+
+            int cArm = ColorUtil.overCol(
+                    ColorUtil.multBright(ColorUtil.fade(k * 64), 0.9F), redColor, alpha_2.get());
+            int cArmTip = ColorUtil.replAlpha(ColorUtil.multBright(cArm, 1.15F), aRibbon);
+
+            pentagramRibbon(fillBuf, m, armX0, armZ0, tipX, tipZ, w,
+                    ColorUtil.replAlpha(cArm, aRibbon), ColorUtil.replAlpha(cArm, aRibbon));
+
+            float hx = -sa * swastonDir, hz = ca * swastonDir;
+            pentagramRibbon(fillBuf, m, tipX, tipZ, tipX + hx * hookLen, tipZ + hz * hookLen, w,
+                    ColorUtil.replAlpha(cArm, aRibbon), cArmTip);
+        }
+
+        // --- Pass 3: тонкие яркие сердцевины линий ---
+        VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
+        int coreCol = ColorUtil.replAlpha(base, aCore);
+        for (int i = 0; i < segs; i++) {
+            float a0 = (float) (Math.PI * 2.0 * i / segs);
+            float a1 = (float) (Math.PI * 2.0 * (i + 1) / segs);
+            lineBuf.vertex(m, (float) Math.cos(a0) * rc, 0, (float) Math.sin(a0) * rc).color(coreCol);
+            lineBuf.vertex(m, (float) Math.cos(a1) * rc, 0, (float) Math.sin(a1) * rc).color(coreCol);
+        }
+        for (int k = 0; k < 4; k++) {
+            double a = Math.toRadians(spin + k * 90.0);
+            float ca = (float) Math.cos(a), sa = (float) Math.sin(a);
+            lineBuf.vertex(m, ca * rc * 0.85f, 0, sa * rc * 0.85f).color(coreCol);
+            lineBuf.vertex(m, ca * r, 0, sa * r).color(coreCol);
+            float hx = -sa * swastonDir, hz = ca * swastonDir;
+            lineBuf.vertex(m, ca * r + hx * hookLen, 0, sa * r + hz * hookLen).color(coreCol);
+        }
+
+        matrices.pop();
     }
 
     /**

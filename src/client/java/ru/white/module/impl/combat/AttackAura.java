@@ -90,7 +90,7 @@ public class AttackAura extends Module {
             new BooleanSetting("Мобов", false),
             new BooleanSetting("Друзей", false));
 
-    public ModeSetting typeRotation = new ModeSetting(this,"Тип наведения", "FunTime","SpookyTime","Default","Snap","HvH","Custom","Legit","Sloth","Matrix","Neuro","Grim","Свастон");
+    public ModeSetting typeRotation = new ModeSetting(this,"Тип наведения", "FunTime","SpookyTime","Default","Snap","HvH","Custom","Legit","Sloth","Matrix","Neuro","Grim");
     public ModeSetting typeSnap = new ModeSetting(this,"Режим снапа", "360","Fov").setVisible(() -> typeRotation.is("Snap"));
     public SliderSetting fov = new SliderSetting(this, "Fov", 50.0F, 25.0F, 90.0F, 1.0F).setVisible(() -> typeRotation.is("Snap") && typeSnap.is("Fov"));
 
@@ -123,7 +123,7 @@ public class AttackAura extends Module {
     public ModeSetting typeSprint = new ModeSetting(this,"Тип спринта", "Packet","Silent","Legit");
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
 
-    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Огонь","Мечи","Цепь","Не отображать");
+    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Огонь","Мечи","Цепь","Свастон","Не отображать");
 
     public SliderSetting cubeSize = new SliderSetting(this,"Размер куба",1.15F,0.6F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
     public SliderSetting cubeRotateSpeed = new SliderSetting(this,"Скорость вращения куба",1.2F,0.2F,4.0F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
@@ -165,6 +165,9 @@ public class AttackAura extends Module {
     public SliderSetting linkSpeed = new SliderSetting(this,"Скорость вращения",0.8F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Цепь"));
     public SliderSetting linkRadius = new SliderSetting(this,"Радиус кольца",0.9F,0.5F,2.0F,0.05F).setVisible(() -> typeTargetESP.is("Цепь"));
     public SliderSetting linkSize = new SliderSetting(this,"Размер звеньев",0.09F,0.04F,0.2F,0.01F).setVisible(() -> typeTargetESP.is("Цепь"));
+
+    public SliderSetting swastonRadius = new SliderSetting(this,"Радиус свастики",1.4F,0.8F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Свастон"));
+    public SliderSetting swastonSpeed = new SliderSetting(this,"Скорость вращения",0.6F,0.1F,3.0F,0.05F).setVisible(() -> typeTargetESP.is("Свастон"));
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
             new BooleanSetting("Умные криты", false),
@@ -365,7 +368,7 @@ public static int lookUpDuration = 0;
     public boolean justAttacked = false;
     public long attackFlickAt = 0;
 
-    private int hitCount = 0;
+    public int hitCount = 0;
     private int pitchFlickThreshold = ThreadLocalRandom.current().nextInt(14,19);
     public boolean pitchFlickActive = false;
     public long pitchFlickEndTime = 0;
