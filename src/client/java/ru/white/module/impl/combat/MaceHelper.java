@@ -1,13 +1,22 @@
 package ru.white.module.impl.combat;
 
+import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 import ru.white.manager.event_impl.EventTick;
 import ru.white.manager.events.orbit.EventHandler;
+import ru.white.manager.rotation.Rotation;
+import ru.white.manager.rotation.RotationProcess;
 import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
@@ -15,13 +24,12 @@ import ru.white.module.api.settings.impl.BindSetting;
 import ru.white.module.api.settings.impl.BooleanSetting;
 import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
-import ru.white.utils.math.StopGPT;
-import net.minecraft.client.util.InputUtil;
+import ru.white.utils.aura.UAttack;
 
 /**
  * Mace Helper: во время падения заранее берёт булаву и бьёт цель в нужный тайминг.
- * Легитный свап — видимое переключение хотбара заранее, удар после короткой паузы,
- * возврат предмета после приземления.
+ * Работает поверх наведения AttackAura (или целится сам, если аура выключена),
+ * не бьёт по кулдауну/hurtTime вслепую и ретраит удар до попадания.
  */
 @ModuleInfo(
         name = "Mace Helper",
@@ -30,18 +38,23 @@ import net.minecraft.client.util.InputUtil;
 )
 public class MaceHelper extends Module {
 
-    public SliderSetting height = new SliderSetting(this, "Высота удара", 2.5F, 1.0F, 10.0F, 0.1F);
+    public ModeSetting heightMode = new ModeSetting(this, "Высота", "Умный", "Ручной");
+    public SliderSetting height = new SliderSetting(this, "Высота удара", 2.5F, 1.0F, 10.0F, 0.1F)
+            .setVisible(() -> heightMode.is("Ручной"));
     public ModeSetting swapMode = new ModeSetting(this, "Свап", "Легит", "Пакетный");
     public ModeSetting maceChoice = new ModeSetting(this, "Выбор булавы", "Авто", "Бинд");
     public BindSetting selectBind = new BindSetting(this, "Выбрать булаву")
             .setVisible(() -> maceChoice.is("Бинд"));
     public BooleanSetting returnItem = new BooleanSetting(this, "Возвращать предмет", true);
 
-    private final StopGPT timer = new StopGPT();
+    /** Минимальная высота падения для умного режима — ниже урона булавы почти нет. */
+    private static final float MIN_SMART_FALL = 1.5F;
+    private static final double REACH = 3.0D;
 
     private boolean switched;
     private boolean struck;
     private boolean bindHeld;
+    private int maceSlotOverride = -1;
 
     /** Слот хотбара, куда встала булава. */
     private int maceSlot = -1;
@@ -57,7 +70,6 @@ public class MaceHelper extends Module {
             return;
         }
 
-        // запоминание слота с булавой по бинду
         handleBind();
 
         // приземление: возврат предмета и сброс
@@ -67,49 +79,140 @@ public class MaceHelper extends Module {
         }
 
         LivingEntity target = findTarget();
-        float h = height.getValue();
-        float fd = (float) mc.player.fallDistance;
         boolean fallingDown = mc.player.getVelocity().y < 0;
+        float fd = (float) mc.player.fallDistance;
+
+        if (!fallingDown || target == null) return;
+
+        boolean wantStrike = shouldStrikeNow(fd);
+
+        // пока готовим удар — глушим атак ауру, чтобы она не била раньше времени
+        // и не сбивала общий кулдаун перед нашим окном
+        if (!struck) {
+            AttackAura.stoptick = 3;
+        }
+
+        // если аура не даёт наведение — целимся сами
+        AttackAura aura = AttackAura.get();
+        if (aura == null || !aura.isEnabled()) {
+            aimAt(target);
+        }
 
         if (swapMode.is("Пакетный")) {
-            if (struck || !fallingDown || fd < h) return;
-            LivingEntity t = inReach(target) ? target : null;
-            if (t == null) return;
+            if (!wantStrike) return;
 
             int slot = resolveMaceSlot();
             if (slot == -1) return;
 
-            int prev = mc.player.getInventory().getSelectedSlot();
-            boolean swapped = slot != prev;
-            if (swapped) selectSlot(slot);
+            if (prevHotbar == -1) {
+                prevHotbar = mc.player.getInventory().getSelectedSlot();
+            }
+            if (slot != mc.player.getInventory().getSelectedSlot()) {
+                selectSlot(slot);
+            }
 
-            attack(t);
-            struck = true;
-
-            if (swapped && returnItem.getValue()) selectSlot(prev);
+            if (tryStrike(target)) {
+                struck = true;
+                if (returnItem.getValue() && prevHotbar >= 0 && prevHotbar <= 8
+                        && prevHotbar != mc.player.getInventory().getSelectedSlot()) {
+                    selectSlot(prevHotbar);
+                }
+            }
             return;
         }
 
-        // ── Легитный режим ──
-
-        // подготовка: заранее переключаемся на булаву, пока летим к цели
-        if (!switched && fallingDown && fd >= h * 0.5F && target != null) {
+        // ── Легитный режим: заранее переключаемся на булаву ──
+        float prepFd = heightMode.is("Ручной") ? height.getValue() * 0.5F : MIN_SMART_FALL;
+        if (!switched && fd >= prepFd) {
             int slot = resolveMaceSlot();
-            if (slot != -1 && slot != mc.player.getInventory().getSelectedSlot()) {
-                prevHotbar = mc.player.getInventory().getSelectedSlot();
-                selectSlot(slot);
-            } else if (slot == mc.player.getInventory().getSelectedSlot()) {
-                prevHotbar = mc.player.getInventory().getSelectedSlot();
+            if (slot != -1) {
+                if (prevHotbar == -1) {
+                    prevHotbar = mc.player.getInventory().getSelectedSlot();
+                }
+                if (slot != mc.player.getInventory().getSelectedSlot()) {
+                    selectSlot(slot);
+                }
+                switched = true;
             }
-            switched = true;
-            timer.reset();
         }
 
-        // удар: достигли нужной высоты + небольшая честная пауза после свапа
-        if (switched && !struck && fallingDown && fd >= h && target != null && timer.hasTimePassed(50L)) {
-            attack(target);
+        if (switched && !struck && wantStrike && tryStrike(target)) {
             struck = true;
         }
+    }
+
+    /**
+     * Умный: бьём в последний тик перед землёй — fallDistance максимальный,
+     * весь бонус булавы сохраняется. Ручной: строго по слайдеру.
+     */
+    private boolean shouldStrikeNow(float fd) {
+        if (heightMode.is("Ручной")) {
+            return fd >= height.getValue();
+        }
+
+        if (fd < MIN_SMART_FALL) return false;
+
+        double distToGround = getDistanceToGround();
+        double fallSpeed = Math.abs(mc.player.getVelocity().y);
+        return distToGround <= Math.max(0.55D, fallSpeed * 1.25D);
+    }
+
+    /** Удар только когда цель в зоне, взгляд на ней и кулдаун прошёл. Иначе ретрай на следующем тике. */
+    private boolean tryStrike(LivingEntity target) {
+        if (!withinReach(target)) return false;
+        if (!UAttack.anyEntityOnRay(target, 3.2F)) return false;
+        if (!UAttack.msCooldownReached(0L)) return false;
+
+        return UAttack.useEntity(target, null, null, Hand.MAIN_HAND, false);
+    }
+
+    private void aimAt(LivingEntity target) {
+        if (mc.player == null) return;
+
+        Vec3d eye = mc.player.getEyePos();
+        Box box = target.getBoundingBox();
+        Vec3d point = new Vec3d(
+                MathHelper.clamp(eye.x, box.minX, box.maxX),
+                MathHelper.clamp(eye.y, box.minY, box.maxY),
+                MathHelper.clamp(eye.z, box.minZ, box.maxZ)
+        );
+
+        Vec3d delta = point.subtract(eye);
+        float yaw = (float) Math.toDegrees(Math.atan2(-delta.x, delta.z));
+        float pitch = (float) MathHelper.clamp(
+                -Math.toDegrees(Math.atan2(delta.y, Math.hypot(delta.x, delta.z))),
+                -90F, 90F
+        );
+
+        RotationProcess.update(new Rotation(yaw, pitch), 65F, 75F, 40F, 40F, 5, 10, false);
+    }
+
+    private boolean withinReach(LivingEntity target) {
+        Vec3d eye = mc.player.getEyePos();
+        Box box = target.getBoundingBox();
+        Vec3d closest = new Vec3d(
+                MathHelper.clamp(eye.x, box.minX, box.maxX),
+                MathHelper.clamp(eye.y, box.minY, box.maxY),
+                MathHelper.clamp(eye.z, box.minZ, box.maxZ)
+        );
+        return eye.distanceTo(closest) <= REACH;
+    }
+
+    private double getDistanceToGround() {
+        if (mc.world == null) return 999.0;
+
+        Vec3d start = mc.player.getEntityPos();
+        BlockHitResult result = mc.world.raycast(new RaycastContext(
+                start,
+                start.add(0, -10.0, 0),
+                RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE,
+                mc.player
+        ));
+
+        return result != null && result.getType() == HitResult.Type.BLOCK
+                ? start.y - result.getPos().y
+                : 999.0;
     }
 
     @Override
@@ -143,7 +246,6 @@ public class MaceHelper extends Module {
         maceSlot = -1;
         prevHotbar = -1;
         invSwapFrom = -1;
-        timer.reset();
     }
 
     private void handleBind() {
@@ -152,13 +254,8 @@ public class MaceHelper extends Module {
         if (pressed && !bindHeld) {
             maceSlotOverride = mc.player.getInventory().getSelectedSlot();
         }
-        if (!pressed) {
-            // отпустил кнопку — можно выбрать новый слот следующим нажатием
-        }
         bindHeld = pressed;
     }
-
-    private int maceSlotOverride = -1;
 
     private int resolveMaceSlot() {
         if (maceChoice.is("Бинд")) {
@@ -199,27 +296,18 @@ public class MaceHelper extends Module {
         return stack.getItem() == Items.MACE;
     }
 
-    private boolean inReach(LivingEntity target) {
-        return target != null && mc.player.distanceTo(target) <= 3.2F;
-    }
-
-    private void attack(LivingEntity target) {
-        mc.interactionManager.attackEntity(mc.player, target);
-        mc.player.swingHand(Hand.MAIN_HAND);
-    }
-
     /** Цель: приоритет — таргет Attack Aura, иначе ближайшая живая сущность в радиусе удара. */
     private LivingEntity findTarget() {
         AttackAura aura = AttackAura.get();
         if (aura != null && aura.isEnabled() && AttackAura.target != null) {
             LivingEntity t = AttackAura.target;
-            if (t.isAlive() && mc.player.distanceTo(t) <= 3.2F) {
+            if (t.isAlive() && withinReach(t)) {
                 return t;
             }
         }
 
         LivingEntity best = null;
-        double bestSq = 3.2 * 3.2;
+        double bestSq = REACH * REACH;
         for (Entity entity : mc.world.getEntities()) {
             if (!(entity instanceof LivingEntity living)
                     || entity == mc.player

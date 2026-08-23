@@ -14,25 +14,15 @@ import ru.white.manager.events.orbit.EventHandler;
 import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
-import ru.white.module.api.settings.impl.ModeSetting;
-import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.other.TimerUtil;
 import ru.white.utils.player.MoveUtil;
 
 @ModuleInfo(
         name = "WaterSpeed",
-        desc = "Ускоряет движение в воде (под потолком и в открытой воде)",
+        desc = "Ускоряет движение в воде под потолком",
         category = Category.MOVEMENT
 )
 public class WaterSpeed extends Module {
-
-    public ModeSetting type = new ModeSetting(this, "Режим", "Везде", "Под потолком");
-
-    public SliderSetting openMultiplier = new SliderSetting(this, "Множитель", 1.03F, 1.0F, 1.06F, 0.001F)
-            .setVisible(() -> type.is("Везде"));
-
-    public SliderSetting openSpeedLimit = new SliderSetting(this, "Лимит скорости", 0.25F, 0.1F, 0.5F, 0.01F)
-            .setVisible(() -> type.is("Везде"));
 
     private final TimerUtil idleTimer = new TimerUtil();
 
@@ -47,12 +37,10 @@ public class WaterSpeed extends Module {
     public void onEvent(EventUpdate event) {
         if (mc.player == null || mc.world == null) return;
         if (!mc.player.isTouchingWater()) return;
+        if (!isTouchingCeiling()) return;
 
-        boolean ceiling = isTouchingCeiling();
-        if (type.is("Под потолком") && !ceiling) return;
-
-        processMovement(ceiling);
-        processIdleOscillation(ceiling);
+        processMovement();
+        processIdleOscillation();
     }
 
     private boolean isTouchingCeiling() {
@@ -63,37 +51,17 @@ public class WaterSpeed extends Module {
         return !state.isAir() && state.getFluidState().isEmpty();
     }
 
-    private void processMovement(boolean ceiling) {
+    private void processMovement() {
         if (!MoveUtil.isMoving()) return;
 
         idleTimer.reset();
 
-        float multiplier;
-        if (ceiling) {
-            multiplier = calculateCeilingMultiplier();
-        } else {
-            if (mc.options.jumpKey.isPressed()) return;
-            multiplier = openMultiplier.getValue();
-        }
-
+        float multiplier = calculateMultiplier();
         Vec3d velocity = mc.player.getVelocity();
-        double x = velocity.x * multiplier;
-        double z = velocity.z * multiplier;
-
-        if (!ceiling) {
-            double limit = openSpeedLimit.getValue();
-            double horizontal = Math.sqrt(x * x + z * z);
-            if (horizontal > limit) {
-                double scale = limit / horizontal;
-                x *= scale;
-                z *= scale;
-            }
-        }
-
-        mc.player.setVelocity(x, velocity.y, z);
+        mc.player.setVelocity(velocity.x * multiplier, velocity.y, velocity.z * multiplier);
     }
 
-    private float calculateCeilingMultiplier() {
+    private float calculateMultiplier() {
         if (getDepthStriderLevel() > 0) {
             return hasPlayerHeadInOffhand() ? MULTIPLIER_DEPTH_HEAD : MULTIPLIER_DEPTH_ONLY;
         }
@@ -116,8 +84,7 @@ public class WaterSpeed extends Module {
         return !offhand.isEmpty() && offhand.getItem() == Items.PLAYER_HEAD;
     }
 
-    private void processIdleOscillation(boolean ceiling) {
-        if (!ceiling) return;
+    private void processIdleOscillation() {
         if (mc.player.horizontalCollision || MoveUtil.isMoving()) return;
         if (!idleTimer.finished(IDLE_TIMEOUT_MS)) return;
 
