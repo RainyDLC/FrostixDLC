@@ -187,9 +187,10 @@ public class PenisEsp extends Module implements IMinecraft {
         double rRestZ = bz - rz * side - fz * sway;
 
         double len = length.getValue();
-        double tRestX = bx + fx * len * 0.32D;
-        double tRestY = by - len * 0.78D;
-        double tRestZ = bz + fz * len * 0.32D;
+        // орган торчит вперёд-вниз под углом — виден сбоку и спереди, не прячется в ногах
+        double tRestX = bx + fx * len * 0.62D;
+        double tRestY = by - len * 0.40D;
+        double tRestZ = bz + fz * len * 0.62D;
 
         double gravity = 13D + sag.getValue() * 26D;
         double k = stiffness.getValue();
@@ -207,6 +208,47 @@ public class PenisEsp extends Module implements IMinecraft {
         integrate(phys.left, lRestX, lRestY, lRestZ, r * 0.92D, k, gravity, damping, groundY, dt);
         integrate(phys.right, rRestX, rRestY, rRestZ, r * 0.92D, k, gravity, damping, groundY, dt);
         integrate(phys.tip, tRestX, tRestY, tRestZ, 0.03D, k * 0.65D, gravity, damping, groundY, dt);
+
+        // привязка к телу: физика остаётся, но в локальных осях игрока
+        // яйца не уезжают назад за спину и не разбегаются далеко в стороны
+        constrainToBody(phys.left, lRestX, lRestY, lRestZ, fx, fz, rx, rz, r * 1.5D, -r * 0.55D, r * 2.2D);
+        constrainToBody(phys.right, rRestX, rRestY, rRestZ, fx, fz, rx, rz, r * 1.5D, -r * 0.55D, r * 2.2D);
+        // кончик органа всегда впереди корпуса
+        constrainToBody(phys.tip, tRestX, tRestY, tRestZ, fx, fz, rx, rz,
+                len * 1.1D, -len * 0.18D, len * 0.8D);
+    }
+
+    /**
+     * Локальные границы относительно точки покоя: вперёд/назад по оси взгляда,
+     * вбок по оси права. При выходе за границу позиция возвращается, а скорость,
+     * толкавшая наружу, гасится (упругая стенка) — колебание сохраняется.
+     */
+    private void constrainToBody(PointMass p, double restX, double restY, double restZ,
+                                 double fx, double fz, double rx, double rz,
+                                 double maxFwd, double minFwd, double maxSide) {
+        double dx = p.x - restX, dz = p.z - restZ;
+
+        double fwd = dx * fx + dz * fz;
+        double side = dx * rx + dz * rz;
+
+        double newFwd = MathHelper.clamp(fwd, minFwd, maxFwd);
+        double newSide = MathHelper.clamp(side, -maxSide, maxSide);
+
+        if (newFwd != fwd || newSide != side) {
+            // возврат позиции в границы
+            p.x += fx * (newFwd - fwd) + rx * (newSide - side);
+            p.z += fz * (newFwd - fwd) + rz * (newSide - side);
+
+            // гашение скорости, толкавшей за границу
+            double vFwd = p.vx * fx + p.vz * fz;
+            double vSide = p.vx * rx + p.vz * rz;
+
+            if ((fwd < minFwd && vFwd < 0) || (fwd > maxFwd && vFwd > 0)) vFwd *= -0.25D;
+            if ((side < -maxSide && vSide < 0) || (side > maxSide && vSide > 0)) vSide *= -0.25D;
+
+            p.vx = vFwd * fx + vSide * rx;
+            p.vz = vFwd * fz + vSide * rz;
+        }
     }
 
     /**
