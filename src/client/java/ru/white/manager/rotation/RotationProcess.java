@@ -1582,19 +1582,14 @@ public class RotationProcess extends Component {
         float bodyH = target.getHeight();
         Camera camera = mc.gameRenderer.getCamera();
 
-        VertexConsumer texBuf = immediate.getBuffer(
-                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
-        VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
-        VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
-
         for (int i = 0; i < count; i++) {
             float ang = t * 55F * speed + i * (360F / count);
             double rad = Math.toRadians(ang);
             float orbit = 0.55F + 0.12F * (float) Math.sin(t * 0.9 + i * 1.9);
             float bob = 0.09F * (float) Math.sin(t * 2.2 + i * 1.7);
-            float gx = targetPos.x - cameraPos.x + (float) Math.cos(rad) * orbit;
-            float gz = targetPos.z - cameraPos.z + (float) Math.sin(rad) * orbit;
-            float gy = targetPos.y - cameraPos.y
+            float gx = (float) (targetPos.x - cameraPos.x) + (float) Math.cos(rad) * orbit;
+            float gz = (float) (targetPos.z - cameraPos.z) + (float) Math.sin(rad) * orbit;
+            float gy = (float) (targetPos.y - cameraPos.y)
                     + bodyH * (0.52F + 0.05F * (float) Math.sin(t * 1.3 + i * 2.3)) + bob;
 
             float pulse = 0.62F + 0.38F * (float) Math.sin(t * 2.6 + i * 2.1);
@@ -1619,12 +1614,14 @@ public class RotationProcess extends Component {
             float gs = 0.42F * pulse + 0.10F;
             matrices.push();
             matrices.scale(gs, gs, gs);
-            drawTexQuad(texBuf, matrices.peek().getPositionMatrix(), 1.0F, glowCol);
+            drawTexQuad(immediate.getBuffer(
+                    ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png"))),
+                    matrices.peek().getPositionMatrix(), 1.0F, glowCol);
             matrices.pop();
 
             Matrix4f m = matrices.peek().getPositionMatrix();
-            ghostSilhouette(fillBuf, m, 0.16F, bodyCol, eyeCol);
-            ghostOutline(lineBuf, m, 0.16F, coreCol);
+            ghostSilhouette(immediate.getBuffer(RING_FILL_LAYER), m, 0.16F, bodyCol, eyeCol);
+            ghostOutline(immediate.getBuffer(RING_LINE_LAYER), m, 0.16F, coreCol);
 
             matrices.pop();
         }
@@ -1651,11 +1648,6 @@ public class RotationProcess extends Component {
         float bodyH = target.getHeight();
         Camera camera = mc.gameRenderer.getCamera();
 
-        VertexConsumer softBuf = immediate.getBuffer(
-                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
-        VertexConsumer coreBuf = immediate.getBuffer(
-                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_4.png")));
-
         int soulSoft = ColorUtil.overCol(ColorUtil.getColor(90, 200, 255), redColor, atts);
         int soulCore = ColorUtil.overCol(ColorUtil.getColor(195, 245, 255), redColor, atts);
 
@@ -1670,9 +1662,9 @@ public class RotationProcess extends Component {
                 float ang = t * 70F * speed + s * 137.5F + k * 24.0F + u * 160.0F;
                 double rad = Math.toRadians(ang);
 
-                float px = targetPos.x - cameraPos.x + (float) Math.cos(rad) * radius;
-                float pz = targetPos.z - cameraPos.z + (float) Math.sin(rad) * radius;
-                float py = targetPos.y - cameraPos.y + y;
+                float px = (float) (targetPos.x - cameraPos.x) + (float) Math.cos(rad) * radius;
+                float pz = (float) (targetPos.z - cameraPos.z) + (float) Math.sin(rad) * radius;
+                float py = (float) (targetPos.y - cameraPos.y) + y;
 
                 matrices.push();
                 matrices.translate(px, py, pz);
@@ -1682,14 +1674,18 @@ public class RotationProcess extends Component {
                 float gs = 0.16F * (1.0F + u * 0.8F);
                 matrices.push();
                 matrices.scale(gs, gs, gs);
-                drawTexQuad(softBuf, matrices.peek().getPositionMatrix(), 1.0F,
+                drawTexQuad(immediate.getBuffer(
+                        ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png"))),
+                        matrices.peek().getPositionMatrix(), 1.0F,
                         ColorUtil.replAlpha(soulSoft, (int) (alphaPC * wave * 60)));
                 matrices.pop();
 
                 float cs = 0.05F * (1.0F + u);
                 matrices.push();
                 matrices.scale(cs, cs, cs);
-                drawTexQuad(coreBuf, matrices.peek().getPositionMatrix(), 1.0F,
+                drawTexQuad(immediate.getBuffer(
+                        ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_4.png"))),
+                        matrices.peek().getPositionMatrix(), 1.0F,
                         ColorUtil.replAlpha(soulCore, (int) (alphaPC * wave * 220)));
                 matrices.pop();
 
