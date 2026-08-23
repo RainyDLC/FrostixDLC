@@ -102,6 +102,9 @@ public class GlassHands extends Module {
     public BooleanSetting lightning = new BooleanSetting(this, "Молнии", false);
     public SliderSetting lightningSize = new SliderSetting(this, "Размер молний", 0.4f, 0.15f, 0.8f, 0.05f)
             .setVisible(() -> lightning.getValue());
+    /** Подъём центра разрядов от якоря руки к визуальному центру предмета. */
+    public SliderSetting lightningOffset = new SliderSetting(this, "Смещение молний", 0.35f, -0.2f, 0.8f, 0.05f)
+            .setVisible(() -> lightning.getValue());
 
     public GlassHands() {
         instance = this;
@@ -222,8 +225,8 @@ public class GlassHands extends Module {
     private final boolean[] handHolding = new boolean[2];
     /** Матрица мирового прохода этого кадра (из EventRender3D) — нужна для отрисовки после композита стекла. */
     private MatrixStack frame3dStack;
-    /** UBO мировой проекции для отрисовки молний поверх рук (проекция восстанавливается на время вызова). */
-    private final RawProjectionMatrix lightningProjection = new RawProjectionMatrix("glass_hands_lightning");
+    /** UBO мировой проекции для отрисовки молний поверх рук. Создаётся лениво: при старте модуля GpuDevice ещё не инициализирован. */
+    private RawProjectionMatrix lightningProjection;
 
     @EventHandler
     public void onRender3D(EventRender3D event) {
@@ -252,6 +255,9 @@ public class GlassHands extends Module {
 
         // после фазы рук RenderSystem держит hud-проекцию (GameRenderer.renderWorld
         // переключает её перед renderHand) — временно возвращаем мировую, как в мировом проходе
+        if (lightningProjection == null) {
+            lightningProjection = new RawProjectionMatrix("glass_hands_lightning");
+        }
         RenderSystem.backupProjectionMatrix();
         try {
             RenderSystem.setProjectionMatrix(
@@ -275,11 +281,11 @@ public class GlassHands extends Module {
         if (handHolding[1]) handLightning[1].drawPointBolts(frame3dStack, alpha);
     }
 
-    /** Мировая позиция предмета в руке: вью-пространственный оффект экипировки (как в HeldItemRenderer), повёрнутый камерой. */
+    /** Мировая позиция центра предмета в руке: оффект экипировки (±0.56, -0.52, -0.72) + подъём к центру модели, повёрнутый камерой. */
     private Vec3d getHeldItemPos(Hand hand) {
         boolean mainSide = (hand == Hand.MAIN_HAND) == (mc.player.getMainArm() == Arm.RIGHT);
         float side = mainSide ? 0.56f : -0.56f;
-        Vector3f local = new Vector3f(side, -0.52f, -0.72f);
+        Vector3f local = new Vector3f(side, -0.52f + lightningOffset.getValue(), -0.72f);
         local.rotate(mc.gameRenderer.getCamera().getRotation().conjugate(new Quaternionf()));
         Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
         return camPos.add(local.x, local.y, local.z);

@@ -355,18 +355,23 @@ public class LightningRenderer implements IMinecraft {
     }
 
     private Bolt spawnPointBolt(Vec3d c, float spread) {
+        // равномерная точка на сфере вокруг центра предмета — облако обхватывает его со всех сторон
         double ang = random.nextDouble() * Math.PI * 2;
-        double ph = (random.nextDouble() - 0.5) * Math.PI;
-        double r = spread * (0.35 + random.nextDouble() * 0.65);
+        double ph = Math.acos(2 * random.nextDouble() - 1);
+        double r = spread * (0.45 + random.nextDouble() * 0.55);
 
         Vec3d start = c.add(
-                Math.cos(ang) * Math.cos(ph) * r,
-                Math.sin(ph) * r,
-                Math.sin(ang) * Math.cos(ph) * r);
+                Math.cos(ang) * Math.sin(ph) * r,
+                Math.cos(ph) * r,
+                Math.sin(ang) * Math.sin(ph) * r);
+
+        double theta = random.nextDouble() * Math.PI * 2;
+        double phi = Math.toRadians((random.nextDouble() - 0.5) * 140.0);
+        double spike = spread * (0.35 + random.nextDouble() * 0.45);
         Vec3d end = start.add(
-                (random.nextDouble() - 0.5) * spread,
-                -(0.2 + random.nextDouble() * 0.5) * spread,
-                (random.nextDouble() - 0.5) * spread);
+                Math.cos(phi) * Math.cos(theta) * spike,
+                Math.sin(phi) * spike,
+                Math.cos(phi) * Math.sin(theta) * spike);
 
         Bolt bolt = new Bolt();
         bolt.points = LightningPath.generate(start, end, 2, r * 0.5, random);
