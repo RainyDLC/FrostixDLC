@@ -84,7 +84,273 @@ public enum Theme {
             , ColorUtil.getColor(240)
                     ,ColorUtil.getColor(160)
                     ,ColorUtil.getColor(24,24,27),
-                    new Color(0xB4E9FF).getRGB());
+                    new Color(0xB4E9FF).getRGB()),
+
+    // ── красные ──
+    CRIMSON("Crimson",
+            new Color(0xDC2626).getRGB()
+            ,   new Color(0x99260707, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xEC5E5E).getRGB()),
+    BLOOD("Blood",
+            new Color(0x8B0000).getRGB()
+            ,   new Color(0x99180303, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xB54545).getRGB()),
+    CORAL("Coral",
+            new Color(0xFF6F61).getRGB()
+            ,   new Color(0x99260F0E, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xFF9C90).getRGB()),
+    SALMON("Salmon",
+            new Color(0xFA8072).getRGB()
+            ,   new Color(0x99250F0D, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xFFA79B).getRGB()),
+    FLAMINGO("Flamingo",
+            new Color(0xFC8EAC).getRGB()
+            ,   new Color(0x99190D11, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xFDB4C8).getRGB()),
+
+    // ── оранжевые / жёлтые ──
+    TANGERINE("Tangerine",
+            new Color(0xF28500).getRGB()
+            ,   new Color(0x99220F00, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xFFA83D).getRGB()),
+    MANGO("Mango",
+            new Color(0xFF8C42).getRGB()
+            ,   new Color(0x99240F09, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xFFB173).getRGB()),
+    GOLDEN("Golden",
+            new Color(0xFFD700).getRGB()
+            ,   new Color(0x99241E00, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xFFE14D).getRGB()),
+    HONEY("Honey",
+            new Color(0xEAB308).getRGB()
+            ,   new Color(0x99211800, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xF5CB42).getRGB()),
+    LEMON("Lemon",
+            new Color(0xFDE047).getRGB()
+            ,   new Color(0x99241F08, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xFEE97F).getRGB()),
+
+    // ── зелёные ──
+    MOSS("Moss",
+            new Color(0x6B8E23).getRGB()
+            ,   new Color(0x990D1204, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0x95BC4E).getRGB()),
+    FOREST("Forest",
+            new Color(0x228B22).getRGB()
+            ,   new Color(0x99050F05, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0x4DAF4D).getRGB()),
+    EMERALD("Emerald",
+            new Color(0x10B981).getRGB()
+            ,   new Color(0x9902120D, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0x4FDCA9).getRGB()),
+    MINT("Mint",
+            new Color(0x98FB98).getRGB()
+            ,   new Color(0x99121812, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xC2FFC2).getRGB()),
+    SEAFOAM("Seafoam",
+            new Color(0x93E9BE).getRGB()
+            ,   new Color(0x99111814, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xBEF4D8).getRGB()),
+    OLIVE("Olive",
+            new Color(0x808000).getRGB()
+            ,   new Color(0x99101002, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xB3B33D).getRGB()),
+    NEON("Neon",
+            new Color(0x39FF14).getRGB()
+            ,   new Color(0x99081903, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0x8AFF6E).getRGB()),
+
+    // ── голубые / синие ──
+    AQUA("Aqua",
+            new Color(0x22D3EE).getRGB()
+            ,   new Color(0x9904171A, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0x63E4F5).getRGB()),
+    CYAN("Cyan",
+            new Color(0x00E5FF).getRGB()
+            ,   new Color(0x99001719, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0x4DF0FF).getRGB()),
+    SKY("Sky",
+            new Color(0x38BDF8).getRGB()
+            ,   new Color(0x9907161A, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0x78D2FA).getRGB()),
+    AZURE("Azure",
+            new Color(0x007FFF).getRGB()
+            ,   new Color(0x99001119, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0x4DA6FF).getRGB()),
+    SAPPHIRE("Sapphire",
+            new Color(0x0F52BA).getRGB()
+            ,   new Color(0x99020C15, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0x4A82D6).getRGB()),
+    NAVY("Navy",
+            new Color(0x4C6FE7).getRGB()
+            ,   new Color(0x99090D19, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0x7E99EF).getRGB()),
+    PERIWINKLE("Periwinkle",
+            new Color(0x8FA3FF).getRGB()
+            ,   new Color(0x99121319, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xB6C3FF).getRGB()),
+
+    // ── фиолетовые / розовые ──
+    LAVENDER("Lavender",
+            new Color(0xC4B5FD).getRGB()
+            ,   new Color(0x99171519, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xDACEFE).getRGB()),
+    LILAC("Lilac",
+            new Color(0xC77DFF).getRGB()
+            ,   new Color(0x99170F19, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xDAA9FF).getRGB()),
+    ORCHID("Orchid",
+            new Color(0xDA70D6).getRGB()
+            ,   new Color(0x99190F18, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xE9A0E6).getRGB()),
+    MAGENTA("Magenta",
+            new Color(0xE935C1).getRGB()
+            ,   new Color(0x99190615, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xF270D8).getRGB()),
+    FUCHSIA("Fuchsia",
+            new Color(0xFF4FC3).getRGB()
+            ,   new Color(0x99190914, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xFF85D7).getRGB()),
+
+    // ── тёплые коричневые ──
+    COPPER("Copper",
+            new Color(0xB87333).getRGB()
+            ,   new Color(0x99120B05, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xD69A62).getRGB()),
+    CHOCOLATE("Chocolate",
+            new Color(0xD2691E).getRGB()
+            ,   new Color(0x99150A03, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xE29055).getRGB()),
+    COFFEE("Coffee",
+            new Color(0xA0785A).getRGB()
+            ,   new Color(0x99100C09, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xC09A80).getRGB()),
+
+    // ── нейтральные ──
+    SLATE("Slate",
+            new Color(0x94A3B8).getRGB()
+            ,   new Color(0x99111316, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xBCC9DB).getRGB()),
+    STEEL("Steel",
+            new Color(0x7393B3).getRGB()
+            ,   new Color(0x990C1013, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xA1BAD1).getRGB()),
+    SILVER("Silver",
+            new Color(0xC0C0C0).getRGB()
+            ,   new Color(0x99141414, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0xE3E3E3).getRGB()),
+    GRAPHITE("Graphite",
+            new Color(0x6B7280).getRGB()
+            ,   new Color(0x990A0B0C, true).getRGB()
+            , ColorUtil.getColor(240)
+                    ,ColorUtil.getColor(160)
+                    ,ColorUtil.getColor(24,24,27),
+                    new Color(0x9BA3AE).getRGB());
     private final String name;
     private final int client;
     private final int rect;

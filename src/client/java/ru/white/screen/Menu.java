@@ -90,10 +90,13 @@ public class Menu extends Screen implements IMinecraft {
     public static ru.white.manager.Theme preSelectedTheme;
     public static ru.white.manager.Theme[] themes;
 
-    // ── попап выбора тем: открывается кликом по иконке клиента в шапке ──
+    // ── попап выбора тем: открывается кликом по иконке клиента в шапке.
+    //    Тем много, поэтому они показываются сеткой свотчей ──
     private static final float POP_PAD = 6F;
-    private static final float POP_ITEM_H = 13F;
     private static final float POP_HEAD_H = 11F;
+    private static final int POP_COLS = 5;
+    private static final float POP_CELL_W = 14F;
+    private static final float POP_CELL_H = 13F;
     private boolean themePopupOpen = false;
     private final ru.white.utils.animation.satoshi.Animation animThemePopup = new EaseInOutQuad(250, 1, Direction.BACKWARDS);
     /** Геометрия иконки и попапа из последнего кадра — для обработки кликов. */
@@ -1214,15 +1217,14 @@ public class Menu extends Screen implements IMinecraft {
             return;
         }
 
+        int rows = (themes.length + POP_COLS - 1) / POP_COLS;
         float pad = POP_PAD * S;
-        float itemH = POP_ITEM_H * S;
         float headH = POP_HEAD_H * S;
+        float cellW = POP_CELL_W * S;
+        float cellH = POP_CELL_H * S;
 
-        // ширина подстраивается под самое длинное название темы
-        float nameW = 0;
-        for (Theme t : themes) nameW = Math.max(nameW, font.getWidth(t.getName(), 6.5F * S));
-        float popW = pad + 7 * S + 5 * S + nameW + pad;
-        float popH = pad + headH + 3 * S + themes.length * itemH - 3 * S + pad;
+        float popW = pad * 2 + POP_COLS * cellW;
+        float popH = pad + headH + 3 * S + rows * cellH + pad;
 
         float slide = (1F - open) * 6 * S;
         float pX = px, pY = py + slide;
@@ -1232,38 +1234,48 @@ public class Menu extends Screen implements IMinecraft {
         RenderUtil.Render2D.outline(pX, pY, popW, popH, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), 0.35F * globalAnim * open), 8 * S);
         RenderUtil.Images.texture(Identifier.of("client", "textures/frame/rectgui.png"), pX, pY, popW, popH, ColorUtil.multAlpha(ColorUtil.client(), globalAnim * open));
 
-        font.draw("Темы", pX + pad, pY + pad - 1.5F * S, 6.5F * S, ColorUtil.replAlpha(ColorUtil.client(), 0.8F * globalAnim * open));
+        // в шапке — имя темы под курсором, иначе просто «Темы»
+        String headLabel = "Темы";
 
-        float iy = pY + pad + headH + 3 * S;
-        for (Theme t : themes) {
+        float gridTop = pY + pad + headH + 3 * S;
+        for (int i = 0; i < themes.length; i++) {
+            Theme t = themes[i];
+            int col = i % POP_COLS, row = i / POP_COLS;
+            float cX = pX + pad + col * cellW;
+            float cY = gridTop + row * cellH;
+
             boolean sel = t == selectedTheme;
-            boolean hov = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, pX + 2 * S, iy, popW - 4 * S, itemH);
-            ru.white.utils.animation.satoshi.Animation a = chipAnim("theme:" + t.getName());
-            a.setDirection(hov || sel ? Direction.FORWARDS : Direction.BACKWARDS);
-            float act = a.getOutput();
+            boolean hov = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cX, cY, cellW, cellH);
 
-            if (act > 0.01F) {
-                RenderUtil.Render2D.rect(pX + 2 * S, iy, popW - 4 * S, itemH,
-                        ColorUtil.overCol(ColorUtil.getColor(255, 0.05F * globalAnim * open * act),
-                                ColorUtil.replAlpha(ColorUtil.client(), (sel ? 0.22F : 0.10F) * globalAnim * open * act), act), 4 * S);
-            }
-            if (sel) {
-                RenderUtil.Render2D.outline(pX + 2 * S, iy, popW - 4 * S, itemH, 0.5F * S,
-                        ColorUtil.replAlpha(ColorUtil.client(), 0.75F * globalAnim * open), 4 * S);
-            }
+            ru.white.utils.animation.satoshi.Animation hovAnim = chipAnim("theme:" + t.getName());
+            hovAnim.setDirection(hov || sel ? Direction.FORWARDS : Direction.BACKWARDS);
+            float act = hovAnim.getOutput();
+            ru.white.utils.animation.satoshi.Animation selAnim = chipAnim("themeSel:" + t.getName());
+            selAnim.setDirection(sel ? Direction.FORWARDS : Direction.BACKWARDS);
+            float sAct = selAnim.getOutput();
+            if (hov) headLabel = t.getName();
 
-            RenderUtil.Render2D.rect(pX + pad, iy + (itemH - 7 * S) / 2, 7 * S, 7 * S,
-                    ColorUtil.replAlpha(t.getClient(), globalAnim * open), 3 * S);
-            if (sel) {
-                RenderUtil.Render2D.outline(pX + pad - 0.75F * S, iy + (itemH - 9 * S) / 2, 9.5F * S, 9.5F * S,
-                        0.35F * S, ColorUtil.getColor(255, globalAnim * open), 3 * S);
-            }
+            float size = (8.5F + 2F * sAct) * S;
+            float sX = cX + (cellW - size) / 2;
+            float sY = cY + (cellH - size) / 2;
 
-            font.draw(t.getName(), pX + pad + 12 * S, iy + (itemH - 8 * S) / 2 + 0.5F * S, 6.5F * S,
-                    ColorUtil.getColor(255, globalAnim * open * (sel ? 0.95F : 0.45F + 0.45F * act)));
-
-            iy += itemH;
+            if (act > 0.01F)
+                RenderUtil.Render2D.glow(sX, sY, size, size,
+                        ColorUtil.replAlpha(t.getClient(), 0.35F * globalAnim * open * act), size, 6, 1);
+            RenderUtil.Render2D.rect(sX, sY, size, size,
+                    ColorUtil.replAlpha(t.getClient(), (0.75F + 0.25F * act) * globalAnim * open), 3 * S);
+            if (sAct > 0.01F)
+                RenderUtil.Render2D.outline(sX - 1.25F * S * sAct, sY - 1.25F * S * sAct,
+                        size + 2.5F * S * sAct, size + 2.5F * S * sAct, 0.5F * S,
+                        ColorUtil.overCol(ColorUtil.getColor(255, globalAnim * open * sAct),
+                                ColorUtil.replAlpha(ColorUtil.client(), globalAnim * open * sAct), 0.35F), 3 * S);
         }
+
+        font.draw(headLabel, pX + pad, pY + pad - 1.5F * S, 6.5F * S,
+                ColorUtil.replAlpha(ColorUtil.client(), 0.8F * globalAnim * open));
+        String cnt = themes.length + "";
+        font.draw(cnt, pX + popW - pad - font.getWidth(cnt, 6.5F * S), pY + pad - 1.5F * S, 6.5F * S,
+                ColorUtil.getColor(255, 0.4F * globalAnim * open));
 
         themePopupRect = new float[]{pX, pY, popW, popH};
     }
@@ -1354,17 +1366,23 @@ public class Menu extends Screen implements IMinecraft {
             return true;
         }
 
-        // ── попап тем: выбор темы, клик мимо — закрыть ──
+        // ── попап тем (сетка свотчей): выбор темы, клик мимо — закрыть ──
         if (themePopupOpen) {
             if (themePopupRect != null
                     && MathUtil.isHovered(mouseX, mouseY, themePopupRect[0], themePopupRect[1], themePopupRect[2], themePopupRect[3])) {
-                int idx = (int) ((mouseY - (themePopupRect[1] + POP_PAD * S + POP_HEAD_H * S + 3 * S)) / (POP_ITEM_H * S));
-                if (idx >= 0 && idx < themes.length) {
-                    Theme chosen = themes[idx];
-                    if (chosen != selectedTheme) {
-                        animation14.reset(); preSelectedTheme = selectedTheme; selectedTheme = chosen;
-                        Client.get().guiManager().setGuiTheme(chosen);
-                        GuiSounds.theme(idx, themes.length);
+                float relX = mouseX - (themePopupRect[0] + POP_PAD * S);
+                float relY = mouseY - (themePopupRect[1] + POP_PAD * S + POP_HEAD_H * S + 3 * S);
+                int colIdx = (int) (relX / (POP_CELL_W * S));
+                int rowIdx = (int) (relY / (POP_CELL_H * S));
+                if (colIdx >= 0 && colIdx < POP_COLS && rowIdx >= 0) {
+                    int idx = rowIdx * POP_COLS + colIdx;
+                    if (idx < themes.length) {
+                        Theme chosen = themes[idx];
+                        if (chosen != selectedTheme) {
+                            animation14.reset(); preSelectedTheme = selectedTheme; selectedTheme = chosen;
+                            Client.get().guiManager().setGuiTheme(chosen);
+                            GuiSounds.theme(idx, themes.length);
+                        }
                     }
                 }
                 return true;
