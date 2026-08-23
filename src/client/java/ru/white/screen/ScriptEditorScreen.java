@@ -272,7 +272,9 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         cur.scrollYTarget = MathUtil.clamp(cur.scrollYTarget, 0F, maxY);
         cur.scrollY += (cur.scrollYTarget - cur.scrollY) * 0.3F;
 
-        Scissor.enable(codeX, codeY, codeW, codeH, 3);
+        // внимание: последний аргумент Scissor.enable — guiScale (как в Menu/RotationBuilder),
+        // координаты редактора живут в пространстве x2
+        Scissor.enable(codeX, codeY, codeW, codeH, 2);
 
         int firstRow = Math.max(0, (int) (cur.scrollY / LINE_H) - 1);
         int lastRow = Math.min(cur.lines.size(), firstRow + (int) (codeH / LINE_H) + 3);
