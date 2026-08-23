@@ -57,6 +57,7 @@ public final class ModuleManager extends LinkedHashMap<Class<? extends Module>, 
                 new Speed(),
                 new WaterSpeed(),
                 new AirStuck(),
+                new Fly(),
 
                 new ClickGui(),
                 new Arrows(),
