@@ -579,9 +579,13 @@ public static int lookUpDuration = 0;
 
 
     private boolean isValidTarget(LivingEntity entity) {
+        return isValidTarget(entity, auraDist());
+    }
+
+    public boolean isValidTarget(LivingEntity entity, double maxDist) {
         if (entity instanceof ClientPlayerEntity) return false;
 
-        if (mc.player.distanceTo(entity) > auraDist()) return false;
+        if (mc.player.distanceTo(entity) > maxDist) return false;
 
         if (!others.getValue("Бить через блоки")) {
             if (!mc.player.canSee(entity)) return false;

@@ -2,6 +2,7 @@ package ru.white.module.impl.combat;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.util.Hand;
@@ -35,16 +36,21 @@ public class TpAura extends Module {
         if (mc.player == null || mc.world == null || mc.player.networkHandler == null) return;
         if (mc.player.isUsingItem() || mc.currentScreen != null) return;
 
-        LivingEntity target = AttackAura.target;
-        if (target == null || !target.isAlive()) return;
-
         long ms = System.currentTimeMillis();
         if (ms < nextStrike) return;
 
-        double dist = mc.player.getEyePos().distanceTo(target.getEntityPos());
-        if (dist > tpRadius.getValue()) return;
+        AttackAura aura = AttackAura.get();
+        float atkRange = aura.attackRange.getValue();
 
-        float[] ranges = AttackAura.get().getRanges();
+        // своя цель: аура не берёт цели дальше attackRange + обнаружение,
+        // поэтому ищем самостоятельно в радиусе телепорта
+        LivingEntity target = findTarget();
+        if (target == null) return;
+
+        double dist = mc.player.getEyePos().distanceTo(target.getEntityPos());
+        if (dist > tpRadius.getValue() || dist <= atkRange) return;
+
+        float[] ranges = aura.getRanges();
         if (!UAttack.shouldAttack(target, false, false, false, 0L, ranges)) return;
 
         // точка высадки: между нами и целью, на дистанции удара от её корпуса
@@ -84,5 +90,22 @@ public class TpAura extends Module {
                 mc.player.getEntityPos(), mc.player.isOnGround(), false));
 
         nextStrike = ms + cooldown.getValue().longValue();
+    }
+
+    /** Ближайшая валидная цель в радиусе телепорта — фильтры самой ауры. */
+    private LivingEntity findTarget() {
+        LivingEntity best = null;
+        double bestDist = Double.MAX_VALUE;
+        double radius = tpRadius.getValue();
+        for (Entity ent : mc.world.getEntities()) {
+            if (!(ent instanceof LivingEntity living)) continue;
+            if (!AttackAura.get().isValidTarget(living, radius)) continue;
+            double d = mc.player.getEyePos().distanceTo(living.getEntityPos());
+            if (d < bestDist) {
+                bestDist = d;
+                best = living;
+            }
+        }
+        return best;
     }
 }
