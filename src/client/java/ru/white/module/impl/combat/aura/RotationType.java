@@ -19,7 +19,8 @@ public enum RotationType {
     LEGIT("Legit", new LegitRotation()),
     SLOTH("Sloth", new SlothRotation()),
     CONSTRUCTOR_MATRIX("Matrix", new ConstructorRotation(ConstructorRotation.Profile.MATRIX)),
-    GRIM("Grim", new ConstructorRotation(ConstructorRotation.Profile.GRIM));
+    GRIM("Grim", new ConstructorRotation(ConstructorRotation.Profile.GRIM)),
+    RELLYWORLD("RellyWorld", new RellyWorldRotation());
 
 
     private final String name;
