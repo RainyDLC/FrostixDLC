@@ -12,7 +12,9 @@ import ru.white.manager.events.orbit.EventHandler;
 import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
+import ru.white.module.api.settings.impl.BooleanSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
+import ru.white.utils.aura.AttackUtil;
 import ru.white.utils.aura.UAttack;
 
 /**
@@ -25,9 +27,13 @@ import ru.white.utils.aura.UAttack;
 @ModuleInfo(name = "TpAura", desc = "Телепортируется к цели, бьёт и возвращается обратно", category = Category.COMBAT)
 public class TpAura extends Module {
 
-    public SliderSetting tpRadius = new SliderSetting(this, "Радиус телепорта", 5.0F, 3.0F, 8.0F, 0.1F);
+    public SliderSetting tpRadius = new SliderSetting(this, "Радиус телепорта", 15.0F, 3.0F, 50.0F, 0.5F);
     public SliderSetting standOff = new SliderSetting(this, "Дистанция удара", 2.2F, 1.5F, 3.0F, 0.1F);
     public SliderSetting cooldown = new SliderSetting(this, "Перезарядка", 800F, 250F, 2000F, 50F);
+
+    public BooleanSetting critOnly = new BooleanSetting(this, "Только криты", true);
+    public BooleanSetting autoJump = new BooleanSetting(this, "Прыжок для крита", true)
+            .setVisible(() -> critOnly.getValue());
 
     private long nextStrike = 0L;
 
@@ -50,8 +56,16 @@ public class TpAura extends Module {
         double dist = mc.player.getEyePos().distanceTo(target.getEntityPos());
         if (dist > tpRadius.getValue() || dist <= atkRange) return;
 
+        // только криты: бьём строго в состоянии крита, иначе прыгаем и ждём падения
+        if (critOnly.getValue() && !AttackUtil.isPlayerInCriticalState()) {
+            if (autoJump.getValue() && mc.player.isOnGround()) {
+                mc.player.setVelocity(mc.player.getVelocity().x, 0.42F, mc.player.getVelocity().z);
+            }
+            return;
+        }
+
         float[] ranges = aura.getRanges();
-        if (!UAttack.shouldAttack(target, false, false, false, 0L, ranges)) return;
+        if (!UAttack.shouldAttack(target, false, false, !critOnly.getValue(), 0L, ranges)) return;
 
         // точка высадки: между нами и целью, на дистанции удара от её корпуса
         Vec3d toPlayer = mc.player.getEntityPos().subtract(target.getEntityPos());
