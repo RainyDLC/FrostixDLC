@@ -1,5 +1,6 @@
 package ru.white.module.impl.movement;
 
+import net.minecraft.block.SignBlock;
 import net.minecraft.client.gui.screen.ingame.SignEditScreen;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.SignItem;
@@ -43,11 +44,13 @@ public class Fly extends Module {
 
     private final TimerUtil placeTimer = new TimerUtil();
     private final TimerUtil jumpTimer = new TimerUtil();
+    private BlockPos lastPlacedCell = null;
 
     @Override
     protected void onEnable() {
         placeTimer.reset();
         jumpTimer.reset();
+        lastPlacedCell = null;
         super.onEnable();
     }
 
@@ -101,6 +104,11 @@ public class Fly extends Module {
         int signSlot = findSignSlot();
         if (signSlot == -1) return;
 
+        // клиентская коллизия: на Funtime таблички твёрдые, в ванилле — нет.
+        // Сами держим игрока на верхней грани последней поставленной таблички,
+        // иначе клиент проваливается сквозь неё и рассинхрон флагает Polar'ом.
+        simulateSignCollision();
+
         // мгновенный отскок: прыгаем в тот же тик приземления
         if (autoJump.getValue() && mc.player.isOnGround() && jumpTimer.finished(jitter(35))) {
             mc.player.jump();
@@ -126,7 +134,30 @@ public class Fly extends Module {
         mc.player.swingHand(Hand.MAIN_HAND);
         mc.player.getInventory().setSelectedSlot(oldSlot);
 
+        lastPlacedCell = target;
         placeTimer.reset();
+    }
+
+    /**
+     * Симуляция твёрдой таблички: при падении на последнюю поставленную ячейку
+     * ставим игрока на её верхнюю грань и объявляем землю. Позиции клиента и
+     * сервера совпадают — Polar не видит рассинхрона.
+     */
+    private void simulateSignCollision() {
+        if (lastPlacedCell == null || mc.player.isOnGround()) return;
+        if (mc.player.getVelocity().y > 0) return;
+
+        double top = lastPlacedCell.getY() + 1.0;
+        Vec3d p = mc.player.getEntityPos();
+        double dx = p.x - (lastPlacedCell.getX() + 0.5);
+        double dz = p.z - (lastPlacedCell.getZ() + 0.5);
+        if (dx * dx + dz * dz > 0.42) return;
+        if (p.y < top - 0.8 || p.y > top + 0.2) return;
+
+        mc.player.setPosition(p.x, top, p.z);
+        mc.player.setVelocity(mc.player.getVelocity().x, 0, mc.player.getVelocity().z);
+        mc.player.setOnGround(true);
+        mc.player.fallDistance = 0;
     }
 
     /** Polar: интеракция засчитывается только при правдоподобном взгляде. */
@@ -169,6 +200,8 @@ public class Fly extends Module {
     /**
      * Ищем соседний блок, кликом по грани которого табличка встанет в target.
      * Приоритет: блок снизу (грань вверх) -> боковые -> верх.
+     * Предыдущая табличка снизу — валидный якорь (на Funtime знаки твёрдые),
+     * хотя её коллизия в ванилле пустая.
      */
     private BlockHitResult findAnchorHit(BlockPos target) {
         Direction[] order = {Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST, Direction.UP};
@@ -178,7 +211,9 @@ public class Fly extends Module {
             var state = mc.world.getBlockState(neighbor);
 
             if (state.isReplaceable()) continue;
-            if (state.getCollisionShape(mc.world, neighbor).isEmpty()) continue;
+
+            boolean isSign = state.getBlock() instanceof SignBlock;
+            if (!isSign && state.getCollisionShape(mc.world, neighbor).isEmpty()) continue;
 
             Vec3d point = Vec3d.ofCenter(neighbor).add(
                     Vec3d.of(dir.getOpposite().getVector()).multiply(0.5));
