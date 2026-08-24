@@ -4,12 +4,15 @@ import net.minecraft.block.SignBlock;
 import net.minecraft.client.gui.screen.ingame.SignEditScreen;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.SignItem;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import ru.white.manager.event_impl.EventPacket;
 import ru.white.manager.event_impl.MotionEvent;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.manager.rotation.Rotation;
@@ -36,7 +39,10 @@ public class Fly extends Module {
     public BooleanSetting autoJump = new BooleanSetting(this, "Автопрыжок", true)
             .setVisible(() -> type.is("FunTime"));
 
-    public SliderSetting placeDelay = new SliderSetting(this, "Задержка установки", 120, 70, 350, 5)
+    public SliderSetting placeDelay = new SliderSetting(this, "Задержка установки", 150, 70, 350, 5)
+            .setVisible(() -> type.is("FunTime"));
+
+    public SliderSetting signTop = new SliderSetting(this, "Высота таблички", 1.0F, 0.5F, 1.0F, 0.05F)
             .setVisible(() -> type.is("FunTime"));
 
     public SliderSetting flySpeed = new SliderSetting(this, "Скорость", 1, 0.1F, 3F, 0.05F)
@@ -45,12 +51,14 @@ public class Fly extends Module {
     private final TimerUtil placeTimer = new TimerUtil();
     private final TimerUtil jumpTimer = new TimerUtil();
     private BlockPos lastPlacedCell = null;
+    private long polarPauseUntil = 0L;
 
     @Override
     protected void onEnable() {
         placeTimer.reset();
         jumpTimer.reset();
         lastPlacedCell = null;
+        polarPauseUntil = 0L;
         super.onEnable();
     }
 
@@ -61,6 +69,21 @@ public class Fly extends Module {
             mc.player.sendAbilitiesUpdate();
         }
         super.onDisable();
+    }
+
+    /**
+     * Сервер сделал ресинк позиции — не спорим с античитом. Сбрасываем башню
+     * и выдерживаем паузу: долгая работа важнее упрямства.
+     */
+    @EventHandler
+    public void onPacket(EventPacket e) {
+        if (!type.is("FunTime") || e.isSend()) return;
+        if (e.getPacket() instanceof PlayerPositionLookS2CPacket) {
+            lastPlacedCell = null;
+            polarPauseUntil = System.currentTimeMillis() + 1500L;
+            placeTimer.reset();
+            jumpTimer.reset();
+        }
     }
 
     @EventHandler
@@ -78,11 +101,11 @@ public class Fly extends Module {
 
     /**
      * Непрерывный подъём на табличках под Polar (FunTime):
-     * - редактор таблички закрывается автоматически — ничто не прерывает цикл;
-     * - отскок в тот же тик приземления, установка ещё в полёте — без пауз;
-     * - поворот доводится каждый тик, установка только при валидном взгляде —
-     *   Polar проверяет ротацию на интеракции;
-     * - точка клика джиттерится, задержки плавают — нет машинного паттерна.
+     * - редактор закрывается сам, отскок в тик приземления, установка в полёте;
+     * - интеракция валидируется как на сервере: реальный рейкаст из камеры
+     *   должен попадать в тот же блок и грань, ошибка ротации <= 8 градусов;
+     * - табличка в оффхуке — установка без переключения слотов;
+     * - после ресинка пауза 1.5с и старт заново с текущей позиции.
      */
     private void handleSignFly(MotionEvent e) {
         if (mc.player.hasVehicle()
@@ -91,26 +114,22 @@ public class Fly extends Module {
                 || mc.player.isInLava()
                 || mc.player.isClimbing()) return;
 
-        // редактор таблички сам себя закрывает — цикл не прерывается
         if (mc.currentScreen instanceof SignEditScreen) {
             mc.setScreen(null);
             return;
         }
 
+        if (System.currentTimeMillis() < polarPauseUntil) return;
+
         // Shift — плавное снижение, ничего не делаем
         if (mc.player.input.playerInput.sneak()) return;
         if (mc.player.isUsingItem()) return;
 
-        int signSlot = findSignSlot();
-        if (signSlot == -1) return;
-
-        // клиентская коллизия: на Funtime таблички твёрдые, в ванилле — нет.
-        // Сами держим игрока на верхней грани последней поставленной таблички,
-        // иначе клиент проваливается сквозь неё и рассинхрон флагает Polar'ом.
+        // клиентская коллизия: держим игрока на верхней грани последней таблички
         simulateSignCollision();
 
         // мгновенный отскок: прыгаем в тот же тик приземления
-        if (autoJump.getValue() && mc.player.isOnGround() && jumpTimer.finished(jitter(35))) {
+        if (autoJump.getValue() && mc.player.isOnGround() && jumpTimer.finished(jitter(70, 30))) {
             mc.player.jump();
             mc.player.fallDistance = 0;
             jumpTimer.reset();
@@ -122,32 +141,46 @@ public class Fly extends Module {
         BlockHitResult hit = findAnchorHit(target);
         if (hit == null) return;
 
-        // доводим взгляд каждый тик — установка только по валидной ротации
+        // доводим взгляд каждый тик
         lookAt(hit.getPos());
 
-        if (!placeTimer.finished(jitter(placeDelay.getValue()))) return;
+        if (!placeTimer.finished(jitter(placeDelay.getValue(), 40))) return;
         if (!rotationCloseEnough(hit)) return;
+        if (!raycastMatches(hit)) return;
+
+        placeSign(hit);
+        lastPlacedCell = target;
+        placeTimer.reset();
+    }
+
+    private void placeSign(BlockHitResult hit) {
+        ItemStack off = mc.player.getOffHandStack();
+        if (!off.isEmpty() && off.getItem() instanceof SignItem) {
+            // оффхенд: никаких переключений слотов — чистая интеракция
+            mc.interactionManager.interactBlock(mc.player, Hand.OFF_HAND, jitterHit(hit));
+            mc.player.swingHand(Hand.OFF_HAND);
+            return;
+        }
+
+        int signSlot = findSignSlot();
+        if (signSlot == -1) return;
 
         int oldSlot = mc.player.getInventory().getSelectedSlot();
         mc.player.getInventory().setSelectedSlot(signSlot);
         mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, jitterHit(hit));
         mc.player.swingHand(Hand.MAIN_HAND);
         mc.player.getInventory().setSelectedSlot(oldSlot);
-
-        lastPlacedCell = target;
-        placeTimer.reset();
     }
 
     /**
      * Симуляция твёрдой таблички: при падении на последнюю поставленную ячейку
-     * ставим игрока на её верхнюю грань и объявляем землю. Позиции клиента и
-     * сервера совпадают — Polar не видит рассинхрона.
+     * ставим игрока на её верхнюю грань и объявляем землю.
      */
     private void simulateSignCollision() {
         if (lastPlacedCell == null || mc.player.isOnGround()) return;
         if (mc.player.getVelocity().y > 0) return;
 
-        double top = lastPlacedCell.getY() + 1.0;
+        double top = lastPlacedCell.getY() + signTop.getValue();
         Vec3d p = mc.player.getEntityPos();
         double dx = p.x - (lastPlacedCell.getX() + 0.5);
         double dz = p.z - (lastPlacedCell.getZ() + 0.5);
@@ -160,7 +193,19 @@ public class Fly extends Module {
         mc.player.fallDistance = 0;
     }
 
-    /** Polar: интеракция засчитывается только при правдоподобном взгляде. */
+    /**
+     * Polar валидирует интеракцию рейкастом из отправленной ротации.
+     * Повторяем ту же проверку локально: камера должна попадать ровно
+     * в тот же блок и ту же грань.
+     */
+    private boolean raycastMatches(BlockHitResult hit) {
+        HitResult cam = mc.player.raycast(4.5F, 1.0F, false);
+        if (!(cam instanceof BlockHitResult bhr)) return false;
+        return bhr.getBlockPos().equals(hit.getBlockPos())
+                && bhr.getSide() == hit.getSide();
+    }
+
+    /** Ошибка ротации <= 8 градусов — интеракция выглядит прицельно. */
     private boolean rotationCloseEnough(BlockHitResult hit) {
         Vec3d delta = hit.getPos().subtract(mc.player.getEyePos());
         double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
@@ -170,7 +215,7 @@ public class Fly extends Module {
 
         float yawDiff = Math.abs(MathHelper.wrapDegrees(yaw - Rotation.cameraYaw()));
         float pitchDiff = Math.abs(pitch - Rotation.cameraPitch());
-        return Math.hypot(yawDiff, pitchDiff) <= 25.0F;
+        return Math.hypot(yawDiff, pitchDiff) <= 8.0F;
     }
 
     /** Лёгкий джиттер точки клика внутри грани — против паттернов установки. */
@@ -200,11 +245,14 @@ public class Fly extends Module {
     /**
      * Ищем соседний блок, кликом по грани которого табличка встанет в target.
      * Приоритет: блок снизу (грань вверх) -> боковые -> верх.
-     * Предыдущая табличка снизу — валидный якорь (на Funtime знаки твёрдые),
-     * хотя её коллизия в ванилле пустая.
+     * Предыдущая табличка снизу — валидный якорь (на Funtime знаки твёрдые).
      */
     private BlockHitResult findAnchorHit(BlockPos target) {
-        Direction[] order = {Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST, Direction.UP};
+        boolean sideFirst = ThreadLocalRandom.current().nextInt(100) < 30;
+
+        Direction[] order = sideFirst
+                ? new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST, Direction.DOWN, Direction.UP}
+                : new Direction[]{Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST, Direction.UP};
 
         for (Direction dir : order) {
             BlockPos neighbor = target.offset(dir);
@@ -236,8 +284,8 @@ public class Fly extends Module {
         RotationProcess.update(new Rotation(yaw, pitch), 170, 170, 0, 50);
     }
 
-    private long jitter(double base) {
-        return (long) base + ThreadLocalRandom.current().nextLong(-15, 16);
+    private long jitter(double base, double spread) {
+        return (long) base + ThreadLocalRandom.current().nextLong((long) -spread, (long) spread + 1);
     }
 
     private int findSignSlot() {
