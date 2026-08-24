@@ -32,7 +32,7 @@ import java.util.Arrays;
 )
 public class Speed extends Module {
 
-    public ModeSetting type = new ModeSetting(this, "Режим", "Vanilla","Meta","ReallyWorld");
+    public ModeSetting type = new ModeSetting(this, "Режим", "Vanilla","Meta","ReallyWorld","Grim");
 
     public SliderSetting speed = new SliderSetting(this, "Скорость", 1, 0.3F, 2F, 0.1F)
             .setVisible(() -> type.is("Vanilla"));
@@ -46,6 +46,11 @@ public class Speed extends Module {
     private long rwPhaseStart = 0L;
     private float rwPhaseDur = 0F;
     private long rwFlagCooldown = 0L;
+
+    // Grim speed state
+    private int grimTick = 0;
+    private boolean grimLastOnGround = true;
+    private long grimFlagCooldown = 0L;
 
     @EventHandler
     public void onEvent(MotionEvent event) {
@@ -131,6 +136,12 @@ public class Speed extends Module {
         if (type.is("ReallyWorld")) {
             handleReallyWorld();
         }
+
+        if (type.is("Grim")) {
+            handleGrimSpeed();
+
+            grimLastOnGround = mc.player.isOnGround();
+        }
     }
 
     public float tick = 1.0F;
@@ -160,6 +171,13 @@ public class Speed extends Module {
                 rwFlagCooldown = System.currentTimeMillis() + 900L;
                 rwPhase = 0;
                 rwPhaseStart = 0L;
+            }
+        }
+
+        if (type.is("Grim")) {
+            if (e.getPacket() instanceof PlayerPositionLookS2CPacket) {
+                grimFlagCooldown = System.currentTimeMillis() + 1000L;
+                grimTick = 0;
             }
         }
     }
@@ -237,6 +255,59 @@ public class Speed extends Module {
         };
     }
 
+    /**
+     * Grim: буст в пределах погрешности предсказания GrimAC.
+     * - движок предсказаний Grim допускает неопределённость ~0.03 блока/тик:
+     *   микро-прирост скорости по направлению движения остаётся «невидимым»
+     *   для проверки дистанции — флагов «moved too fast» нет;
+     * - фазовый паттерн (3 тика буста / отдых) рвёт постоянность для эвристик;
+     * - в бою с таргет аурой буст реже и слабее — не ломает предсказание
+     *   отброса от удара и спринт-пакеты ауры;
+     * - тик прыжка, вода, лаги, sneak, транспорт — буст пропускается.
+     */
+    private void handleGrimSpeed() {
+        long ms = System.currentTimeMillis();
+        if (ms < grimFlagCooldown) return;
+
+        if (mc.player.isSubmergedInWater() || mc.player.hasVehicle()
+                || mc.player.getAbilities().flying || mc.player.isClimbing()
+                || mc.player.isSneaking() || !MoveUtil.isMoving()
+                || mc.player.fallDistance > 1.5F) {
+            return;
+        }
+
+        AttackAura aura = AttackAura.get();
+        boolean combat = false;
+        if (aura != null && aura.isEnabled() && AttackAura.target != null) {
+            float[] ranges = aura.getRanges();
+            double reach = ranges[0] + ranges[1] + 0.5;
+            combat = AttackAura.target.squaredDistanceTo(mc.player) <= reach * reach;
+        }
+
+        grimTick++;
+
+        boolean boostTick;
+        if (combat) {
+            boostTick = grimTick % 6 < 3;
+        } else {
+            boostTick = grimTick % 4 < 3;
+        }
+        if (!boostTick) return;
+
+        // тик прыжка: горизонтальный буст ломает предсказание прыжка Grim
+        boolean jumpTick = !mc.player.isOnGround() && grimLastOnGround
+                && mc.player.getVelocity().y > 0;
+        if (jumpTick) return;
+
+        double dx = mc.player.getX() - mc.player.prevX;
+        double dz = mc.player.getZ() - mc.player.prevZ;
+        double len = Math.sqrt(dx * dx + dz * dz);
+        if (len < 1e-4) return;
+
+        float power = combat ? 0.018F : 0.026F;
+        mc.player.addVelocity(dx / len * power, 0, dz / len * power);
+    }
+
     private void handleRW() {
         if (mc.getRenderTickCounter() instanceof ITimerSpeed speedTimer) {
 
@@ -304,6 +375,8 @@ public class Speed extends Module {
         rwPhase = 0;
         rwPhaseStart = 0L;
         rwFlagCooldown = 0L;
+        grimTick = 0;
+        grimFlagCooldown = 0L;
         super.onEnable();
     }
 
