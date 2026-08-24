@@ -1,5 +1,6 @@
 package ru.white.module.impl.movement;
 
+import net.minecraft.client.gui.screen.ingame.SignEditScreen;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.SignItem;
 import net.minecraft.util.Hand;
@@ -72,6 +73,14 @@ public class Fly extends Module {
         }
     }
 
+    /**
+     * Непрерывный подъём на табличках под Polar (FunTime):
+     * - редактор таблички закрывается автоматически — ничто не прерывает цикл;
+     * - отскок в тот же тик приземления, установка ещё в полёте — без пауз;
+     * - поворот доводится каждый тик, установка только при валидном взгляде —
+     *   Polar проверяет ротацию на интеракции;
+     * - точка клика джиттерится, задержки плавают — нет машинного паттерна.
+     */
     private void handleSignFly(MotionEvent e) {
         if (mc.player.hasVehicle()
                 || mc.player.getAbilities().flying
@@ -79,39 +88,68 @@ public class Fly extends Module {
                 || mc.player.isInLava()
                 || mc.player.isClimbing()) return;
 
+        // редактор таблички сам себя закрывает — цикл не прерывается
+        if (mc.currentScreen instanceof SignEditScreen) {
+            mc.setScreen(null);
+            return;
+        }
+
         // Shift — плавное снижение, ничего не делаем
         if (mc.player.input.playerInput.sneak()) return;
+        if (mc.player.isUsingItem()) return;
 
         int signSlot = findSignSlot();
         if (signSlot == -1) return;
 
-        // Реальный прыжок только с реальной земли (на табличке или блоке)
-        if (autoJump.getValue() && mc.player.isOnGround() && jumpTimer.finished(jitter(140))) {
+        // мгновенный отскок: прыгаем в тот же тик приземления
+        if (autoJump.getValue() && mc.player.isOnGround() && jumpTimer.finished(jitter(35))) {
             mc.player.jump();
             mc.player.fallDistance = 0;
             jumpTimer.reset();
-            return;
         }
 
-        // Ищем ячейку под ногами, которую мы только что освободили прыжком
         BlockPos target = getTargetCell();
         if (target == null) return;
 
         BlockHitResult hit = findAnchorHit(target);
         if (hit == null) return;
 
-        long delay = jitter(placeDelay.getValue());
-        if (!placeTimer.finished(delay)) return;
-
+        // доводим взгляд каждый тик — установка только по валидной ротации
         lookAt(hit.getPos());
+
+        if (!placeTimer.finished(jitter(placeDelay.getValue()))) return;
+        if (!rotationCloseEnough(hit)) return;
 
         int oldSlot = mc.player.getInventory().getSelectedSlot();
         mc.player.getInventory().setSelectedSlot(signSlot);
-        mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+        mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, jitterHit(hit));
         mc.player.swingHand(Hand.MAIN_HAND);
         mc.player.getInventory().setSelectedSlot(oldSlot);
 
         placeTimer.reset();
+    }
+
+    /** Polar: интеракция засчитывается только при правдоподобном взгляде. */
+    private boolean rotationCloseEnough(BlockHitResult hit) {
+        Vec3d delta = hit.getPos().subtract(mc.player.getEyePos());
+        double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+
+        float yaw = (float) (MathHelper.atan2(delta.z, delta.x) * 180.0 / Math.PI) - 90.0F;
+        float pitch = (float) (-(MathHelper.atan2(delta.y, horiz) * 180.0 / Math.PI));
+
+        float yawDiff = Math.abs(MathHelper.wrapDegrees(yaw - Rotation.cameraYaw()));
+        float pitchDiff = Math.abs(pitch - Rotation.cameraPitch());
+        return Math.hypot(yawDiff, pitchDiff) <= 25.0F;
+    }
+
+    /** Лёгкий джиттер точки клика внутри грани — против паттернов установки. */
+    private BlockHitResult jitterHit(BlockHitResult hit) {
+        Vec3d p = hit.getPos();
+        Vec3d jittered = p.add(
+                ThreadLocalRandom.current().nextDouble(-0.03, 0.03),
+                ThreadLocalRandom.current().nextDouble(-0.03, 0.03),
+                ThreadLocalRandom.current().nextDouble(-0.03, 0.03));
+        return new BlockHitResult(jittered, hit.getSide(), hit.getBlockPos(), hit.isInsideBlock());
     }
 
     /**
@@ -159,7 +197,8 @@ public class Fly extends Module {
         float yaw = (float) (MathHelper.atan2(delta.z, delta.x) * 180.0 / Math.PI) - 90.0F;
         float pitch = (float) (-(MathHelper.atan2(delta.y, horiz) * 180.0 / Math.PI));
 
-        RotationProcess.update(new Rotation(yaw, pitch), 255, 255, 0, 50);
+        // быстрый, но не мгновенный доворот — Polar ловит телепорт-повороты
+        RotationProcess.update(new Rotation(yaw, pitch), 170, 170, 0, 50);
     }
 
     private long jitter(double base) {
