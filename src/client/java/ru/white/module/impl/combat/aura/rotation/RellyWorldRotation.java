@@ -48,9 +48,9 @@ public class RellyWorldRotation implements RotationAura {
         Box box = target.getBoundingBox();
         if (ms >= nextRepick) {
             nextRepick = ms + MathUtil.randomInt(140, 380);
-            offX = MathUtil.randomGaussian(-0.14F, 0.14F) * (float) box.getXLength();
-            offY = MathUtil.randomGaussian(-0.10F, 0.16F) * (float) box.getYLength();
-            offZ = MathUtil.randomGaussian(-0.14F, 0.14F) * (float) box.getZLength();
+            offX = MathUtil.randomGaussian(-0.14F, 0.14F) * (float) (box.maxX - box.minX);
+            offY = MathUtil.randomGaussian(-0.10F, 0.16F) * (float) (box.maxY - box.minY);
+            offZ = MathUtil.randomGaussian(-0.14F, 0.14F) * (float) (box.maxZ - box.minZ);
         }
 
         Vec3d base = UBoxPoints.getBestVector3dOnEntityBox(box);
@@ -61,7 +61,7 @@ public class RellyWorldRotation implements RotationAura {
         ).subtract(mc.player.getEyePos());
 
         float yaw = (float) Math.toDegrees(Math.atan2(-aim.x, aim.z));
-        float pitch = MathHelper.clamp(
+        float pitch = (float) MathHelper.clamp(
                 -Math.toDegrees(Math.atan2(aim.y, Math.hypot(aim.x, aim.z))), -90F, 90F);
 
         boolean onTarget = RayTraceUtil.rayTraceEntity(mc.player.getYaw(), mc.player.getPitch(),
