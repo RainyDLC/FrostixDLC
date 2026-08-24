@@ -1,6 +1,7 @@
 package ru.white.module.impl.movement;
 
 
+import ru.white.Client;
 import ru.white.manager.event_impl.MotionEvent;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.manager.rotation.Rotation;
@@ -8,8 +9,15 @@ import ru.white.manager.rotation.RotationProcess;
 import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
+import ru.white.module.api.settings.impl.BooleanSetting;
 import ru.white.module.api.settings.impl.ModeSetting;
+import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.other.TimerUtil;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.vehicle.BoatEntity;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.block.*;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -27,7 +35,15 @@ import net.minecraft.util.math.Direction;
 )
 public class Spider extends Module {
 
-    public ModeSetting modeSpider = new ModeSetting(this,"Режим","Matrix");
+    public ModeSetting modeSpider = new ModeSetting(this,"Режим","Matrix","FT - 2","FT - 2 2","Grim");
+
+    public BooleanSetting grimBoost = new BooleanSetting(this, "Буст прыжка", true)
+            .setVisible(() -> modeSpider.is("Grim"));
+    public SliderSetting boostPower = new SliderSetting(this, "Сила буста", 0.0008f, 0.0002f, 0.0009f, 0.0001f)
+            .setVisible(() -> modeSpider.is("Grim"));
+
+    private double lastGrimY = Double.NaN;
+    private int grimSetbackPause = 0;
 
     private final TimerUtil timerUtil = new TimerUtil();
     TimerUtil placeTimer = new TimerUtil();
@@ -67,6 +83,51 @@ public class Spider extends Module {
                 || blockBelow instanceof LanternBlock
                 || blockBelow instanceof LightningRodBlock
                 || penisB;
+        // ===== GrimAC 2.0 =====
+        // Вертикаль у стены у грима замкнута предиктом (Simulation.threshold = 0.001,
+        // immediate-setback = 0.1). Подъём возможен ТОЛЬКО прыжком с реального
+        // онграунда — всё остальное грим симулирует как падение.
+        //
+        // Разбор флагов из теста: накопительный дожим каждый тик расширял разрыв
+        // d = 0.98*d + b (грим пересинхронизирует свою скорость с ближайшим
+        // предсказанным вектором, а буст оставался в клиентской скорости и
+        // протаскивался через гравитацию) -> на 2-й тик d = 0.0018 > порога ->
+        // сетбэк -> прыжки во время подтверждения телепорта -> каскад
+        // GroundSpoof "claimed true" и Simulation 0.40-0.42.
+        //
+        // Теперь: чистый ванильный прыжок по факту приземления (грим сам его
+        // предсказывает, офсет ~1e-16) + ОДНОРАЗОВЫЙ буст в тике прыжка — его
+        // расхождение затухает как 0.98^n и никогда не накапливается.
+        if (modeSpider.is("Grim")) {
+            // детект телепорта (сетбэк грима / /tp): сдвиг Y > 1.5 за один тик
+            if (!Double.isNaN(lastGrimY) && Math.abs(mc.player.getY() - lastGrimY) > 1.5) {
+                grimSetbackPause = 5;
+            }
+            lastGrimY = mc.player.getY();
+
+            if (grimSetbackPause > 0) {
+                grimSetbackPause--;
+            } else if (hozColl()
+                    && mc.options.forwardKey.isPressed()
+                    && mc.player.isOnGround()
+                    && mc.player.isAlive()
+                    && !mc.player.hasVehicle()
+                    && !mc.player.isTouchingWater()
+                    && !mc.player.isSubmergedInWater()
+                    && !mc.player.isClimbing()
+                    && !standingOnEntity()
+                    && !conflictingMovementModule()) {
+
+                mc.player.jump();
+                mc.player.fallDistance = 0;
+
+                if (grimBoost.getValue()) {
+                    Vec3d vel = mc.player.getVelocity();
+                    mc.player.setVelocity(vel.x, vel.y + boostPower.getValue(), vel.z);
+                }
+            }
+        }
+
         if (modeSpider.is("Matrix")) {
 
             ;
@@ -164,5 +225,30 @@ public class Spider extends Module {
 
     public boolean hozColl() {
         return mc.player.horizontalCollision;
+    }
+
+    /**
+     * Стоим на энтити (лодка, моб): клиент даёт onGround=true, а грим
+     * симулирует воздух -> прыжок оттуда = GroundSpoof "claimed true".
+     * Предметы/опыт не считаются — только живность и лодки.
+     */
+    private boolean standingOnEntity() {
+        Box box = mc.player.getBoundingBox().stretch(0, -0.2, 0);
+        for (Entity entity : mc.world.getOtherEntities(mc.player, box)) {
+            if (entity instanceof LivingEntity || entity instanceof BoatEntity) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Другие movement-модули правят скорость одновременно с нами —
+     * их правки + наш прыжок = гарантированный Simulation. Не мешаем им.
+     */
+    private boolean conflictingMovementModule() {
+        return Client.get().moduleManager().get(Fly.class).isEnabled()
+                || Client.get().moduleManager().get(Speed.class).isEnabled()
+                || Client.get().moduleManager().get(WaterSpeed.class).isEnabled()
+                || Client.get().moduleManager().get(AirStuck.class).isEnabled()
+                || Client.get().moduleManager().get(NoWeb.class).isEnabled();
     }
 }
