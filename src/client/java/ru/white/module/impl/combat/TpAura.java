@@ -41,26 +41,26 @@ public class TpAura extends Module {
         long ms = System.currentTimeMillis();
         if (ms < nextStrike) return;
 
-        double dist = mc.player.getEyePos().distanceTo(target.getPos());
+        double dist = mc.player.getEyePos().distanceTo(target.getEntityPos());
         if (dist > tpRadius.getValue()) return;
 
         float[] ranges = AttackAura.get().getRanges();
         if (!UAttack.shouldAttack(target, false, false, false, 0L, ranges)) return;
 
         // точка высадки: между нами и целью, на дистанции удара от её корпуса
-        Vec3d toPlayer = mc.player.getPos().subtract(target.getPos());
+        Vec3d toPlayer = mc.player.getEntityPos().subtract(target.getEntityPos());
         Vec3d dir = new Vec3d(toPlayer.x, 0, toPlayer.z);
         if (dir.lengthSquared() < 1e-4) {
             dir = new Vec3d(1, 0, 0);
         } else {
             dir = dir.normalize();
         }
-        Vec3d landing = target.getPos().add(dir.multiply(standOff.getValue()));
+        Vec3d landing = target.getEntityPos().add(dir.multiply(standOff.getValue()));
         landing = new Vec3d(landing.x, target.getY(), landing.z);
 
         // 1) рывок к цели
         mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(
-                landing.x, landing.y, landing.z, mc.player.isOnGround()));
+                landing, mc.player.isOnGround(), false));
 
         // 2) удар с обходом щита
         final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(target, true);
@@ -81,7 +81,7 @@ public class TpAura extends Module {
 
         // 3) мгновенный возврат на реальную позицию
         mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(
-                mc.player.getX(), mc.player.getY(), mc.player.getZ(), mc.player.isOnGround()));
+                mc.player.getEntityPos(), mc.player.isOnGround(), false));
 
         nextStrike = ms + cooldown.getValue().longValue();
     }
