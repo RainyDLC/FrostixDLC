@@ -4,7 +4,6 @@ import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.Vec3d;
 import ru.white.manager.event_impl.EventUpdate;
@@ -18,10 +17,10 @@ import ru.white.utils.aura.AttackUtil;
 import ru.white.utils.aura.UAttack;
 
 /**
- * TpAura: HvH телепорт-удар. Когда цель вне досягаемости ауры, но в радиусе
- * телепорта — шлём пакет позиции у корпуса цели, наносим удар с обходом щита
- * и сразу возвращаемся пакетом на реальную позицию. Сервер видит:
- * рывок к цели -> удар -> мгновенный возврат.
+ * TpAura: HvH телепорт-удар. Игрок реально телепортируется к корпусу цели
+ * (видно визуально), наносит удар и резко возвращается на исходную точку.
+ * Фазы: 0 — поиск/прыжок для крита, 1 — стоим у цели (сервер уже принял
+ * позицию), удар, 2 — мгновенный возврат.
  */
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ModuleInfo(name = "TpAura", desc = "Телепортируется к цели, бьёт и возвращается обратно", category = Category.COMBAT)
@@ -35,11 +34,35 @@ public class TpAura extends Module {
     public BooleanSetting autoJump = new BooleanSetting(this, "Прыжок для крита", true)
             .setVisible(() -> critOnly.getValue());
 
+    private static final int PHASE_IDLE = 0;
+    private static final int PHASE_AT_TARGET = 1;
+
+    private int strikePhase = PHASE_IDLE;
+    private Vec3d returnPos = null;
+    private LivingEntity strikeTarget = null;
+    private long phaseDeadline = 0L;
     private long nextStrike = 0L;
 
     @EventHandler
     public void onUpdate(EventUpdate e) {
-        if (mc.player == null || mc.world == null || mc.player.networkHandler == null) return;
+        if (mc.player == null || mc.world == null) return;
+
+        if (strikePhase == PHASE_AT_TARGET) {
+            LivingEntity t = strikeTarget;
+            if (t == null || !t.isAlive() || System.currentTimeMillis() > phaseDeadline) {
+                goBack();
+                return;
+            }
+
+            if (!UAttack.shouldAttack(t, false, false, false, 0L, AttackAura.get().getRanges())) {
+                return;
+            }
+
+            strike(t);
+            goBack();
+            return;
+        }
+
         if (mc.player.isUsingItem() || mc.currentScreen != null) return;
 
         long ms = System.currentTimeMillis();
@@ -48,15 +71,12 @@ public class TpAura extends Module {
         AttackAura aura = AttackAura.get();
         float atkRange = aura.attackRange.getValue();
 
-        // своя цель: аура не берёт цели дальше attackRange + обнаружение,
-        // поэтому ищем самостоятельно в радиусе телепорта
         LivingEntity target = findTarget();
         if (target == null) return;
 
         double dist = mc.player.getEyePos().distanceTo(target.getEntityPos());
         if (dist > tpRadius.getValue() || dist <= atkRange) return;
 
-        // только криты: бьём строго в состоянии крита, иначе прыгаем и ждём падения
         if (critOnly.getValue() && !AttackUtil.isPlayerInCriticalState()) {
             if (autoJump.getValue() && mc.player.isOnGround()) {
                 mc.player.setVelocity(mc.player.getVelocity().x, 0.42F, mc.player.getVelocity().z);
@@ -64,29 +84,24 @@ public class TpAura extends Module {
             return;
         }
 
-        float[] ranges = aura.getRanges();
-        if (!UAttack.shouldAttack(target, false, false, !critOnly.getValue(), 0L, ranges)) return;
-
-        // точка высадки: между нами и целью, на дистанции удара от её корпуса
         Vec3d toPlayer = mc.player.getEntityPos().subtract(target.getEntityPos());
         Vec3d dir = new Vec3d(toPlayer.x, 0, toPlayer.z);
-        if (dir.lengthSquared() < 1e-4) {
-            dir = new Vec3d(1, 0, 0);
-        } else {
-            dir = dir.normalize();
-        }
+        dir = dir.lengthSquared() < 1e-4 ? new Vec3d(1, 0, 0) : dir.normalize();
         Vec3d landing = target.getEntityPos().add(dir.multiply(standOff.getValue()));
         landing = new Vec3d(landing.x, target.getY(), landing.z);
 
-        // 1) рывок к цели
-        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(
-                landing, mc.player.isOnGround(), false));
+        returnPos = mc.player.getEntityPos();
+        strikeTarget = target;
+        mc.player.setPosition(landing.x, landing.y, landing.z);
+        strikePhase = PHASE_AT_TARGET;
+        phaseDeadline = ms + 400L;
+    }
 
-        // 2) удар с обходом щита
-        final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(target, true);
+    private void strike(LivingEntity t) {
+        final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(t, true);
         final Runnable[] shieldPress = UAttack.resetShieldSilentTaskForUse(true);
         final Runnable[] skipSprint = UAttack.skipSilentSprintingTaskForUse(false);
-        UAttack.useEntity(target,
+        UAttack.useEntity(t,
                 () -> {
                     skipSprint[0].run();
                     shieldPress[0].run();
@@ -98,12 +113,24 @@ public class TpAura extends Module {
                     skipSprint[1].run();
                 },
                 Hand.MAIN_HAND, false);
+    }
 
-        // 3) мгновенный возврат на реальную позицию
-        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(
-                mc.player.getEntityPos(), mc.player.isOnGround(), false));
+    private void goBack() {
+        if (returnPos != null) {
+            mc.player.setPosition(returnPos.x, returnPos.y, returnPos.z);
+        }
+        returnPos = null;
+        strikeTarget = null;
+        strikePhase = PHASE_IDLE;
+        nextStrike = System.currentTimeMillis() + cooldown.getValue().longValue();
+    }
 
-        nextStrike = ms + cooldown.getValue().longValue();
+    @Override
+    public void onDisable() {
+        if (strikePhase != PHASE_IDLE) {
+            goBack();
+        }
+        super.onDisable();
     }
 
     /** Ближайшая валидная цель в радиусе телепорта — фильтры самой ауры. */
