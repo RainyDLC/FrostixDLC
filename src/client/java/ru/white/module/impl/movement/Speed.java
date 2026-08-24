@@ -1,9 +1,11 @@
 package ru.white.module.impl.movement;
 
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.EntityPose;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.tick.TickManager;
 import ru.white.manager.event_impl.EventMoveInput;
@@ -51,6 +53,10 @@ public class Speed extends Module {
     private int grimTick = 0;
     private boolean grimLastOnGround = true;
     private long grimFlagCooldown = 0L;
+    private double grimLastX, grimLastZ;
+    private boolean hasGrimPos = false;
+    private float grimTimerCredit = 0F;
+    private boolean grimRepaying = false;
 
     @EventHandler
     public void onEvent(MotionEvent event) {
@@ -141,6 +147,9 @@ public class Speed extends Module {
             handleGrimSpeed();
 
             grimLastOnGround = mc.player.isOnGround();
+            grimLastX = mc.player.getX();
+            grimLastZ = mc.player.getZ();
+            hasGrimPos = true;
         }
     }
 
@@ -178,6 +187,7 @@ public class Speed extends Module {
             if (e.getPacket() instanceof PlayerPositionLookS2CPacket) {
                 grimFlagCooldown = System.currentTimeMillis() + 1000L;
                 grimTick = 0;
+                resetGrimTimer();
             }
         }
     }
@@ -256,14 +266,21 @@ public class Speed extends Module {
     }
 
     /**
-     * Grim: буст в пределах погрешности предсказания GrimAC.
-     * - движок предсказаний Grim допускает неопределённость ~0.03 блока/тик:
-     *   микро-прирост скорости по направлению движения остаётся «невидимым»
-     *   для проверки дистанции — флагов «moved too fast» нет;
-     * - фазовый паттерн (3 тика буста / отдых) рвёт постоянность для эвристик;
-     * - в бою с таргет аурой буст реже и слабее — не ломает предсказание
-     *   отброса от удара и спринт-пакеты ауры;
-     * - тик прыжка, вода, лаги, sneak, транспорт — буст пропускается.
+     * Grim: обход по механике предсказаний GrimAC 2.0.
+     *
+     * БОЕВОЙ ПРОФИЛЬ (рядом толкаемые сущности):
+     * UncertaintyHandler выдаёт ±0.08 блока/тик горизонтали за КАЖДУЮ сущность
+     * в 0.5 блоках от хитбокса (avgColliding * 0.08 в handleStartingVelocityUncertainty).
+     * Таргет ауры рядом — бустим на 75% этого лимита, движение остаётся
+     * внутри бокса возможных векторов предсказаний.
+     *
+     * ПОХОДОВЫЙ ПРОФИЛЬ (один):
+     * Timer.java флагует только при balance > now (дрейф 120мс). Ведём внутренний
+     * «кредит» перерасхода: разгон до 1.32, затем выплата на 0.6 до нуля —
+     * средний множитель цикла ровно 1.0, баланс никогда не уходит вперёд.
+     *
+     * Стражи: тик прыжка, использование предмета (NoSlow меряет оффсет),
+     * hurtTime (KnockbackHandler проверяет приём отдачи), вода/лестница/sneak.
      */
     private void handleGrimSpeed() {
         long ms = System.currentTimeMillis();
@@ -273,39 +290,81 @@ public class Speed extends Module {
                 || mc.player.getAbilities().flying || mc.player.isClimbing()
                 || mc.player.isSneaking() || !MoveUtil.isMoving()
                 || mc.player.fallDistance > 1.5F) {
+            resetGrimTimer();
             return;
-        }
-
-        AttackAura aura = AttackAura.get();
-        boolean combat = false;
-        if (aura != null && aura.isEnabled() && AttackAura.target != null) {
-            float[] ranges = aura.getRanges();
-            double reach = ranges[0] + ranges[1] + 0.5;
-            combat = AttackAura.target.squaredDistanceTo(mc.player) <= reach * reach;
         }
 
         grimTick++;
 
-        boolean boostTick;
-        if (combat) {
-            boostTick = grimTick % 6 < 3;
-        } else {
-            boostTick = grimTick % 4 < 3;
+        AttackAura aura = AttackAura.get();
+        boolean auraActive = aura != null && aura.isEnabled() && AttackAura.target != null;
+        int pushables = auraActive ? countPushableEntities() : 0;
+
+        if (pushables > 0) {
+            resetGrimTimer();
+
+            // стражи проверок, которые меряют оффсет поверх предсказаний
+            if (mc.player.isUsingItem() || mc.player.hurtTime > 0) return;
+
+            boolean jumpTick = !mc.player.isOnGround() && grimLastOnGround
+                    && mc.player.getVelocity().y > 0;
+            if (jumpTick) return;
+
+            double dx = hasGrimPos ? mc.player.getX() - grimLastX : 0;
+            double dz = hasGrimPos ? mc.player.getZ() - grimLastZ : 0;
+            double len = Math.sqrt(dx * dx + dz * dz);
+            if (len < 1e-4) return;
+
+            float limit = Math.min(pushables * 0.08F, 0.16F);
+            float power = limit * 0.75F * MathUtil.randomLerp(0.85F, 1.0F);
+            if (!mc.player.isOnGround()) power *= 0.7F;
+
+            mc.player.addVelocity((float) (dx / len) * power, 0, (float) (dz / len) * power);
+            return;
         }
-        if (!boostTick) return;
 
-        // тик прыжка: горизонтальный буст ломает предсказание прыжка Grim
-        boolean jumpTick = !mc.player.isOnGround() && grimLastOnGround
-                && mc.player.getVelocity().y > 0;
-        if (jumpTick) return;
+        // ── походовый профиль: таймерный заём/возврат ──
+        if (!(mc.getRenderTickCounter() instanceof ITimerSpeed speedTimer)) return;
 
-        double dx = mc.player.getX() - mc.player.prevX;
-        double dz = mc.player.getZ() - mc.player.prevZ;
-        double len = Math.sqrt(dx * dx + dz * dz);
-        if (len < 1e-4) return;
+        float mult;
+        if (grimRepaying) {
+            mult = 0.6F;
+            grimTimerCredit += mult - 1.0F;
+            if (grimTimerCredit <= 0F) {
+                grimTimerCredit = 0F;
+                grimRepaying = false;
+            }
+        } else {
+            mult = MathUtil.randomLerp(1.18F, 1.32F);
+            grimTimerCredit += mult - 1.0F;
+            if (grimTimerCredit >= MathUtil.randomLerp(1.2F, 1.8F)) {
+                grimRepaying = true;
+            }
+        }
+        speedTimer.setSpeed(mult);
+    }
 
-        float power = combat ? 0.018F : 0.026F;
-        mc.player.addVelocity(dx / len * power, 0, dz / len * power);
+    private void resetGrimTimer() {
+        if (mc.getRenderTickCounter() instanceof ITimerSpeed speedTimer) {
+            speedTimer.setSpeed(1.0F);
+        }
+        grimTimerCredit = 0F;
+        grimRepaying = false;
+    }
+
+    /** Толкаемые живые сущности рядом — зеркалирует collidingEntities Grim'а (с запасом вниз). */
+    private int countPushableEntities() {
+        Box near = mc.player.getBoundingBox().expand(0.45);
+        int n = 0;
+        for (Entity ent : mc.world.getEntities()) {
+            if (ent == mc.player || !(ent instanceof LivingEntity living)) continue;
+            if (!living.isAlive() || living.isSpectator()) continue;
+            if (living.getBoundingBox().expand(0.45).intersects(near)) {
+                n++;
+                if (n >= 3) break;
+            }
+        }
+        return n;
     }
 
     private void handleRW() {
@@ -377,6 +436,8 @@ public class Speed extends Module {
         rwFlagCooldown = 0L;
         grimTick = 0;
         grimFlagCooldown = 0L;
+        hasGrimPos = false;
+        resetGrimTimer();
         super.onEnable();
     }
 
