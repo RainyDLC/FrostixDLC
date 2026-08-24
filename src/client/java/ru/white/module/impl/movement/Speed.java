@@ -1,10 +1,15 @@
 package ru.white.module.impl.movement;
 
+import net.minecraft.block.Blocks;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.EntityPose;
+import net.minecraft.entity.mob.ShulkerEntity;
+import net.minecraft.entity.vehicle.BoatEntity;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
+import net.minecraft.registry.tag.BlockTags;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.tick.TickManager;
@@ -44,9 +49,8 @@ public class Speed extends Module {
     private int groundTicks = 0;
 
     // ReallyWorld state
-    private int rwPhase = 0;
-    private long rwPhaseStart = 0L;
-    private float rwPhaseDur = 0F;
+    private float rwTimerCredit = 0F;
+    private boolean rwRepaying = false;
     private long rwFlagCooldown = 0L;
 
     // Grim speed state
@@ -178,8 +182,8 @@ public class Speed extends Module {
                     speedTimer.setSpeed(1.0F);
                 }
                 rwFlagCooldown = System.currentTimeMillis() + 900L;
-                rwPhase = 0;
-                rwPhaseStart = 0L;
+                rwTimerCredit = 0F;
+                rwRepaying = false;
             }
         }
 
@@ -196,73 +200,116 @@ public class Speed extends Module {
 // timerUtil2 и timerUtil3 пока не требуются для этой задачи
 
     /**
-     * ReallyWorld: таймерный буст с займом/возвратом под Grim + Matrix.
-     * - средний множитель цикла держится около 1.05 — баланс таймера Grim
-     *   не уходит в минус, спайков, которые ловит Matrix, нет;
-     * - боевой профиль (таргет ауры в радиусе): мягкий буст ~1.06-1.11,
-     *   чтобы тайминги ударов и спринт-пакеты ауры не рассинхронизировались;
-     * - при сетбэке (PlayerPositionLook) таймер мгновенно в 1.0 и пауза.
+     * ReallyWorld: постоянное сильное ускорение без компенсирующих просадок.
+     *
+     * Скорость набирается из «бесплатных» каналов неопределённости GrimAC 2.0 —
+     * их предсказатель сам выдаёт нам запас по оффсету, repay не нужен:
+     * - сущности в 0.5 блоках: ±0.08/тик за каждую (avgColliding * 0.08);
+     * - лодка/шалкер в блоке: reduceOffset до -1.2 и +0.1 горизонтали;
+     * - липкие блоки под ногами: reduceOffset -0.03.
+     *
+     * Таймер поверх — короткие разгон 1.30-1.45 и мягкая выплата 0.85-0.92
+     * (без резиновых просадок): средний множитель держится у 1.0, баланс
+     * Timer'а Grim не обгоняет.
      */
     private void handleReallyWorld() {
-        if (!(mc.getRenderTickCounter() instanceof ITimerSpeed speedTimer)) return;
-
         if (mc.player.isSubmergedInWater() || mc.player.hasVehicle()
-                || mc.player.getAbilities().flying || !MoveUtil.isMoving()) {
-            speedTimer.setSpeed(1.0F);
-            rwPhase = 0;
-            rwPhaseStart = 0L;
+                || mc.player.getAbilities().flying || mc.player.isClimbing()
+                || mc.player.isSneaking() || !MoveUtil.isMoving()
+                || mc.player.fallDistance > 1.5F) {
+            resetRWTimer();
             return;
         }
 
         long ms = System.currentTimeMillis();
         if (ms < rwFlagCooldown) {
-            speedTimer.setSpeed(1.0F);
+            resetRWTimer();
             return;
         }
 
-        AttackAura aura = AttackAura.get();
-        boolean combat = false;
-        if (aura != null && aura.isEnabled() && AttackAura.target != null) {
-            float[] ranges = aura.getRanges();
-            double reach = ranges[0] + ranges[1] + 0.5;
-            combat = AttackAura.target.squaredDistanceTo(mc.player) <= reach * reach;
+        // ── канал 1: неопределённость предсказаний — буст без возврата ──
+        float boost = uncertaintyBoost();
+        if (boost > 0F
+                && !mc.player.isUsingItem() && mc.player.hurtTime <= 0
+                && !(!mc.player.isOnGround() && grimLastOnGround && mc.player.getVelocity().y > 0)) {
+
+            double dx = hasGrimPos ? mc.player.getX() - grimLastX : 0;
+            double dz = hasGrimPos ? mc.player.getZ() - grimLastZ : 0;
+            double len = Math.sqrt(dx * dx + dz * dz);
+            if (len >= 1e-4) {
+                float power = boost * MathUtil.randomLerp(0.85F, 1.0F);
+                if (!mc.player.isOnGround()) power *= 0.75F;
+                mc.player.addVelocity((float) (dx / len) * power, 0, (float) (dz / len) * power);
+            }
         }
 
-        if (rwPhaseStart == 0L) {
-            rwPhaseStart = ms;
-            rwPhase = 0;
-            rwPhaseDur = nextPhaseDur(combat);
-        }
+        // ── канал 2: таймерный разгон с мягкой выплатой ──
+        if (!(mc.getRenderTickCounter() instanceof ITimerSpeed speedTimer)) return;
 
-        if (ms - rwPhaseStart > rwPhaseDur) {
-            rwPhase = combat ? (rwPhase + 1) % 2 : (rwPhase + 1) % 3;
-            rwPhaseStart = ms;
-            rwPhaseDur = nextPhaseDur(combat);
-        }
-
-        float boost;
-        if (combat) {
-            boost = rwPhase == 0 ? MathUtil.randomLerp(1.06F, 1.11F) : MathUtil.randomLerp(0.97F, 1.0F);
+        float mult;
+        if (rwRepaying) {
+            mult = MathUtil.randomLerp(0.85F, 0.92F);
+            rwTimerCredit += mult - 1.0F;
+            if (rwTimerCredit <= 0F) {
+                rwTimerCredit = 0F;
+                rwRepaying = false;
+            }
         } else {
-            boost = switch (rwPhase) {
-                case 0 -> MathUtil.randomLerp(1.25F, 1.38F);
-                case 1 -> MathUtil.randomLerp(1.05F, 1.15F);
-                default -> MathUtil.randomLerp(0.55F, 0.70F);
-            };
+            mult = MathUtil.randomLerp(1.30F, 1.45F);
+            rwTimerCredit += mult - 1.0F;
+            if (rwTimerCredit >= MathUtil.randomLerp(1.0F, 1.6F)) {
+                rwRepaying = true;
+            }
         }
-
-        speedTimer.setSpeed(boost);
+        speedTimer.setSpeed(mult);
     }
 
-    private float nextPhaseDur(boolean combat) {
-        if (combat) {
-            return rwPhase == 0 ? MathUtil.randomInt(280, 420) : MathUtil.randomInt(120, 200);
+    /** Суммарный безопасный буст из каналов неопределённости Grim (блоков/тик). */
+    private float uncertaintyBoost() {
+        float boost = 0F;
+
+        int pushables = countPushableEntities();
+        if (pushables > 0) {
+            boost += Math.min(pushables * 0.08F, 0.16F) * 0.85F;
         }
-        return switch (rwPhase) {
-            case 0 -> MathUtil.randomInt(300, 450);
-            case 1 -> MathUtil.randomInt(100, 180);
-            default -> MathUtil.randomInt(200, 300);
-        };
+
+        if (nearHardLerpingEntity()) {
+            boost += 0.30F;
+        }
+
+        if (onBouncyBlock()) {
+            boost += 0.025F;
+        }
+
+        return boost;
+    }
+
+    private void resetRWTimer() {
+        if (mc.getRenderTickCounter() instanceof ITimerSpeed speedTimer) {
+            speedTimer.setSpeed(1.0F);
+        }
+        rwTimerCredit = 0F;
+        rwRepaying = false;
+    }
+
+    /** Лодка/шалкер вплотную — Grim даёт до -1.2 оффсета и +0.1 горизонтали. */
+    private boolean nearHardLerpingEntity() {
+        Box near = mc.player.getBoundingBox().expand(1.0);
+        for (Entity ent : mc.world.getEntities()) {
+            if (ent == mc.player) continue;
+            if ((ent instanceof BoatEntity || ent instanceof ShulkerEntity)
+                    && ent.getBoundingBox().intersects(near)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Слизь/мёд/кровати под ногами — reduceOffset выдаёт -0.03 оффсета. */
+    private boolean onBouncyBlock() {
+        BlockPos under = BlockPos.ofFloored(mc.player.getX(), mc.player.getY() - 0.2, mc.player.getZ());
+        var state = mc.world.getBlockState(under);
+        return state.isOf(Blocks.SLIME_BLOCK) || state.isOf(Blocks.HONEY_BLOCK) || state.isIn(BlockTags.BEDS);
     }
 
     /**
@@ -431,9 +478,9 @@ public class Speed extends Module {
     @Override
     public void onEnable() {
         resetRWState(true);
-        rwPhase = 0;
-        rwPhaseStart = 0L;
         rwFlagCooldown = 0L;
+        rwTimerCredit = 0F;
+        rwRepaying = false;
         grimTick = 0;
         grimFlagCooldown = 0L;
         hasGrimPos = false;
