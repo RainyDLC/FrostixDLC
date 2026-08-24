@@ -47,6 +47,7 @@ public final class ModuleManager extends LinkedHashMap<Class<? extends Module>, 
                 new MaceHelper(),
                 new AntiBot(),
                 new TriggerBot(),
+                new TpAura(),
                 new UseTracker(),
 
 
