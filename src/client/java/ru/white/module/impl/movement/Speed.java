@@ -16,6 +16,7 @@ import ru.white.module.api.ModuleInfo;
 import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.module.impl.combat.AttackAura;
+import ru.white.utils.math.MathUtil;
 import ru.white.utils.other.TimerUtil;
 import ru.white.utils.player.ITimerSpeed;
 import ru.white.utils.player.MoveUtil;
@@ -31,7 +32,7 @@ import java.util.Arrays;
 )
 public class Speed extends Module {
 
-    public ModeSetting type = new ModeSetting(this, "Режим", "Vanilla","Meta");
+    public ModeSetting type = new ModeSetting(this, "Режим", "Vanilla","Meta","ReallyWorld");
 
     public SliderSetting speed = new SliderSetting(this, "Скорость", 1, 0.3F, 2F, 0.1F)
             .setVisible(() -> type.is("Vanilla"));
@@ -39,6 +40,12 @@ public class Speed extends Module {
     // RW state
     private int ticks = 0;
     private int groundTicks = 0;
+
+    // ReallyWorld state
+    private int rwPhase = 0;
+    private long rwPhaseStart = 0L;
+    private float rwPhaseDur = 0F;
+    private long rwFlagCooldown = 0L;
 
     @EventHandler
     public void onEvent(MotionEvent event) {
@@ -120,6 +127,10 @@ public class Speed extends Module {
         if (type.is("RW")) {
             handleRW();;
         }
+
+        if (type.is("ReallyWorld")) {
+            handleReallyWorld();
+        }
     }
 
     public float tick = 1.0F;
@@ -141,11 +152,90 @@ public class Speed extends Module {
             }
         }
 
-
+        if (type.is("ReallyWorld")) {
+            if (e.getPacket() instanceof PlayerPositionLookS2CPacket) {
+                if (mc.getRenderTickCounter() instanceof ITimerSpeed speedTimer) {
+                    speedTimer.setSpeed(1.0F);
+                }
+                rwFlagCooldown = System.currentTimeMillis() + 900L;
+                rwPhase = 0;
+                rwPhaseStart = 0L;
+            }
+        }
     }
 
     public TimerUtil timerUtil = new TimerUtil();
 // timerUtil2 и timerUtil3 пока не требуются для этой задачи
+
+    /**
+     * ReallyWorld: таймерный буст с займом/возвратом под Grim + Matrix.
+     * - средний множитель цикла держится около 1.05 — баланс таймера Grim
+     *   не уходит в минус, спайков, которые ловит Matrix, нет;
+     * - боевой профиль (таргет ауры в радиусе): мягкий буст ~1.06-1.11,
+     *   чтобы тайминги ударов и спринт-пакеты ауры не рассинхронизировались;
+     * - при сетбэке (PlayerPositionLook) таймер мгновенно в 1.0 и пауза.
+     */
+    private void handleReallyWorld() {
+        if (!(mc.getRenderTickCounter() instanceof ITimerSpeed speedTimer)) return;
+
+        if (mc.player.isSubmergedInWater() || mc.player.hasVehicle()
+                || mc.player.getAbilities().flying || !MoveUtil.isMoving()) {
+            speedTimer.setSpeed(1.0F);
+            rwPhase = 0;
+            rwPhaseStart = 0L;
+            return;
+        }
+
+        long ms = System.currentTimeMillis();
+        if (ms < rwFlagCooldown) {
+            speedTimer.setSpeed(1.0F);
+            return;
+        }
+
+        AttackAura aura = AttackAura.get();
+        boolean combat = false;
+        if (aura != null && aura.isEnabled() && AttackAura.target != null) {
+            float[] ranges = aura.getRanges();
+            double reach = ranges[0] + ranges[1] + 0.5;
+            combat = AttackAura.target.squaredDistanceTo(mc.player) <= reach * reach;
+        }
+
+        if (rwPhaseStart == 0L) {
+            rwPhaseStart = ms;
+            rwPhase = 0;
+            rwPhaseDur = nextPhaseDur(combat);
+        }
+
+        if (ms - rwPhaseStart > rwPhaseDur) {
+            rwPhase = combat ? (rwPhase + 1) % 2 : (rwPhase + 1) % 3;
+            rwPhaseStart = ms;
+            rwPhaseDur = nextPhaseDur(combat);
+        }
+
+        float boost;
+        if (combat) {
+            boost = rwPhase == 0 ? MathUtil.randomLerp(1.06F, 1.11F) : MathUtil.randomLerp(0.97F, 1.0F);
+        } else {
+            boost = switch (rwPhase) {
+                case 0 -> MathUtil.randomLerp(1.25F, 1.38F);
+                case 1 -> MathUtil.randomLerp(1.05F, 1.15F);
+                default -> MathUtil.randomLerp(0.55F, 0.70F);
+            };
+        }
+
+        speedTimer.setSpeed(boost);
+    }
+
+    private float nextPhaseDur(boolean combat) {
+        if (combat) {
+            return rwPhase == 0 ? MathUtil.randomInt(280, 420) : MathUtil.randomInt(120, 200);
+        }
+        return switch (rwPhase) {
+            case 0 -> MathUtil.randomInt(300, 450);
+            case 1 -> MathUtil.randomInt(100, 180);
+            default -> MathUtil.randomInt(200, 300);
+        };
+    }
 
     private void handleRW() {
         if (mc.getRenderTickCounter() instanceof ITimerSpeed speedTimer) {
@@ -211,6 +301,9 @@ public class Speed extends Module {
     @Override
     public void onEnable() {
         resetRWState(true);
+        rwPhase = 0;
+        rwPhaseStart = 0L;
+        rwFlagCooldown = 0L;
         super.onEnable();
     }
 
