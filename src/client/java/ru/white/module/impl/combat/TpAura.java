@@ -19,24 +19,28 @@ import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.aura.UAttack;
 
 /**
- * TpAura: HvH телепорт-удар, видимый блинк, всегда крит.
+ * TpAura: HvH телепорт-удар на ЛЮБОЙ дистанции через хопы.
  *
- * Обычное оружие: прыжок (честный крит-фолл) -> блинк к цели ГОРИЗОНТАЛЬНО
- * на текущей высоте (fallDistance сервера не сбрасывается) -> удар -> блинк назад.
- * Блинк реальным перемещением — камера показывает телепорт.
+ * Дальняя дистанция разбивается на рывки по N блоков за тик (по умолчанию 6 —
+ * ниже ванильного порога "moved too quickly" = 10), поэтому сервер принимает
+ * каждую позицию и удар доходит даже с 50 блоков.
  *
- * Булава: отдельная хореография — подъём на высоту смэша, сброс к цели
- * (серверный fallDistance = высоте -> смэш + крит), удар, возврат.
+ * Крит: честный прыжок -> хопы строго горизонтально на текущей высоте
+ * (серверный fallDistance не сбрасывается) -> удар в падении = крит.
+ *
+ * Булава: хопы к цели -> подъём на высоту смэша -> сброс (серверный
+ * fallDistance = высоте -> смэш + крит) -> удар -> хопы назад.
  *
  * Анти-промах: линия огня (8 углов, рейкаст), hurtTime == 0, полный кулдаун.
  */
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ModuleInfo(name = "TpAura", desc = "Teleport strike: visible blink, always crit", category = Category.COMBAT)
+@ModuleInfo(name = "TpAura", desc = "Teleport strike at any range via hops, always crit", category = Category.COMBAT)
 public class TpAura extends Module {
 
-    public SliderSetting tpRadius = new SliderSetting(this, "Радиус телепорта", 6.0F, 3.0F, 50.0F, 0.5F);
+    public SliderSetting tpRadius = new SliderSetting(this, "Радиус телепорта", 15.0F, 3.0F, 50.0F, 0.5F);
     public SliderSetting standOff = new SliderSetting(this, "Дистанция удара", 2.2F, 1.5F, 3.0F, 0.1F);
     public SliderSetting cooldown = new SliderSetting(this, "Перезарядка", 800F, 250F, 2000F, 50F);
+    public SliderSetting hopSpeed = new SliderSetting(this, "Скорость рывка", 6.0F, 3.0F, 9.0F, 0.5F);
     public SliderSetting maceHeight = new SliderSetting(this, "Высота смэша булавы", 6.0F, 2.0F, 15.0F, 0.5F);
 
     public BooleanSetting critOnly = new BooleanSetting(this, "Только криты", true);
@@ -44,13 +48,15 @@ public class TpAura extends Module {
             .setVisible(() -> critOnly.getValue());
 
     private static final int PHASE_IDLE = 0;
-    private static final int PHASE_BLINK = 1;
+    private static final int PHASE_HOP_OUT = 1;
     private static final int PHASE_MACE_UP = 2;
     private static final int PHASE_MACE_DOWN = 3;
+    private static final int PHASE_HOP_BACK = 4;
 
     private int phase = PHASE_IDLE;
     private Vec3d returnPos = null;
-    private Vec3d dropPos = null;
+    private Vec3d strikePos = null;   // точка над целью (последний хоп)
+    private Vec3d dropPos = null;     // точка сброса для булавы
     private LivingEntity strikeTarget = null;
     private long phaseDeadline = 0L;
     private long nextStrike = 0L;
@@ -61,9 +67,10 @@ public class TpAura extends Module {
         if (mc.player == null || mc.world == null) return;
 
         switch (phase) {
-            case PHASE_BLINK -> phaseBlink();
+            case PHASE_HOP_OUT -> hopTo(strikePos, () -> afterHopOut());
             case PHASE_MACE_UP -> phaseMaceUp();
             case PHASE_MACE_DOWN -> phaseMaceDown();
+            case PHASE_HOP_BACK -> hopTo(returnPos, () -> finish());
             default -> idleTick();
         }
     }
@@ -85,7 +92,7 @@ public class TpAura extends Module {
 
         boolean mace = mc.player.getMainHandStack().getItem() == Items.MACE;
 
-        // крит-гейт для обычного оружия: прыжок и ожидание падения
+        // крит-гейт: прыжок и ожидание падения (только не булава)
         if (!mace && critOnly.getValue()) {
             if (mc.player.isOnGround()) {
                 if (autoJump.getValue()) {
@@ -96,79 +103,78 @@ public class TpAura extends Module {
             if (mc.player.getVelocity().y >= 0) return;
         }
 
-        // точка высадки на ТЕКУЩЕЙ высоте (горизонтальный блинк, крит не сбрасывается)
+        // точка удара на ТЕКУЩЕЙ высоте: хопы горизонтальные, крит не сбрасывается
         Vec3d landing = findLanding(target, standOff.getValue());
         if (landing == null) return;
 
         returnPos = mc.player.getEntityPos();
         strikeTarget = target;
+        strikePos = landing;
         phaseTicks = 0;
 
         if (mace) {
-            Vec3d up = new Vec3d(landing.x, target.getY() + maceHeight.getValue(), landing.z);
             dropPos = new Vec3d(landing.x, target.getY() + 0.4, landing.z);
-            mc.player.setPosition(up.x, up.y, up.z);
-            mc.player.setVelocity(Vec3d.ZERO);
-            phase = PHASE_MACE_UP;
+            phase = PHASE_HOP_OUT;
         } else {
-            mc.player.setPosition(landing.x, landing.y, landing.z);
-            phase = PHASE_BLINK;
+            phase = PHASE_HOP_OUT;
         }
-        phaseDeadline = ms + 600L;
+        phaseDeadline = ms + 3000L;
     }
 
-    private void phaseBlink() {
-        LivingEntity t = strikeTarget;
-        if (!valid(t)) {
-            goBack();
+    /** После прихода к цели: булава делает смэш-подъём/сброс, остальное бьёт сразу. */
+    private void afterHopOut() {
+        boolean mace = mc.player.getMainHandStack().getItem() == Items.MACE;
+        if (!mace) {
+            strikeNow();
             return;
         }
-        // тик на принятие позиции сервером, затем удар и возврат
-        if (t.hurtTime > 0 && System.currentTimeMillis() < phaseDeadline) return;
-        if (!UAttack.shouldAttack(t, false, false, false, 0L, AttackAura.get().getRanges())
-                && System.currentTimeMillis() < phaseDeadline) return;
-
-        strike(t);
-        goBack();
+        Vec3d up = new Vec3d(strikePos.x, strikeTarget.getY() + maceHeight.getValue(), strikePos.z);
+        mc.player.setPosition(up.x, up.y, up.z);
+        mc.player.setVelocity(Vec3d.ZERO);
+        phase = PHASE_MACE_UP;
+        phaseTicks = 0;
+        phaseDeadline = System.currentTimeMillis() + 1000L;
     }
 
     private void phaseMaceUp() {
-        LivingEntity t = strikeTarget;
-        if (!valid(t)) {
-            goBack();
+        if (!valid(strikeTarget)) {
+            abort();
             return;
         }
         if (++phaseTicks < 2) return;
 
-        // сброс к цели: сервер видит падение с высоты смэша
         mc.player.setPosition(dropPos.x, dropPos.y, dropPos.z);
         phase = PHASE_MACE_DOWN;
         phaseTicks = 0;
-        phaseDeadline = System.currentTimeMillis() + 600L;
+        phaseDeadline = System.currentTimeMillis() + 1000L;
     }
 
     private void phaseMaceDown() {
-        LivingEntity t = strikeTarget;
-        if (!valid(t)) {
-            goBack();
+        if (!valid(strikeTarget)) {
+            abort();
             return;
         }
         if (++phaseTicks < 2) return;
-        if (t.hurtTime > 0 && System.currentTimeMillis() < phaseDeadline) return;
-        if (!UAttack.shouldAttack(t, false, false, false, 0L, AttackAura.get().getRanges())
-                && System.currentTimeMillis() < phaseDeadline) return;
 
-        strike(t);
-        goBack();
+        strikeNow();
     }
 
-    private boolean valid(LivingEntity t) {
-        return t != null && t.isAlive()
-                && System.currentTimeMillis() <= phaseDeadline
-                && mc.player != null;
-    }
+    /** Удар с анти-промахом: i-frames, кулдаун; потом хопы назад. */
+    private void strikeNow() {
+        LivingEntity t = strikeTarget;
+        if (!valid(t)) {
+            phase = PHASE_HOP_BACK;
+            phaseTicks = 0;
+            return;
+        }
+        if (t.hurtTime > 0 || !UAttack.shouldAttack(t, false, false, false, 0L, AttackAura.get().getRanges())) {
+            if (System.currentTimeMillis() > phaseDeadline) {
+                phase = PHASE_HOP_BACK;
+                phaseTicks = 0;
+            }
+            return;
+        }
 
-    private void strike(LivingEntity t) {
         final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(t, true);
         final Runnable[] shieldPress = UAttack.resetShieldSilentTaskForUse(true);
         final Runnable[] skipSprint = UAttack.skipSilentSprintingTaskForUse(false);
@@ -184,14 +190,61 @@ public class TpAura extends Module {
                     skipSprint[1].run();
                 },
                 Hand.MAIN_HAND, false);
+
+        phase = PHASE_HOP_BACK;
+        phaseTicks = 0;
     }
 
-    private void goBack() {
-        if (returnPos != null) {
+    /** Прыжок-хоп к точке: <= hopSpeed блоков за тик, Y живой (падение сохраняется). */
+    private void hopTo(Vec3d target, Runnable onArrive) {
+        if (!valid(strikeTarget) && phase == PHASE_HOP_OUT) {
+            abort();
+            return;
+        }
+        if (mc.player == null) return;
+
+        Vec3d p = mc.player.getEntityPos();
+        double dx = target.x - p.x;
+        double dy = target.y - p.y;
+        double dz = target.z - p.z;
+        double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        double step = hopSpeed.getValue();
+        if (dist <= step) {
+            // прибытие: для хопов фиксируем только X/Z, живой Y сохраняем
+            // (падение продолжается — серверный крит не сбрасывается)
+            mc.player.setPosition(target.x, p.y, target.z);
+            onArrive.run();
+            return;
+        }
+
+        // горизонтальный хоп: Y живой — гравитация/падение видны серверу
+        double horizontal = Math.sqrt(dx * dx + dz * dz);
+        double nx, nz;
+        if (horizontal > 1e-4) {
+            double k = Math.min(1.0, step / horizontal);
+            nx = p.x + dx * k;
+            nz = p.z + dz * k;
+        } else {
+            nx = p.x;
+            nz = p.z;
+        }
+        double ny = Math.abs(dy) > 1e-4 && Math.abs(dy) <= step ? target.y : p.y;
+
+        mc.player.setPosition(nx, ny, nz);
+    }
+
+    private boolean valid(LivingEntity t) {
+        return t != null && t.isAlive() && mc.player != null;
+    }
+
+    private void finish() {
+        if (returnPos != null && mc.player != null) {
             mc.player.setPosition(returnPos.x, returnPos.y, returnPos.z);
         }
-        mc.player.fallDistance = 0;
+        if (mc.player != null) mc.player.fallDistance = 0;
         returnPos = null;
+        strikePos = null;
         dropPos = null;
         strikeTarget = null;
         phase = PHASE_IDLE;
@@ -199,16 +252,27 @@ public class TpAura extends Module {
         nextStrike = System.currentTimeMillis() + cooldown.getValue().longValue();
     }
 
+    private void abort() {
+        phase = PHASE_HOP_BACK;
+        phaseTicks = 0;
+    }
+
     @Override
     public void onDisable() {
-        if (phase != PHASE_IDLE) {
-            goBack();
+        if (phase != PHASE_IDLE && mc.player != null && returnPos != null) {
+            mc.player.setPosition(returnPos.x, returnPos.y, returnPos.z);
         }
+        if (mc.player != null) mc.player.fallDistance = 0;
+        returnPos = null;
+        strikePos = null;
+        dropPos = null;
+        strikeTarget = null;
+        phase = PHASE_IDLE;
         super.onDisable();
     }
 
     /**
-     * Точка высадки на текущей высоте игрока: 8 углов вокруг цели,
+     * Точка удара на текущей высоте: 8 углов вокруг цели (старт со своей),
      * первая с чистой линией огня от глаз до корпуса цели.
      */
     private Vec3d findLanding(LivingEntity target, double stand) {
