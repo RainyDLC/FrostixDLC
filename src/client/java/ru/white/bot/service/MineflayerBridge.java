@@ -2,14 +2,17 @@ package ru.white.bot.service;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.minecraft.client.MinecraftClient;
 import ru.white.bot.model.HeadlessBot;
 import ru.white.module.impl.utils.BotManager;
 
 import java.io.File;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
-import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -48,15 +51,25 @@ public class MineflayerBridge implements WebSocket.Listener {
         if (nodeProcess != null && nodeProcess.isAlive()) return;
 
         try {
-            File botServiceDir = new File("bot-service");
-            if (!botServiceDir.exists()) {
-                botServiceDir = new File("d:/FrostixDLC/bot-service");
-            }
+            File botServiceDir = locateOrExtractBotService();
 
             File serverJs = new File(botServiceDir, "server.js");
             if (!serverJs.exists()) {
                 System.err.println("[MineflayerBridge] server.js not found in " + botServiceDir.getAbsolutePath());
                 return;
+            }
+
+            File nodeModules = new File(botServiceDir, "node_modules");
+            if (!nodeModules.exists()) {
+                System.out.println("[MineflayerBridge] node_modules missing, running npm install in " + botServiceDir.getAbsolutePath());
+                try {
+                    Process npmProc = new ProcessBuilder("npm", "install", "--no-audit", "--no-fund")
+                            .directory(botServiceDir)
+                            .start();
+                    npmProc.waitFor();
+                } catch (Exception e) {
+                    System.err.println("[MineflayerBridge] npm install failed: " + e.getMessage());
+                }
             }
 
             ProcessBuilder pb = new ProcessBuilder("node", "server.js");
@@ -68,6 +81,42 @@ public class MineflayerBridge implements WebSocket.Listener {
         } catch (Exception e) {
             System.err.println("[MineflayerBridge] Failed to start node process: " + e.getMessage());
         }
+    }
+
+    private File locateOrExtractBotService() {
+        File[] candidates = new File[] {
+                new File("bot-service"),
+                new File("d:/FrostixDLC/bot-service"),
+                MinecraftClient.getInstance() != null && MinecraftClient.getInstance().runDirectory != null
+                        ? new File(MinecraftClient.getInstance().runDirectory, "bot-service")
+                        : new File("bot-service")
+        };
+
+        for (File candidate : candidates) {
+            if (new File(candidate, "server.js").exists()) {
+                return candidate;
+            }
+        }
+
+        File targetDir = MinecraftClient.getInstance() != null && MinecraftClient.getInstance().runDirectory != null
+                ? new File(MinecraftClient.getInstance().runDirectory, "bot-service")
+                : new File("bot-service");
+
+        targetDir.mkdirs();
+
+        extractResource("/bot-service/server.js", new File(targetDir, "server.js"));
+        extractResource("/bot-service/package.json", new File(targetDir, "package.json"));
+
+        return targetDir;
+    }
+
+    private void extractResource(String resourcePath, File destination) {
+        if (destination.exists()) return;
+        try (InputStream in = getClass().getResourceAsStream(resourcePath)) {
+            if (in != null) {
+                Files.copy(in, destination.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Exception ignored) {}
     }
 
     public synchronized void stopNodeProcess() {
@@ -92,7 +141,7 @@ public class MineflayerBridge implements WebSocket.Listener {
 
         new Thread(() -> {
             try {
-                Thread.sleep(1000); // Give node service time to bind port
+                Thread.sleep(1000);
                 HttpClient client = HttpClient.newBuilder()
                         .connectTimeout(Duration.ofSeconds(5))
                         .build();
