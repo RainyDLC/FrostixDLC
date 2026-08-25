@@ -169,7 +169,7 @@ public class TpAura extends Module {
             return;
         }
 
-        strike(t);
+        hitTarget(t);
 
         // подскок вверх: сервер видит набор высоты — fallDistance гасится, свой урон не прилетает
         mc.player.setPosition(dropPos.x, dropPos.y + 1.2, dropPos.z);
@@ -183,6 +183,25 @@ public class TpAura extends Module {
         mc.player.setPosition(pos.x, pos.y, pos.z);
         mc.player.setVelocity(Vec3d.ZERO);
         mc.player.fallDistance = 0;
+    }
+
+    /** Сам удар: щит-брейк + атака. */
+    private void hitTarget(LivingEntity t) {
+        final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(t, true);
+        final Runnable[] shieldPress = UAttack.resetShieldSilentTaskForUse(true);
+        final Runnable[] skipSprint = UAttack.skipSilentSprintingTaskForUse(false);
+        UAttack.useEntity(t,
+                () -> {
+                    skipSprint[0].run();
+                    shieldPress[0].run();
+                    shieldBreak[0].run();
+                },
+                () -> {
+                    shieldBreak[1].run();
+                    shieldPress[1].run();
+                    skipSprint[1].run();
+                },
+                Hand.MAIN_HAND, false);
     }
 
     /** Удар с анти-промахом: i-frames, кулдаун; потом хопы назад. */
@@ -201,21 +220,7 @@ public class TpAura extends Module {
             return;
         }
 
-        final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(t, true);
-        final Runnable[] shieldPress = UAttack.resetShieldSilentTaskForUse(true);
-        final Runnable[] skipSprint = UAttack.skipSilentSprintingTaskForUse(false);
-        UAttack.useEntity(t,
-                () -> {
-                    skipSprint[0].run();
-                    shieldPress[0].run();
-                    shieldBreak[0].run();
-                },
-                () -> {
-                    shieldBreak[1].run();
-                    shieldPress[1].run();
-                    skipSprint[1].run();
-                },
-                Hand.MAIN_HAND, false);
+        hitTarget(t);
 
         phase = PHASE_HOP_BACK;
         phaseTicks = 0;
