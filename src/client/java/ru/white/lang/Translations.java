@@ -471,6 +471,14 @@ final class Translations {
         m.put("Периодически", "Periodically");
         m.put("При убийстве", "In the event of a murder");
 
+        m.put("Bot Manager", "Bot Manager");
+        m.put("Управление ботами прямо из одного окна", "Manage bots directly from a single window");
+        m.put("Открыть меню ботов", "Open Bot Menu");
+        m.put("Потато графика", "Potato Graphics");
+        m.put("Следовать за мной", "Follow Me");
+        m.put("Ассист в бою", "Combat Assist");
+        m.put("Дистанция следования", "Follow Distance");
+        m.put("Авто-регистрация", "Auto Register");
 
         return m;
     }

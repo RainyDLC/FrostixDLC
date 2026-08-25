@@ -129,7 +129,8 @@ public final class ModuleManager extends LinkedHashMap<Class<? extends Module>, 
                 new AutoDuel(),
                 new AutoPotion(),
                 new DanjHelper(),
-                new AutoInvest()
+                new AutoInvest(),
+                new BotManager()
 
         );
 
