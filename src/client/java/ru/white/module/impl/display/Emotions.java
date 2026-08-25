@@ -30,10 +30,13 @@ public class Emotions extends Module {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.world == null) return;
 
-        if (mc.currentScreen == null) {
+        System.out.println("[Emotions] wheel bind pressed, screen=" + mc.currentScreen);
+        try {
             mc.setScreen(new EmoteWheelScreen());
-        } else if (mc.currentScreen instanceof EmoteWheelScreen) {
-            mc.setScreen(null);
+            System.out.println("[Emotions] wheel opened");
+        } catch (Throwable t) {
+            System.out.println("[Emotions] wheel FAILED:");
+            t.printStackTrace();
         }
     }
 
