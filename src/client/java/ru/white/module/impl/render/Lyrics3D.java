@@ -183,6 +183,10 @@ public class Lyrics3D extends Module {
             // SMTC отдаёт позицию снапшотами раз в ~5с (устаревшую), поэтому
             // храним момент репорта и достраиваем время сами — без рывков и лагов.
             long reported = media.getPosition();
+            long dur = media.getDuration();
+            if (dur > 86_400_000L) { // микросекунды -> миллисекунды
+                reported /= 1000L;
+            }
             if (reported != smtcReportedPos) {
                 smtcReportedPos = reported;
                 smtcReportedReal = System.currentTimeMillis();

@@ -24,7 +24,7 @@ public abstract class KeyboardInputMixin extends Input {
     private PlayerInput tickHook(PlayerInput original) {
         InputEvent event = new InputEvent(original);
         event.hook();
-        return original;
+        return event.getInput();
     }
     @Shadow
     @Final
@@ -59,9 +59,9 @@ public abstract class KeyboardInputMixin extends Input {
                 forward < 0,
                 strafe > 0,
                 strafe < 0,
-                this.settings.jumpKey.isPressed(),
-                this.settings.sneakKey.isPressed(),
-                this.settings.sprintKey.isPressed()
+                this.playerInput.jump() || this.settings.jumpKey.isPressed(),
+                this.playerInput.sneak() || this.settings.sneakKey.isPressed(),
+                this.playerInput.sprint() || this.settings.sprintKey.isPressed()
         );
         ci.cancel();
     }
