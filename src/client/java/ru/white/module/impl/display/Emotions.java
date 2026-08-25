@@ -22,15 +22,21 @@ public class Emotions extends Module {
 
     public BindSetting wheelKey = new BindSetting(this, "Wheel key", -1);
 
+    public Emotions() {
+        System.out.println("[Emotions] constructed");
+    }
+
     @EventHandler
     public void onKey(EventKey e) {
-        // бинд работает всегда, как у ClickGui — модуль включать не нужно
-        if (wheelKey.get() == -1 || e.getKey() != wheelKey.get()) return;
+        if (wheelKey.get() == -1) return;
 
-        MinecraftClient mc = MinecraftClient.getInstance();
+        System.out.println("[Emotions] key=" + e.getKey() + " bind=" + wheelKey.get()
+                + " screen=" + (mc.currentScreen != null));
+
+        if (e.getKey() != wheelKey.get()) return;
+
         if (mc.player == null || mc.world == null) return;
 
-        System.out.println("[Emotions] wheel bind pressed, screen=" + mc.currentScreen);
         try {
             mc.setScreen(new EmoteWheelScreen());
             System.out.println("[Emotions] wheel opened");
