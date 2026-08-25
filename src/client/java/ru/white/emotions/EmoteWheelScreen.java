@@ -113,7 +113,11 @@ public final class EmoteWheelScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyInput input) {
-        // повторное нажатие бинда закрывает колесо
+        // закрытие ванильным биндом или клиентским
+        if (Emotions.vanillaKey != null && Emotions.vanillaKey.matchesKey(input)) {
+            close();
+            return true;
+        }
         Emotions module = Instance.get(Emotions.class);
         if (module != null && input.key() == module.wheelKey.get()) {
             close();
