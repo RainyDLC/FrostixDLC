@@ -92,7 +92,8 @@ public final class ModuleManager extends LinkedHashMap<Class<? extends Module>, 
                 new KillEffect(),
                 new Hands(),
                 new InterFace(),
-                new ReportHelper()
+                new ReportHelper(),
+                new Emotions(),
 
                 ,
                 new AutoAccept(),
