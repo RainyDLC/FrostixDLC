@@ -73,16 +73,31 @@ public final class Emotes {
 
     private static void jerkOff(PlayerEntityModel m, long ms) {
         double t = ms / 1000.0;
-        float stroke = (float) Math.sin(t * 13.0);
-        m.rightArm.pitch = -1.45F + stroke * 0.28F;
-        m.rightArm.yaw = 0.18F;
-        m.rightArm.roll = -0.08F + stroke * 0.06F;
-        m.leftArm.pitch = -0.3F - stroke * 0.08F;
-        m.leftArm.roll = 0.3F;
-        m.head.pitch = 0.55F;
-        m.body.pitch = 0.08F;
-        m.rightLeg.pitch = 0.06F;
-        m.leftLeg.pitch = -0.06F;
+        // плавный вход в позу за 0.4с, затем ровный ритм
+        float ramp = (float) Math.min(1.0, t / 0.4);
+        float stroke = (float) Math.sin(t * 10.0) * ramp;
+        float strokeLag = (float) Math.sin(t * 10.0 - 0.9) * ramp;
+
+        // лёгкий наклон назад, голова смотрит вниз на руку
+        m.body.pitch = -0.07F * ramp;
+        m.head.pitch = (0.5F + stroke * 0.04F) * ramp;
+        m.head.yaw = 0.12F * ramp;
+
+        // правая рука: ровные движения вперёд-назад перед корпусом
+        m.rightArm.pitch = (-1.52F + stroke * 0.34F) * ramp;
+        m.rightArm.yaw = 0.22F * ramp;
+        m.rightArm.roll = (-0.1F + strokeLag * 0.05F) * ramp;
+
+        // левая рука на бедре
+        m.leftArm.pitch = -0.15F * ramp;
+        m.leftArm.yaw = -0.12F * ramp;
+        m.leftArm.roll = 0.45F * ramp;
+
+        // стойка: ноги на ширине плеч, лёгкий перенос веса в такт
+        m.rightLeg.yaw = 0.17F * ramp;
+        m.leftLeg.yaw = -0.17F * ramp;
+        m.rightLeg.pitch = (-0.03F + stroke * 0.05F) * ramp;
+        m.leftLeg.pitch = (0.03F - stroke * 0.05F) * ramp;
     }
 
     private static void floss(PlayerEntityModel m, long ms) {

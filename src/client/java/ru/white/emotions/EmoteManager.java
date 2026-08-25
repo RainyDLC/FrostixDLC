@@ -36,13 +36,13 @@ public final class EmoteManager {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || state.id != mc.player.getId()) return;
 
-        // сброс к базе, чтобы эмоция не складывалась с ванильной анимацией
-        model.head.resetTransform();
-        model.body.resetTransform();
-        model.rightArm.resetTransform();
-        model.leftArm.resetTransform();
-        model.rightLeg.resetTransform();
-        model.leftLeg.resetTransform();
+        // сброс ТОЛЬКО углов (resetTransform ломает пивоты — модель разваливается)
+        resetAngles(model.head);
+        resetAngles(model.body);
+        resetAngles(model.rightArm);
+        resetAngles(model.leftArm);
+        resetAngles(model.rightLeg);
+        resetAngles(model.leftLeg);
 
         long ms = System.currentTimeMillis() - startMs;
         if (active.durationMs() > 0 && ms > active.durationMs()) {
@@ -50,5 +50,11 @@ public final class EmoteManager {
             return;
         }
         active.pose().apply(model, ms);
+    }
+
+    private static void resetAngles(net.minecraft.client.model.ModelPart part) {
+        part.pitch = 0;
+        part.yaw = 0;
+        part.roll = 0;
     }
 }

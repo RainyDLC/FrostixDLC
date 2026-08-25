@@ -11,17 +11,24 @@ import ru.white.utils.other.Instance;
 import java.util.List;
 
 /**
- * Колесо выбора эмоций: сектора по кругу, выбор мышью, клик — играть.
+ * Колесо выбора эмоций: тёмный диск с акцентным кольцом, карточки по кругу
+ * с тенями, выбор мышью, клик — играть.
  */
 public final class EmoteWheelScreen extends Screen {
 
-    private static final int RADIUS = 95;
-    private static final int CARD_W = 92;
+    private static final int RADIUS = 96;
+    private static final int CARD_W = 96;
     private static final int CARD_H = 26;
-    private static final int BG = 0xC8101014;
-    private static final int CARD = 0xFF1A1B22;
-    private static final int CARD_SEL = 0xFF7B4DFF;
-    private static final int TEXT = 0xFFE8E8F0;
+
+    private static final int SHADOW = 0x66000000;
+    private static final int DISC = 0xE40D0E14;
+    private static final int DISC_INNER = 0xF0121320;
+    private static final int RING = 0xFF7B4DFF;
+    private static final int CARD = 0xF01A1B26;
+    private static final int CARD_SEL = 0xF07B4DFF;
+    private static final int CARD_BORDER = 0xFF2A2B38;
+    private static final int TEXT = 0xFFECECF4;
+    private static final int TEXT_DIM = 0xFF8A8B9C;
 
     private final List<Emote> emotes;
     private int selected = -1;
@@ -41,41 +48,70 @@ public final class EmoteWheelScreen extends Screen {
         int cx = width / 2;
         int cy = height / 2;
 
-        // затемнение фона
-        context.fill(0, 0, width, height, 0x8806060A);
+        // мягкое затемнение всего экрана
+        context.fill(0, 0, width, height, 0x7A050508);
 
         selected = pickSector(mouseX, mouseY);
+
+        // диск с тенью и акцентным кольцом
+        fillCircle(context, cx, cy + 3, 122, SHADOW);
+        fillCircle(context, cx, cy, 118, RING);
+        fillCircle(context, cx, cy, 114, DISC);
+        fillCircle(context, cx, cy, 56, RING);
+        fillCircle(context, cx, cy, 53, DISC_INNER);
 
         // карточки по кругу
         int n = emotes.size();
         for (int i = 0; i < n; i++) {
             double a = sectorAngle(i, n);
-            int px = cx + (int) (Math.cos(a) * RADIUS) - CARD_W / 2;
-            int py = cy + (int) (Math.sin(a) * RADIUS) - CARD_H / 2;
+            int px = cx + (int) Math.round(Math.cos(a) * RADIUS) - CARD_W / 2;
+            int py = cy + (int) Math.round(Math.sin(a) * RADIUS) - CARD_H / 2;
 
             boolean sel = i == selected;
             boolean active = EmoteManager.active() == emotes.get(i);
 
-            context.fill(px, py, px + CARD_W, py + CARD_H, sel ? CARD_SEL : CARD);
-            // рамка активной эмоции
+            int inflate = sel ? 3 : 0;
+            int x = px - inflate;
+            int y = py - inflate;
+            int w = CARD_W + inflate * 2;
+            int h = CARD_H + inflate * 2;
+
+            // тень -> фон -> рамка -> внутренняя плашка
+            context.fill(x + 2, y + 2, x + w + 2, y + h + 2, SHADOW);
+            context.fill(x - 1, y - 1, x + w + 1, y + h + 1, sel ? RING : CARD_BORDER);
+            context.fill(x, y, x + w, y + h, sel ? CARD_SEL : CARD);
+
+            // индикатор активной эмоции
             if (active) {
-                context.fill(px, py, px + CARD_W, py + 1, 0xFFFFFFFF);
-                context.fill(px, py + CARD_H - 1, px + CARD_W, py + CARD_H, 0xFFFFFFFF);
+                context.fill(x + w - 7, y + 3, x + w - 4, y + 6, 0xFFFFFFFF);
             }
 
             String label = emotes.get(i).name();
             int tw = textRenderer.getWidth(label);
             context.drawText(textRenderer, label,
-                    px + (CARD_W - tw) / 2, py + (CARD_H - 8) / 2, TEXT, false);
+                    x + (w - tw) / 2, y + (h - 8) / 2, sel ? 0xFFFFFFFF : TEXT, false);
         }
 
-        // центр
-        context.fill(cx - 52, cy - 14, cx + 52, cy + 14, BG);
-        String title = "EMOTIONS";
+        // центр: выбранная эмоция крупно, подсказка снизу
+        String title = selected >= 0 ? emotes.get(selected).name() : "EMOTIONS";
+        int tw = textRenderer.getWidth(title);
         context.drawText(textRenderer, title,
-                cx - textRenderer.getWidth(title) / 2, cy - 4, TEXT, false);
+                cx - tw / 2, cy - 9, TEXT, false);
+
+        String hint = "LMB - play   ESC - close";
+        int hw = textRenderer.getWidth(hint);
+        context.drawText(textRenderer, hint,
+                cx - hw / 2, cy + 3, TEXT_DIM, false);
 
         super.render(context, mouseX, mouseY, delta);
+    }
+
+    /** Плавный круг через скан-линии. */
+    private void fillCircle(DrawContext context, int cx, int cy, int r, int color) {
+        for (int dy = -r; dy <= r; dy++) {
+            int w = (int) Math.sqrt((double) r * r - (double) dy * dy);
+            context.fill(cx - w, cy + dy, cx + w, cy + dy + 1, color);
+        }
     }
 
     private static double sectorAngle(int i, int n) {
@@ -86,7 +122,7 @@ public final class EmoteWheelScreen extends Screen {
     private int pickSector(double mx, double my) {
         double dx = mx - width / 2.0;
         double dy = my - height / 2.0;
-        if (Math.sqrt(dx * dx + dy * dy) < 40) return -1;
+        if (Math.sqrt(dx * dx + dy * dy) < 42) return -1;
 
         double ang = Math.atan2(dy, dx);
         int n = emotes.size();
@@ -102,8 +138,6 @@ public final class EmoteWheelScreen extends Screen {
             int idx = pickSector(click.x(), click.y());
             if (idx >= 0) {
                 EmoteManager.play(emotes.get(idx));
-                close();
-                return true;
             }
             close();
             return true;
