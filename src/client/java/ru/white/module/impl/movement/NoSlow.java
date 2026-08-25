@@ -10,6 +10,7 @@ import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
 import ru.white.module.api.settings.impl.ModeSetting;
 
+import ru.white.utils.aura.AuraUtil;
 import ru.white.utils.math.StopWatchShadow;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -19,8 +20,10 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.item.CrossbowItem;
 import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec2f;
@@ -37,6 +40,9 @@ public class NoSlow extends Module {
 
     private int ticks = 0;
     private int cycleCounter = 0;
+
+    /** Предыдущий тик был с движением (для перехода «бежал -> стою»). */
+    private boolean wasMoving = false;
 
     private boolean crossbowSwapped = false;
     private int savedCrossbowSlot = -1;
@@ -65,6 +71,7 @@ public class NoSlow extends Module {
         bypassActive = false;
         bypassSwapped = false;
         pendingSwapSlot = -1;
+        wasMoving = false;
     }
 
     
@@ -154,26 +161,61 @@ public class NoSlow extends Module {
     }
 
     /**
-     * Grim: каждый тик ПЕРЕД movement-пакетом шлём USE-пакет ДРУГОЙ руки.
+     * Grim: каждый тик ПЕРЕД movement-пакетом воздействуем на его модель
+     * замедления (slowedByUsingItem).
      *
-     * Grim обновляет свой флаг замедления (slowedByUsingItem) по предмету
-     * из каждого USE-пакета: в другой руке обычно тотем/пусто (действие
-     * NONE) — Grim считает, что игрока не замедляет, и предикт сходит с
-     * полной скоростью. Ванильный же сервер на такой PASS-интеракции НЕ
-     * трогает своё состояние использования: еда доедает по-настоящему,
-     * лук натягивается, щит работает.
+     * Пустая вторая рука: USE-пакет с ПРАВИЛЬНЫМ sequence — Grim в
+     * handleUseItem видит item == null и снимает свой slowed-флаг
+     * (BadPacketsH ждёт lastSequence+1, поэтому шлём только через
+     * канонический sendSequencedPacket, sequence=0 мгновенно флагается).
+     * Ванильный сервер на PASS-интеракции пустой рукой состояние
+     * использования не трогает (проверено по байткоду 1.21.11: ранний
+     * return до interactionManager): еда доедает по-настоящему, лук
+     * натягивается.
+     *
+     * Занятая вторая рука (тотем и т.п.): Grim для неюзабельного предмета
+     * состояние НЕ меняет (canUse == false), флип невозможен — тогда
+     * RELEASE только в движении: полная скорость в беге, а при остановке
+     * использование чисто перезапускается и еда доедает стоя.
      */
     @EventHandler
     public void onMotion(MotionEvent event) {
         if (!type.is("Грим")) return;
         if (mc.player == null || mc.world == null || !mc.player.isUsingItem()) return;
-        if (mc.getNetworkHandler() == null) return;
+        if (mc.interactionManager == null) return;
 
         Hand hand = mc.player.getActiveHand();
         Hand other = hand == Hand.MAIN_HAND ? Hand.OFF_HAND : Hand.MAIN_HAND;
 
-        mc.getNetworkHandler().sendPacket(new PlayerInteractItemC2SPacket(
-                other, 0, mc.player.getYaw(), mc.player.getPitch()));
+        float[] mv = AuraUtil.getMovementFromKeys();
+        boolean moving = mv[0] != 0 || mv[1] != 0;
+
+        if (mc.player.getStackInHand(other).isEmpty()) {
+            sendSequencedPacket(i -> new PlayerInteractItemC2SPacket(
+                    other, i, mc.player.getYaw(), mc.player.getPitch()));
+            wasMoving = moving;
+            return;
+        }
+
+        if (moving) {
+            releaseUseItem();
+            wasMoving = true;
+        } else if (wasMoving) {
+            // переход «бежал -> стою»: чисто бросаем использование, чтобы
+            // серверная еда началась заново и доела без десинка-цикла
+            wasMoving = false;
+            if (mc.player.isUsingItem()) {
+                mc.player.stopUsingItem();
+            }
+        }
+    }
+
+    /** Серверный «отпуск» предмета: безусловно снимает slowed у Grim. */
+    private void releaseUseItem() {
+        if (mc.getNetworkHandler() != null) {
+            mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(
+                    PlayerActionC2SPacket.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, Direction.DOWN));
+        }
     }
 
     

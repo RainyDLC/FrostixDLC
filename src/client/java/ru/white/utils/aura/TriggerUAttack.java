@@ -174,12 +174,11 @@ public class TriggerUAttack implements IMinecraft {
 
         if (AttackUtil.isPlayerInCriticalState()) return true;
 
-        boolean isCritState = AttackUtil.isPlayerInCriticalState();
-        boolean isSmartCrit = triggerBot().smartCrit.getValue() && !mc.options.jumpKey.isPressed();
+        if (triggerBot().smartCrit.getValue()) {
+            return !mc.options.jumpKey.isPressed() || AttackUtil.hasMovementRestrictions();
+        }
 
-        final boolean skipFallCheck = isSmartCrit || isCritState || AttackUtil.hasMovementRestrictions();
-
-        return skipFallCheck ;
+        return true;
     }
 
     public static boolean useEntity(LivingEntity livingIn, Runnable preHit, Runnable postHit, Hand hand,

@@ -221,32 +221,26 @@ public class UAttack implements IMinecraft {
         if (mc.player == null)
             return true;
 
-        boolean landingSoon = isLandingWithinTicks(2);
-
-        if (AttackAura.get().others.getValue("Только криты") && fallCheck) {
-            return AttackUtil.isPlayerInCriticalState() || landingSoon;
-        }
-
         if (mc.player.getMainHandStack().getItem() == Items.MACE) {
             return true;
         }
 
         if (!fallCheck) return true;
 
-        if (AttackUtil.isPlayerInCriticalState()) return true;
-
-        // WillLand: касание земли в ближайших тиках — идеальный момент крита.
-        // Работает и при ручных прыжках с включёнными «Умными критами».
-        if (landingSoon) {
+        boolean landingSoon = isLandingWithinTicks(2);
+        if (AttackUtil.isPlayerInCriticalState() || landingSoon) {
             return true;
         }
 
-        boolean isCritState = AttackUtil.isPlayerInCriticalState();
-        boolean isSmartCrit = AttackAura.get().others.getValue("Умные криты") && !mc.options.jumpKey.isPressed();
+        if (AttackAura.get().others.getValue("Только криты")) {
+            return false;
+        }
 
-        final boolean skipFallCheck = isSmartCrit || isCritState || AttackUtil.hasMovementRestrictions();
+        if (AttackAura.get().others.getValue("Умные криты")) {
+            return !mc.options.jumpKey.isPressed() || AttackUtil.hasMovementRestrictions();
+        }
 
-        return skipFallCheck ;
+        return true;
     }
 
     public static boolean useEntity(LivingEntity livingIn, Runnable preHit, Runnable postHit, Hand hand,
