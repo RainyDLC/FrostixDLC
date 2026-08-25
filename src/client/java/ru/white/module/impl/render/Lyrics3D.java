@@ -122,6 +122,7 @@ public class Lyrics3D extends Module {
         isPlaying = false;
 
         String expectedKey = this.lastTrackKey;
+        System.out.println("[Lyrics3D] track detected: " + currentTrackTitle + " - " + currentTrackArtist);
 
         LrcLibClient.fetchLyricsAsync(currentTrackTitle, currentTrackArtist, debugMode.getValue()).thenAccept(lines -> {
             if (!this.lastTrackKey.equalsIgnoreCase(expectedKey)) {
@@ -135,6 +136,9 @@ public class Lyrics3D extends Module {
             rebuildLyricsQueue();
             currentLyricIndex = 0;
             isPlaying = !lyricsQueue.isEmpty();
+            System.out.println("[Lyrics3D] lyrics " + (lyricsQueue.isEmpty()
+                    ? "NOT FOUND (queue empty)"
+                    : "loaded: " + lyricsQueue.size() + " lines"));
         });
     }
 
@@ -345,6 +349,7 @@ public class Lyrics3D extends Module {
 
         float riseHeight = floatHeight.getValue();
         activeParticles.add(new LyricParticle3D(text, spawnPos, spawnTimeMs, durationMs, riseHeight));
+        System.out.println("[Lyrics3D] spawned: \"" + text + "\"");
     }
 
     private int getActiveColorRgb() {
