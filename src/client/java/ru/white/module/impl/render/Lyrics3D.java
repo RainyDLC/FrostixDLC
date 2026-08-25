@@ -1,286 +1,372 @@
 package ru.white.module.impl.render;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import dev.redstones.mediaplayerinfo.IMediaSession;
-import dev.redstones.mediaplayerinfo.MediaInfo;
-import dev.redstones.mediaplayerinfo.MediaPlayerInfo;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
 import ru.white.manager.event_impl.EventDisplay;
+import ru.white.manager.event_impl.EventRender3D;
 import ru.white.manager.event_impl.EventUpdate;
 import ru.white.manager.events.orbit.EventHandler;
+import ru.white.lyrics.LrcLibClient;
+import ru.white.lyrics.LyricLine;
+import ru.white.lyrics.LyricLineSplitter;
+import ru.white.lyrics.LyricParticle3D;
 import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
+import ru.white.module.api.settings.impl.BooleanSetting;
+import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
-import ru.white.utils.other.Projection;
-import ru.white.utils.render.font.Font;
-import ru.white.utils.render.font.Fonts;
+import ru.white.utils.colors.ColorUtil;
 
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 3D Lyrics: слова песни из текущей медиасессии подтягиваются с LRCLIB
- * (синхронизированный LRC), нарезаются на куски по 3-5 слов и плавно
- * всплывают перед игроком в мировых координатах — появление/исчезание
- * с мягкими фейдами, как в клипах.
+ * 3D Lyrics: слова трека всплывают в 3D-пространстве перед игроком —
+ * частицы с фиксированной мировой позицией, статичным размером,
+ * 3D-окклюзией и анимациями (LyricFlow / Typewriter / PopScale / KineticSlide / Fade).
  */
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ModuleInfo(name = "3D Lyrics", desc = "Floating song lyrics in front of you", category = Category.RENDER)
+@ModuleInfo(name = "3D Lyrics", desc = "Kinetic lyrics in 3D world space", category = Category.RENDER)
 public class Lyrics3D extends Module {
 
-    public SliderSetting distance = new SliderSetting(this, "Дистанция", 5.0F, 3.0F, 10.0F, 0.5F);
-    public SliderSetting size = new SliderSetting(this, "Размер текста", 9.0F, 6.0F, 14.0F, 0.5F);
-    public SliderSetting wordsPerChunk = new SliderSetting(this, "Слов в строке", 4.0F, 3.0F, 5.0F, 1.0F);
+    public ModeSetting animation = new ModeSetting(this, "Animation", "LyricFlow", "Typewriter", "PopScale", "KineticSlide", "Fade");
+    public ModeSetting colorMode = new ModeSetting(this, "Color", "White", "Theme");
+    public ModeSetting splitMode = new ModeSetting(this, "Split Mode", "SmartSplit", "FullLine");
+    public SliderSetting maxLines = new SliderSetting(this, "Max Lines", 3.0F, 1.0F, 6.0F, 1.0F);
+    public SliderSetting minDistance = new SliderSetting(this, "Min Distance", 2.0F, 1.2F, 4.0F, 0.1F);
+    public SliderSetting maxDistance = new SliderSetting(this, "Max Distance", 4.5F, 2.0F, 7.0F, 0.1F);
+    public SliderSetting arcSpread = new SliderSetting(this, "Arc Spread", 70.0F, 20.0F, 85.0F, 5.0F);
+    public SliderSetting floatHeight = new SliderSetting(this, "Float Height", 0.5F, 0.1F, 2.0F, 0.1F);
+    public SliderSetting timeOffset = new SliderSetting(this, "Offset (ms)", 0.0F, -5000.0F, 5000.0F, 50.0F);
+    public SliderSetting textSize = new SliderSetting(this, "Text Scale", 1.0F, 0.5F, 2.0F, 0.1F);
+    public BooleanSetting debugMode = new BooleanSetting(this, "Debug Mode", false);
 
-    /** Кусок лирики: окно времени [start,end) и текст. */
-    public record Chunk(long startMs, long endMs, String text, float lateral, float up) {}
+    private final List<LyricLine> rawLyrics = new ArrayList<>();
+    private final List<LyricLine> lyricsQueue = new ArrayList<>();
+    private final List<LyricParticle3D> activeParticles = new CopyOnWriteArrayList<>();
+    private int currentLyricIndex = 0;
 
-    private static final long FADE_IN_MS = 260;
-    private static final long FADE_OUT_MS = 320;
+    // внутренние аудио-часы
+    private long internalAudioClockMs = 0L;
+    private long lastUpdateRealTimeMs = 0L;
+    private long lastWindowsReportedPosMs = 0L;
+    private long lastEffectiveAudioTimeMs = 0L;
+    private long trackStartTimeSys = 0L;
+    private boolean isPlaying = false;
 
-    private volatile List<Chunk> chunks = List.of();
-    private volatile long basePosMs = 0L;
-    private volatile long baseRealMs = 0L;
-    private volatile boolean playing = false;
     private String lastTrackKey = "";
+    private String currentTrackTitle = "";
+    private String currentTrackArtist = "";
 
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "nightix-lyrics");
-        t.setDaemon(true);
-        return t;
-    });
-
-    private static final HttpClient HTTP = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
-
-    @EventHandler
-    public void onUpdate(EventUpdate e) {
-        if (!isEnabled()) return;
-        if (mc.player == null || mc.world == null) return;
-        if (mc.player.age % 5 != 0) return;
-
-        executor.submit(this::pollMedia);
-    }
-
-    private void pollMedia() {
-        try {
-            IMediaSession session = MediaPlayerInfo.Instance.getMediaSessions().stream()
-                    .max(java.util.Comparator.comparingInt(s -> s.getMedia().getPlaying() ? 1 : 0))
-                    .orElse(null);
-            if (session == null) {
-                playing = false;
-                return;
-            }
-
-            MediaInfo info = session.getMedia();
-            if (info.getTitle().isEmpty() && info.getArtist().isEmpty()) {
-                playing = false;
-                return;
-            }
-
-            long pos = info.getPosition();
-            long dur = info.getDuration();
-            if (dur > 86_400_000L) { // микросекунды -> миллисекунды
-                pos /= 1000L;
-                dur /= 1000L;
-            }
-
-            basePosMs = pos;
-            baseRealMs = System.currentTimeMillis();
-            playing = info.getPlaying();
-
-            String key = info.getArtist() + "|" + info.getTitle();
-            if (!key.equals(lastTrackKey)) {
-                lastTrackKey = key;
-                chunks = List.of();
-                String title = info.getTitle();
-                String artist = info.getArtist();
-                executor.submit(() -> fetchLyrics(title, artist));
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /** Загрузка синхронизированной лирики с LRCLIB (без ключей, публичный API). */
-    private void fetchLyrics(String title, String artist) {
-        try {
-            String cleanTitle = cleanTitle(title);
-            String url = "https://lrclib.net/api/search?track_name="
-                    + URLEncoder.encode(cleanTitle, StandardCharsets.UTF_8)
-                    + "&artist_name=" + URLEncoder.encode(artist, StandardCharsets.UTF_8);
-
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                    .header("User-Agent", "Nightix/1.0 (Minecraft client)")
-                    .timeout(java.time.Duration.ofSeconds(10))
-                    .GET()
-                    .build();
-
-            HttpResponse<String> resp = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() != 200) return;
-
-            JsonArray arr = JsonParser.parseString(resp.body()).getAsJsonArray();
-            String synced = null;
-            for (JsonElement el : arr) {
-                JsonObject obj = el.getAsJsonObject();
-                String s = obj.has("syncedLyrics") && !obj.get("syncedLyrics").isJsonNull()
-                        ? obj.get("syncedLyrics").getAsString() : "";
-                if (!s.isBlank()) {
-                    synced = s;
-                    break;
-                }
-            }
-            if (synced == null) return;
-
-            chunks = buildChunks(parseLrc(synced));
-            System.out.println("[Lyrics3D] loaded " + chunks.size() + " chunks for: " + cleanTitle);
-        } catch (Throwable t) {
-            System.out.println("[Lyrics3D] fetch failed: " + t);
-        }
-    }
-
-    /** Убираем из названия мусор вида "(Official Video)", "[HD]", "- Remastered 2011". */
-    private static String cleanTitle(String title) {
-        String t = title.replaceAll("\\(([^)]*)\\)", " ").replaceAll("\\[([^]]*)\\]", " ");
-        t = t.replaceAll("(?i)\\b(official|video|audio|lyrics?|hd|4k|remaster(?:ed)?|mv|visualizer)\\b", " ");
-        return t.replaceAll("\\s{2,}", " ").trim();
-    }
-
-    private record LyricLine(long timeMs, String text) {}
-
-    /** Парсер LRC: [mm:ss.xx] текст, возможны несколько меток в строке. */
-    private static List<LyricLine> parseLrc(String lrc) {
-        Pattern stamp = Pattern.compile("\\[(\\d+):(\\d+)(?:[.:](\\d+))?\\]");
-        List<LyricLine> out = new ArrayList<>();
-        for (String raw : lrc.split("\n")) {
-            Matcher m = stamp.matcher(raw);
-            List<Long> times = new ArrayList<>();
-            int last = 0;
-            while (m.find() && m.start() == last) {
-                long min = Long.parseLong(m.group(1));
-                long sec = Long.parseLong(m.group(2));
-                long frac = m.group(3) == null ? 0 : Long.parseLong(m.group(3));
-                // сотые или тысячные — нормализуем к мс
-                long ms = frac < 100 ? frac * 10 : (frac < 1000 ? frac : frac / 10);
-                times.add(min * 60_000 + sec * 1000 + ms);
-                last = m.end();
-            }
-            if (times.isEmpty()) continue;
-            String text = raw.substring(last).trim();
-            if (text.isEmpty()) continue;
-            for (Long t : times) out.add(new LyricLine(t, text));
-        }
-        out.sort(java.util.Comparator.comparingLong(LyricLine::timeMs));
-        return out;
-    }
-
-    /** Нарезка строк на куски по 3-5 слов с пропорциональным таймингом. */
-    private static List<Chunk> buildChunks(List<LyricLine> lines) {
-        List<Chunk> chunks = new ArrayList<>();
-        int maxWords = 4;
-
-        for (int i = 0; i < lines.size(); i++) {
-            long start = lines.get(i).timeMs();
-            long end = i + 1 < lines.size() ? lines.get(i + 1).timeMs() : start + 5000;
-            if (end - start < 400) end = start + 400;
-
-            String[] words = lines.get(i).text().split("\\s+");
-            if (words.length == 0) continue;
-
-            int per = maxWords;
-            int chunkCount = Math.max(1, (int) Math.ceil(words.length / (double) per));
-            double dur = end - start;
-
-            int idx = 0;
-            for (int c = 0; c < chunkCount; c++) {
-                int from = idx;
-                int count = Math.min(per, words.length - idx);
-                if (count <= 0) break;
-                idx += count;
-
-                StringBuilder sb = new StringBuilder();
-                for (int w = from; w < from + count; w++) sb.append(words[w]).append(' ');
-
-                long cs = start + (long) (dur * from / (double) words.length);
-                long ce = start + (long) (dur * idx / (double) words.length);
-
-                // детерминированный разброс позиций: каждое появление в своём месте
-                int seed = chunks.size() * 31 + 7;
-                long hx = seed * 2654435761L;
-                long hy = seed * 40503L + 97;
-                float lateral = (Math.floorMod(hx, 2001) / 1000.0f - 1.0f) * 2.2f; // -2.2..2.2
-                float up = (Math.floorMod(hy, 1000) / 1000.0f) * 1.8f - 0.2f;     // -0.2..1.6
-
-                chunks.add(new Chunk(cs, ce, sb.toString().trim(), lateral, up));
-            }
-        }
-        return chunks;
-    }
-
-    @EventHandler
-    public void onDisplay(EventDisplay e) {
-        if (!isEnabled() || chunks.isEmpty()) return;
-        if (mc.player == null || mc.world == null || mc.options.hudHidden) return;
-        if (Fonts.sf_medium == null) return;
-
-        long now = System.currentTimeMillis();
-        long pos = playing ? basePosMs + (now - baseRealMs) : basePosMs;
-
-        Font font = Fonts.sf_medium;
-        float fontSize = size.getValue();
-
-        Vec3d eye = mc.player.getEyePos();
-        Vec3d forward = mc.player.getRotationVec(1.0F).normalize();
-        Vec3d right = new Vec3d(-forward.z, 0, forward.x).normalize();
-        float dist = distance.getValue();
-
-        for (Chunk c : chunks) {
-            if (pos < c.startMs() - FADE_IN_MS || pos > c.endMs() + FADE_OUT_MS) continue;
-
-            float alphaIn = Math.min(1.0F, Math.max(0.0F, (pos - c.startMs()) / (float) FADE_IN_MS));
-            float alphaOut = Math.min(1.0F, Math.max(0.0F, (c.endMs() + FADE_OUT_MS - pos) / (float) FADE_OUT_MS));
-            float alpha = Math.min(alphaIn, alphaOut);
-            if (alpha <= 0.02F) continue;
-
-            Vec3d world = eye
-                    .add(forward.multiply(dist))
-                    .add(right.multiply(c.lateral()))
-                    .add(0, c.up(), 0);
-
-            Vec3d screen = Projection.worldSpaceToScreenSpace(world);
-            if (screen.z <= 0 || screen.z >= 1) continue;
-            if (!Float.isFinite((float) screen.x) || !Float.isFinite((float) screen.y)) continue;
-
-            int a = (int) (255 * alpha);
-            int color = (a << 24) | 0xFFFFFF;
-            int shadow = ((int) (180 * alpha) << 24);
-
-            // мягкая тень-подложка для читаемости и «свечения»
-            font.drawCentered(c.text(), (float) screen.x + 0.7F, (float) screen.y + 0.7F, fontSize, (shadow & 0xFF000000) | 0x101018);
-            font.drawCentered(c.text(), (float) screen.x, (float) screen.y, fontSize, color);
-        }
+    @Override
+    public void onEnable() {
+        super.onEnable();
+        resetPlaybackState();
     }
 
     @Override
     public void onDisable() {
-        chunks = List.of();
-        lastTrackKey = "";
         super.onDisable();
+        resetPlaybackState();
+    }
+
+    private void resetPlaybackState() {
+        activeParticles.clear();
+        rawLyrics.clear();
+        lyricsQueue.clear();
+        lastTrackKey = "";
+        currentTrackTitle = "";
+        currentTrackArtist = "";
+        currentLyricIndex = 0;
+        internalAudioClockMs = 0L;
+        lastEffectiveAudioTimeMs = 0L;
+        lastUpdateRealTimeMs = System.currentTimeMillis();
+        trackStartTimeSys = System.currentTimeMillis();
+        lastWindowsReportedPosMs = 0L;
+        isPlaying = false;
+    }
+
+    private void playTrack(String trackName, String artistName) {
+        this.currentTrackTitle = trackName != null ? trackName.trim() : "";
+        this.currentTrackArtist = artistName != null ? artistName.trim() : "";
+        this.lastTrackKey = (currentTrackTitle + " - " + currentTrackArtist).toLowerCase();
+
+        activeParticles.clear();
+        rawLyrics.clear();
+        lyricsQueue.clear();
+        currentLyricIndex = 0;
+        internalAudioClockMs = 0L;
+        lastEffectiveAudioTimeMs = 0L;
+        trackStartTimeSys = System.currentTimeMillis();
+        lastUpdateRealTimeMs = System.currentTimeMillis();
+        lastWindowsReportedPosMs = 0L;
+        isPlaying = false;
+
+        String expectedKey = this.lastTrackKey;
+
+        LrcLibClient.fetchLyricsAsync(currentTrackTitle, currentTrackArtist, debugMode.getValue()).thenAccept(lines -> {
+            if (!this.lastTrackKey.equalsIgnoreCase(expectedKey)) {
+                return;
+            }
+
+            activeParticles.clear();
+            rawLyrics.clear();
+            lyricsQueue.clear();
+            rawLyrics.addAll(lines);
+            rebuildLyricsQueue();
+            currentLyricIndex = 0;
+            isPlaying = !lyricsQueue.isEmpty();
+        });
+    }
+
+    private void rebuildLyricsQueue() {
+        lyricsQueue.clear();
+        if (splitMode.is("SmartSplit")) {
+            lyricsQueue.addAll(LyricLineSplitter.splitLongLines(rawLyrics));
+        } else {
+            lyricsQueue.addAll(rawLyrics);
+        }
+    }
+
+    @EventHandler
+    public void onUpdate(EventUpdate e) {
+        syncPlaybackTime();
+    }
+
+    private void syncPlaybackTime() {
+        if (!isEnabled() || mc.player == null) return;
+
+        long now = System.currentTimeMillis();
+        long dt = (lastUpdateRealTimeMs > 0) ? (now - lastUpdateRealTimeMs) : 0;
+        lastUpdateRealTimeMs = now;
+
+        dev.redstones.mediaplayerinfo.MediaInfo media = currentMedia();
+        if (media != null && media.getTitle() != null && !media.getTitle().isBlank()
+                && !media.getTitle().equalsIgnoreCase("Unknown")) {
+            String title = media.getTitle().trim();
+            String artist = media.getArtist() != null ? media.getArtist().trim() : "";
+            String key = (title + " - " + artist).toLowerCase();
+
+            // 1. смена трека
+            if (!key.equalsIgnoreCase(lastTrackKey)) {
+                playTrack(title, artist);
+                return;
+            }
+
+            // 2. восстановление после Unknown-буферизации
+            if (!isPlaying && !lyricsQueue.isEmpty()) {
+                isPlaying = true;
+            }
+
+            // 3. синхронизация с позицией Windows (защита от старого трека в первые 1.5с)
+            if (now - trackStartTimeSys > 1500L && media.getPosition() > 0
+                    && Math.abs(media.getPosition() - lastWindowsReportedPosMs) > 1500L) {
+                lastWindowsReportedPosMs = media.getPosition();
+                internalAudioClockMs = media.getPosition();
+            }
+
+            boolean paused = !media.getPlaying();
+            if (!paused) {
+                internalAudioClockMs += dt;
+            }
+
+            long effectiveAudioTime = Math.max(0, internalAudioClockMs + (long) timeOffset.getValue());
+
+            // 4. перемотка: резкий скачок — пересобираем активные частицы
+            if (Math.abs(effectiveAudioTime - lastEffectiveAudioTimeMs) > 1500L) {
+                resyncQueue(effectiveAudioTime);
+            }
+            lastEffectiveAudioTimeMs = effectiveAudioTime;
+
+            update(effectiveAudioTime);
+        } else {
+            if (isPlaying) {
+                isPlaying = false;
+                activeParticles.clear();
+            }
+        }
+    }
+
+    private dev.redstones.mediaplayerinfo.MediaInfo currentMedia() {
+        try {
+            return dev.redstones.mediaplayerinfo.MediaPlayerInfo.Instance.getMediaSessions().stream()
+                    .max(java.util.Comparator.comparingInt(s -> s.getMedia().getPlaying() ? 1 : 0))
+                    .map(dev.redstones.mediaplayerinfo.IMediaSession::getMedia)
+                    .orElse(null);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private void resyncQueue(long audioTimeMs) {
+        activeParticles.clear();
+        currentLyricIndex = 0;
+        long now = System.currentTimeMillis();
+
+        for (int i = 0; i < lyricsQueue.size(); i++) {
+            LyricLine line = lyricsQueue.get(i);
+            long nextStartMs = (i + 1 < lyricsQueue.size()) ? lyricsQueue.get(i + 1).timestampMs() : line.timestampMs() + 3500L;
+            long durationMs = Math.max(1200L, Math.min(5000L, nextStartMs - line.timestampMs()));
+
+            if (audioTimeMs >= line.timestampMs()) {
+                long timeSinceLine = audioTimeMs - line.timestampMs();
+                if (timeSinceLine < durationMs) {
+                    spawnLyricParticle(line.text(), now - timeSinceLine, durationMs);
+                }
+                currentLyricIndex = i + 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    private void update(long audioTimeMs) {
+        if (!isPlaying || lyricsQueue.isEmpty() || mc.player == null) return;
+
+        long now = System.currentTimeMillis();
+
+        while (currentLyricIndex < lyricsQueue.size()) {
+            LyricLine line = lyricsQueue.get(currentLyricIndex);
+            long nextStartMs = (currentLyricIndex + 1 < lyricsQueue.size()) ? lyricsQueue.get(currentLyricIndex + 1).timestampMs() : line.timestampMs() + 3500L;
+            long durationMs = Math.max(1400L, Math.min(5500L, nextStartMs - line.timestampMs()));
+
+            if (audioTimeMs >= line.timestampMs()) {
+                long timeSinceLine = audioTimeMs - line.timestampMs();
+                if (timeSinceLine < durationMs) {
+                    spawnLyricParticle(line.text(), now - timeSinceLine, durationMs);
+                }
+                currentLyricIndex++;
+            } else {
+                break;
+            }
+        }
+
+        activeParticles.removeIf(particle -> particle.isDead(now));
+    }
+
+    /** Позиция спавна: случайный угол в дуге перед камерой, без перекрытий. */
+    private Vec3d findNonOverlappingSpawnPos(Vec3d headPos, float cameraYaw) {
+        double spread = arcSpread.getValue();
+        double minD = minDistance.getValue();
+        double maxD = Math.max(minD + 0.5, maxDistance.getValue());
+
+        Vec3d bestPos = null;
+        double maxMinDistance = -1.0;
+
+        for (int attempt = 0; attempt < 16; attempt++) {
+            double randomAngleOffset = ThreadLocalRandom.current().nextDouble(-spread, spread);
+            double targetYawDeg = cameraYaw + randomAngleOffset;
+            double distance = ThreadLocalRandom.current().nextDouble(minD, maxD);
+            double yOffset = ThreadLocalRandom.current().nextDouble(-0.25, 0.55);
+
+            double yawRad = Math.toRadians(targetYawDeg);
+            double dirX = -Math.sin(yawRad);
+            double dirZ = Math.cos(yawRad);
+
+            Vec3d candidate = new Vec3d(
+                    headPos.x + (dirX * distance),
+                    headPos.y + yOffset,
+                    headPos.z + (dirZ * distance));
+
+            if (activeParticles.isEmpty()) {
+                return candidate;
+            }
+
+            double minDistanceToOthers = Double.MAX_VALUE;
+            for (LyricParticle3D active : activeParticles) {
+                double d = candidate.distanceTo(active.getBasePosition());
+                if (d < minDistanceToOthers) {
+                    minDistanceToOthers = d;
+                }
+            }
+
+            if (minDistanceToOthers >= 1.35) {
+                return candidate;
+            }
+
+            if (minDistanceToOthers > maxMinDistance) {
+                maxMinDistance = minDistanceToOthers;
+                bestPos = candidate;
+            }
+        }
+
+        return bestPos;
+    }
+
+    private void spawnLyricParticle(String text, long spawnTimeMs, long durationMs) {
+        if (mc.player == null || text == null || text.isBlank()) return;
+
+        Camera camera = mc.gameRenderer.getCamera();
+        Vec3d headPos = mc.player.getEyePos();
+        float cameraYaw = camera.getYaw();
+
+        int maxAllowed = maxLines.getValue().intValue();
+        while (activeParticles.size() >= maxAllowed) {
+            activeParticles.remove(0);
+        }
+
+        Vec3d spawnPos = findNonOverlappingSpawnPos(headPos, cameraYaw);
+        if (spawnPos == null) return;
+
+        float riseHeight = floatHeight.getValue();
+        activeParticles.add(new LyricParticle3D(text, spawnPos, spawnTimeMs, durationMs, riseHeight));
+    }
+
+    private int getActiveColorRgb() {
+        if (colorMode.is("Theme")) {
+            int c = ColorUtil.getClientColor1(1);
+            return c & 0x00FFFFFF;
+        }
+        return 0xFFFFFF;
+    }
+
+    @EventHandler
+    public void onRender3D(EventRender3D event) {
+        if (!isEnabled() || mc.world == null || mc.player == null) return;
+
+        syncPlaybackTime();
+
+        if (activeParticles.isEmpty()) return;
+
+        Camera camera = mc.gameRenderer.getCamera();
+        String animMode = animation.getValue();
+        int colorRgb = getActiveColorRgb();
+        long now = System.currentTimeMillis();
+
+        for (LyricParticle3D particle : activeParticles) {
+            particle.render(event.getMatrixStack(), camera, animMode, colorRgb, now, textSize.getValue());
+        }
+    }
+
+    @EventHandler
+    public void onDisplay(EventDisplay e) {
+        if (!isEnabled() || !debugMode.getValue() || mc.player == null) return;
+
+        net.minecraft.client.font.TextRenderer font = MinecraftClient.getInstance().textRenderer;
+
+        long displayTimeMs = Math.max(0, internalAudioClockMs + (long) timeOffset.getValue());
+        String titleStr = "Track: " + (currentTrackTitle.isEmpty() ? "None" : currentTrackTitle + " - " + currentTrackArtist);
+        String timerInfo = String.format("Audio Time: %02d:%02d.%03d (%d ms)",
+                (displayTimeMs / 60_000),
+                (displayTimeMs % 60_000) / 1000,
+                displayTimeMs % 1000,
+                displayTimeMs);
+        String particlesInfo = String.format("Active 3D Particles: %d", activeParticles.size());
+        String statusInfo = String.format("Queue: %d / %d lines", currentLyricIndex, lyricsQueue.size());
+
+        float x = 10.0f;
+        float y = 70.0f;
+
+        e.getContext().drawText(font, "[3D Lyrics Debug]", x, y, 0xFFFF5A5A);
+        e.getContext().drawText(font, titleStr, x, y + 12, 0xFFDCDCDC);
+        e.getContext().drawText(font, timerInfo, x, y + 24, 0xFFFFFFFF);
+        e.getContext().drawText(font, particlesInfo, x, y + 36, 0xFF78FF78);
+        e.getContext().drawText(font, statusInfo, x, y + 48, 0xFFB4B4FF);
     }
 }
