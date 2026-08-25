@@ -1,6 +1,7 @@
 package ru.white.module.impl.combat.aura.rotation;
 
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
@@ -9,6 +10,7 @@ import ru.white.manager.rotation.Rotation;
 import ru.white.manager.rotation.RotationProcess;
 import ru.white.module.impl.combat.AttackAura;
 import ru.white.module.impl.combat.aura.RotationAura;
+import ru.white.utils.aura.LagCompensation;
 import ru.white.utils.aura.RayTraceUtil;
 import ru.white.utils.aura.UBoxPoints;
 import ru.white.utils.math.MathUtil;
@@ -37,6 +39,11 @@ public class ConstructorRotation implements RotationAura {
     private float currentSpeedYaw = 40F;
     private float currentSpeedPitch = 14F;
 
+    // человеческие микро-косяки руки: паузы и овершут
+    private int pauseTicks = 0;
+    private float overshootYaw = 0F;
+    private float overshootPitch = 0F;
+
     public ConstructorRotation(Profile profile) {
         this.profile = profile;
     }
@@ -45,7 +52,12 @@ public class ConstructorRotation implements RotationAura {
     public void onRotation(AttackAura aura, LivingEntity target, float[] ranges, boolean canAttack) {
         if (mc.player == null || target == null) return;
 
-        Vec3d aimPoint = UBoxPoints.getBestVector3dOnEntityBox(target.getBoundingBox());
+        // античит валидирует удар по отложенному (лаг-компенсированному)
+        // хитбоксу — наводиться нужно тоже по нему, иначе рейкаст промахнётся
+        Box aimBox = LagCompensation.mode > 0
+                ? LagCompensation.delayedBox(target)
+                : target.getBoundingBox();
+        Vec3d aimPoint = UBoxPoints.getBestVector3dOnEntityBox(aimBox);
         Vec3d vec = aimPoint.subtract(mc.player.getEyePos());
 
         float yaw = (float) Math.toDegrees(Math.atan2(-vec.x, vec.z));
@@ -65,6 +77,15 @@ public class ConstructorRotation implements RotationAura {
 
         switch (profile) {
             case MATRIX -> {
+                // микро-пауза руки: настоящая мышь иногда замирает на тик-два
+                if (pauseTicks > 0) {
+                    pauseTicks--;
+                    speedYaw = 0.25F;
+                    speedPitch = 0.15F;
+                } else if (MathUtil.randomInt(0, 100) < 3) {
+                    pauseTicks = MathUtil.randomInt(1, 2);
+                }
+
                 if (onTarget) {
                     speedYaw = MathUtil.randomLerp(3F, 6F);
                     speedPitch = MathUtil.randomLerp(1.5F, 3F);
@@ -77,6 +98,22 @@ public class ConstructorRotation implements RotationAura {
                 // лёгкая тряска руки — живая траектория без резких спайков
                 yaw += MathUtil.randomGaussian(-0.7F, 0.7F);
                 pitch += MathUtil.randomGaussian(-0.45F, 0.45F);
+
+                // овершут: мышь проносится мимо цели и доводится обратно —
+                // идеальная доводка без перелёта ловится на «роботизм»
+                if (Math.abs(overshootYaw) > 0.05F || Math.abs(overshootPitch) > 0.05F) {
+                    yaw += overshootYaw;
+                    pitch += overshootPitch;
+                    overshootYaw *= -0.35F;
+                    overshootPitch *= -0.35F;
+                } else if (!onTarget && MathUtil.randomInt(0, 100) < 5) {
+                    float yawDeltaAbs = Math.abs(MathHelper.wrapDegrees(yaw - mc.player.getYaw()));
+                    if (yawDeltaAbs > 12F) {
+                        float dir = Math.signum(MathHelper.wrapDegrees(yaw - mc.player.getYaw()));
+                        overshootYaw = dir * MathUtil.randomLerp(0.8F, 1.8F);
+                        overshootPitch = MathUtil.randomGaussian(-0.5F, 0.5F);
+                    }
+                }
 
                 retYawSpeed = MathUtil.randomInt(360, 400);
                 retPitchSpeed = MathUtil.randomInt(360, 400);
@@ -99,6 +136,14 @@ public class ConstructorRotation implements RotationAura {
             }
             default -> {
                 // GRIM: никаких рывков, маленький шаг, без овершута
+                if (pauseTicks > 0) {
+                    pauseTicks--;
+                    speedYaw = 0.2F;
+                    speedPitch = 0.15F;
+                } else if (MathUtil.randomInt(0, 100) < 2) {
+                    pauseTicks = 1;
+                }
+
                 if (onTarget) {
                     speedYaw = MathUtil.randomLerp(1.5F, 3.5F);
                     speedPitch = MathUtil.randomLerp(1F, 2F);

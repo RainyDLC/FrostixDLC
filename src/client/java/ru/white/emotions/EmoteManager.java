@@ -21,6 +21,9 @@ public final class EmoteManager {
     private static Emote preview;
     private static long previewStart;
 
+    /** Позапрошлая поза двигала пивоты — надо восстановить дефолт. */
+    private static boolean pivotsDirty;
+
     private EmoteManager() {
     }
 
@@ -34,6 +37,15 @@ public final class EmoteManager {
     public static void startHold(Emote emote) {
         active = emote;
         startMs = System.currentTimeMillis();
+    }
+
+    /** Превью становится активной эмоцией без сброса времени — бесшовно. */
+    public static void keepPreviewAsActive() {
+        if (preview != null) {
+            active = preview;
+            startMs = previewStart;
+            preview = null;
+        }
     }
 
     public static void stop() {
@@ -61,12 +73,17 @@ public final class EmoteManager {
 
     public static void apply(PlayerEntityModel model, PlayerEntityRenderState state) {
         Emote current = preview != null ? preview : active;
-        if (current == null) return;
 
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player == null || state.id != mc.player.getId()) return;
 
-        // сброс ТОЛЬКО углов (resetTransform ломает пивоты — модель разваливается)
+        // если прошлая поза двигала пивоты (twerk и т.п.) — вернуть дефолт
+        if (pivotsDirty) {
+            restoreOrigins(model);
+            pivotsDirty = false;
+        }
+
+        // сброс ТОЛЬКО углов (resetTransform трогает лишнее — углы гасим руками)
         resetAngles(model.head);
         resetAngles(model.body);
         resetAngles(model.rightArm);
@@ -74,12 +91,32 @@ public final class EmoteManager {
         resetAngles(model.rightLeg);
         resetAngles(model.leftLeg);
 
+        if (current == null) return;
+
         long ms = System.currentTimeMillis() - (preview != null ? previewStart : startMs);
         if (preview == null && current.durationMs() > 0 && ms > current.durationMs()) {
             active = null;
             return;
         }
         current.pose().apply(model, ms);
+        pivotsDirty = true;
+    }
+
+    /** Возврат пивотов шести частей к дефолтным значениям модели. */
+    private static void restoreOrigins(PlayerEntityModel model) {
+        restoreOrigin(model.head);
+        restoreOrigin(model.body);
+        restoreOrigin(model.rightArm);
+        restoreOrigin(model.leftArm);
+        restoreOrigin(model.rightLeg);
+        restoreOrigin(model.leftLeg);
+    }
+
+    private static void restoreOrigin(net.minecraft.client.model.ModelPart part) {
+        net.minecraft.client.model.ModelTransform def = part.getDefaultTransform();
+        part.originX = def.x();
+        part.originY = def.y();
+        part.originZ = def.z();
     }
 
     private static void resetAngles(net.minecraft.client.model.ModelPart part) {

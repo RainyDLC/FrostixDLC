@@ -19,11 +19,14 @@ import net.minecraft.client.util.InputUtil;
 import net.minecraft.item.CrossbowItem;
 import net.minecraft.item.consume.UseAction;
 import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec2f;
+import ru.white.utils.aura.AuraUtil;
 
 
 @ModuleInfo(
@@ -37,6 +40,9 @@ public class NoSlow extends Module {
 
     private int ticks = 0;
     private int cycleCounter = 0;
+
+    /** Серверу уже отправлен RELEASE_USE_ITEM в текущем цикле использования. */
+    private boolean grimReleased = false;
 
     private boolean crossbowSwapped = false;
     private int savedCrossbowSlot = -1;
@@ -65,6 +71,7 @@ public class NoSlow extends Module {
         bypassActive = false;
         bypassSwapped = false;
         pendingSwapSlot = -1;
+        grimReleased = false;
     }
 
     
@@ -152,10 +159,24 @@ public class NoSlow extends Module {
                     }
                 }
                 if(type.is("Грим")) {
-                    if (mc.player.getOffHandStack().getUseAction().equals(UseAction.NONE) || mc.player.getMainHandStack().getUseAction().equals(UseAction.NONE)) {
+                    // Десинк состояния использования: сервер после RELEASE_USE_ITEM
+                    // считает предмет отпущенным и не применяет предикт замедления —
+                    // каждый тик движения легален (именно так NoSlow-проверка Grim
+                    // перестаёт срабатывать). Стоим — ресинк use-пакетами, чтобы
+                    // серверная еда доедала нормально.
+                    float[] mv = AuraUtil.getMovementFromKeys();
+                    boolean moving = mv[0] != 0 || mv[1] != 0;
+
+                    if (moving) {
+                        if (!grimReleased) {
+                            releaseUseItem();
+                            grimReleased = true;
+                        }
+                        e.cancel();
+                    } else if (grimReleased) {
                         interactItem(first);
                         interactItem(second);
-                        e.cancel();
+                        grimReleased = false;
                     }
                 }
             }
@@ -164,6 +185,14 @@ public class NoSlow extends Module {
     
     public void sendSequencedPacket(SequencedPacketCreator packetCreator) {
         mc.interactionManager.sendSequencedPacket(mc.world, packetCreator);
+    }
+
+    /** Серверный «отпуск» предмета: снимает использование на стороне сервера. */
+    private void releaseUseItem() {
+        if (mc.getNetworkHandler() != null) {
+            mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(
+                    PlayerActionC2SPacket.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, Direction.DOWN));
+        }
     }
     
     public void interactItem(Hand hand) {
@@ -182,6 +211,7 @@ public class NoSlow extends Module {
             } else {
                 ticks = 0;
                 cycleCounter = 0;
+                grimReleased = false;
             }
         }
         if (type.is("ФанТайм")) {

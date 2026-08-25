@@ -31,11 +31,29 @@ import java.util.List;
  */
 public final class EmoteWheelScreen extends Screen {
 
-    private static final float CARD_W = 118;
-    private static final float CARD_H = 46;
+    private static final float CARD_W = 116;
+    private static final float CARD_H = 44;
     private static final float CARD_R = 14;
     private static final float TAB_W = 176;
     private static final float TAB_H = 26;
+
+    /**
+     * Слоты карточек вокруг модели (в долях радиуса): ровный "цветок"
+     * как на референсе — верх, верх-лево/право, бока, низ-лево/право,
+     * пара снизу. Фиксированные позиции вместо равных углов: карточки
+     * не налезают друг на друга и сидят симметрично.
+     */
+    private static final float[][] SLOTS = {
+            { 0.00f, -1.00f},   // верх
+            {-0.78f, -0.68f},   // левый верх
+            { 0.78f, -0.68f},   // правый верх
+            {-1.14f,  0.02f},   // лево
+            { 1.14f,  0.02f},   // право
+            {-0.86f,  0.66f},   // левый низ
+            { 0.86f,  0.66f},   // правый низ
+            {-0.46f,  1.02f},   // низ лево
+            { 0.46f,  1.02f},   // низ право
+    };
 
     private final MinecraftClient mc = MinecraftClient.getInstance();
     private final List<Emote> emotes = Emotes.ALL;
@@ -45,10 +63,21 @@ public final class EmoteWheelScreen extends Screen {
     private int tab = 0;            // 0 — Эмоции, 1 — Скины
     private int selected = -1;
     private boolean holding = false;
+    private boolean holdWasActive = false;
+    private long holdPressMs;
 
     // hit-зоны в клиентских координатах
     private float tabX, tabY;
     private float cx, cy, radius;
+    private float cardW = CARD_W, cardH = CARD_H;
+
+    private float cardX(int i) {
+        return cx + SLOTS[i][0] * radius - cardW / 2f;
+    }
+
+    private float cardY(int i) {
+        return cy + SLOTS[i][1] * radius - cardH / 2f;
+    }
 
     public EmoteWheelScreen() {
         super(Text.literal("Emotions"));
@@ -74,10 +103,14 @@ public final class EmoteWheelScreen extends Screen {
         cx = w / 2f;
         cy = h / 2f;
 
-        // радиус колеса: от меньшей стороны экрана, но не залезает на табы и заголовок
+        // радиус колеса: от меньшей стороны, не залезает на табы и края экрана
         radius = Math.min(w, h) * 0.34f;
-        radius = Math.min(195f, Math.max(112f, radius));
+        radius = Math.min(190f, Math.max(120f, radius));
         radius = Math.min(radius, cy - 96f);
+        radius = Math.min(radius, (w * 0.5f - 66f) / 1.14f);
+        // карточки чуть сжимаются на маленьком радиусе
+        cardW = Math.min(CARD_W, radius * 0.78f);
+        cardH = cardW * (CARD_H / CARD_W);
 
         Render2D.beginOverlay();
 
@@ -132,19 +165,17 @@ public final class EmoteWheelScreen extends Screen {
                     Math.round(44f * scaleFix), 0.0625f, (float) guiMX, (float) guiMY, mc.player);
         }
 
-        // карточки по кругу: шахматный порядок по двум радиусам
+        // карточки по слотам вокруг модели
         for (int i = 0; i < n; i++) {
-            double a = -Math.PI / 2.0 + (Math.PI * 2.0 * i / n);
-            float rad = (i % 2 == 0) ? radius : radius * 0.74f;
-            float px = cx + (float) Math.cos(a) * rad - CARD_W / 2f;
-            float py = cy + (float) Math.sin(a) * rad - CARD_H / 2f;
+            float px = cardX(i);
+            float py = cardY(i);
 
             float p = hover[i];
             float inflate = p * 3f;
             float x = px - inflate;
             float y = py - inflate;
-            float cw = CARD_W + inflate * 2f;
-            float ch = CARD_H + inflate * 2f;
+            float cw = cardW + inflate * 2f;
+            float ch = cardH + inflate * 2f;
 
             Emote emote = emotes.get(i);
             boolean isActive = EmoteManager.active() == emote;
@@ -188,7 +219,7 @@ public final class EmoteWheelScreen extends Screen {
         // подсказка внизу
         Fonts.sf_regular.drawCentered(
                 holding ? "отпусти ЛКМ, чтобы остановить"
-                        : "ЛКМ — играть · удерживай для (Hold) · 1-9 — слоты · ESC — закрыть",
+                        : "ЛКМ — играть / удерживать · 1-9 — слоты · ESC — закрыть",
                 cx, h - 18f, 7f, ColorUtil.getColor(255, 255, 255, 80));
     }
 
@@ -260,13 +291,8 @@ public final class EmoteWheelScreen extends Screen {
     // ── геометрия / ввод ─────────────────────────────────────────────────
 
     private int pickCard(float mx, float my) {
-        int n = emotes.size();
-        for (int i = 0; i < n; i++) {
-            double a = -Math.PI / 2.0 + (Math.PI * 2.0 * i / n);
-            float rad = (i % 2 == 0) ? radius : radius * 0.74f;
-            float px = cx + (float) Math.cos(a) * rad - CARD_W / 2f;
-            float py = cy + (float) Math.sin(a) * rad - CARD_H / 2f;
-            if (isHovered(mx, my, px, py, CARD_W, CARD_H)) return i;
+        for (int i = 0; i < emotes.size(); i++) {
+            if (isHovered(mx, my, cardX(i), cardY(i), cardW, cardH)) return i;
         }
         return -1;
     }
@@ -322,7 +348,10 @@ public final class EmoteWheelScreen extends Screen {
                 if (idx >= 0) {
                     Emote emote = emotes.get(idx);
                     if (emote.hold()) {
-                        // hold-эмоции играют, пока зажата ЛКМ
+                        // hold-эмоция: играет пока зажато; быстрый клик —
+                        // оставить играть (повторный клик выключит)
+                        holdWasActive = EmoteManager.active() == emote;
+                        holdPressMs = System.currentTimeMillis();
                         EmoteManager.startHold(emote);
                         holding = true;
                     } else {
@@ -341,7 +370,15 @@ public final class EmoteWheelScreen extends Screen {
     public boolean mouseReleased(Click click) {
         if (holding && click.button() == 0) {
             holding = false;
-            EmoteManager.stop();
+            boolean quickClick = System.currentTimeMillis() - holdPressMs < 300L;
+            if (quickClick && !holdWasActive) {
+                // быстрый клик по неиграющей hold-эмоции — оставить играть
+                // (продолжаем с того места, где было превью)
+                EmoteManager.keepPreviewAsActive();
+            } else {
+                // удержание или выключение — стоп
+                EmoteManager.stop();
+            }
             close();
             return true;
         }
@@ -350,18 +387,12 @@ public final class EmoteWheelScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyInput input) {
-        // цифры 1-9 — быстрый выбор слота
+        // цифры 1-9 — быстрый выбор слота (переключатель)
         if (tab == 0 && input.key() >= GLFW.GLFW_KEY_1 && input.key() <= GLFW.GLFW_KEY_9) {
             int idx = input.key() - GLFW.GLFW_KEY_1;
             if (idx < emotes.size()) {
-                Emote emote = emotes.get(idx);
-                if (emote.hold()) {
-                    EmoteManager.startHold(emote);
-                    close();
-                } else {
-                    EmoteManager.play(emote);
-                    close();
-                }
+                EmoteManager.play(emotes.get(idx));
+                close();
                 return true;
             }
         }

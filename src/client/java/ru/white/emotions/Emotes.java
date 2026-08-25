@@ -53,26 +53,52 @@ public final class Emotes {
         float beat = (float) Math.abs(Math.sin(t * 9.0));   // отскок таза
         float shimmy = (float) Math.sin(t * 18.0);          // быстрая тряска
 
-        // наклон вперёд, корпус пружинит и трясётся бёдрами
-        m.body.pitch = (0.78F + beat * 0.14F) * r;
+        // наклон корпуса: тело крутится вокруг шеи (пивот y=0), поэтому
+        // низ корпуса уезжает по дуге — ноги переезжают за ним пивотами
+        float bend = (0.85F + beat * 0.12F) * r;
+        float hipY = 12F * (float) Math.cos(bend);
+        float hipZ = 12F * (float) Math.sin(bend);
+
+        m.body.pitch = bend;
         m.body.roll = shimmy * 0.07F * r;
         m.body.yaw = shimmy * 0.05F * r;
 
+        // пивоты ног — на плоскость низа корпуса: шов на бёдрах закрыт
+        // бёдра наклонены вниз-вперёд, стопы остаются под корпусом
+        float thigh = -bend * 0.55F;
+        m.rightLeg.originY = hipY;
+        m.rightLeg.originZ = hipZ;
+        m.leftLeg.originY = hipY;
+        m.leftLeg.originZ = hipZ;
+        m.rightLeg.pitch = (thigh + beat * 0.05F) * r;
+        m.leftLeg.pitch = (thigh - beat * 0.05F) * r;
+        m.rightLeg.yaw = (-0.22F + shimmy * 0.05F) * r;
+        m.leftLeg.yaw = (0.22F - shimmy * 0.05F) * r;
+
+        // стопы всплыли над землёй — опускаем всю модель целиком
+        float drop = 24F - (hipY + 12F * (float) Math.cos(thigh));
+        m.head.originY += drop;
+        m.body.originY += drop;
+        m.rightLeg.originY += drop;
+        m.leftLeg.originY += drop;
+
+        // плечи тоже едут по корпусу
+        float shoulderY = 2F * (float) Math.cos(bend) + drop;
+        float shoulderZ = 2F * (float) Math.sin(bend);
+        m.rightArm.originY = shoulderY;
+        m.rightArm.originZ = shoulderZ;
+        m.leftArm.originY = shoulderY;
+        m.leftArm.originZ = shoulderZ;
+
         // голова поднята — смотрит перед собой, слегка качается
-        m.head.pitch = (-0.62F - beat * 0.06F) * r;
+        m.head.pitch = (-0.55F - beat * 0.06F) * r;
         m.head.roll = -shimmy * 0.04F * r;
 
-        // широкая стойка в полуприседе, пятки поочерёдно пружинят
-        m.rightLeg.yaw = (-0.26F + shimmy * 0.05F) * r;
-        m.leftLeg.yaw = (0.26F - shimmy * 0.05F) * r;
-        m.rightLeg.pitch = (0.20F - beat * 0.16F) * r;
-        m.leftLeg.pitch = (-0.04F + beat * 0.16F) * r;
-
-        // руки упираются в колени
-        m.rightArm.pitch = (-0.62F + beat * 0.12F) * r;
-        m.leftArm.pitch = (-0.62F + beat * 0.12F) * r;
-        m.rightArm.roll = -0.45F * r;
-        m.leftArm.roll = 0.45F * r;
+        // руки упираются в колени, локти в стороны
+        m.rightArm.pitch = (-bend - 0.35F) * r;
+        m.leftArm.pitch = (-bend - 0.35F) * r;
+        m.rightArm.roll = 0.40F * r;
+        m.leftArm.roll = -0.40F * r;
     }
 
     private static void dance(PlayerEntityModel m, long ms) {
@@ -113,22 +139,23 @@ public final class Emotes {
         float raw = (float) Math.sin(t * 11.0);
         float stroke = (raw - 0.28F * (float) Math.sin(t * 22.0)) * r;
 
-        // правая рука: кисть на уровне паха перед корпусом, ходит вдоль ствола
-        m.rightArm.pitch = (-0.55F + stroke * 0.32F) * r;
-        m.rightArm.yaw = -0.28F * r;
-        m.rightArm.roll = 0.10F * r;
+        // правая рука: кисть у паха перед корпусом. Рука почти вертикальна,
+        // поэтому к центральной линии её тянет ROLL (yaw на вертикальной
+        // руке не работает — кисть оставалась сбоку от тела)
+        m.rightArm.pitch = (-0.45F + stroke * 0.28F) * r;
+        m.rightArm.yaw = -0.10F * r;
+        m.rightArm.roll = -0.45F * r;
 
-        // левая рука лежит на бедре
-        m.leftArm.pitch = 0.28F * r;
-        m.leftArm.roll = 0.85F * r;
+        // левая рука лежит на бедре (локоть наружу)
+        m.leftArm.pitch = 0.25F * r;
+        m.leftArm.roll = -0.55F * r;
 
         // смотрит вниз на "работу", голова чуть покачивается
         m.head.pitch = (0.42F + stroke * 0.05F) * r;
         m.head.roll = (float) (Math.sin(t * 5.5) * 0.05) * r;
-        m.head.yaw = -0.10F * r;
 
         // корпус чуть откинут и дышит в такт, бёдра слегка подаются навстречу
-        m.body.pitch = (-0.07F + stroke * 0.02F) * r;
+        m.body.pitch = (-0.06F + stroke * 0.02F) * r;
         m.rightLeg.pitch = 0.05F * r;
         m.leftLeg.pitch = -0.05F * r;
         m.rightLeg.roll = 0.06F * r;
@@ -140,8 +167,34 @@ public final class Emotes {
         float r = ramp(t, 0.4);
         float bob = (float) Math.sin(t * 7.5);   // кивки головой
 
-        // наклонена вперёд, корпус качается в ритме кивков
-        m.body.pitch = (0.50F + bob * 0.08F) * r;
+        // наклон вперёд, корпус качается в ритме кивков
+        float bend = (0.55F + bob * 0.08F) * r;
+        float hipY = 12F * (float) Math.cos(bend);
+        float hipZ = 12F * (float) Math.sin(bend);
+        m.body.pitch = bend;
+
+        // ноги следуют за низом корпуса, стопы обратно на землю
+        float thigh = -bend * 0.5F;
+        m.rightLeg.originY = hipY;
+        m.rightLeg.originZ = hipZ;
+        m.leftLeg.originY = hipY;
+        m.leftLeg.originZ = hipZ;
+        m.rightLeg.pitch = thigh * r;
+        m.leftLeg.pitch = thigh * r;
+        m.rightLeg.yaw = -0.08F * r;
+        m.leftLeg.yaw = 0.08F * r;
+
+        float drop = 24F - (hipY + 12F * (float) Math.cos(thigh));
+        m.head.originY += drop;
+        m.body.originY += drop;
+        m.rightLeg.originY += drop;
+        m.leftLeg.originY += drop;
+        float shoulderY = 2F * (float) Math.cos(bend) + drop;
+        float shoulderZ = 2F * (float) Math.sin(bend);
+        m.rightArm.originY = shoulderY;
+        m.rightArm.originZ = shoulderZ;
+        m.leftArm.originY = shoulderY;
+        m.leftArm.originZ = shoulderZ;
 
         // голова работает: глубокий кивок вниз и обратно
         m.head.pitch = (-0.10F + bob * 0.38F) * r;
@@ -154,12 +207,6 @@ public final class Emotes {
         m.leftArm.yaw = 0.30F * r;
         m.rightArm.roll = -0.12F * r;
         m.leftArm.roll = 0.12F * r;
-
-        // колени слегка прогнулись
-        m.rightLeg.pitch = -0.06F * r;
-        m.leftLeg.pitch = 0.06F * r;
-        m.rightLeg.yaw = -0.08F * r;
-        m.leftLeg.yaw = 0.08F * r;
     }
 
     private static void floss(PlayerEntityModel m, long ms) {
