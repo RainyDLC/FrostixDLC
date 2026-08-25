@@ -5,6 +5,8 @@ import io.netty.buffer.Unpooled;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
@@ -130,20 +132,39 @@ public final class BotPacketHelper {
 
     public static String cleanJsonText(String raw) {
         if (raw == null || raw.isEmpty()) return "";
-        // If raw is simple text
-        if (!raw.startsWith("{") && !raw.startsWith("[")) {
+        System.out.println("[BotPacketHelper] Disconnect raw: " + raw);
+
+        if (!raw.startsWith("{") && !raw.startsWith("[") && !raw.contains("\"")) {
             return raw;
         }
-        try {
-            // Strip standard JSON keys
-            String clean = raw.replaceAll("\"text\"\\s*:\\s*\"([^\"]*)\"", "$1")
-                    .replaceAll("\"extra\"\\s*:\\s*\\[", "")
-                    .replaceAll("[\\{\\}\\[\\]\"]", "")
-                    .replaceAll(",+", " ")
+
+        StringBuilder sb = new StringBuilder();
+        Pattern textPattern = Pattern.compile("\"text\"\\s*:\\s*\"([^\"]*)\"");
+        Matcher m = textPattern.matcher(raw);
+        while (m.find()) {
+            String val = m.group(1);
+            if (!val.isEmpty()) {
+                sb.append(val);
+            }
+        }
+
+        if (sb.isEmpty()) {
+            Pattern transPattern = Pattern.compile("\"translate\"\\s*:\\s*\"([^\"]+)\"");
+            Matcher tm = transPattern.matcher(raw);
+            while (tm.find()) {
+                sb.append(tm.group(1)).append(" ");
+            }
+        }
+
+        if (sb.isEmpty()) {
+            String fallback = raw
+                    .replaceAll("\"(color|bold|italic|underlined|strikethrough|obfuscated|extra|translate|with|hoverEvent|clickEvent)\"\\s*:\\s*(\"[^\"]*\"|true|false|\\[[^\\]]*\\]|\\{[^\\}]*\\})", "")
+                    .replaceAll("[\\{\\}\\[\\]\":,]", " ")
+                    .replaceAll("\\s+", " ")
                     .trim();
-            return clean.isEmpty() ? raw : clean;
-        } catch (Exception e) {
-            return raw;
+            return fallback.isEmpty() ? raw : fallback;
         }
+
+        return sb.toString().trim();
     }
 }

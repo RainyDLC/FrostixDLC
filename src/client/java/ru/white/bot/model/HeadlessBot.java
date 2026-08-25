@@ -263,6 +263,7 @@ public class HeadlessBot {
         BotPacketHelper.writeVarInt(buf, 1); // Main hand: Right
         buf.writeBoolean(false); // Text filtering
         buf.writeBoolean(true); // Server listings
+        BotPacketHelper.writeVarInt(buf, 0); // Particle status: All
         sendPacket(buf);
 
         // Plugin Message: minecraft:brand (0x02 in Configuration)
@@ -273,9 +274,7 @@ public class HeadlessBot {
         ByteBuf buf = Unpooled.buffer();
         BotPacketHelper.writeVarInt(buf, packetId);
         BotPacketHelper.writeString(buf, "minecraft:brand");
-        byte[] brandData = "vanilla".getBytes(StandardCharsets.UTF_8);
-        BotPacketHelper.writeVarInt(buf, brandData.length);
-        buf.writeBytes(brandData);
+        BotPacketHelper.writeString(buf, "vanilla");
         sendPacket(buf);
     }
 
@@ -324,10 +323,11 @@ public class HeadlessBot {
 
         private void handleLoginPacket(int id, ByteBuf buf) {
             if (id == 0x00) {
-                // Disconnect
-                String reason = BotPacketHelper.readString(buf, 1024);
+                // Disconnect in Login
+                String reason = BotPacketHelper.readString(buf, 2048);
+                String clean = BotPacketHelper.cleanJsonText(reason);
                 state = BotState.ERROR;
-                statusMessage = "Кик: " + BotPacketHelper.cleanJsonText(reason);
+                statusMessage = "Кик: " + clean;
                 disconnect();
             } else if (id == 0x02) {
                 // Login Success
@@ -352,13 +352,13 @@ public class HeadlessBot {
 
         private void handleConfigPacket(int id, ByteBuf buf) {
             if (id == 0x00) {
-                // Cookie Request -> reply Cookie Response (0x01)
+                // Cookie Request in Config -> reply Cookie Response (0x01)
                 try {
                     String cookieKey = BotPacketHelper.readString(buf, 256);
                     ByteBuf reply = Unpooled.buffer();
                     BotPacketHelper.writeVarInt(reply, 0x01);
                     BotPacketHelper.writeString(reply, cookieKey);
-                    buf.writeBoolean(false); // No cookie data
+                    reply.writeBoolean(false); // No cookie data
                     sendPacket(reply);
                 } catch (Exception ignored) {}
             } else if (id == 0x01) {
@@ -371,9 +371,10 @@ public class HeadlessBot {
                 } catch (Exception ignored) {}
             } else if (id == 0x02) {
                 // Disconnect in Config
-                String reason = BotPacketHelper.readString(buf, 1024);
+                String reason = BotPacketHelper.readString(buf, 2048);
+                String clean = BotPacketHelper.cleanJsonText(reason);
                 state = BotState.ERROR;
-                statusMessage = "Кик: " + BotPacketHelper.cleanJsonText(reason);
+                statusMessage = "Кик: " + clean;
                 disconnect();
             } else if (id == 0x03) {
                 // Finish Configuration -> Send Acknowledge (0x03)
@@ -417,12 +418,48 @@ public class HeadlessBot {
                     reply.writeInt(pingId);
                     sendPacket(reply);
                 } catch (Exception ignored) {}
+            } else if (id == 0x09) {
+                // Resource Pack Send in Config -> reply 0x06
+                try {
+                    UUID packUuid = BotPacketHelper.readUuid(buf);
+                    ByteBuf reply = Unpooled.buffer();
+                    BotPacketHelper.writeVarInt(reply, 0x06);
+                    BotPacketHelper.writeUuid(reply, packUuid);
+                    BotPacketHelper.writeVarInt(reply, 3); // 3 = Accepted
+                    sendPacket(reply);
+
+                    ByteBuf replyLoaded = Unpooled.buffer();
+                    BotPacketHelper.writeVarInt(replyLoaded, 0x06);
+                    BotPacketHelper.writeUuid(replyLoaded, packUuid);
+                    BotPacketHelper.writeVarInt(replyLoaded, 0); // 0 = Successfully loaded
+                    sendPacket(replyLoaded);
+                } catch (Exception ignored) {}
             } else if (id == 0x0E) {
-                // Select Known Packs -> Send empty
-                ByteBuf reply = Unpooled.buffer();
-                BotPacketHelper.writeVarInt(reply, 0x07);
-                BotPacketHelper.writeVarInt(reply, 0); // 0 known packs
-                sendPacket(reply);
+                // Select Known Packs -> Echo back
+                try {
+                    int count = BotPacketHelper.readVarInt(buf);
+                    ByteBuf reply = Unpooled.buffer();
+                    BotPacketHelper.writeVarInt(reply, 0x07);
+                    BotPacketHelper.writeVarInt(reply, count);
+                    for (int i = 0; i < count; i++) {
+                        String namespace = BotPacketHelper.readString(buf, 256);
+                        String packId = BotPacketHelper.readString(buf, 256);
+                        String version = BotPacketHelper.readString(buf, 256);
+
+                        BotPacketHelper.writeString(reply, namespace);
+                        BotPacketHelper.writeString(reply, packId);
+                        BotPacketHelper.writeString(reply, version);
+                    }
+                    sendPacket(reply);
+                } catch (Exception e) {
+                    ByteBuf reply = Unpooled.buffer();
+                    BotPacketHelper.writeVarInt(reply, 0x07);
+                    BotPacketHelper.writeVarInt(reply, 1);
+                    BotPacketHelper.writeString(reply, "minecraft");
+                    BotPacketHelper.writeString(reply, "core");
+                    BotPacketHelper.writeString(reply, "1.21.1");
+                    sendPacket(reply);
+                }
             }
         }
 
@@ -495,9 +532,10 @@ public class HeadlessBot {
             // Disconnect (0x1D / 0x1B / 0x1C)
             else if (id == 0x1D || id == 0x1B || id == 0x1C || id == 0x1E) {
                 try {
-                    String reason = BotPacketHelper.readString(buf, 1024);
+                    String reason = BotPacketHelper.readString(buf, 2048);
+                    String clean = BotPacketHelper.cleanJsonText(reason);
                     state = BotState.DISCONNECTED;
-                    statusMessage = "Кик: " + BotPacketHelper.cleanJsonText(reason);
+                    statusMessage = "Кик: " + clean;
                 } catch (Exception ignored) {}
             }
         }
