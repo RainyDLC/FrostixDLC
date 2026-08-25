@@ -222,8 +222,10 @@ public class Lyrics3D extends Module {
 
                 // детерминированный разброс позиций: каждое появление в своём месте
                 int seed = chunks.size() * 31 + 7;
-                float lateral = (Float.intBitsToFloat(seed) % 1.0f) * 4.4f - 2.2f;
-                float up = ((seed >>> 8) % 100) / 100.0f * 1.8f - 0.2f;
+                long hx = seed * 2654435761L;
+                long hy = seed * 40503L + 97;
+                float lateral = (Math.floorMod(hx, 2001) / 1000.0f - 1.0f) * 2.2f; // -2.2..2.2
+                float up = (Math.floorMod(hy, 1000) / 1000.0f) * 1.8f - 0.2f;     // -0.2..1.6
 
                 chunks.add(new Chunk(cs, ce, sb.toString().trim(), lateral, up));
             }
@@ -263,6 +265,7 @@ public class Lyrics3D extends Module {
 
             Vec3d screen = Projection.worldSpaceToScreenSpace(world);
             if (screen.z <= 0 || screen.z >= 1) continue;
+            if (!Float.isFinite((float) screen.x) || !Float.isFinite((float) screen.y)) continue;
 
             int a = (int) (255 * alpha);
             int color = (a << 24) | 0xFFFFFF;

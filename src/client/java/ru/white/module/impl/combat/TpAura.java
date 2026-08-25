@@ -169,11 +169,7 @@ public class TpAura extends Module {
             return;
         }
 
-<<<<<<< HEAD
         hitTarget(t);
-=======
-        strikeNow();
->>>>>>> a375239 (Изменил файл Б)
 
         // подскок вверх: сервер видит набор высоты — fallDistance гасится, свой урон не прилетает
         mc.player.setPosition(dropPos.x, dropPos.y + 1.2, dropPos.z);
