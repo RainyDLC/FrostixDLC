@@ -4,7 +4,7 @@ import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
+import net.minecraft.item.Items;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Vec3d;
@@ -19,35 +19,56 @@ import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.aura.UAttack;
 
 /**
- * TpAura: HvH телепорт-удар с минимальным следом.
+ * TpAura: HvH телепорт-удар, видимый блинк, всегда крит.
  *
- * Минимализм сигнатуры — главный обход:
- * - крит берётся ЧЕСТНЫМ прыжком (сервер видит настоящую физику падения);
- * - телепорт строго ГОРИЗОНТАЛЬНЫЙ на текущей высоте: fallDistance сервера
- *   не сбрасывается, крит сохраняется;
- * - весь удар — один тик: [пакет позиции у цели] -> [удар] -> [пакет назад].
- *   Всего 2 нестандартных пакета, дельта по умолчанию <= 6 блоков
- *   (порог ванильного "moved too quickly" — 10);
- * - точка высадки с чистой линией огня (8 углов, рейкаст);
- * - удар только при hurtTime == 0 цели и полном кулдауне.
+ * Обычное оружие: прыжок (честный крит-фолл) -> блинк к цели ГОРИЗОНТАЛЬНО
+ * на текущей высоте (fallDistance сервера не сбрасывается) -> удар -> блинк назад.
+ * Блинк реальным перемещением — камера показывает телепорт.
+ *
+ * Булава: отдельная хореография — подъём на высоту смэша, сброс к цели
+ * (серверный fallDistance = высоте -> смэш + крит), удар, возврат.
+ *
+ * Анти-промах: линия огня (8 углов, рейкаст), hurtTime == 0, полный кулдаун.
  */
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ModuleInfo(name = "TpAura", desc = "Teleport strike: minimal packets, always crit", category = Category.COMBAT)
+@ModuleInfo(name = "TpAura", desc = "Teleport strike: visible blink, always crit", category = Category.COMBAT)
 public class TpAura extends Module {
 
     public SliderSetting tpRadius = new SliderSetting(this, "Радиус телепорта", 6.0F, 3.0F, 50.0F, 0.5F);
     public SliderSetting standOff = new SliderSetting(this, "Дистанция удара", 2.2F, 1.5F, 3.0F, 0.1F);
     public SliderSetting cooldown = new SliderSetting(this, "Перезарядка", 800F, 250F, 2000F, 50F);
+    public SliderSetting maceHeight = new SliderSetting(this, "Высота смэша булавы", 6.0F, 2.0F, 15.0F, 0.5F);
 
     public BooleanSetting critOnly = new BooleanSetting(this, "Только криты", true);
     public BooleanSetting autoJump = new BooleanSetting(this, "Прыжок для крита", true)
             .setVisible(() -> critOnly.getValue());
 
+    private static final int PHASE_IDLE = 0;
+    private static final int PHASE_BLINK = 1;
+    private static final int PHASE_MACE_UP = 2;
+    private static final int PHASE_MACE_DOWN = 3;
+
+    private int phase = PHASE_IDLE;
+    private Vec3d returnPos = null;
+    private Vec3d dropPos = null;
+    private LivingEntity strikeTarget = null;
+    private long phaseDeadline = 0L;
     private long nextStrike = 0L;
+    private int phaseTicks = 0;
 
     @EventHandler
     public void onUpdate(EventUpdate e) {
-        if (mc.player == null || mc.world == null || mc.player.networkHandler == null) return;
+        if (mc.player == null || mc.world == null) return;
+
+        switch (phase) {
+            case PHASE_BLINK -> phaseBlink();
+            case PHASE_MACE_UP -> phaseMaceUp();
+            case PHASE_MACE_DOWN -> phaseMaceDown();
+            default -> idleTick();
+        }
+    }
+
+    private void idleTick() {
         if (mc.player.isUsingItem() || mc.currentScreen != null) return;
 
         long ms = System.currentTimeMillis();
@@ -62,43 +83,96 @@ public class TpAura extends Module {
         double dist = mc.player.getEyePos().distanceTo(target.getEntityPos());
         if (dist > tpRadius.getValue() || dist <= atkRange) return;
 
-        // крит: только в честном падении (сервер видит настоящую физику)
-        if (critOnly.getValue()) {
+        boolean mace = mc.player.getMainHandStack().getItem() == Items.MACE;
+
+        // крит-гейт для обычного оружия: прыжок и ожидание падения
+        if (!mace && critOnly.getValue()) {
             if (mc.player.isOnGround()) {
                 if (autoJump.getValue()) {
                     mc.player.setVelocity(mc.player.getVelocity().x, 0.42F, mc.player.getVelocity().z);
                 }
                 return;
             }
-            if (mc.player.getVelocity().y >= 0) return; // ждём падение
+            if (mc.player.getVelocity().y >= 0) return;
         }
 
-        if (target.hurtTime > 0) return;
-        float[] ranges = aura.getRanges();
-        if (!UAttack.shouldAttack(target, false, false, false, 0L, ranges)) return;
-
-        // точка высадки на ТЕКУЩЕЙ высоте (горизонтальный рывок, крит не сбрасывается)
+        // точка высадки на ТЕКУЩЕЙ высоте (горизонтальный блинк, крит не сбрасывается)
         Vec3d landing = findLanding(target, standOff.getValue());
         if (landing == null) return;
 
-        strike(target, landing);
-        nextStrike = ms + cooldown.getValue().longValue();
+        returnPos = mc.player.getEntityPos();
+        strikeTarget = target;
+        phaseTicks = 0;
+
+        if (mace) {
+            Vec3d up = new Vec3d(landing.x, target.getY() + maceHeight.getValue(), landing.z);
+            dropPos = new Vec3d(landing.x, target.getY() + 0.4, landing.z);
+            mc.player.setPosition(up.x, up.y, up.z);
+            mc.player.setVelocity(Vec3d.ZERO);
+            phase = PHASE_MACE_UP;
+        } else {
+            mc.player.setPosition(landing.x, landing.y, landing.z);
+            phase = PHASE_BLINK;
+        }
+        phaseDeadline = ms + 600L;
     }
 
-    /**
-     * Весь удар в одном тике: пакет позиции у цели -> удар -> пакет назад.
-     * Порядок пакетов гарантирует, что сервер считает удар из точки высадки.
-     */
-    private void strike(LivingEntity target, Vec3d landing) {
-        // 1) рывок к цели (горизонтальный, Y текущий)
-        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(
-                landing, mc.player.isOnGround(), false));
+    private void phaseBlink() {
+        LivingEntity t = strikeTarget;
+        if (!valid(t)) {
+            goBack();
+            return;
+        }
+        // тик на принятие позиции сервером, затем удар и возврат
+        if (t.hurtTime > 0 && System.currentTimeMillis() < phaseDeadline) return;
+        if (!UAttack.shouldAttack(t, false, false, false, 0L, AttackAura.get().getRanges())
+                && System.currentTimeMillis() < phaseDeadline) return;
 
-        // 2) удар с обходом щита
-        final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(target, true);
+        strike(t);
+        goBack();
+    }
+
+    private void phaseMaceUp() {
+        LivingEntity t = strikeTarget;
+        if (!valid(t)) {
+            goBack();
+            return;
+        }
+        if (++phaseTicks < 2) return;
+
+        // сброс к цели: сервер видит падение с высоты смэша
+        mc.player.setPosition(dropPos.x, dropPos.y, dropPos.z);
+        phase = PHASE_MACE_DOWN;
+        phaseTicks = 0;
+        phaseDeadline = System.currentTimeMillis() + 600L;
+    }
+
+    private void phaseMaceDown() {
+        LivingEntity t = strikeTarget;
+        if (!valid(t)) {
+            goBack();
+            return;
+        }
+        if (++phaseTicks < 2) return;
+        if (t.hurtTime > 0 && System.currentTimeMillis() < phaseDeadline) return;
+        if (!UAttack.shouldAttack(t, false, false, false, 0L, AttackAura.get().getRanges())
+                && System.currentTimeMillis() < phaseDeadline) return;
+
+        strike(t);
+        goBack();
+    }
+
+    private boolean valid(LivingEntity t) {
+        return t != null && t.isAlive()
+                && System.currentTimeMillis() <= phaseDeadline
+                && mc.player != null;
+    }
+
+    private void strike(LivingEntity t) {
+        final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(t, true);
         final Runnable[] shieldPress = UAttack.resetShieldSilentTaskForUse(true);
         final Runnable[] skipSprint = UAttack.skipSilentSprintingTaskForUse(false);
-        UAttack.useEntity(target,
+        UAttack.useEntity(t,
                 () -> {
                     skipSprint[0].run();
                     shieldPress[0].run();
@@ -110,11 +184,27 @@ public class TpAura extends Module {
                     skipSprint[1].run();
                 },
                 Hand.MAIN_HAND, false);
+    }
 
-        // 3) мгновенный возврат на реальную позицию
-        Vec3d back = mc.player.getEntityPos();
-        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(
-                back, mc.player.isOnGround(), false));
+    private void goBack() {
+        if (returnPos != null) {
+            mc.player.setPosition(returnPos.x, returnPos.y, returnPos.z);
+        }
+        mc.player.fallDistance = 0;
+        returnPos = null;
+        dropPos = null;
+        strikeTarget = null;
+        phase = PHASE_IDLE;
+        phaseTicks = 0;
+        nextStrike = System.currentTimeMillis() + cooldown.getValue().longValue();
+    }
+
+    @Override
+    public void onDisable() {
+        if (phase != PHASE_IDLE) {
+            goBack();
+        }
+        super.onDisable();
     }
 
     /**
@@ -146,11 +236,6 @@ public class TpAura extends Module {
             }
         }
         return null;
-    }
-
-    @Override
-    public void onDisable() {
-        super.onDisable();
     }
 
     /** Ближайшая валидная цель в радиусе телепорта — фильтры самой ауры. */
