@@ -1,5 +1,6 @@
 package ru.white.module.impl.movement;
 
+import ru.white.manager.event_impl.EventPacket;
 import ru.white.manager.event_impl.EventTick;
 import ru.white.manager.event_impl.EventType;
 import ru.white.manager.event_impl.UsingItemEvent;
@@ -9,7 +10,9 @@ import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
 import ru.white.module.api.settings.impl.ModeSetting;
 
+import ru.white.utils.aura.AuraUtil;
 import ru.white.utils.math.StopWatchShadow;
+import net.minecraft.item.ItemStack;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -26,7 +29,6 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec2f;
-import ru.white.utils.aura.AuraUtil;
 
 
 @ModuleInfo(
@@ -41,8 +43,8 @@ public class NoSlow extends Module {
     private int ticks = 0;
     private int cycleCounter = 0;
 
-    /** Серверу уже отправлен RELEASE_USE_ITEM в текущем цикле использования. */
-    private boolean grimReleased = false;
+    /** Сервер сейчас считает, что предмет используется. */
+    private boolean serverUsing = false;
 
     /** Тиков подряд без движения (для отложенного ресинка). */
     private int stillTicks = 0;
@@ -74,8 +76,39 @@ public class NoSlow extends Module {
         bypassActive = false;
         bypassSwapped = false;
         pendingSwapSlot = -1;
-        grimReleased = false;
+        serverUsing = false;
         stillTicks = 0;
+    }
+
+    /**
+     * Гашение USE-пакета «жующего» предмета при движении: сервер не входит
+     * в состояние использования — его NoSlow-проверке нечего проверять.
+     * Щит/еда/зелья; лук и метательные пропускают как есть.
+     */
+    @EventHandler
+    public void onPacket(EventPacket e) {
+        if (!type.is("Грим") || !e.isSend()) return;
+        if (!(e.getPacket() instanceof PlayerInteractItemC2SPacket use)) return;
+        if (mc.player == null || mc.world == null) return;
+
+        if (serverUsing) {
+            serverUsing = false; // старое использование уже не актуально
+        }
+
+        float[] mv = AuraUtil.getMovementFromKeys();
+        boolean moving = mv[0] != 0 || mv[1] != 0;
+        if (!moving) {
+            // стоя USE доходит: сервер начинает есть (еда доедает по-настоящему)
+            serverUsing = true;
+            return;
+        }
+
+        ItemStack stack = mc.player.getStackInHand(use.getHand());
+        UseAction action = stack.getUseAction();
+        if (action == UseAction.EAT || action == UseAction.DRINK || action == UseAction.BLOCK) {
+            e.setCancelled(true);
+            serverUsing = false;
+        }
     }
 
     
@@ -163,34 +196,30 @@ public class NoSlow extends Module {
                     }
                 }
                 if(type.is("Грим")) {
-                    // Десынк состояния использования, разнесённый по времени:
-                    //  - первые 4 тика — честное ванильное замедление (выглядит
-                    //    как «начал есть на ходу», мгновенный RELEASE после USE
-                    //    палится патченными Grim);
-                    //  - затем один RELEASE_USE_ITEM — сервер снимает состояние
-                    //    использования и больше не предиктит замедление, каждый
-                    //    тик движения легален на полной скорости;
-                    //  - ресинк (re-use) только после 5+ тиков покоя: спам
-                    //    USE/RELEASE от дрожи клавиш (стрейфы) не палится,
-                    //    еда доедает стоя.
+                    // Сервер не должен ЗНАТЬ об использовании, пока идём:
+                    //  - начальный USE-пакет при движении гасится на уровне
+                    //    ClientConnection (см. onPacket) — сервер не входит в
+                    //    состояние использования, его NoSlow-проверка вообще
+                    //    не получает материала для флага;
+                    //  - если ели стоя (USE дошёл) и побежали — один RELEASE
+                    //    до movement-пакета, сервер снимает использование;
+                    //  - стоим 5+ тиков — ресинк re-use, еда доедает по-настоящему.
                     float[] mv = AuraUtil.getMovementFromKeys();
                     boolean moving = mv[0] != 0 || mv[1] != 0;
 
                     if (moving) {
                         stillTicks = 0;
-                        if (mc.player.getItemUseTime() >= 4) {
-                            if (!grimReleased) {
-                                releaseUseItem();
-                                grimReleased = true;
-                            }
-                            e.cancel();
+                        if (serverUsing) {
+                            releaseUseItem();
+                            serverUsing = false;
                         }
+                        e.cancel();
                     } else {
                         stillTicks++;
-                        if (grimReleased && stillTicks >= 5) {
+                        if (!serverUsing && stillTicks >= 5) {
                             interactItem(first);
                             interactItem(second);
-                            grimReleased = false;
+                            serverUsing = true;
                         }
                     }
                 }
@@ -226,7 +255,7 @@ public class NoSlow extends Module {
             } else {
                 ticks = 0;
                 cycleCounter = 0;
-                grimReleased = false;
+                serverUsing = false;
                 stillTicks = 0;
             }
         }
