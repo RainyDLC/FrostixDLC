@@ -8,6 +8,7 @@ import ru.white.module.impl.combat.*;
 import ru.white.module.impl.combat.*;
 import ru.white.module.impl.display.Arrows;
 import ru.white.module.impl.display.ClickGui;
+import ru.white.module.impl.display.Emotions;
 import ru.white.module.impl.display.Hud;
 
 import ru.white.module.impl.display.InterFace;
@@ -94,8 +95,6 @@ public final class ModuleManager extends LinkedHashMap<Class<? extends Module>, 
                 new InterFace(),
                 new ReportHelper(),
                 new Emotions(),
-
-                ,
                 new AutoAccept(),
                 new NoPush(),
                 new NoDelay(),

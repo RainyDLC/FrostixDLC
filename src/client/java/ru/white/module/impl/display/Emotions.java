@@ -24,7 +24,7 @@ public class Emotions extends Module {
 
     @EventHandler
     public void onKey(EventKey e) {
-        if (!isEnabled()) return;
+        // бинд работает всегда, как у ClickGui — модуль включать не нужно
         if (wheelKey.get() == -1 || e.getKey() != wheelKey.get()) return;
 
         MinecraftClient mc = MinecraftClient.getInstance();

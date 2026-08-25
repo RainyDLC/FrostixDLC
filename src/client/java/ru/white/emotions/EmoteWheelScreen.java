@@ -1,8 +1,11 @@
 package ru.white.emotions;
 
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.input.KeyInput;
 import net.minecraft.text.Text;
+import ru.white.module.impl.display.Emotions;
 import ru.white.utils.other.Instance;
 
 import java.util.List;
@@ -94,9 +97,9 @@ public final class EmoteWheelScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
-            int idx = pickSector(mouseX, mouseY);
+    public boolean mouseClicked(Click click, boolean doubled) {
+        if (click.button() == 0) {
+            int idx = pickSector(click.x(), click.y());
             if (idx >= 0) {
                 EmoteManager.play(emotes.get(idx));
                 close();
@@ -105,17 +108,17 @@ public final class EmoteWheelScreen extends Screen {
             close();
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(click, doubled);
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(KeyInput input) {
         // повторное нажатие бинда закрывает колесо
         Emotions module = Instance.get(Emotions.class);
-        if (module != null && keyCode == module.wheelKey.get()) {
+        if (module != null && input.key() == module.wheelKey.get()) {
             close();
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(input);
     }
 }
