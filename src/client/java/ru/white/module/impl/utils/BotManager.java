@@ -75,6 +75,9 @@ public class BotManager extends Module {
     }
 
     public void unpossess() {
+        if (this.possessedBot != null) {
+            this.possessedBot.stopControl();
+        }
         this.possessedBot = null;
     }
 
@@ -222,10 +225,10 @@ public class BotManager extends Module {
             float yaw = mc.player.getYaw();
             float pitch = mc.player.getPitch();
 
-            if (f != 0 || s != 0 || jump) {
+            if (f != 0 || s != 0 || jump || sneak || sprint) {
                 possessedBot.walk(f, s, yaw, pitch, jump, sneak, sprint);
             } else {
-                possessedBot.moveTo(possessedBot.getX(), possessedBot.getY(), possessedBot.getZ(), yaw, pitch, true);
+                possessedBot.stopControl();
             }
         }
 

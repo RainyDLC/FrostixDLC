@@ -1,0 +1,16 @@
+{
+  "name": "bot-service",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "mineflayer": "^4.37.1",
+    "ws": "^8.21.3"
+  }
+}
