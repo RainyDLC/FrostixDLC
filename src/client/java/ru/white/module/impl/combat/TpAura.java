@@ -57,6 +57,7 @@ public class TpAura extends Module {
     private int phase = PHASE_IDLE;
     private Vec3d returnPos = null;
     private Vec3d strikePos = null;   // точка над целью (последний хоп)
+    private Vec3d upPos = null;       // верхняя точка смэша булавы
     private Vec3d dropPos = null;     // точка сброса для булавы
     private LivingEntity strikeTarget = null;
     private long phaseDeadline = 0L;
@@ -131,35 +132,57 @@ public class TpAura extends Module {
             strikeNow();
             return;
         }
-        Vec3d up = new Vec3d(strikePos.x, strikeTarget.getY() + maceHeight.getValue(), strikePos.z);
-        mc.player.setPosition(up.x, up.y, up.z);
-        mc.player.setVelocity(Vec3d.ZERO);
+        upPos = new Vec3d(strikePos.x, strikeTarget.getY() + maceHeight.getValue(), strikePos.z);
+        dropPos = new Vec3d(strikePos.x, strikeTarget.getY() + 1.0, strikePos.z);
         phase = PHASE_MACE_UP;
         phaseTicks = 0;
-        phaseDeadline = System.currentTimeMillis() + 1000L;
+        phaseDeadline = System.currentTimeMillis() + 2000L;
     }
 
     private void phaseMaceUp() {
-        if (!valid(strikeTarget)) {
+        LivingEntity t = strikeTarget;
+        if (!valid(t)) {
             abort();
             return;
         }
+        pin(upPos);
         if (++phaseTicks < 2) return;
 
-        mc.player.setPosition(dropPos.x, dropPos.y, dropPos.z);
         phase = PHASE_MACE_DOWN;
         phaseTicks = 0;
-        phaseDeadline = System.currentTimeMillis() + 1000L;
     }
 
     private void phaseMaceDown() {
-        if (!valid(strikeTarget)) {
+        LivingEntity t = strikeTarget;
+        if (!valid(t)) {
             abort();
             return;
         }
+        pin(dropPos);
         if (++phaseTicks < 2) return;
 
-        strikeNow();
+        // анти-промах: не бьём в i-frames, ждём с зафиксированной позицией
+        if (t.hurtTime > 0 || !UAttack.shouldAttack(t, false, false, false, 0L, AttackAura.get().getRanges())) {
+            if (System.currentTimeMillis() > phaseDeadline) {
+                abort();
+            }
+            return;
+        }
+
+        strike(t);
+
+        // подскок вверх: сервер видит набор высоты — fallDistance гасится, свой урон не прилетает
+        mc.player.setPosition(dropPos.x, dropPos.y + 1.2, dropPos.z);
+        mc.player.setVelocity(Vec3d.ZERO);
+        phase = PHASE_HOP_BACK;
+        phaseTicks = 0;
+    }
+
+    /** Фиксация позиции: физика не таскает игрока во время фаз. */
+    private void pin(Vec3d pos) {
+        mc.player.setPosition(pos.x, pos.y, pos.z);
+        mc.player.setVelocity(Vec3d.ZERO);
+        mc.player.fallDistance = 0;
     }
 
     /** Удар с анти-промахом: i-frames, кулдаун; потом хопы назад. */
