@@ -1,7 +1,6 @@
 package ru.white.module.impl.combat.aura.rotation;
 
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
@@ -54,10 +53,7 @@ public class ConstructorRotation implements RotationAura {
 
         // античит валидирует удар по отложенному (лаг-компенсированному)
         // хитбоксу — наводиться нужно тоже по нему, иначе рейкаст промахнётся
-        Box aimBox = LagCompensation.mode > 0
-                ? LagCompensation.delayedBox(target)
-                : target.getBoundingBox();
-        Vec3d aimPoint = UBoxPoints.getBestVector3dOnEntityBox(aimBox);
+        Vec3d aimPoint = UBoxPoints.getBestVector3dOnEntityBox(LagCompensation.delayedBox(target));
         Vec3d vec = aimPoint.subtract(mc.player.getEyePos());
 
         float yaw = (float) Math.toDegrees(Math.atan2(-vec.x, vec.z));

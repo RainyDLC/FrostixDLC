@@ -323,14 +323,11 @@ public class UAttack implements IMinecraft {
     }
 
     public static boolean anyEntityOnRay(LivingEntity livingIn, double range) {
-        // при лаг-компенсации рейкаст идёт по отложенному хитбоксу —
-        // ровно так удар валидирует серверный античит
-        if (LagCompensation.mode > 0 && livingIn != null) {
+        // рейкаст по отложенному хитбоксу — ровно так удар валидирует античит
+        if (livingIn != null) {
             return LagCompensation.rayHitsDelayed(livingIn, (float) range);
         }
-        // RayTraceUtil должен быть обновлен отдельно, так как это кастомный класс
-        return livingIn != null && RayTraceUtil.rayTraceEntity(MathHelper.wrapDegrees(mc.player.getYaw()),
-                mc.player.getPitch(), (float) range, livingIn);
+        return false;
     }
 
 

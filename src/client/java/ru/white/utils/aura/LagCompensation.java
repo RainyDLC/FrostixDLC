@@ -41,13 +41,9 @@ public class LagCompensation implements IMinecraft {
     private static final int MAX_SAMPLES = 64;
     private static final double MAX_TRACK_DIST = 12.0;
 
-    /** 0 — выкл, 1 — Grim (строже), 2 — Matrix. */
-    public static int mode = 0;
-
     /** Запись позиции цели каждый тик (вызывать из ауры). */
     public static void record(LivingEntity target) {
         if (target == null || mc.player == null || mc.world == null) return;
-        if (mode == 0) return;
 
         long now = System.currentTimeMillis();
         HISTORY.values().removeIf(deque -> {
@@ -92,17 +88,17 @@ public class LagCompensation implements IMinecraft {
     }
 
     /**
-     * Задержка бокса: Grim проверяет по транзакционному пингу (чуть больше
-     * обычного), Matrix — по меньшему. Запас сверху гасит джиттер пинга.
+     * Задержка бокса: Grim проверяет по транзакционному пингу (пинг + запас),
+     * запас сверху гасит джиттер пинга. Такой проверки хватает и для Matrix —
+     * его лаг-компенсация мягче.
      */
     public static long delayMs() {
-        long base = ping() + (mode == 1 ? 60L : 40L);
+        long base = ping() + 60L;
         return MathHelper.clamp(base, 50L, 1200L);
     }
 
     /** Отложенный (лаг-компенсированный) хитбокс цели. */
     public static Box delayedBox(LivingEntity target) {
-        if (mode == 0) return target.getBoundingBox();
         ArrayDeque<Sample> deque = HISTORY.get(target.getUuid());
         if (deque == null || deque.isEmpty()) return target.getBoundingBox();
 
@@ -191,10 +187,8 @@ public class LagCompensation implements IMinecraft {
         return new Vec3d(g * h, i, f * h);
     }
 
-    /** Безопасный reach: чуть меньше лимита античита. */
+    /** Безопасный reach: чуть меньше лимита античита (эпсилон Grim). */
     public static double safeReach(float attackRange) {
-        if (mode == 1) return attackRange - 0.06; // Grim: 0.03-0.05 epsilon на сервере
-        if (mode == 2) return attackRange - 0.10; // Matrix: жёстче
-        return attackRange;
+        return attackRange - 0.06;
     }
 }

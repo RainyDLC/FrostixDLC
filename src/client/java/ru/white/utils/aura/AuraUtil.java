@@ -196,9 +196,9 @@ public class AuraUtil implements IMinecraft {
         return (float)(oldValue + (newValue - oldValue) * interpolationValue);
     }
     public static boolean validDistance(Entity entity, float distance, boolean smart) {
-        // при лаг-компенсации дистанция считается по отложенному хитбоксу
-        // с безопасным эпсилоном — как её считает серверный античит
-        if (LagCompensation.mode > 0 && entity instanceof LivingEntity living) {
+        // дистанция по отложенному хитбоксу с безопасным эпсилоном —
+        // как её считает серверный античит
+        if (entity instanceof LivingEntity living) {
             return LagCompensation.distanceToDelayed(living) < LagCompensation.safeReach(distance);
         }
         return getStrictDistance(entity) < distance;

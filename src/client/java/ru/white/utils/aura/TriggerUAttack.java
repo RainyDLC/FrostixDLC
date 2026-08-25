@@ -255,12 +255,11 @@ public class TriggerUAttack implements IMinecraft {
     }
 
     public static boolean anyEntityOnRay(LivingEntity livingIn, double range) {
-        // при лаг-компенсации рейкаст идёт по отложенному хитбоксу
-        if (LagCompensation.mode > 0 && livingIn != null) {
+        // рейкаст по отложенному хитбоксу — как валидирует античит
+        if (livingIn != null) {
             return LagCompensation.rayHitsDelayed(livingIn, (float) range);
         }
-        return livingIn != null && RayTraceUtil.rayTraceEntity(MathHelper.wrapDegrees(mc.player.getYaw()),
-                mc.player.getPitch(), (float) range, livingIn);
+        return false;
     }
 
 

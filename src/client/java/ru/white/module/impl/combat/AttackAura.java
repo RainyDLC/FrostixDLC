@@ -92,13 +92,6 @@ public class AttackAura extends Module {
             new BooleanSetting("Друзей", false));
 
     public ModeSetting typeRotation = new ModeSetting(this,"Тип наведения", "FunTime","SpookyTime","Default","Snap","HvH","Custom","Legit","Sloth","Matrix","Neuro","Grim","RellyWorld");
-
-    /**
-     * Лаг-компенсация цели: дистанция удара и рейкаст считаются по отложенному
-     * хитбоксу (now - пинг), ровно как их считает серверный античит.
-     * Grim — транзакционный пинг + жёсткий эпсилон, Matrix — мягче.
-     */
-    public ModeSetting typeLagComp = new ModeSetting(this, "Лаг-компенсация", "Grim", "Выкл", "Grim", "Matrix");
     public ModeSetting typeSnap = new ModeSetting(this,"Режим снапа", "360","Fov").setVisible(() -> typeRotation.is("Snap"));
     public SliderSetting fov = new SliderSetting(this, "Fov", 50.0F, 25.0F, 90.0F, 1.0F).setVisible(() -> typeRotation.is("Snap") && typeSnap.is("Fov"));
 
@@ -192,13 +185,6 @@ public class AttackAura extends Module {
         return new float[]{attackRange.getValue(), preRange.getValue()};
     }
 
-    /** 0 — выкл, 1 — Grim, 2 — Matrix. */
-    public int lagCompMode() {
-        if (typeLagComp.is("Grim")) return 1;
-        if (typeLagComp.is("Matrix")) return 2;
-        return 0;
-    }
-
     public AttackAura() {
         // при переключении на Matrix / Neuro / Grim подтягиваем пресет из конструктора ротации
         typeRotation.onAction(this::applyConstructorPreset);
@@ -220,8 +206,7 @@ public class AttackAura extends Module {
 
         LivingEntity prevTarget = target;
 
-        // режим лаг-компенсации + запись истории позиций цели каждый тик
-        LagCompensation.mode = lagCompMode();
+        // запись истории позиций цели каждый тик (для лаг-компенсации удара)
         LagCompensation.record(target);
 
         // переоценка цели: мгновенно при потере валидности, иначе раз в 10 тиков —
@@ -255,13 +240,8 @@ public class AttackAura extends Module {
             return;
         }
 
-        // дистанция удара: по отложенному хитбоксу (как считает античит)
-        // или по клиентскому, если лаг-компенсация выключена
-        if (LagCompensation.mode > 0) {
-            if (LagCompensation.distanceToDelayed(target) >= LagCompensation.safeReach(attackRange.getValue())) {
-                return;
-            }
-        } else if (AuraUtil.getStrictDistance(target) >= attackRange.getValue()) {
+        // дистанция удара: по отложенному хитбоксу — как её считает античит
+        if (LagCompensation.distanceToDelayed(target) >= LagCompensation.safeReach(attackRange.getValue())) {
             return;
         }
 

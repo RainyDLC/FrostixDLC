@@ -44,6 +44,9 @@ public class NoSlow extends Module {
     /** Серверу уже отправлен RELEASE_USE_ITEM в текущем цикле использования. */
     private boolean grimReleased = false;
 
+    /** Тиков подряд без движения (для отложенного ресинка). */
+    private int stillTicks = 0;
+
     private boolean crossbowSwapped = false;
     private int savedCrossbowSlot = -1;
     private boolean wasPressingUseWithFood = false;
@@ -72,6 +75,7 @@ public class NoSlow extends Module {
         bypassSwapped = false;
         pendingSwapSlot = -1;
         grimReleased = false;
+        stillTicks = 0;
     }
 
     
@@ -159,24 +163,35 @@ public class NoSlow extends Module {
                     }
                 }
                 if(type.is("Грим")) {
-                    // Десинк состояния использования: сервер после RELEASE_USE_ITEM
-                    // считает предмет отпущенным и не применяет предикт замедления —
-                    // каждый тик движения легален (именно так NoSlow-проверка Grim
-                    // перестаёт срабатывать). Стоим — ресинк use-пакетами, чтобы
-                    // серверная еда доедала нормально.
+                    // Десынк состояния использования, разнесённый по времени:
+                    //  - первые 4 тика — честное ванильное замедление (выглядит
+                    //    как «начал есть на ходу», мгновенный RELEASE после USE
+                    //    палится патченными Grim);
+                    //  - затем один RELEASE_USE_ITEM — сервер снимает состояние
+                    //    использования и больше не предиктит замедление, каждый
+                    //    тик движения легален на полной скорости;
+                    //  - ресинк (re-use) только после 5+ тиков покоя: спам
+                    //    USE/RELEASE от дрожи клавиш (стрейфы) не палится,
+                    //    еда доедает стоя.
                     float[] mv = AuraUtil.getMovementFromKeys();
                     boolean moving = mv[0] != 0 || mv[1] != 0;
 
                     if (moving) {
-                        if (!grimReleased) {
-                            releaseUseItem();
-                            grimReleased = true;
+                        stillTicks = 0;
+                        if (mc.player.getItemUseTime() >= 4) {
+                            if (!grimReleased) {
+                                releaseUseItem();
+                                grimReleased = true;
+                            }
+                            e.cancel();
                         }
-                        e.cancel();
-                    } else if (grimReleased) {
-                        interactItem(first);
-                        interactItem(second);
-                        grimReleased = false;
+                    } else {
+                        stillTicks++;
+                        if (grimReleased && stillTicks >= 5) {
+                            interactItem(first);
+                            interactItem(second);
+                            grimReleased = false;
+                        }
                     }
                 }
             }
@@ -212,6 +227,7 @@ public class NoSlow extends Module {
                 ticks = 0;
                 cycleCounter = 0;
                 grimReleased = false;
+                stillTicks = 0;
             }
         }
         if (type.is("ФанТайм")) {
