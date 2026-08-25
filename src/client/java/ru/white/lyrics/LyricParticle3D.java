@@ -1,14 +1,11 @@
 package ru.white.lyrics;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
-import org.joml.Matrix4f;
+import net.minecraft.world.RaycastContext;
+import ru.white.utils.render.font.Font;
 
 public class LyricParticle3D {
     private final String text;
@@ -45,10 +42,11 @@ public class LyricParticle3D {
     }
 
     /**
-     * 3D-текст в мировом пространстве: статичный мировой размер (объект,
-     * а не экранная надпись), полная 3D-окклюзия, анимации появления/ухода.
+     * Рендер частицы: мировая позиция проецируется на экран, размер
+     * уменьшается с дистанцией (объект в мире, а не экранный текст),
+     * окклюзия через рейкаст — за стенами слова скрываются.
      */
-    public void render(MatrixStack matrices, Camera camera, String animMode, int colorRgb, long nowMs, float baseScale) {
+    public void render(Camera camera, Font font, String animMode, int colorRgb, long nowMs, float baseScale) {
         long elapsed = nowMs - spawnTimeMs;
         if (elapsed < 0 || elapsed > durationMs || forceExpire) return;
 
@@ -139,53 +137,40 @@ public class LyricParticle3D {
         alpha = MathHelper.clamp(alpha, 0.0f, 1.0f);
         if (alpha <= 0.001f || displayText == null || displayText.isBlank()) return;
 
-        MinecraftClient mc = MinecraftClient.getInstance();
-        TextRenderer textRenderer = mc.getTextRenderer();
+        MinecraftClientBlock:
+        {
+            var mc = net.minecraft.client.MinecraftClient.getInstance();
+            Vec3d camPos = camera.getCameraPos();
+            Vec3d worldPos = basePosition.add(0, offsetY, 0);
 
-        Vec3d camPos = camera.getPos();
-        double renderX = basePosition.x - camPos.x;
-        double renderY = (basePosition.y + offsetY) - camPos.y;
-        double renderZ = basePosition.z - camPos.z;
+            // 3D-окклюзия: стена между камерой и словом скрывает его
+            RaycastContext rc = new RaycastContext(camPos, worldPos,
+                    RaycastContext.ShapeType.COLLIDER,
+                    RaycastContext.FluidHandling.NONE, mc.player);
+            if (mc.world != null && mc.world.raycast(rc).getType() != HitResult.Type.MISS) {
+                break MinecraftClientBlock;
+            }
 
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.disableCull();
-        RenderSystem.enableDepthTest();
-        RenderSystem.depthFunc(515); // GL_LEQUAL
-        RenderSystem.depthMask(false);
+            Vec3d screen = ru.white.utils.other.Projection.worldSpaceToScreenSpace(worldPos);
+            if (screen.z <= 0 || screen.z >= 1) break MinecraftClientBlock;
 
-        matrices.push();
-        matrices.translate(renderX, renderY, renderZ);
+            float dist = (float) camPos.distanceTo(worldPos);
+            if (dist < 0.5f) break MinecraftClientBlock;
 
-        // билборд: текст всегда лицом к камере
-        matrices.multiply(camera.getRotation());
+            // статичный мировой размер: видимый размер обратно пропорционален дистанции
+            float fontSize = MathHelper.clamp(baseScale * 45.0f / dist, 2.0f, 30.0f) * animScale;
 
-        if (rotationTilt != 0.0f) {
-            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(rotationTilt));
+            float textWidth = font.getWidth(displayText, fontSize);
+            float x = (float) screen.x - textWidth / 2.0f;
+            float y = (float) screen.y - fontSize * 0.35f;
+
+            int alphaInt = (int) (alpha * 255.0f);
+            int finalColor = (alphaInt << 24) | (colorRgb & 0x00FFFFFF);
+            int shadowColor = ((int) (alpha * 160.0f) << 24);
+
+            font.draw(displayText, x + fontSize * 0.04f, y + fontSize * 0.04f, fontSize, shadowColor & 0xFF000000);
+            font.draw(displayText, x, y, fontSize, finalColor);
         }
-
-        // статичный мировой масштаб — текст не растёт при приближении
-        float staticScale = 0.02f * animScale * baseScale;
-        matrices.scale(-staticScale, -staticScale, staticScale);
-
-        float fontSize = 24.0f;
-        float textWidth = textRenderer.getWidth(displayText);
-        float xOffset = -textWidth / 2.0f;
-        float yOffset = -fontSize * 0.35f;
-
-        int alphaInt = (int) (alpha * 255.0f);
-        int finalColor = (alphaInt << 24) | (colorRgb & 0x00FFFFFF);
-
-        Matrix4f modelMatrix = matrices.peek().getPositionMatrix();
-        VertexConsumerProvider.Immediate immediate = VertexConsumerProvider.immediate(
-                new net.minecraft.client.render.BufferAllocator(2048));
-        textRenderer.draw(displayText, xOffset, yOffset, finalColor, false, modelMatrix,
-                immediate, TextRenderer.TextLayerType.NORMAL, 0, 0xF000F0);
-        immediate.draw();
-
-        matrices.pop();
-
-        RenderSystem.depthMask(true);
     }
 
     private static float easeOutCubic(float t) {

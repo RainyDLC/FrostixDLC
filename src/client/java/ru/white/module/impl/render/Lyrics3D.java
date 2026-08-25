@@ -176,7 +176,7 @@ public class Lyrics3D extends Module {
                 internalAudioClockMs += dt;
             }
 
-            long effectiveAudioTime = Math.max(0, internalAudioClockMs + (long) timeOffset.getValue());
+            long effectiveAudioTime = Math.max(0, internalAudioClockMs + timeOffset.getValue().longValue());
 
             // 4. перемотка: резкий скачок — пересобираем активные частицы
             if (Math.abs(effectiveAudioTime - lastEffectiveAudioTimeMs) > 1500L) {
@@ -327,7 +327,7 @@ public class Lyrics3D extends Module {
     }
 
     @EventHandler
-    public void onRender3D(EventRender3D event) {
+    public void onDisplay(EventDisplay e) {
         if (!isEnabled() || mc.world == null || mc.player == null) return;
 
         syncPlaybackTime();
@@ -335,22 +335,23 @@ public class Lyrics3D extends Module {
         if (activeParticles.isEmpty()) return;
 
         Camera camera = mc.gameRenderer.getCamera();
+        ru.white.utils.render.font.Font font = ru.white.utils.render.font.Fonts.sf_bold;
         String animMode = animation.getValue();
         int colorRgb = getActiveColorRgb();
         long now = System.currentTimeMillis();
 
         for (LyricParticle3D particle : activeParticles) {
-            particle.render(event.getMatrixStack(), camera, animMode, colorRgb, now, textSize.getValue());
+            particle.render(camera, font, animMode, colorRgb, now, textSize.getValue());
         }
     }
 
     @EventHandler
-    public void onDisplay(EventDisplay e) {
+    public void onDebug(EventDisplay e) {
         if (!isEnabled() || !debugMode.getValue() || mc.player == null) return;
 
         net.minecraft.client.font.TextRenderer font = MinecraftClient.getInstance().textRenderer;
 
-        long displayTimeMs = Math.max(0, internalAudioClockMs + (long) timeOffset.getValue());
+        long displayTimeMs = Math.max(0, internalAudioClockMs + timeOffset.getValue().longValue());
         String titleStr = "Track: " + (currentTrackTitle.isEmpty() ? "None" : currentTrackTitle + " - " + currentTrackArtist);
         String timerInfo = String.format("Audio Time: %02d:%02d.%03d (%d ms)",
                 (displayTimeMs / 60_000),
@@ -363,10 +364,10 @@ public class Lyrics3D extends Module {
         float x = 10.0f;
         float y = 70.0f;
 
-        e.getContext().drawText(font, "[3D Lyrics Debug]", x, y, 0xFFFF5A5A);
-        e.getContext().drawText(font, titleStr, x, y + 12, 0xFFDCDCDC);
-        e.getContext().drawText(font, timerInfo, x, y + 24, 0xFFFFFFFF);
-        e.getContext().drawText(font, particlesInfo, x, y + 36, 0xFF78FF78);
-        e.getContext().drawText(font, statusInfo, x, y + 48, 0xFFB4B4FF);
+        e.getDrawContext().drawText(font, "[3D Lyrics Debug]", (int) x, (int) y, 0xFFFF5A5A, false);
+        e.getDrawContext().drawText(font, titleStr, (int) x, (int) y + 12, 0xFFDCDCDC, false);
+        e.getDrawContext().drawText(font, timerInfo, (int) x, (int) y + 24, 0xFFFFFFFF, false);
+        e.getDrawContext().drawText(font, particlesInfo, (int) x, (int) y + 36, 0xFF78FF78, false);
+        e.getDrawContext().drawText(font, statusInfo, (int) x, (int) y + 48, 0xFFB4B4FF, false);
     }
 }
