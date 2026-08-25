@@ -68,6 +68,8 @@ public class Lyrics3D extends Module {
 
     // кэш для рендера: нативные вызовы медиа — только из executor'а
     private volatile boolean mediaPlaying = false;
+    private volatile long smtcReportedPos = 0L;
+    private volatile long smtcReportedReal = 0L;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "nightix-lyrics");
@@ -177,16 +179,16 @@ public class Lyrics3D extends Module {
                 return;
             }
 
-            // синхронизация с позицией Windows (защита от старого трека в первые 1.5с)
-            long now = System.currentTimeMillis();
-            if (now - trackStartTimeSys > 1500L && media.getPosition() > 0
-                    && Math.abs(media.getPosition() - lastWindowsReportedPosMs) > 1500L) {
-                lastWindowsReportedPosMs = media.getPosition();
-                internalAudioClockMs = media.getPosition();
+            // синхронизация с позицией Windows: якорь + интерполяция.
+            // SMTC отдаёт позицию снапшотами раз в ~5с (устаревшую), поэтому
+            // храним момент репорта и достраиваем время сами — без рывков и лагов.
+            long reported = media.getPosition();
+            if (reported != smtcReportedPos) {
+                smtcReportedPos = reported;
+                smtcReportedReal = System.currentTimeMillis();
             }
 
-            mediaPlaying = !media.getPlaying() ? false : true;
-            lastWindowsReportedPosMs = media.getPosition();
+            mediaPlaying = media.getPlaying();
         } catch (Throwable ignored) {
         }
     }
@@ -195,18 +197,17 @@ public class Lyrics3D extends Module {
         if (!isEnabled() || mc.player == null) return;
 
         long now = System.currentTimeMillis();
-        long dt = (lastUpdateRealTimeMs > 0) ? (now - lastUpdateRealTimeMs) : 0;
-        lastUpdateRealTimeMs = now;
 
         // только кэш: никаких нативных вызовов из этого метода
         if (!mediaPlaying) return;
+        if (smtcReportedReal == 0) return;
         if (!isPlaying && !lyricsQueue.isEmpty()) {
             isPlaying = true;
         }
 
-        internalAudioClockMs += dt;
-
-        long effectiveAudioTime = Math.max(0, internalAudioClockMs + timeOffset.getValue().longValue());
+        // оценка реальной позиции: последний снапшот SMTC + прошедшее с него время
+        long estPos = smtcReportedPos + (now - smtcReportedReal);
+        long effectiveAudioTime = Math.max(0, estPos + timeOffset.getValue().longValue());
 
         // перемотка: резкий скачок — пересобираем активные частицы
         if (Math.abs(effectiveAudioTime - lastEffectiveAudioTimeMs) > 1500L) {
