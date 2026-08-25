@@ -24,6 +24,8 @@ import ru.white.utils.colors.ColorUtil;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -63,6 +65,15 @@ public class Lyrics3D extends Module {
     private String lastTrackKey = "";
     private String currentTrackTitle = "";
     private String currentTrackArtist = "";
+
+    // кэш для рендера: нативные вызовы медиа — только из executor'а
+    private volatile boolean mediaPlaying = false;
+
+    private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "nightix-lyrics");
+        t.setDaemon(true);
+        return t;
+    });
 
     @Override
     public void onEnable() {
@@ -136,7 +147,48 @@ public class Lyrics3D extends Module {
 
     @EventHandler
     public void onUpdate(EventUpdate e) {
+        // нативный доступ к медиа (Windows SMTC) — ТОЛЬКО из фонового потока:
+        // вызовы из рендера параллельно с MusicHud рушат процесс на нативе
+        if (mc.player != null && mc.player.age % 5 == 0) {
+            executor.submit(this::pollMedia);
+        }
         syncPlaybackTime();
+    }
+
+    private void pollMedia() {
+        try {
+            dev.redstones.mediaplayerinfo.MediaInfo media = currentMedia();
+            if (media == null || media.getTitle() == null || media.getTitle().isBlank()
+                    || media.getTitle().equalsIgnoreCase("Unknown")) {
+                if (isPlaying) {
+                    isPlaying = false;
+                    activeParticles.clear();
+                }
+                return;
+            }
+
+            String title = media.getTitle().trim();
+            String artist = media.getArtist() != null ? media.getArtist().trim() : "";
+            String key = (title + " - " + artist).toLowerCase();
+
+            // смена трека — из фонового потока безопасно
+            if (!key.equalsIgnoreCase(lastTrackKey)) {
+                playTrack(title, artist);
+                return;
+            }
+
+            // синхронизация с позицией Windows (защита от старого трека в первые 1.5с)
+            long now = System.currentTimeMillis();
+            if (now - trackStartTimeSys > 1500L && media.getPosition() > 0
+                    && Math.abs(media.getPosition() - lastWindowsReportedPosMs) > 1500L) {
+                lastWindowsReportedPosMs = media.getPosition();
+                internalAudioClockMs = media.getPosition();
+            }
+
+            mediaPlaying = !media.getPlaying() ? false : true;
+            lastWindowsReportedPosMs = media.getPosition();
+        } catch (Throwable ignored) {
+        }
     }
 
     private void syncPlaybackTime() {
@@ -146,51 +198,23 @@ public class Lyrics3D extends Module {
         long dt = (lastUpdateRealTimeMs > 0) ? (now - lastUpdateRealTimeMs) : 0;
         lastUpdateRealTimeMs = now;
 
-        dev.redstones.mediaplayerinfo.MediaInfo media = currentMedia();
-        if (media != null && media.getTitle() != null && !media.getTitle().isBlank()
-                && !media.getTitle().equalsIgnoreCase("Unknown")) {
-            String title = media.getTitle().trim();
-            String artist = media.getArtist() != null ? media.getArtist().trim() : "";
-            String key = (title + " - " + artist).toLowerCase();
-
-            // 1. смена трека
-            if (!key.equalsIgnoreCase(lastTrackKey)) {
-                playTrack(title, artist);
-                return;
-            }
-
-            // 2. восстановление после Unknown-буферизации
-            if (!isPlaying && !lyricsQueue.isEmpty()) {
-                isPlaying = true;
-            }
-
-            // 3. синхронизация с позицией Windows (защита от старого трека в первые 1.5с)
-            if (now - trackStartTimeSys > 1500L && media.getPosition() > 0
-                    && Math.abs(media.getPosition() - lastWindowsReportedPosMs) > 1500L) {
-                lastWindowsReportedPosMs = media.getPosition();
-                internalAudioClockMs = media.getPosition();
-            }
-
-            boolean paused = !media.getPlaying();
-            if (!paused) {
-                internalAudioClockMs += dt;
-            }
-
-            long effectiveAudioTime = Math.max(0, internalAudioClockMs + timeOffset.getValue().longValue());
-
-            // 4. перемотка: резкий скачок — пересобираем активные частицы
-            if (Math.abs(effectiveAudioTime - lastEffectiveAudioTimeMs) > 1500L) {
-                resyncQueue(effectiveAudioTime);
-            }
-            lastEffectiveAudioTimeMs = effectiveAudioTime;
-
-            update(effectiveAudioTime);
-        } else {
-            if (isPlaying) {
-                isPlaying = false;
-                activeParticles.clear();
-            }
+        // только кэш: никаких нативных вызовов из этого метода
+        if (!mediaPlaying) return;
+        if (!isPlaying && !lyricsQueue.isEmpty()) {
+            isPlaying = true;
         }
+
+        internalAudioClockMs += dt;
+
+        long effectiveAudioTime = Math.max(0, internalAudioClockMs + timeOffset.getValue().longValue());
+
+        // перемотка: резкий скачок — пересобираем активные частицы
+        if (Math.abs(effectiveAudioTime - lastEffectiveAudioTimeMs) > 1500L) {
+            resyncQueue(effectiveAudioTime);
+        }
+        lastEffectiveAudioTimeMs = effectiveAudioTime;
+
+        update(effectiveAudioTime);
     }
 
     private dev.redstones.mediaplayerinfo.MediaInfo currentMedia() {
