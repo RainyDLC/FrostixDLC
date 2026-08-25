@@ -145,6 +145,12 @@ public class BotManager extends Module {
     }
 
     public String getCurrentServerHost() {
+        if (mc.getNetworkHandler() != null && mc.getNetworkHandler().getConnection() != null) {
+            java.net.SocketAddress socketAddress = mc.getNetworkHandler().getConnection().getAddress();
+            if (socketAddress instanceof java.net.InetSocketAddress inet) {
+                return inet.getHostString();
+            }
+        }
         if (mc.getCurrentServerEntry() != null) {
             String addr = mc.getCurrentServerEntry().address;
             if (addr.contains(":")) {
@@ -156,6 +162,12 @@ public class BotManager extends Module {
     }
 
     public int getCurrentServerPort() {
+        if (mc.getNetworkHandler() != null && mc.getNetworkHandler().getConnection() != null) {
+            java.net.SocketAddress socketAddress = mc.getNetworkHandler().getConnection().getAddress();
+            if (socketAddress instanceof java.net.InetSocketAddress inet) {
+                return inet.getPort();
+            }
+        }
         if (mc.getCurrentServerEntry() != null) {
             String addr = mc.getCurrentServerEntry().address;
             if (addr.contains(":")) {

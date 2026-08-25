@@ -11,6 +11,7 @@ import io.netty.handler.codec.ByteToMessageDecoder;
 import lombok.Getter;
 import lombok.Setter;
 import ru.white.bot.protocol.BotPacketHelper;
+import ru.white.bot.protocol.ServerAddressUtil;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -81,6 +82,8 @@ public class HeadlessBot {
 
         new Thread(() -> {
             try {
+                ServerAddressUtil.ResolvedAddress resolved = ServerAddressUtil.resolve(host, port);
+
                 Bootstrap b = new Bootstrap();
                 b.group(WORKER_GROUP)
                         .channel(NioSocketChannel.class)
@@ -94,13 +97,11 @@ public class HeadlessBot {
                             }
                         });
 
-                ChannelFuture future = b.connect(host, port).sync();
+                ChannelFuture future = b.connect(resolved.host(), resolved.port()).sync();
                 future.channel().closeFuture().addListener(f -> {
-                    if (state != BotState.ERROR) {
+                    if (state != BotState.ERROR && (statusMessage.isEmpty() || statusMessage.equals("В игре!"))) {
                         state = BotState.DISCONNECTED;
-                        if (statusMessage.isEmpty() || statusMessage.equals("В игре!")) {
-                            statusMessage = "Соединение закрыто";
-                        }
+                        statusMessage = "Соединение закрыто";
                     }
                 });
             } catch (Exception e) {
@@ -113,6 +114,10 @@ public class HeadlessBot {
     public void disconnect() {
         state = BotState.DISCONNECTED;
         statusMessage = "Отключен пользователем";
+        closeChannel();
+    }
+
+    public void closeChannel() {
         if (channel != null && channel.isOpen()) {
             channel.close();
         }
@@ -328,7 +333,12 @@ public class HeadlessBot {
                 String clean = BotPacketHelper.cleanJsonText(reason);
                 state = BotState.ERROR;
                 statusMessage = "Кик: " + clean;
-                disconnect();
+                closeChannel();
+            } else if (id == 0x01) {
+                // Encryption Request
+                state = BotState.ERROR;
+                statusMessage = "Сервер требует лицензию (Online-mode)";
+                closeChannel();
             } else if (id == 0x02) {
                 // Login Success
                 UUID playerUuid = BotPacketHelper.readUuid(buf);
@@ -375,7 +385,7 @@ public class HeadlessBot {
                 String clean = BotPacketHelper.cleanJsonText(reason);
                 state = BotState.ERROR;
                 statusMessage = "Кик: " + clean;
-                disconnect();
+                closeChannel();
             } else if (id == 0x03) {
                 // Finish Configuration -> Send Acknowledge (0x03)
                 ByteBuf ack = Unpooled.buffer();
