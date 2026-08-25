@@ -81,6 +81,30 @@ public class NoSlow extends Module {
     }
 
     /**
+     * На ходу использование «жующего» предмета не начинается вовсе:
+     * ни клиентской анимации-цикла, ни десинка стака. Стоя — ест нормально.
+     */
+    @EventHandler
+    public void onStart(UsingItemEvent e) {
+        if (!type.is("Грим") || e.getType() != EventType.START) return;
+        if (mc.player == null || mc.world == null) return;
+
+        float[] mv = AuraUtil.getMovementFromKeys();
+        boolean moving = mv[0] != 0 || mv[1] != 0;
+        if (!moving) return;
+
+        if (isChow(mc.player.getMainHandStack()) || isChow(mc.player.getOffHandStack())) {
+            e.cancel();
+        }
+    }
+
+    /** Еда/питьё/щит — то, что имеет смысл глушить на ходу. */
+    private static boolean isChow(ItemStack stack) {
+        UseAction action = stack.getUseAction();
+        return action == UseAction.EAT || action == UseAction.DRINK || action == UseAction.BLOCK;
+    }
+
+    /**
      * Гашение USE-пакета «жующего» предмета при движении: сервер не входит
      * в состояние использования — его NoSlow-проверке нечего проверять.
      * Щит/еда/зелья; лук и метательные пропускают как есть.
@@ -104,8 +128,7 @@ public class NoSlow extends Module {
         }
 
         ItemStack stack = mc.player.getStackInHand(use.getHand());
-        UseAction action = stack.getUseAction();
-        if (action == UseAction.EAT || action == UseAction.DRINK || action == UseAction.BLOCK) {
+        if (isChow(stack)) {
             e.setCancelled(true);
             serverUsing = false;
         }
@@ -197,12 +220,10 @@ public class NoSlow extends Module {
                 }
                 if(type.is("Грим")) {
                     // Сервер не должен ЗНАТЬ об использовании, пока идём:
-                    //  - начальный USE-пакет при движении гасится на уровне
-                    //    ClientConnection (см. onPacket) — сервер не входит в
-                    //    состояние использования, его NoSlow-проверка вообще
-                    //    не получает материала для флага;
+                    //  - на ходу использование не начинается вовсе (START гасится
+                    //    в onStart) — нет цикла «поел/предмет вернулся»;
                     //  - если ели стоя (USE дошёл) и побежали — один RELEASE
-                    //    до movement-пакета, сервер снимает использование;
+                    //    до movement-пакета и бросаем использование;
                     //  - стоим 5+ тиков — ресинк re-use, еда доедает по-настоящему.
                     float[] mv = AuraUtil.getMovementFromKeys();
                     boolean moving = mv[0] != 0 || mv[1] != 0;
@@ -214,6 +235,11 @@ public class NoSlow extends Module {
                             serverUsing = false;
                         }
                         e.cancel();
+                        if (mc.player.isUsingItem()) {
+                            // использование, начатое стоя, на ходу бросаем —
+                            // иначе клиент доест его сам и десинк замкнётся
+                            mc.player.stopUsingItem();
+                        }
                     } else {
                         stillTicks++;
                         if (!serverUsing && stillTicks >= 5) {
