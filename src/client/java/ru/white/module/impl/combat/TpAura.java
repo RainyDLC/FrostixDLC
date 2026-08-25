@@ -40,9 +40,10 @@ public class TpAura extends Module {
     public SliderSetting tpRadius = new SliderSetting(this, "Радиус телепорта", 15.0F, 3.0F, 50.0F, 0.5F);
     public SliderSetting standOff = new SliderSetting(this, "Дистанция удара", 2.2F, 1.5F, 3.0F, 0.1F);
     public SliderSetting cooldown = new SliderSetting(this, "Перезарядка", 800F, 250F, 2000F, 50F);
-    public SliderSetting hopSpeed = new SliderSetting(this, "Скорость рывка", 6.0F, 3.0F, 9.0F, 0.5F);
+    public SliderSetting hopSpeed = new SliderSetting(this, "Скорость рывка", 9.0F, 3.0F, 15.0F, 0.5F);
     public SliderSetting maceHeight = new SliderSetting(this, "Высота смэша булавы", 6.0F, 2.0F, 15.0F, 0.5F);
 
+    public BooleanSetting throughWalls = new BooleanSetting(this, "Через стены", true);
     public BooleanSetting critOnly = new BooleanSetting(this, "Только криты", true);
     public BooleanSetting autoJump = new BooleanSetting(this, "Прыжок для крита", true)
             .setVisible(() -> critOnly.getValue());
@@ -104,7 +105,9 @@ public class TpAura extends Module {
         }
 
         // точка удара на ТЕКУЩЕЙ высоте: хопы горизонтальные, крит не сбрасывается
-        Vec3d landing = findLanding(target, standOff.getValue());
+        Vec3d landing = throughWalls.getValue()
+                ? landingSimple(target, standOff.getValue())
+                : findLanding(target, standOff.getValue());
         if (landing == null) return;
 
         returnPos = mc.player.getEntityPos();
@@ -195,7 +198,7 @@ public class TpAura extends Module {
         phaseTicks = 0;
     }
 
-    /** Прыжок-хоп к точке: <= hopSpeed блоков за тик, Y живой (падение сохраняется). */
+    /** Прыжок-хоп к точке: <= hopSpeed блоков за тик, физика заморожена — дэш не провисает. */
     private void hopTo(Vec3d target, Runnable onArrive) {
         if (!valid(strikeTarget) && phase == PHASE_HOP_OUT) {
             abort();
@@ -205,33 +208,22 @@ public class TpAura extends Module {
 
         Vec3d p = mc.player.getEntityPos();
         double dx = target.x - p.x;
-        double dy = target.y - p.y;
         double dz = target.z - p.z;
-        double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double horizontal = Math.sqrt(dx * dx + dz * dz);
 
         double step = hopSpeed.getValue();
-        if (dist <= step) {
-            // прибытие: для хопов фиксируем только X/Z, живой Y сохраняем
-            // (падение продолжается — серверный крит не сбрасывается)
+        if (horizontal <= step) {
+            // прибытие: фиксируем только X/Z, Y живой
             mc.player.setPosition(target.x, p.y, target.z);
+            mc.player.setVelocity(Vec3d.ZERO);
             onArrive.run();
             return;
         }
 
-        // горизонтальный хоп: Y живой — гравитация/падение видны серверу
-        double horizontal = Math.sqrt(dx * dx + dz * dz);
-        double nx, nz;
-        if (horizontal > 1e-4) {
-            double k = Math.min(1.0, step / horizontal);
-            nx = p.x + dx * k;
-            nz = p.z + dz * k;
-        } else {
-            nx = p.x;
-            nz = p.z;
-        }
-        double ny = Math.abs(dy) > 1e-4 && Math.abs(dy) <= step ? target.y : p.y;
-
-        mc.player.setPosition(nx, ny, nz);
+        double k = step / horizontal;
+        mc.player.setPosition(p.x + dx * k, p.y, p.z + dz * k);
+        // гравитация в хопах выключена: дэш прямой, fallDistance не растёт и не сбрасывается
+        mc.player.setVelocity(Vec3d.ZERO);
     }
 
     private boolean valid(LivingEntity t) {
@@ -269,6 +261,19 @@ public class TpAura extends Module {
         strikeTarget = null;
         phase = PHASE_IDLE;
         super.onDisable();
+    }
+
+    /** Точка удара без проверки стен: просто со стороны игрока на дистанции удара. */
+    private Vec3d landingSimple(LivingEntity target, double stand) {
+        Vec3d tpos = target.getEntityPos();
+        double y = mc.player.getY();
+
+        Vec3d toMe = mc.player.getEntityPos().subtract(tpos);
+        double a = Math.atan2(toMe.z, toMe.x);
+        return new Vec3d(
+                tpos.x + Math.cos(a) * stand,
+                y,
+                tpos.z + Math.sin(a) * stand);
     }
 
     /**
