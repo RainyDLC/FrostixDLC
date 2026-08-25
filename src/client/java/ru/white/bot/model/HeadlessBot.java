@@ -10,7 +10,6 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.ByteToMessageDecoder;
 import lombok.Getter;
 import lombok.Setter;
-import net.minecraft.SharedConstants;
 import ru.white.bot.protocol.BotPacketHelper;
 
 import java.nio.charset.StandardCharsets;
@@ -55,6 +54,7 @@ public class HeadlessBot {
     @Getter @Setter private volatile float yaw = 0;
     @Getter @Setter private volatile float pitch = 0;
     @Getter @Setter private volatile boolean onGround = true;
+    @Getter @Setter private volatile int selectedSlot = 0;
 
     @Getter @Setter private boolean following = false;
     @Getter @Setter private boolean attacking = false;
@@ -98,7 +98,9 @@ public class HeadlessBot {
                 future.channel().closeFuture().addListener(f -> {
                     if (state != BotState.ERROR) {
                         state = BotState.DISCONNECTED;
-                        statusMessage = "Соединение закрыто";
+                        if (statusMessage.isEmpty() || statusMessage.equals("В игре!")) {
+                            statusMessage = "Соединение закрыто";
+                        }
                     }
                 });
             } catch (Exception e) {
@@ -131,7 +133,7 @@ public class HeadlessBot {
 
         if (message.startsWith("/")) {
             // Chat command packet (0x04)
-            String cmd = message.startsWith("/") ? message.substring(1) : message;
+            String cmd = message.substring(1);
             ByteBuf buf = Unpooled.buffer();
             BotPacketHelper.writeVarInt(buf, 0x04);
             BotPacketHelper.writeString(buf, cmd);
@@ -171,6 +173,23 @@ public class HeadlessBot {
         sendPacket(buf);
     }
 
+    public void walk(double forward, double strafe, float cameraYaw, float cameraPitch, boolean jump, boolean sneak, boolean sprint) {
+        if (!isConnected()) return;
+        double rad = Math.toRadians(cameraYaw);
+        double sin = Math.sin(rad);
+        double cos = Math.cos(rad);
+
+        double speed = sprint ? 0.32 : sneak ? 0.08 : 0.22;
+        double dx = (strafe * cos - forward * sin) * speed;
+        double dz = (forward * cos + strafe * sin) * speed;
+
+        double newX = this.x + dx;
+        double newY = this.y + (jump ? 0.42 : 0);
+        double newZ = this.z + dz;
+
+        moveTo(newX, newY, newZ, cameraYaw, cameraPitch, !jump);
+    }
+
     public void jump() {
         if (!isConnected()) return;
         moveTo(x, y + 0.42, z, yaw, pitch, false);
@@ -196,6 +215,16 @@ public class HeadlessBot {
         sendPacket(buf);
 
         swing();
+    }
+
+    public void setSlot(int slot) {
+        if (!isConnected()) return;
+        this.selectedSlot = Math.max(0, Math.min(8, slot));
+        // Update Selected Slot (0x2F in 1.21.x)
+        ByteBuf buf = Unpooled.buffer();
+        BotPacketHelper.writeVarInt(buf, 0x2F);
+        buf.writeShort(this.selectedSlot);
+        sendPacket(buf);
     }
 
     private void sendHandshake() {
@@ -234,6 +263,19 @@ public class HeadlessBot {
         BotPacketHelper.writeVarInt(buf, 1); // Main hand: Right
         buf.writeBoolean(false); // Text filtering
         buf.writeBoolean(true); // Server listings
+        sendPacket(buf);
+
+        // Plugin Message: minecraft:brand (0x02 in Configuration)
+        sendBrandPacket(0x02);
+    }
+
+    private void sendBrandPacket(int packetId) {
+        ByteBuf buf = Unpooled.buffer();
+        BotPacketHelper.writeVarInt(buf, packetId);
+        BotPacketHelper.writeString(buf, "minecraft:brand");
+        byte[] brandData = "vanilla".getBytes(StandardCharsets.UTF_8);
+        BotPacketHelper.writeVarInt(buf, brandData.length);
+        buf.writeBytes(brandData);
         sendPacket(buf);
     }
 
@@ -285,7 +327,7 @@ public class HeadlessBot {
                 // Disconnect
                 String reason = BotPacketHelper.readString(buf, 1024);
                 state = BotState.ERROR;
-                statusMessage = "Кик: " + reason;
+                statusMessage = "Кик: " + BotPacketHelper.cleanJsonText(reason);
                 disconnect();
             } else if (id == 0x02) {
                 // Login Success
@@ -309,11 +351,29 @@ public class HeadlessBot {
         }
 
         private void handleConfigPacket(int id, ByteBuf buf) {
-            if (id == 0x02) {
-                // Disconnect
+            if (id == 0x00) {
+                // Cookie Request -> reply Cookie Response (0x01)
+                try {
+                    String cookieKey = BotPacketHelper.readString(buf, 256);
+                    ByteBuf reply = Unpooled.buffer();
+                    BotPacketHelper.writeVarInt(reply, 0x01);
+                    BotPacketHelper.writeString(reply, cookieKey);
+                    buf.writeBoolean(false); // No cookie data
+                    sendPacket(reply);
+                } catch (Exception ignored) {}
+            } else if (id == 0x01) {
+                // Plugin Message in Config
+                try {
+                    String channel = BotPacketHelper.readString(buf, 256);
+                    if (channel.equals("minecraft:brand")) {
+                        sendBrandPacket(0x02);
+                    }
+                } catch (Exception ignored) {}
+            } else if (id == 0x02) {
+                // Disconnect in Config
                 String reason = BotPacketHelper.readString(buf, 1024);
                 state = BotState.ERROR;
-                statusMessage = "Кик: " + reason;
+                statusMessage = "Кик: " + BotPacketHelper.cleanJsonText(reason);
                 disconnect();
             } else if (id == 0x03) {
                 // Finish Configuration -> Send Acknowledge (0x03)
@@ -325,43 +385,50 @@ public class HeadlessBot {
                 state = BotState.PLAYING;
                 statusMessage = "В игре!";
 
+                // Brand in Play state
+                sendBrandPacket(0x10);
+
                 // Auto register if enabled
                 if (autoRegister) {
                     new Thread(() -> {
                         try {
-                            Thread.sleep(1200);
+                            Thread.sleep(1000);
                             sendChat("/register " + password + " " + password);
-                            Thread.sleep(800);
+                            Thread.sleep(600);
                             sendChat("/login " + password);
                         } catch (Exception ignored) {}
                     }).start();
                 }
             } else if (id == 0x04) {
                 // Keep Alive in Config
-                long keepAliveId = buf.readLong();
-                ByteBuf reply = Unpooled.buffer();
-                BotPacketHelper.writeVarInt(reply, 0x05);
-                reply.writeLong(keepAliveId);
-                sendPacket(reply);
+                try {
+                    long keepAliveId = buf.readLong();
+                    ByteBuf reply = Unpooled.buffer();
+                    BotPacketHelper.writeVarInt(reply, 0x04);
+                    reply.writeLong(keepAliveId);
+                    sendPacket(reply);
+                } catch (Exception ignored) {}
             } else if (id == 0x05) {
                 // Ping in Config
-                int pingId = buf.readInt();
-                ByteBuf reply = Unpooled.buffer();
-                BotPacketHelper.writeVarInt(reply, 0x04);
-                reply.writeInt(pingId);
-                sendPacket(reply);
+                try {
+                    int pingId = buf.readInt();
+                    ByteBuf reply = Unpooled.buffer();
+                    BotPacketHelper.writeVarInt(reply, 0x05);
+                    reply.writeInt(pingId);
+                    sendPacket(reply);
+                } catch (Exception ignored) {}
             } else if (id == 0x0E) {
                 // Select Known Packs -> Send empty
                 ByteBuf reply = Unpooled.buffer();
                 BotPacketHelper.writeVarInt(reply, 0x07);
-                BotPacketHelper.writeVarInt(reply, 0);
+                BotPacketHelper.writeVarInt(reply, 0); // 0 known packs
                 sendPacket(reply);
             }
         }
 
         private void handlePlayPacket(int id, ByteBuf buf) {
-            // Keep Alive (0x26 in 1.21.x)
-            if (id == 0x26 || id == 0x24 || id == 0x23) {
+            // Keep Alive (0x26 / 0x24 / 0x23 in 1.21.x)
+            if (id == 0x26 || id == 0x24 || id == 0x23 || id == 0x25 || id == 0x27) {
                 try {
                     long keepAliveId = buf.readLong();
                     ByteBuf reply = Unpooled.buffer();
@@ -370,8 +437,8 @@ public class HeadlessBot {
                     sendPacket(reply);
                 } catch (Exception ignored) {}
             }
-            // Ping (0x35)
-            else if (id == 0x35 || id == 0x34) {
+            // Ping (0x35 / 0x34 / 0x33)
+            else if (id == 0x35 || id == 0x34 || id == 0x33 || id == 0x36) {
                 try {
                     int pingId = buf.readInt();
                     ByteBuf reply = Unpooled.buffer();
@@ -379,13 +446,13 @@ public class HeadlessBot {
                     reply.writeInt(pingId);
                     sendPacket(reply);
                     if (lastPingSentTime > 0) {
-                        ping = System.currentTimeMillis() - lastPingSentTime;
+                        ping = Math.max(1, System.currentTimeMillis() - lastPingSentTime);
                     }
                     lastPingSentTime = System.currentTimeMillis();
                 } catch (Exception ignored) {}
             }
-            // Synchronize Player Position (0x40 in 1.21.x)
-            else if (id == 0x40 || id == 0x3E || id == 0x3F) {
+            // Synchronize Player Position (0x40 / 0x3E / 0x3F)
+            else if (id == 0x40 || id == 0x3E || id == 0x3F || id == 0x41) {
                 try {
                     double px = buf.readDouble();
                     double py = buf.readDouble();
@@ -401,7 +468,7 @@ public class HeadlessBot {
                     yaw = pyaw;
                     pitch = ppitch;
 
-                    // Teleport Confirm (0x00)
+                    // Teleport Confirm (0x00 in Play)
                     ByteBuf confirm = Unpooled.buffer();
                     BotPacketHelper.writeVarInt(confirm, 0x00);
                     BotPacketHelper.writeVarInt(confirm, teleportId);
@@ -411,8 +478,8 @@ public class HeadlessBot {
                     moveTo(x, y, z, yaw, pitch, true);
                 } catch (Exception ignored) {}
             }
-            // Update Health (0x5B in 1.21.x)
-            else if (id == 0x5B || id == 0x59 || id == 0x5A) {
+            // Update Health (0x5B / 0x59 / 0x5A)
+            else if (id == 0x5B || id == 0x59 || id == 0x5A || id == 0x5C) {
                 try {
                     health = buf.readFloat();
                     food = BotPacketHelper.readVarInt(buf);
@@ -425,12 +492,12 @@ public class HeadlessBot {
                     }
                 } catch (Exception ignored) {}
             }
-            // Disconnect (0x1D in 1.21.x)
-            else if (id == 0x1D || id == 0x1B || id == 0x1C) {
+            // Disconnect (0x1D / 0x1B / 0x1C)
+            else if (id == 0x1D || id == 0x1B || id == 0x1C || id == 0x1E) {
                 try {
                     String reason = BotPacketHelper.readString(buf, 1024);
                     state = BotState.DISCONNECTED;
-                    statusMessage = "Отключен: " + reason;
+                    statusMessage = "Кик: " + BotPacketHelper.cleanJsonText(reason);
                 } catch (Exception ignored) {}
             }
         }

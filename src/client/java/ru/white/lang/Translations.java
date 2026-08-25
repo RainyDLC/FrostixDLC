@@ -473,7 +473,9 @@ final class Translations {
 
         m.put("Bot Manager", "Bot Manager");
         m.put("Управление ботами прямо из одного окна", "Manage bots directly from a single window");
+        m.put("Управление ботами и игра от их лица", "Manage bots and play from their perspective");
         m.put("Открыть меню ботов", "Open Bot Menu");
+        m.put("Зеркальное управление", "Mirror Control");
         m.put("Потато графика", "Potato Graphics");
         m.put("Следовать за мной", "Follow Me");
         m.put("Ассист в бою", "Combat Assist");

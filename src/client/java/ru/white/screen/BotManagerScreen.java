@@ -49,8 +49,9 @@ public class BotManagerScreen extends Screen implements IMinecraft {
 
     // Clickable hitboxes
     private final List<float[]> botCardRects = new ArrayList<>();
-    private final List<float[]> botDeleteRects = new ArrayList<>();
+    private final List<float[]> botPlayRects = new ArrayList<>();
     private final List<float[]> botTpRects = new ArrayList<>();
+    private final List<float[]> botDeleteRects = new ArrayList<>();
     private final List<HeadlessBot> renderedBots = new ArrayList<>();
 
     public BotManagerScreen(Screen parent) {
@@ -96,7 +97,7 @@ public class BotManagerScreen extends Screen implements IMinecraft {
         Draw.blur(0, 0, screenWidth, screenHeight, a, ColorUtil.getColor(10, 10, 15, (int) (a * 150)));
 
         // 2. Main Window Panel
-        panelW = 540;
+        panelW = 560;
         panelH = 340;
         panelX = (screenWidth - panelW) / 2.0F;
         panelY = (screenHeight - panelH) / 2.0F;
@@ -123,43 +124,49 @@ public class BotManagerScreen extends Screen implements IMinecraft {
         String statusSummary = "Онлайн: " + onlineCount + " / " + (manager != null ? manager.getBots().size() : 0);
         regular.draw(statusSummary, panelX + 145, panelY + 16, 7.0F, ColorUtil.getColor(120, 220, 140, (int) (a * 220)));
 
+        if (manager != null && manager.isPossessing()) {
+            drawMiniButton("🎮 Вернуться к основе", panelX + 250, panelY + 12, 115, 16, 0xFFFF7744, a);
+        }
+
         // Close hint
-        regular.draw("ESC чтобы закрыть (боты работают в фоне)", panelX + panelW - 200, panelY + 16, 6.5F, ColorUtil.getColor(140, 150, 170, (int) (a * 180)));
+        regular.draw("ESC чтобы закрыть (работает в фоне)", panelX + panelW - 180, panelY + 16, 6.5F, ColorUtil.getColor(140, 150, 170, (int) (a * 180)));
 
         // ── Input Bar (Nick, Host, Port, Add buttons) ──
         float inputBarY = panelY + 36;
 
         // Nick field
-        drawInputField("Никнейм", nameInput, panelX + 16, inputBarY, 110, 22, focusedField == 1, a);
+        drawInputField("Никнейм", nameInput, panelX + 16, inputBarY, 115, 22, focusedField == 1, a);
         // Host field
-        drawInputField("Хост / IP", hostInput, panelX + 132, inputBarY, 120, 22, focusedField == 2, a);
+        drawInputField("Хост / IP", hostInput, panelX + 137, inputBarY, 125, 22, focusedField == 2, a);
         // Port field
-        drawInputField("Порт", portInput, panelX + 258, inputBarY, 50, 22, focusedField == 3, a);
+        drawInputField("Порт", portInput, panelX + 268, inputBarY, 52, 22, focusedField == 3, a);
 
         // Action buttons: + Добавить, 🎲 Рандом, +3, +5
-        drawButton("+ Добавить", panelX + 314, inputBarY, 65, 22, 0xFF44AAFF, a);
-        drawButton("🎲 Рандом", panelX + 384, inputBarY, 58, 22, 0xFF7766FF, a);
-        drawButton("+3", panelX + 447, inputBarY, 35, 22, 0xFF55CC88, a);
-        drawButton("+5", panelX + 487, inputBarY, 35, 22, 0xFF55CC88, a);
+        drawButton("+ Добавить", panelX + 326, inputBarY, 68, 22, 0xFF44AAFF, a);
+        drawButton("🎲 Рандом", panelX + 398, inputBarY, 60, 22, 0xFF7766FF, a);
+        drawButton("+3", panelX + 462, inputBarY, 40, 22, 0xFF55CC88, a);
+        drawButton("+5", panelX + 506, inputBarY, 40, 22, 0xFF55CC88, a);
 
         // ── Quick Command Toolbar ──
         float toolBarY = inputBarY + 28;
         boolean follow = manager != null && manager.globalFollow.getValue();
         boolean assist = manager != null && manager.globalAttack.getValue();
+        boolean mirror = manager != null && manager.mirrorControl.getValue();
         boolean autoReg = manager != null && manager.autoRegister.getValue();
         boolean potato = PotatoGraphics.isEnabled();
 
-        drawToggleButton("🚶 Следовать", panelX + 16, toolBarY, 82, 20, follow, a);
-        drawToggleButton("⚔ Ассист", panelX + 103, toolBarY, 70, 20, assist, a);
-        drawButton("⬆ Прыгнуть", panelX + 178, toolBarY, 68, 20, 0xFF5599DD, a);
-        drawToggleButton("🔑 Авто-рег", panelX + 251, toolBarY, 75, 20, autoReg, a);
-        drawToggleButton("🥔 Потато", panelX + 331, toolBarY, 68, 20, potato, a);
-        drawButton("❌ Отключить всех", panelX + 404, toolBarY, 118, 20, 0xFFFF4455, a);
+        drawToggleButton("🚶 Следовать", panelX + 16, toolBarY, 78, 20, follow, a);
+        drawToggleButton("⚔ Ассист", panelX + 98, toolBarY, 68, 20, assist, a);
+        drawToggleButton("🔄 Зеркало", panelX + 170, toolBarY, 72, 20, mirror, a);
+        drawButton("⬆ Прыгнуть", panelX + 246, toolBarY, 66, 20, 0xFF5599DD, a);
+        drawToggleButton("🔑 Авто-рег", panelX + 316, toolBarY, 72, 20, autoReg, a);
+        drawToggleButton("🥔 Потато", panelX + 392, toolBarY, 64, 20, potato, a);
+        drawButton("❌ Отключить всех", panelX + 460, toolBarY, 86, 20, 0xFFFF4455, a);
 
         // ── Chat / Command Bar ──
         float chatBarY = toolBarY + 26;
-        drawInputField("Сообщение или /команда для всех ботов...", chatInput, panelX + 16, chatBarY, 410, 22, focusedField == 4, a);
-        drawButton("Отправить", panelX + 432, chatBarY, 90, 22, 0xFF44AAEE, a);
+        drawInputField("Сообщение или /команда для всех ботов...", chatInput, panelX + 16, chatBarY, 430, 22, focusedField == 4, a);
+        drawButton("Отправить", panelX + 452, chatBarY, 94, 22, 0xFF44AAEE, a);
 
         // ── Scrollable Bot List ──
         listX = panelX + 16;
@@ -174,8 +181,9 @@ public class BotManagerScreen extends Screen implements IMinecraft {
         scroll = MathUtil.lerp(scroll, scrollTarget, 0.25F);
 
         botCardRects.clear();
-        botDeleteRects.clear();
+        botPlayRects.clear();
         botTpRects.clear();
+        botDeleteRects.clear();
         renderedBots.clear();
 
         List<HeadlessBot> bots = manager != null ? manager.getBots() : new ArrayList<>();
@@ -199,13 +207,16 @@ public class BotManagerScreen extends Screen implements IMinecraft {
                     float cardX = listX + 6;
                     float cardW = listW - 12;
 
+                    boolean isPossessed = manager != null && manager.getPossessedBot() == bot;
                     boolean hovered = MathUtil.isHovered(this.mouseX, this.mouseY, cardX, curY, cardW, cardH);
-                    int cardBg = hovered
+                    int cardBg = isPossessed
+                            ? ColorUtil.getColor(35, 55, 45, (int) (a * 230))
+                            : hovered
                             ? ColorUtil.getColor(28, 32, 44, (int) (a * 220))
                             : ColorUtil.getColor(22, 25, 34, (int) (a * 200));
 
                     Draw.rect(cardX, curY, cardW, cardH, cardBg, 5);
-                    Draw.outline(cardX, curY, cardW, cardH, 1.0F, hovered ? ColorUtil.getColor(100, 160, 255, (int) (a * 80)) : ColorUtil.getColor(255, 255, 255, (int) (a * 15)), 5);
+                    Draw.outline(cardX, curY, cardW, cardH, 1.0F, isPossessed ? ColorUtil.getColor(80, 255, 140, (int) (a * 160)) : hovered ? ColorUtil.getColor(100, 160, 255, (int) (a * 80)) : ColorUtil.getColor(255, 255, 255, (int) (a * 15)), 5);
 
                     // Bot state dot & name
                     int dotColor = bot.getState().getColor();
@@ -218,9 +229,9 @@ public class BotManagerScreen extends Screen implements IMinecraft {
                     regular.draw(stateText, cardX + 22, curY + 20, 6.0F, ColorUtil.getColor(150, 165, 185, (int) (a * 200)));
 
                     // Health bar & stats
-                    float barX = cardX + 180;
+                    float barX = cardX + 160;
                     float barY = curY + 12;
-                    float barW = 70;
+                    float barW = 60;
                     float barH = 8;
                     float hpFrac = MathUtil.clamp(bot.getHealth() / 20.0F, 0F, 1F);
 
@@ -235,21 +246,27 @@ public class BotManagerScreen extends Screen implements IMinecraft {
                                 Math.pow(bot.getY() - mc.player.getY(), 2) +
                                 Math.pow(bot.getZ() - mc.player.getZ(), 2)
                         );
-                        regular.draw(String.format("Дист: %.1fм", dist), cardX + 300, curY + 13, 6.5F, ColorUtil.getColor(160, 175, 200, (int) (a * 190)));
+                        regular.draw(String.format("Дист: %.1fм", dist), cardX + 270, curY + 13, 6.5F, ColorUtil.getColor(160, 175, 200, (int) (a * 190)));
                     }
 
-                    // Per-bot buttons: ТП, Кик
-                    float tpBtnX = cardX + cardW - 100;
-                    float delBtnX = cardX + cardW - 46;
+                    // Per-bot buttons: 🎮 Играть, ТП ко мне, Кик
+                    float playBtnX = cardX + cardW - 170;
+                    float tpBtnX = cardX + cardW - 95;
+                    float delBtnX = cardX + cardW - 44;
                     float btnH = 18;
                     float btnY = curY + 8;
 
-                    drawMiniButton("ТП ко мне", tpBtnX, btnY, 50, btnH, 0xFF44AAFF, a);
-                    drawMiniButton("Кик", delBtnX, btnY, 40, btnH, 0xFFFF4455, a);
+                    String playLabel = isPossessed ? "Управляете" : "🎮 Играть";
+                    int playColor = isPossessed ? 0xFF33CC66 : 0xFF9966FF;
+
+                    drawMiniButton(playLabel, playBtnX, btnY, 70, btnH, playColor, a);
+                    drawMiniButton("ТП ко мне", tpBtnX, btnY, 48, btnH, 0xFF44AAFF, a);
+                    drawMiniButton("Кик", delBtnX, btnY, 38, btnH, 0xFFFF4455, a);
 
                     botCardRects.add(new float[]{cardX, curY, cardW, cardH});
-                    botTpRects.add(new float[]{tpBtnX, btnY, 50, btnH});
-                    botDeleteRects.add(new float[]{delBtnX, btnY, 40, btnH});
+                    botPlayRects.add(new float[]{playBtnX, btnY, 70, btnH});
+                    botTpRects.add(new float[]{tpBtnX, btnY, 48, btnH});
+                    botDeleteRects.add(new float[]{delBtnX, btnY, 38, btnH});
                     renderedBots.add(bot);
                 }
                 curY += cardH + gap;
@@ -331,6 +348,14 @@ public class BotManagerScreen extends Screen implements IMinecraft {
 
         if (click.button() != 0) return super.mouseClicked(click, doubled);
 
+        BotManager manager = BotManager.get();
+
+        // Check header "Вернуться к основе"
+        if (manager != null && manager.isPossessing() && MathUtil.isHovered(mx, my, panelX + 250, panelY + 12, 115, 16)) {
+            manager.unpossess();
+            return true;
+        }
+
         if (!MathUtil.isHovered(mx, my, panelX, panelY, panelW, panelH)) {
             mc.setScreen(parent);
             return true;
@@ -340,16 +365,14 @@ public class BotManagerScreen extends Screen implements IMinecraft {
         float toolBarY = inputBarY + 28;
         float chatBarY = toolBarY + 26;
 
-        BotManager manager = BotManager.get();
-
         // 1. Text input focus
-        if (MathUtil.isHovered(mx, my, panelX + 16, inputBarY, 110, 22)) {
+        if (MathUtil.isHovered(mx, my, panelX + 16, inputBarY, 115, 22)) {
             focusedField = 1; return true;
-        } else if (MathUtil.isHovered(mx, my, panelX + 132, inputBarY, 120, 22)) {
+        } else if (MathUtil.isHovered(mx, my, panelX + 137, inputBarY, 125, 22)) {
             focusedField = 2; return true;
-        } else if (MathUtil.isHovered(mx, my, panelX + 258, inputBarY, 50, 22)) {
+        } else if (MathUtil.isHovered(mx, my, panelX + 268, inputBarY, 52, 22)) {
             focusedField = 3; return true;
-        } else if (MathUtil.isHovered(mx, my, panelX + 16, chatBarY, 410, 22)) {
+        } else if (MathUtil.isHovered(mx, my, panelX + 16, chatBarY, 430, 22)) {
             focusedField = 4; return true;
         } else {
             focusedField = 0;
@@ -357,18 +380,18 @@ public class BotManagerScreen extends Screen implements IMinecraft {
 
         // 2. Action buttons
         // + Добавить
-        if (MathUtil.isHovered(mx, my, panelX + 314, inputBarY, 65, 22)) {
+        if (MathUtil.isHovered(mx, my, panelX + 326, inputBarY, 68, 22)) {
             tryAddBot();
             return true;
         }
         // 🎲 Рандом
-        if (MathUtil.isHovered(mx, my, panelX + 384, inputBarY, 58, 22)) {
+        if (MathUtil.isHovered(mx, my, panelX + 398, inputBarY, 60, 22)) {
             nameInput = "Bot_" + (int) MathUtil.random(100, 999);
             tryAddBot();
             return true;
         }
         // +3
-        if (MathUtil.isHovered(mx, my, panelX + 447, inputBarY, 35, 22)) {
+        if (MathUtil.isHovered(mx, my, panelX + 462, inputBarY, 40, 22)) {
             if (manager != null) {
                 int port = parsePort();
                 manager.createRandomBots(3, "Bot", hostInput, port);
@@ -376,7 +399,7 @@ public class BotManagerScreen extends Screen implements IMinecraft {
             return true;
         }
         // +5
-        if (MathUtil.isHovered(mx, my, panelX + 487, inputBarY, 35, 22)) {
+        if (MathUtil.isHovered(mx, my, panelX + 506, inputBarY, 40, 22)) {
             if (manager != null) {
                 int port = parsePort();
                 manager.createRandomBots(5, "Bot", hostInput, port);
@@ -386,50 +409,75 @@ public class BotManagerScreen extends Screen implements IMinecraft {
 
         // 3. Quick Toolbar
         // 🚶 Следовать
-        if (MathUtil.isHovered(mx, my, panelX + 16, toolBarY, 82, 20)) {
+        if (MathUtil.isHovered(mx, my, panelX + 16, toolBarY, 78, 20)) {
             if (manager != null) {
                 manager.followAll(!manager.globalFollow.getValue());
             }
             return true;
         }
         // ⚔ Ассист
-        if (MathUtil.isHovered(mx, my, panelX + 103, toolBarY, 70, 20)) {
+        if (MathUtil.isHovered(mx, my, panelX + 98, toolBarY, 68, 20)) {
             if (manager != null) {
                 manager.attackAll(!manager.globalAttack.getValue());
             }
             return true;
         }
+        // 🔄 Зеркало
+        if (MathUtil.isHovered(mx, my, panelX + 170, toolBarY, 72, 20)) {
+            if (manager != null) {
+                manager.mirrorControl.set(!manager.mirrorControl.getValue());
+            }
+            return true;
+        }
         // ⬆ Прыгнуть
-        if (MathUtil.isHovered(mx, my, panelX + 178, toolBarY, 68, 20)) {
+        if (MathUtil.isHovered(mx, my, panelX + 246, toolBarY, 66, 20)) {
             if (manager != null) manager.jumpAll();
             return true;
         }
         // 🔑 Авто-рег
-        if (MathUtil.isHovered(mx, my, panelX + 251, toolBarY, 75, 20)) {
+        if (MathUtil.isHovered(mx, my, panelX + 316, toolBarY, 72, 20)) {
             if (manager != null) {
                 manager.autoRegister.set(!manager.autoRegister.getValue());
             }
             return true;
         }
         // 🥔 Потато
-        if (MathUtil.isHovered(mx, my, panelX + 331, toolBarY, 68, 20)) {
+        if (MathUtil.isHovered(mx, my, panelX + 392, toolBarY, 64, 20)) {
             PotatoGraphics.toggle();
             if (manager != null) manager.potatoGraphics.set(PotatoGraphics.isEnabled());
             return true;
         }
         // ❌ Отключить всех
-        if (MathUtil.isHovered(mx, my, panelX + 404, toolBarY, 118, 20)) {
+        if (MathUtil.isHovered(mx, my, panelX + 460, toolBarY, 86, 20)) {
             if (manager != null) manager.disconnectAll();
             return true;
         }
 
         // 4. Chat Send button
-        if (MathUtil.isHovered(mx, my, panelX + 432, chatBarY, 90, 22)) {
+        if (MathUtil.isHovered(mx, my, panelX + 452, chatBarY, 94, 22)) {
             sendChatToAll();
             return true;
         }
 
         // 5. Per-bot buttons
+        // 🎮 Играть от лица бота
+        for (int i = 0; i < botPlayRects.size(); i++) {
+            float[] r = botPlayRects.get(i);
+            if (MathUtil.isHovered(mx, my, r[0], r[1], r[2], r[3])) {
+                HeadlessBot b = renderedBots.get(i);
+                if (manager != null) {
+                    if (manager.getPossessedBot() == b) {
+                        manager.unpossess();
+                    } else {
+                        manager.possess(b);
+                        mc.setScreen(null); // Закрываем меню чтобы сразу управлять ботом
+                    }
+                }
+                return true;
+            }
+        }
+
+        // ТП ко мне
         for (int i = 0; i < botTpRects.size(); i++) {
             float[] r = botTpRects.get(i);
             if (MathUtil.isHovered(mx, my, r[0], r[1], r[2], r[3])) {
@@ -441,6 +489,7 @@ public class BotManagerScreen extends Screen implements IMinecraft {
             }
         }
 
+        // Кик
         for (int i = 0; i < botDeleteRects.size(); i++) {
             float[] r = botDeleteRects.get(i);
             if (MathUtil.isHovered(mx, my, r[0], r[1], r[2], r[3])) {

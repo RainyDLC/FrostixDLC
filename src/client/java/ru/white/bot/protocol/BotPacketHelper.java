@@ -127,4 +127,23 @@ public final class BotPacketHelper {
 
         return Unpooled.wrappedBuffer(uncompressed);
     }
+
+    public static String cleanJsonText(String raw) {
+        if (raw == null || raw.isEmpty()) return "";
+        // If raw is simple text
+        if (!raw.startsWith("{") && !raw.startsWith("[")) {
+            return raw;
+        }
+        try {
+            // Strip standard JSON keys
+            String clean = raw.replaceAll("\"text\"\\s*:\\s*\"([^\"]*)\"", "$1")
+                    .replaceAll("\"extra\"\\s*:\\s*\\[", "")
+                    .replaceAll("[\\{\\}\\[\\]\"]", "")
+                    .replaceAll(",+", " ")
+                    .trim();
+            return clean.isEmpty() ? raw : clean;
+        } catch (Exception e) {
+            return raw;
+        }
+    }
 }
