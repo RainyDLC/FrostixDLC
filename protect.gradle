@@ -1,0 +1,104 @@
+// Защита Nightix: ProGuard (опция) -> AES-шифрование классов -> подпись (опция)
+//
+//   gradlew protectJar                          — шифрование классов (всегда)
+//   gradlew protectJar -PnightixProguard=true   — + обфускация ProGuard
+//   gradlew signProtectedJar                    — + подпись (keystore создаётся сам)
+//
+// Результат: build/libs/rainydlc-protected.jar
+
+configurations {
+    proguardTool
+}
+
+dependencies {
+    proguardTool 'com.guardsquare:proguard-base:7.4.2'
+}
+
+def protectedJarFile = layout.buildDirectory.file('libs/rainydlc-protected.jar')
+def proguardJarFile = layout.buildDirectory.file('libs/nightix-proguard.jar')
+def keystoreFile = file('protection/keystore.jks')
+
+tasks.register('proguardJar', JavaExec) {
+    group = 'protection'
+    description = 'Обфускация переименованием (ProGuard). Только с -PnightixProguard=true'
+    onlyIf { project.findProperty('nightixProguard') == 'true' }
+    dependsOn tasks.named('remapJar')
+
+    classpath = configurations.proguardTool
+    mainClass = 'proguard.ProGuard'
+
+    doFirst {
+        def inJar = tasks.named('remapJar').get().archiveFile.get().asFile
+        def outJar = proguardJarFile.get().asFile
+
+        def runtimeRules = layout.buildDirectory.file('protection/proguard-runtime.rules')
+        runtimeRules.get().asFile.parentFile.mkdirs()
+
+        def libLines = sourceSets.client.runtimeClasspath.files
+                .findAll { it.name.endsWith('.jar') }
+                .collect { "-libraryjars ${it.absolutePath}" }
+                .join('\n')
+
+        runtimeRules.get().asFile.text = """
+-injars ${inJar.absolutePath}
+-outjars ${outJar.absolutePath}
+${libLines}
+"""
+        // базовые правила + сгенерированные пути
+        args("-include", file('protection/proguard.rules').absolutePath,
+             "-include", runtimeRules.get().asFile.absolutePath)
+    }
+}
+
+tasks.register('encryptJar', DefaultTask) {
+    group = 'protection'
+    description = 'AES/GCM-шифрование классов ядра с привязкой ключа к целостности'
+    dependsOn tasks.named('remapJar')
+    if (project.findProperty('nightixProguard') == 'true') {
+        dependsOn 'proguardJar'
+    }
+
+    doLast {
+        def inJar = (project.findProperty('nightixProguard') == 'true')
+                ? proguardJarFile.get().asFile
+                : tasks.named('remapJar').get().archiveFile.get().asFile
+        def outJar = protectedJarFile.get().asFile
+        outJar.parentFile.mkdirs()
+        new nightix.ClassEncryptor().run(inJar, outJar)
+    }
+}
+
+tasks.register('protectJar') {
+    group = 'protection'
+    description = 'Полный цикл защиты: (ProGuard) -> AES-шифрование классов'
+    dependsOn 'encryptJar'
+}
+
+tasks.register('genKeystore', Exec) {
+    group = 'protection'
+    description = 'Генерирует keystore для подписи (один раз)'
+    onlyIf { !keystoreFile.exists() }
+    doFirst {
+        keystoreFile.parentFile.mkdirs()
+    }
+    commandLine 'keytool', '-genkeypair',
+            '-alias', 'nightix',
+            '-keyalg', 'RSA', '-keysize', '2048',
+            '-validity', '3650',
+            '-dname', 'CN=RainyDLC, O=Nightix',
+            '-keystore', keystoreFile.absolutePath,
+            '-storepass', 'nightix-store',
+            '-keypass', 'nightix-key'
+}
+
+tasks.register('signProtectedJar', Exec) {
+    group = 'protection'
+    description = 'Подписывает защищённый JAR'
+    dependsOn 'encryptJar', 'genKeystore'
+    commandLine 'jarsigner',
+            '-keystore', keystoreFile.absolutePath,
+            '-storepass', 'nightix-store',
+            '-keypass', 'nightix-key',
+            protectedJarFile.get().asFile.absolutePath,
+            'nightix'
+}

@@ -1,0 +1,22 @@
+# Nightix: ProGuard — только переименование, без shring/optimize
+# (Fabric + Mixin чувствительны к структуре)
+
+-dontshrink
+-dontoptimize
+-dontwarn **
+
+# Точки входа Fabric и лоадер зашифрованного ядра
+-keep class ru.white.Client { *; }
+-keep class ru.white.NightixLoader { *; }
+-keep class ru.white.core.ClientMain { *; }
+
+# Миксины: имена классов читает mixin.json, аннотации — процессор Mixin
+-keep class ru.white.mixin.** { *; }
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,MethodParameters
+
+# Переименование всего остального в невалидные имена
+-repackageclasses ''
+-allowaccessmodification
+-obfuscationdictionary protection/dict-class.txt
+-classobfuscationdictionary protection/dict-member.txt
+-packageobfuscationdictionary protection/dict-class.txt

@@ -148,3 +148,6 @@ publishing {
     repositories {
     }
 }
+
+// Защита: ProGuard (опция) -> AES-шифрование ядра -> подпись (опция)
+apply from: 'protect.gradle'
