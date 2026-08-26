@@ -105,16 +105,16 @@ public class WaterMark implements element {
 
         // 2. Островок (Pill)
         float islandStartX = x + timeW + 7.5F * S;
-        float padX = 6.5F * S;
-        float logoSize = islandH - 5.5F * S;
+        float padX = 6.0F * S;
+        float logoSize = 6.5F * S;
 
-        String brand = "Nightix";
+        String brand = "RainyDLC";
         float brandW = fontBold.getWidth(brand, TEXT);
         float fpsW = fpsText.width(fontRegular, TEXT) + fontRegular.getWidth("fps", TEXT);
         float pingW = pingText.width(fontRegular, TEXT) + fontRegular.getWidth("ms", TEXT);
         float sepW = fontRegular.getWidth(" • ", TEXT);
 
-        float innerContentW = logoSize + 4.5F * S + brandW + sepW + fpsW + sepW + pingW;
+        float innerContentW = logoSize + 4.0F * S + brandW + sepW + fpsW + sepW + pingW;
         float islandW = padX * 2.0F + innerContentW;
 
         // Рендер капсулы-островка
@@ -123,9 +123,9 @@ public class WaterMark implements element {
         // Внутренние элементы островка
         float curX = islandStartX + padX;
 
-        // Фирменная R иконка клиента
+        // Фирменная R иконка клиента (аккуратный размер)
         RenderUtil.Images.texture(LOGO_TEXTURE, curX, y + (islandH - logoSize) / 2.0F, logoSize, logoSize, ColorUtil.getClientColor(1));
-        curX += logoSize + 4.5F * S;
+        curX += logoSize + 4.0F * S;
 
         // Название клиента
         float textY = y + (islandH - fontRegular.getHeight(TEXT)) / 2.0F - 0.5F * S;
