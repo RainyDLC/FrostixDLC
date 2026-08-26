@@ -51,6 +51,52 @@ float fbm4(vec2 p) {
     return v;
 }
 
+float worley2D(vec2 p) {
+    vec2 n = floor(p);
+    vec2 f = fract(p);
+    float d = 1.0;
+    for (int j = -1; j <= 1; j++) {
+        for (int i = -1; i <= 1; i++) {
+            vec2 g = vec2(float(i), float(j));
+            vec2 o = vec2(hash2(n + g), hash2(n + g + vec2(17.3, 43.7)));
+            vec2 r = g + o - f;
+            d = min(d, dot(r, r));
+        }
+    }
+    return sqrt(d);
+}
+
+float worleyFbm(vec2 p) {
+    float w1 = 1.0 - worley2D(p);
+    float w2 = 1.0 - worley2D(p * 2.15 + 3.14);
+    float w3 = 1.0 - worley2D(p * 4.35 + 7.81);
+    return w1 * 0.52 + w2 * 0.32 + w3 * 0.16;
+}
+
+float billowFbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.52;
+    for (int i = 0; i < 4; i++) {
+        float n = noise2D(p);
+        v += abs(n * 2.0 - 1.0) * a;
+        p = mat2(1.52, 1.12, -1.12, 1.52) * p + 3.71;
+        a *= 0.5;
+    }
+    return v;
+}
+
+float ridgedFbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.52;
+    for (int i = 0; i < 4; i++) {
+        float n = noise2D(p);
+        v += (1.0 - abs(n * 2.0 - 1.0)) * a;
+        p = mat2(1.52, 1.12, -1.12, 1.52) * p + 3.71;
+        a *= 0.5;
+    }
+    return v;
+}
+
 vec2 domeUv(vec3 dir) {
     float k = 1.0 / (1.0 + max(dir.y, -0.35));
     return dir.xz * k * 0.55 + 0.5;
@@ -291,102 +337,127 @@ vec3 plasma(vec3 dir, float time, float scale, float intensity) {
 }
 
 vec3 overcast(vec3 dir, float time, float scale, float intensity, float flashAmt) {
-    // 1. Perspective projection onto the overhead cloud dome
-    float viewH = max(dir.y + 0.14, 0.04);
-    vec2 uv = (dir.xz / viewH) * (scale * 0.42);
+    // 1. Perspective atmospheric projection onto cloud plane
+    float viewH = max(dir.y + 0.13, 0.035);
+    vec2 uv = (dir.xz / viewH) * (scale * 0.72);
 
-    // 2. Wind velocities across multiple atmospheric layers
-    vec2 wind1 = vec2(time * 0.024, time * 0.010);
-    vec2 wind2 = vec2(time * 0.015, -time * 0.018);
-    vec2 wind3 = vec2(-time * 0.020, time * 0.028);
+    // 2. Wind velocities across atmospheric layers (smooth continuous motion)
+    vec2 windMain = vec2(time * 0.022, time * 0.008);
+    vec2 windTurb = vec2(-time * 0.015, time * 0.020);
+    vec2 windScud = vec2(time * 0.048, time * 0.018);
 
-    // 3. Multi-layer domain warping for rich organic turbulent storm clouds
-    vec2 q = vec2(
-        fbm4(uv * 1.15 + wind1),
-        fbm4(uv * 1.15 + wind1 + vec2(5.2, 1.3))
-    );
+    // 3. Turbulent domain warping (swirling cloud masses)
+    vec2 warp1 = vec2(
+        fbm4(uv * 0.95 + windMain),
+        fbm4(uv * 0.95 + windMain + vec2(5.2, 1.3))
+    ) - 0.5;
 
-    vec2 r = vec2(
-        fbm4(uv * 2.3 + q * 1.5 + wind2),
-        fbm4(uv * 2.3 + q * 1.5 + wind2 + vec2(3.1, 7.4))
-    );
+    vec2 warp2 = vec2(
+        fbm4(uv * 1.8 + warp1 * 1.5 + windTurb),
+        fbm4(uv * 1.8 + warp1 * 1.5 + windTurb + vec2(3.1, 7.4))
+    ) - 0.5;
 
-    vec2 p = uv * 1.85 + r * 1.65;
+    vec2 p = uv * 1.75 + warp2 * 1.8 + windMain;
 
-    // 4. Volumetric cloud density octaves (macro structure + puffy billowing + micro-mist)
-    float dMacro = fbm4(p);
-    float dPuffy = fbm4(p * 2.4 + wind3 * 0.35);
-    float dMicro = fbm3(p * 5.2 - wind1 * 0.65);
-    float density = dMacro * 0.58 + dPuffy * 0.32 + dMicro * 0.10;
+    // 4. Perlin-Worley cloud modeling (cauliflower billows, puffy cumulus tufts)
+    float baseFbm = fbm4(p);
+    float billowNoise = billowFbm(p * 1.4 + 1.7);
+    float worleyBillows = worleyFbm(p * 1.8);
+    
+    // High frequency erosion (sharp wispy frayed edges instead of blur)
+    float edgeErosion = ridgedFbm(p * 3.8 - windTurb * 0.6);
+    float microNoise = fbm3(p * 8.5 + windMain * 1.2);
 
-    // 5. Cloud shaping: dense, moody, storm clouds
-    float cloudMask = smoothstep(0.24, 0.84, density);
+    // Combine into solid, puffy storm cloud density with crisp billowy boundaries
+    float rawDensity = baseFbm * 0.40 + billowNoise * 0.25 + worleyBillows * 0.45;
+    rawDensity -= (1.0 - edgeErosion) * 0.18 + (1.0 - microNoise) * 0.08;
+    
+    // Non-linear density shaping (thick storm masses with crisp outlines)
+    float cloudDensity = clamp((rawDensity - 0.26) / 0.52, 0.0, 1.0);
+    cloudDensity = pow(cloudDensity, 1.25);
+    float cloudMask = smoothstep(0.08, 0.75, cloudDensity);
 
-    // 6. Directional self-shadowing & rim lighting towards the rift break
-    vec2 lightOffset = normalize(vec2(0.0, -1.0)) * 0.085;
-    float densityLit = fbm4(p + lightOffset);
-    float shade = clamp(0.48 + (density - densityLit) * 4.4, 0.0, 1.0);
-    float rim = clamp((densityLit - density) * 5.2, 0.0, 1.0);
+    // 5. Directional lighting & self-shadowing towards the rift
+    vec2 lightOffset = normalize(vec2(0.0, -1.0)) * 0.065;
+    float litBase = fbm4(p + lightOffset) * 0.40 + worleyFbm((p + lightOffset) * 1.8) * 0.45;
+    float litDensity = clamp((litBase - 0.26) / 0.52, 0.0, 1.0);
+    
+    float lightGrad = (cloudDensity - litDensity) * 7.5;
+    float shade = clamp(0.38 + lightGrad * 0.65, 0.0, 1.0);
+    // Sharp crisp silver rim on edges facing the light
+    float rim = pow(clamp(-lightGrad * 1.4, 0.0, 1.0), 2.2);
 
-    // 7. Luminous Rift / Break in the storm clouds (as in reference screenshot)
+    // 6. Low Scud / Fractus Layer (dark, shredded storm cloud fragments drifting fast)
+    vec2 scudP = uv * 3.2 + windScud;
+    float scudNoise = fbm4(scudP) * (1.0 - worley2D(scudP * 2.0));
+    float scudMask = smoothstep(0.32, 0.72, scudNoise) * smoothstep(0.01, 0.35, dir.y) * 0.88;
+
+    // 7. Luminous Rift / Break in the clouds (as in reference screenshot)
     vec3 riftDir = normalize(vec3(0.0, 0.14, -1.0));
     float riftDot = max(dot(dir, riftDir), 0.0);
-    float riftCore = pow(riftDot, 16.0) * 1.5;
-    float riftMid = pow(riftDot, 5.0) * 0.75;
-    float riftWide = pow(riftDot, 1.8) * 0.35;
+    float riftCore = pow(riftDot, 28.0) * 2.4;
+    float riftMid = pow(riftDot, 8.0) * 1.2;
+    float riftWide = pow(riftDot, 2.2) * 0.50;
     float totalRiftGlow = riftCore + riftMid + riftWide;
 
-    // Soft gap/break in the low cloud layer letting moonlight/twilight pour through
-    float breakHole = smoothstep(0.72, 0.28, density) * smoothstep(-0.06, 0.38, dir.y);
+    // Cloud opening hole near horizon where moonlight bursts through
+    float breakOpening = smoothstep(0.72, 0.22, cloudDensity) * smoothstep(-0.06, 0.42, dir.y);
 
-    // 8. Color palette: deep moody night + realistic charcoal/slate/navy clouds + silver highlights
-    vec3 deepNightSky = mix(vec3(0.018, 0.026, 0.038), vec3(0.038, 0.052, 0.075), clamp(dir.y * 0.8 + 0.2, 0.0, 1.0));
-    deepNightSky = mix(deepNightSky, primaryColor.rgb * 0.08, 0.30);
+    // 8. Photographic storm color palette (charcoal/slate/navy vs brilliant silver)
+    vec3 deepNightSky = mix(vec3(0.014, 0.020, 0.032), vec3(0.032, 0.046, 0.070), clamp(dir.y * 0.8 + 0.2, 0.0, 1.0));
+    deepNightSky = mix(deepNightSky, primaryColor.rgb * 0.06, 0.25);
 
-    vec3 riftColor = mix(vec3(0.68, 0.80, 0.92), vec3(0.92, 0.96, 1.0), riftCore * 0.6);
-    riftColor = mix(riftColor, secondaryColor.rgb * 0.7 + accentColor.rgb * 0.3, 0.15);
+    vec3 riftLight = mix(vec3(0.70, 0.82, 0.94), vec3(0.94, 0.97, 1.0), riftCore * 0.5);
+    riftLight = mix(riftLight, secondaryColor.rgb * 0.6 + accentColor.rgb * 0.4, 0.12);
 
-    // Dark cloud body and shaded underside
-    vec3 cloudDark = mix(vec3(0.028, 0.038, 0.052), vec3(0.012, 0.018, 0.028), (1.0 - shade));
-    vec3 cloudLit = mix(cloudDark, vec3(0.11, 0.15, 0.21), shade);
+    // Deep dark storm clouds (charcoal base with ambient light on puffy crests)
+    vec3 cloudShadow = mix(vec3(0.010, 0.015, 0.024), vec3(0.024, 0.034, 0.048), shade);
+    vec3 cloudLit = mix(cloudShadow, vec3(0.09, 0.13, 0.19), shade * shade);
+    
+    // Crisp silver rim on cloud contours facing the rift break
+    vec3 silverRim = riftLight * (rim * (0.55 + riftMid * 1.8));
+    cloudLit += silverRim;
 
-    // Silver rim lighting on cloud edges facing the rift
-    vec3 rimLight = mix(vec3(0.32, 0.44, 0.56), riftColor, 0.7) * (rim * (0.35 + riftMid * 1.4));
-    cloudLit += rimLight;
+    // Sky background with rift moonlight glow
+    vec3 skyBg = deepNightSky + (riftLight * totalRiftGlow * 0.48);
 
-    // Direct illumination in the break
-    vec3 riftOpening = riftColor * (breakHole * (riftCore * 1.8 + riftMid * 0.9 + 0.18));
+    // Direct bright opening through the cloud rift
+    vec3 riftBurst = riftLight * (breakOpening * (riftCore * 2.0 + riftMid * 1.1 + 0.22));
 
-    // Combine sky background and clouds
-    vec3 col = mix(deepNightSky + (riftColor * totalRiftGlow * 0.5), cloudLit, cloudMask * 0.94);
-    col += riftOpening * (1.0 - cloudMask * 0.65);
+    // Composite main cloud deck over sky
+    vec3 col = mix(skyBg, cloudLit, cloudMask * 0.96);
+    col += riftBurst * (1.0 - cloudMask * 0.60);
 
-    // 9. Diagonal storm / rain / virga streaks across the upper sky
-    vec2 streakUV = vec2(dir.x * 22.0 + dir.y * 11.0 + time * 0.35, dir.y * 32.0 - time * 1.25);
+    // Composite low dark scud silhouettes drifting in front of the lit rift
+    vec3 scudColor = mix(vec3(0.012, 0.016, 0.024), vec3(0.028, 0.038, 0.052), shade * 0.5);
+    col = mix(col, scudColor, scudMask);
+
+    // 9. Diagonal storm / rain / virga streaks across upper sky
+    vec2 streakUV = vec2(dir.x * 26.0 + dir.y * 13.0 + time * 0.42, dir.y * 38.0 - time * 1.5);
     vec2 sCell = floor(streakUV);
     vec2 sFract = fract(streakUV) - 0.5;
     float sHash = hash2(sCell);
-    float sPick = step(0.962, sHash);
-    float sLine = smoothstep(0.14, 0.0, abs(sFract.x)) * (0.55 + 0.45 * sin(time * 5.0 + sHash * 45.0));
-    float virga = sPick * sLine * smoothstep(0.02, 0.48, dir.y) * 0.32;
-    vec3 streakColor = mix(vec3(0.38, 0.48, 0.60), vec3(0.72, 0.82, 0.94), sHash);
+    float sPick = step(0.960, sHash);
+    float sLine = smoothstep(0.12, 0.0, abs(sFract.x)) * (0.60 + 0.40 * sin(time * 6.0 + sHash * 45.0));
+    float virga = sPick * sLine * smoothstep(0.04, 0.52, dir.y) * 0.36;
+    vec3 streakColor = mix(vec3(0.35, 0.45, 0.58), vec3(0.75, 0.85, 0.98), sHash);
     col += virga * streakColor;
 
-    // 10. Distant horizon haze and ground glow
-    float horizonHaze = 1.0 - smoothstep(0.0, 0.26, abs(dir.y + 0.02));
-    vec3 horizonCol = mix(vec3(0.12, 0.16, 0.20), riftColor * 0.42, riftDot * 0.6);
-    col = mix(col, horizonCol, horizonHaze * 0.50);
+    // 10. Low horizon atmospheric mist
+    float horizonHaze = 1.0 - smoothstep(0.0, 0.24, abs(dir.y + 0.02));
+    vec3 horizonCol = mix(vec3(0.11, 0.15, 0.19), riftLight * 0.40, riftDot * 0.65);
+    col = mix(col, horizonCol, horizonHaze * 0.52);
 
     // 11. Thunderstorm / lightning flash illumination
     float flash = max(flashAmt, 0.0);
     if (flash > 0.001) {
         vec3 flashColor = vec3(0.85, 0.92, 1.0);
-        float cloudScatter = 0.75 + 0.65 * (1.0 - cloudMask * 0.4) + shade * 0.6;
-        col += flashColor * flash * cloudScatter * 1.4;
+        float cloudScatter = 0.80 + 0.70 * (1.0 - cloudMask * 0.35) + shade * 0.65;
+        col += flashColor * flash * cloudScatter * 1.5;
     }
 
-    // 12. Overall intensity scaling and contrast enhancement
-    col = mix(modeBase(dir) * 0.4 + deepNightSky * 0.6, col, intensity);
+    // 12. Contrast enhancement and intensity scale
+    col = mix(modeBase(dir) * 0.35 + deepNightSky * 0.65, col, intensity);
     return col;
 }
 
