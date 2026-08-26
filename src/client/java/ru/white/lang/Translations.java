@@ -261,6 +261,7 @@ final class Translations {
         m.put("Цвет 1", "Color 1");
         m.put("Цвет 2", "Color 2");
         m.put("Ванильное небо", "Vanilla sky");
+        m.put("Пасмурно", "Overcast");
         m.put("Первый предмет", "First item");
         m.put("Второй предмет", "Second item");
         m.put("Клавиша свапа", "Swap key");
