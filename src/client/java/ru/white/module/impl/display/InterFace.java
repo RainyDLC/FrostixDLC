@@ -41,6 +41,8 @@ public class InterFace extends Module {
     public ModeSetting typeNotify = new ModeSetting(this, "Тип уведомления",
             "Первый", "Второй", "Третий");
 
+    public ModeSetting watermarkMode = new ModeSetting(this, "Тип ватермарки",
+            "Островок", "Классический");
 
     public SliderSetting sizeHud = new SliderSetting(this,"Размер интерфейса",1.0F,0.5F,1.5F,0.05F);
     public SliderSetting alphaHUD = new SliderSetting(this,"Прозрачность худа",0.6F,0.0F,0.9F,0.1F);
