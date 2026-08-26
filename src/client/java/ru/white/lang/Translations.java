@@ -471,20 +471,6 @@ final class Translations {
         m.put("Периодически", "Periodically");
         m.put("При убийстве", "In the event of a murder");
 
-        m.put("Плавное появление", "Smooth Fade");
-        m.put("Печатание", "Typewriter");
-        m.put("Режим строк", "Line Split");
-        m.put("Разделять", "Split");
-        m.put("Целые строки", "Full Lines");
-        m.put("Мин. дистанция", "Min Distance");
-        m.put("Макс. дистанция", "Max Distance");
-        m.put("Угол разброса", "Arc Spread");
-        m.put("Высота всплытия", "Float Height");
-        m.put("Смещение (мс)", "Offset (ms)");
-        m.put("Размер текста", "Text Scale");
-        m.put("Режим отладки", "Debug Mode");
-        m.put("Кинетические слова трека в 3D-пространстве", "Kinetic lyrics in 3D world space");
-
         return m;
     }
 }

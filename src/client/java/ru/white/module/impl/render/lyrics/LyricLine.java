@@ -1,4 +1,4 @@
-package ru.white.lyrics;
+package ru.white.module.impl.render.lyrics;
 
 public record LyricLine(long timestampMs, String text) implements Comparable<LyricLine> {
     @Override

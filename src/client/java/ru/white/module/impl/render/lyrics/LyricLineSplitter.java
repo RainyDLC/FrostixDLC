@@ -1,4 +1,4 @@
-package ru.white.lyrics;
+package ru.white.module.impl.render.lyrics;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -7,7 +7,9 @@ import java.util.List;
 public final class LyricLineSplitter {
     private LyricLineSplitter() {}
 
-    /** Длинные строки (> 4 слов) режутся на ритмичные куски по 2-3 слова. */
+    /**
+     * Splits long lyric lines (> 3-4 words) into shorter rhythmic chunks with micro-timings.
+     */
     public static List<LyricLine> splitLongLines(List<LyricLine> originalLines) {
         if (originalLines == null || originalLines.isEmpty()) {
             return Collections.emptyList();
@@ -26,6 +28,7 @@ public final class LyricLineSplitter {
             if (words.length <= 4) {
                 result.add(current);
             } else {
+                // Split into chunks of 2-3 words
                 int wordsPerChunk = words.length > 7 ? 3 : 2;
                 List<String> chunks = new ArrayList<>();
                 StringBuilder sb = new StringBuilder();
@@ -43,7 +46,8 @@ public final class LyricLineSplitter {
                 }
                 if (sb.length() > 0) {
                     if (!chunks.isEmpty() && count <= 1) {
-                        chunks.set(chunks.size() - 1, chunks.get(chunks.size() - 1) + " " + sb);
+                        // Append trailing single word to last chunk to avoid orphan single words
+                        chunks.set(chunks.size() - 1, chunks.get(chunks.size() - 1) + " " + sb.toString());
                     } else {
                         chunks.add(sb.toString());
                     }
