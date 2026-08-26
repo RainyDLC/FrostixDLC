@@ -54,8 +54,9 @@ public class Lyrics3D extends Module {
     private final List<LyricParticle3D> activeParticles = new CopyOnWriteArrayList<>();
     private int currentLyricIndex = 0;
 
-    // Внутренние аудио-часы (работают непрерывно и синхронизируются с медиа)
+    // Внутренние аудио-часы (монотонные, плавно корректируются без скачков)
     private long internalAudioClockMs = 0L;
+    private long lastFrameSysMs = 0L;
     private long lastEffectiveAudioTimeMs = 0L;
     private long trackStartTimeSys = 0L;
     private boolean isPlaying = false;
@@ -65,9 +66,10 @@ public class Lyrics3D extends Module {
     private String currentTrackArtist = "";
 
     // Кэш медиа-информации для безопасного доступа из потока рендера
-    private volatile boolean mediaPlaying = false;
+    private volatile boolean mediaPlaying = true;
     private volatile long smtcReportedPos = 0L;
     private volatile long smtcReportedReal = 0L;
+    private volatile boolean needHardResync = false;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "nightix-lyrics");
@@ -96,10 +98,12 @@ public class Lyrics3D extends Module {
         currentTrackArtist = "";
         currentLyricIndex = 0;
         internalAudioClockMs = 0L;
+        lastFrameSysMs = System.currentTimeMillis();
         lastEffectiveAudioTimeMs = 0L;
         trackStartTimeSys = System.currentTimeMillis();
         smtcReportedPos = 0L;
         smtcReportedReal = 0L;
+        needHardResync = false;
         isPlaying = false;
     }
 
@@ -112,11 +116,11 @@ public class Lyrics3D extends Module {
         rawLyrics.clear();
         lyricsQueue.clear();
         currentLyricIndex = 0;
-        internalAudioClockMs = 0L;
+        internalAudioClockMs = smtcReportedPos > 0 ? smtcReportedPos : 0L;
+        lastFrameSysMs = System.currentTimeMillis();
         lastEffectiveAudioTimeMs = 0L;
         trackStartTimeSys = System.currentTimeMillis();
-        smtcReportedPos = 0L;
-        smtcReportedReal = 0L;
+        needHardResync = false;
         isPlaying = false;
 
         String expectedKey = this.lastTrackKey;
@@ -209,11 +213,11 @@ public class Lyrics3D extends Module {
 
             // Корректная конвертация единиц SMTC (секунды / миллисекунды / микросекунды)
             if (dur > 0) {
-                if (dur > 86_400_000L) { // микросекунды
+                if (dur > 86_400_000L) {
                     reportedMs = reported / 1000L;
-                } else if (dur > 10_000L) { // миллисекунды
+                } else if (dur > 10_000L) {
                     reportedMs = reported;
-                } else { // секунды (getDuration/getPosition в MediaPlayerInfo по умолчанию в секундах)
+                } else {
                     reportedMs = reported * 1000L;
                 }
             } else if (reported > 0) {
@@ -227,12 +231,17 @@ public class Lyrics3D extends Module {
             }
 
             if (reportedMs > 0) {
-                // Если новое значение отличается больше чем на 1 секунду от расчетного, синхронизируем якорь
-                long now = System.currentTimeMillis();
-                long currentEst = smtcReportedReal > 0 ? (smtcReportedPos + (now - smtcReportedReal)) : 0L;
-                if (Math.abs(reportedMs - currentEst) > 1000L || smtcReportedReal == 0) {
-                    smtcReportedPos = reportedMs;
-                    smtcReportedReal = now;
+                smtcReportedPos = reportedMs;
+                smtcReportedReal = System.currentTimeMillis();
+
+                long drift = reportedMs - internalAudioClockMs;
+                if (Math.abs(drift) > 4000L) {
+                    // Пользователь перемотал трек вручную
+                    internalAudioClockMs = reportedMs;
+                    needHardResync = true;
+                } else if (Math.abs(drift) > 200L) {
+                    // Плавная коррекция дрейфа без резких скачков
+                    internalAudioClockMs += (long) (drift * 0.15);
                 }
             }
 
@@ -246,19 +255,19 @@ public class Lyrics3D extends Module {
         if (currentTrackTitle.isEmpty()) return;
 
         long now = System.currentTimeMillis();
+        if (lastFrameSysMs == 0) lastFrameSysMs = now;
+        long delta = Math.min(100L, Math.max(0L, now - lastFrameSysMs));
+        lastFrameSysMs = now;
 
-        // Оценка реальной позиции без скачков
-        if (smtcReportedReal > 0 && smtcReportedPos > 0) {
-            long elapsedSinceReport = now - smtcReportedReal;
-            internalAudioClockMs = smtcReportedPos + elapsedSinceReport;
-        } else if (trackStartTimeSys > 0) {
-            internalAudioClockMs = now - trackStartTimeSys;
+        // Часы непрерывно идут вперёд в реальном времени
+        if (mediaPlaying) {
+            internalAudioClockMs += delta;
         }
 
         long effectiveAudioTime = Math.max(0, internalAudioClockMs + timeOffset.getValue().longValue());
 
-        // Перемотка: пересобираем очередь только при резком скачке (> 3000 мс)
-        if (lastEffectiveAudioTimeMs > 0 && Math.abs(effectiveAudioTime - lastEffectiveAudioTimeMs) > 3000L) {
+        if (needHardResync) {
+            needHardResync = false;
             resyncQueue(effectiveAudioTime);
         }
         lastEffectiveAudioTimeMs = effectiveAudioTime;
@@ -284,8 +293,8 @@ public class Lyrics3D extends Module {
 
         for (int i = 0; i < lyricsQueue.size(); i++) {
             LyricLine line = lyricsQueue.get(i);
-            long nextStartMs = (i + 1 < lyricsQueue.size()) ? lyricsQueue.get(i + 1).timestampMs() : line.timestampMs() + 3500L;
-            long durationMs = Math.max(1200L, Math.min(5500L, nextStartMs - line.timestampMs()));
+            long nextStartMs = (i + 1 < lyricsQueue.size()) ? lyricsQueue.get(i + 1).timestampMs() : line.timestampMs() + 4000L;
+            long durationMs = Math.max(2800L, Math.min(7500L, (nextStartMs - line.timestampMs()) + 800L));
 
             if (audioTimeMs >= line.timestampMs()) {
                 long timeSinceLine = audioTimeMs - line.timestampMs();
@@ -308,8 +317,11 @@ public class Lyrics3D extends Module {
             LyricLine line = lyricsQueue.get(currentLyricIndex);
             long nextStartMs = (currentLyricIndex + 1 < lyricsQueue.size())
                     ? lyricsQueue.get(currentLyricIndex + 1).timestampMs()
-                    : line.timestampMs() + 3500L;
-            long durationMs = Math.max(1400L, Math.min(6000L, nextStartMs - line.timestampMs()));
+                    : line.timestampMs() + 4000L;
+
+            // Длительность отображения: строка живёт до следующей строки + мягкий нахлёст
+            long lineGap = nextStartMs - line.timestampMs();
+            long durationMs = Math.max(2800L, Math.min(7500L, lineGap + 800L));
 
             if (audioTimeMs >= line.timestampMs()) {
                 long timeSinceLine = audioTimeMs - line.timestampMs();
