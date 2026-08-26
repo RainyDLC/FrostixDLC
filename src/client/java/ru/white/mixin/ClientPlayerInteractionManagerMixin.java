@@ -27,11 +27,9 @@ public class ClientPlayerInteractionManagerMixin {
     }
     @Inject(method = "attackEntity", at = @At("HEAD"), cancellable = true)
     private void onAttackEntity(PlayerEntity player, Entity target, CallbackInfo ci) {
-         AttackEvent event =  new AttackEvent(target);
-
-        event.hook();;
-
-        if(event.isCancelled()) {
+        AttackEvent event = new AttackEvent(target);
+        event.hook();
+        if (event.isCancelled()) {
             ci.cancel();
         }
     }

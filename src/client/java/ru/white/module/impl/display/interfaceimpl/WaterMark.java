@@ -78,8 +78,6 @@ public class WaterMark implements element {
         RenderUtil.Images.texture(LOGO_TEXTURE,
                 x + (H - logoS) / 2F, y + (H - logoS) / 2F, logoS, logoS, ColorUtil.getClientColor(1));
 
-        //RenderUtil.Render2D.rect(x + 16 / 2  - 2,y + 14.5F,4,1.5F,ColorUtil.getClientColor1(1),2,2,0,0);
-
         x += 18.5F * S;
 
         String user = "User";

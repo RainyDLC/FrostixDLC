@@ -53,10 +53,8 @@ public class TargetEsp extends Module implements ModulePreview {
 
     public ModeSetting type = new ModeSetting(this,"Режим","Призраки","Картинка","Кольцо","Бублик","Кубики","Молнии");
 
-    public ModeSetting typeGhost = new ModeSetting(this,"Тип призраков","1","2","3","4").setVisible(() -> type.is("Призраки"));;
-
-
-    public ModeSetting typeImages = new ModeSetting(this,"Тип картинки","1","2","3","4").setVisible(() -> type.is("Картинка"));;
+    public ModeSetting typeGhost = new ModeSetting(this, "Тип призраков", "1", "2", "3", "4").setVisible(() -> type.is("Призраки"));
+    public ModeSetting typeImages = new ModeSetting(this, "Тип картинки", "1", "2", "3", "4").setVisible(() -> type.is("Картинка"));
 
     public SliderSetting speed = new SliderSetting(this,"Скорость призраков",900,400,1500,50).setVisible(() -> type.is("Призраки"));
     public SliderSetting sizeGlow = new SliderSetting(this,"Сила свечения",0.35F,0.1F,0.75F,0.05F).setVisible(() -> type.is("Призраки"));

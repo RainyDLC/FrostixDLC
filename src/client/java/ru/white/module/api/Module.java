@@ -100,14 +100,7 @@ public abstract class Module implements IMinecraft {
 
         if (enabled) {
             superEnable();
-            if(mc.player != null && notification) {
-
-
-               // ChatUtils.addChatMessageDev(this.name + " modules was enabled");
-
-                //       Notify.get().showNotification("on", this.name,"function was enabled", 2000,
-            //               ColorUtil.getTextTwoColor());
-
+            if (mc.player != null && notification) {
                 String type = "tone_enable";
                 if (InterFace.getInstance().typeNotify.is("Второй")) {
                     type = "notify_enable";
@@ -119,22 +112,10 @@ public abstract class Module implements IMinecraft {
                     type = "enable4";
                 }
                 SoundUtil.playSound_wav(type, InterFace.getInstance().volume.getValue());
-              // if(Notify.get().isEnabled()) {
-              //     SoundUtil.playSound_wav("Function_ON", Notify.get().setting.getValue());
-              //     Notify.get().showNotification("on",this.name + " modules was enabled");
-              // }
-
             }
         } else {
             superDisable();
-            if(mc.player != null && notification) {
-
-
-               // ChatUtils.addChatMessageDev(this.name + " modules was disabled");
-
-            //      Notify.get().showNotification("off", this.name ,"function was disabled", 2000,
-            //              ColorUtil.getTextTwoColor());
-
+            if (mc.player != null && notification) {
                 String type = "tone_disable";
                 if (InterFace.getInstance().typeNotify.is("Второй")) {
                     type = "notify_disable";
@@ -146,12 +127,6 @@ public abstract class Module implements IMinecraft {
                     type = "disable4";
                 }
                 SoundUtil.playSound_wav(type, InterFace.getInstance().volume.getValue());
-                //if(Notify.get().isEnabled()) {
-                //    SoundUtil.playSound_wav("Function_OFF", Notify.get().setting.getValue());
-                //    Notify.get().showNotification("off",this.name + " modules was disabled");
-                //}
-            //  SoundUtil.playSound_wav("notify/tone_disable", 0.7F);
-
             }
         }
 

@@ -289,7 +289,6 @@ public class DragComponent extends Component implements IMinecraft {
                         if (dist < snap.distance && dist < closest) {
                             closest = dist;
                             selected.targetPosition.y = snap.position + y;
-                            // RectUtil.drawRect(matrices, 0, snap.position - 0.5F, scaled().x, 1F, color);
                         }
                     }
                 }
@@ -304,25 +303,12 @@ public class DragComponent extends Component implements IMinecraft {
                         if (dist < snap.distance && dist < closest) {
                             closest = dist;
                             selected.targetPosition.x = snap.position + x;
-                            // RectUtil.drawRect(matrices, snap.position - 0.5F, 0, 1F, scaled().y, color);
                         }
                     }
                 }
             }
         }
     }
-
-    // Vector2f scaled() {
-    //     return ScaleMath.getMouse(MinecraftClient.getInstance().getWindow().getScaledWidth(), MinecraftClient.getInstance().getWindow().getScaledHeight());
-    // }
-//
-    // private void initSnaps(int width, int height) {
-    //     float edge = 5F;
-    //     float dist = 5F;
-//
-//
-//
-    // }
 
     private void handleAnimation() {
         modules.forEach(m -> m.getSettings().forEach(s -> {

@@ -1514,14 +1514,6 @@ public class AuraCrafter extends Module {
         float sy = y + 18;
         for (int i = 0; i < statLeft.length; i++) {
             float rowY = sy + i * rowH;
-
-          //  RenderUtil.Render2D.gradientRect(x + 5, rowY, width - 10, 12, new int[]{
-          //          ColorUtil.getColor(255, 0.025F),
-          //          ColorUtil.getColor(255, 0.0F),
-          //          ColorUtil.getColor(255, 0.0F),
-          //          ColorUtil.getColor(255, 0.025F)
-          //  }, 3);
-
             Fonts.sf_medium.draw(statLeft[i], x + 6.5F, rowY + 2, 6, hudStatLabelColor(statLeft[i]));
             Fonts.sf_medium.draw(statRight[i], x + width - 6.5F
                             - Fonts.sf_medium.getWidth(statRight[i], 6), rowY + 2, 6,
@@ -1531,24 +1523,12 @@ public class AuraCrafter extends Module {
         sy += statLeft.length * rowH;
         for (int i = 0; i < left.length; i++) {
             float rowY = sy + i * rowH;
-
-          // RenderUtil.Render2D.gradientRect(x + 5,rowY,width - 10,12,new int[]{
-          //         ColorUtil.getColor(255,0.02F),
-          //         ColorUtil.getColor(255,0.0F),
-          //         ColorUtil.getColor(255,0.0F),
-          //         ColorUtil.getColor(255,0.02F)
-          // },3);
-
             int leftColor = i == 0 ? ColorUtil.getClientColor(255) : ColorUtil.getColor(180);
             int rightColor = i == 1 && fullAuto ? ColorUtil.getColor(85, 255, 119, 1F) : ColorUtil.getColor(220);
             Fonts.sf_medium.draw(left[i], x + 6.5F, rowY + 2, 6, leftColor);
             Fonts.sf_medium.draw(right[i], x + width - 6.5F - Fonts.sf_medium.getWidth(right[i], 6),
                     rowY + 2, 6, rightColor);
         }
-
-        //float barY = y + height - 11;
-        //drawBar(x + 8, barY, (width - 22) / 2f, 4, milk, Math.max(1, milkTarget), ColorUtil.getColor(85, 221, 255, 1F));
-        //drawBar(x + 14 + (width - 22) / 2f, barY, (width - 22) / 2f, 4, listed, Math.max(1, slotsMax), ColorUtil.getColor(255, 209, 102, 1F));
     }
 
     private void drawBar(float x, float y, float w, float h, int value, int max, int color) {

@@ -83,10 +83,6 @@ public class AppleFarmer extends Module {
     public void onUpdate(EventUpdate event) {
         if (mc.player == null || mc.world == null) return;
 
-        // if (PlayerHelper.isAutoUseActive()) {
-            //     return;
-            // }
-
         refillTimer++;
         if (refillTimer > 4) {
             handleAutoRefill();

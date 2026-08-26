@@ -140,7 +140,7 @@ public class Speed extends Module {
         }
 
         if (type.is("RW")) {
-            handleRW();;
+            handleRW();
         }
 
         if (type.is("ReallyWorld")) {
@@ -155,13 +155,6 @@ public class Speed extends Module {
             grimLastZ = mc.player.getZ();
             hasGrimPos = true;
         }
-    }
-
-    public float tick = 1.0F;
-
-    @EventHandler
-    public void onEvent(EventMoveInput e) {
-
     }
 
     @EventHandler
@@ -197,7 +190,6 @@ public class Speed extends Module {
     }
 
     public TimerUtil timerUtil = new TimerUtil();
-// timerUtil2 и timerUtil3 пока не требуются для этой задачи
 
     /**
      * ReallyWorld: постоянное сильное ускорение без компенсирующих просадок.
@@ -416,39 +408,25 @@ public class Speed extends Module {
 
     private void handleRW() {
         if (mc.getRenderTickCounter() instanceof ITimerSpeed speedTimer) {
-
             long elapsed = timerUtil.getTime();
-
-            boolean speed;
             float currentSpeed;
-
             if (elapsed < 100) {
-
-                speed = true;
                 currentSpeed = 1.15F;
             } else if (elapsed < 500) {
-
                 currentSpeed = 1.4F;
             } else if (elapsed < 520) {
-
                 currentSpeed = 1.6F;
-            }  else if (elapsed < 540) {
-
-                speed = false;
+            } else if (elapsed < 540) {
                 currentSpeed = 0.25F;
             } else {
-
                 timerUtil.reset();
-                speed = true;
                 currentSpeed = 0.5F;
             }
 
             speedTimer.setSpeed(currentSpeed);
-
-
-            double bst = 0.03;
         }
     }
+
     private boolean canUseRW() {
         return mc.player != null
                 && mc.world != null
@@ -461,9 +439,8 @@ public class Speed extends Module {
     private void resetRWState(boolean resetTimer) {
         ticks = 0;
         groundTicks = 0;
-        if (resetTimer) {
+        if (resetTimer && mc.player != null) {
             mc.player.speed = 0;
-            // mc.timer.resetSpeed();
         }
     }
 
@@ -491,7 +468,7 @@ public class Speed extends Module {
     @Override
     public void onDisable() {
         if (mc.getRenderTickCounter() instanceof ITimerSpeed speedTimer) {
-            speedTimer.setSpeed(1.0F); // Ускорить игру в 2 раза
+            speedTimer.setSpeed(1.0F);
         }
         resetRWState(true);
         TickManagerClient.tick = 20;

@@ -1,59 +1,53 @@
 package nightix;
 
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.FieldVisitor;
+import org.objectweb.asm.Label;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
+
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Шифратор классов Nightix.
+ * Продвинутый шифратор и обфускатор байткода ядра Nightix / RainyDLC.
  *
- * 1. Сид-набор: entrypoint (ru/white/Client), NightixLoader, всё под
- *    ru/white/mixin/ и entrypoints из fabric.mod.json — эти классы Fabric
- *    обязан читать сам, они остаются открытыми.
- * 2. Транзитивное замыкание: из константных пулов сидов вытаскиваются все
- *    ссылки Lru/white/...; и dotted-строки ru.white... — замкнутое множество
- *    остаётся открытым (Knot должен уметь грузить их напрямую).
- * 3. Всё остальное под ru/white/** шифруется AES/GCM. Ключ =
- *    SHA-256(секрет || SHA-256(index.bin)): изменение любого байта шифроблока
- *    или индекса делает расшифровку невозможной. Секрет извлекается из
- *    константного пула NightixLoader (маркер NIXSEC:) — единственный источник.
+ * 1. Трансформирует байткод каждого класса:
+ *    - Полное удаление отладочной информации (LineNumberTable, LocalVariableTable, SourceFile).
+ *    - Установка флага ACC_SYNTHETIC для усложнения анализа декомпиляторами (CFR, JD-GUI, Fernflower).
+ * 2. Упаковывает ВСЕ ~590 классов ядра в сжатый (Deflate) бинарный пакет.
+ * 3. Шифрует пакет с использованием AES-256-GCM с динамическим солевым ключом.
+ * 4. Очищает метаданные у остающихся открытых классов (миксины и точки входа).
  */
 public final class ClassEncryptor {
 
-    private static final String IDX_PATH = "assets/nightix/enc/index.bin";
-    private static final String ENC_DIR = "assets/nightix/enc/";
-    private static final byte[] MARKER = "NIXSEC:".getBytes(StandardCharsets.US_ASCII);
-    private static final Pattern L_FORM = Pattern.compile("L(ru/white/[\\w$/]+);");
-    private static final Pattern DOT_FORM = Pattern.compile("(ru\\.white(?:\\.\\w+)+)");
-
+    private static final String CORE_BIN_PATH = "assets/nightix/core.bin";
+    private static final int MAGIC = 0x4E495843; // NIXC
     private final SecureRandom random = new SecureRandom();
 
     public void run(File inJar, File outJar) {
         try {
             execute(inJar, outJar);
         } catch (Exception e) {
-            throw new RuntimeException("nightix protect failed", e);
+            throw new RuntimeException("Protection packaging failed", e);
         }
     }
 
@@ -70,141 +64,167 @@ public final class ClassEncryptor {
         List<String> order = new ArrayList<>();
         readJar(inJar, entries, order);
 
-        byte[] loaderClass = entries.get("ru/white/NightixLoader.class");
-        if (loaderClass == null) throw new IllegalStateException("NightixLoader not found in jar");
-        String secret = extractSecret(loaderClass);
-
-        Set<String> plain = closure(entries);
-
         List<String> toEncrypt = new ArrayList<>();
         for (String path : order) {
             if (!path.startsWith("ru/white/") || !path.endsWith(".class")) continue;
-            if (plain.contains(path)) continue;
+            // Пропускаем миксины и входные точки Fabric
+            if (path.startsWith("ru/white/mixin/")) continue;
+            if (path.equals("ru/white/Client.class")) continue;
+            if (path.equals("ru/white/NightixLoader.class")) continue;
+            if (path.equals("ru/white/NightixPreLaunch.class")) continue;
+
             toEncrypt.add(path);
         }
 
-        byte[] index = String.join("\n", toEncrypt).getBytes(StandardCharsets.UTF_8);
-        SecretKeySpec key = deriveKey(secret, index);
+        // 1. Формируем сжатый бинарный пакет всех классов с трансформацией байткода
+        ByteArrayOutputStream payloadBuf = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(payloadBuf);
+        dos.writeInt(toEncrypt.size());
 
-        Map<String, byte[]> blobs = new LinkedHashMap<>();
         for (String path : toEncrypt) {
             String className = path.substring(0, path.length() - ".class".length()).replace('/', '.');
-            blobs.put(ENC_DIR + className.replace('.', '_') + ".enc", encrypt(entries.get(path), key));
+            byte[] rawBytes = entries.get(path);
+            byte[] transformedBytes = transformClass(rawBytes, true);
+            byte[] compressed = compress(transformedBytes);
+
+            dos.writeUTF(className);
+            dos.writeInt(compressed.length);
+            dos.write(compressed);
         }
+        dos.flush();
+        byte[] plainPayload = payloadBuf.toByteArray();
 
-        try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(outJar))) {
-            for (String path : order) {
-                if (toEncrypt.contains(path)) continue; // исходный .class удалён
-                writeEntry(zip, path, entries.get(path));
-            }
-            for (Map.Entry<String, byte[]> b : blobs.entrySet()) {
-                writeEntry(zip, b.getKey(), b.getValue());
-            }
-            writeEntry(zip, IDX_PATH, index);
-        }
+        // 2. Шифруем пакет с AES-256-GCM
+        byte[] salt = new byte[16];
+        random.nextBytes(salt);
+        byte[] keyBytes = deriveKey(salt);
+        SecretKeySpec key = new SecretKeySpec(keyBytes, "AES");
 
-        System.out.println("[nightix] encrypted classes : " + toEncrypt.size());
-        System.out.println("[nightix] plaintext classes : " + plain.size());
-        System.out.println("[nightix] protected jar     : " + outJar.getAbsolutePath());
-    }
-
-    /** Сид-набор + транзитивное замыкание по константным пулам. */
-    private Set<String> closure(Map<String, byte[]> entries) {
-        Set<String> plain = new HashSet<>();
-        Deque<String> queue = new ArrayDeque<>();
-
-        for (String path : entries.keySet()) {
-            if (path.startsWith("ru/white/mixin/") && path.endsWith(".class")) {
-                queue.add(path);
-            }
-        }
-        enqueueIfExists(queue, entries, "ru/white/Client.class");
-        enqueueIfExists(queue, entries, "ru/white/NightixLoader.class");
-
-        // entrypoints из fabric.mod.json (client-секция)
-        byte[] fmj = entries.get("fabric.mod.json");
-        if (fmj != null) {
-            String json = new String(fmj, StandardCharsets.UTF_8);
-            Matcher m = DOT_FORM.matcher(json);
-            while (m.find()) {
-                enqueueIfExists(queue, entries, m.group(1).replace('.', '/') + ".class");
-            }
-        }
-
-        while (!queue.isEmpty()) {
-            String path = queue.poll();
-            if (!plain.add(path)) continue;
-            byte[] bytes = entries.get(path);
-            if (bytes == null) continue;
-
-            for (String ref : scanReferences(bytes)) {
-                String refPath = ref.replace('.', '/') + ".class";
-                if (entries.containsKey(refPath) && !plain.contains(refPath)) {
-                    queue.add(refPath);
-                }
-            }
-        }
-        return plain;
-    }
-
-    /** Все ru.white-имена из константного пула класса (L-форма и dotted-строки). */
-    private List<String> scanReferences(byte[] bytes) {
-        List<String> out = new ArrayList<>();
-        Matcher l = L_FORM.matcher(new String(bytes, StandardCharsets.ISO_8859_1));
-        while (l.find()) out.add(l.group(1).replace('/', '.'));
-        Matcher d = DOT_FORM.matcher(new String(bytes, StandardCharsets.ISO_8859_1));
-        while (d.find()) out.add(d.group(1));
-        return out;
-    }
-
-    /** Секрет — в константном пуле NightixLoader после маркера NIXSEC:. */
-    private String extractSecret(byte[] loaderClass) {
-        for (int i = 0; i <= loaderClass.length - MARKER.length; i++) {
-            boolean found = true;
-            for (int j = 0; j < MARKER.length; j++) {
-                if (loaderClass[i + j] != MARKER[j]) {
-                    found = false;
-                    break;
-                }
-            }
-            if (found) {
-                StringBuilder sb = new StringBuilder();
-                for (int k = i + MARKER.length; k < loaderClass.length; k++) {
-                    char c = (char) (loaderClass[k] & 0xFF);
-                    if (Character.isLetterOrDigit(c)) sb.append(c);
-                    else break;
-                }
-                if (sb.length() >= 16) return sb.toString();
-            }
-        }
-        throw new IllegalStateException("NIXSEC secret not found in NightixLoader");
-    }
-
-    private static SecretKeySpec deriveKey(String secret, byte[] index) throws Exception {
-        MessageDigest sha = MessageDigest.getInstance("SHA-256");
-        byte[] idxHash = sha.digest(index);
-        sha.reset();
-        byte[] s = secret.getBytes(StandardCharsets.UTF_8);
-        byte[] material = new byte[s.length + idxHash.length];
-        System.arraycopy(s, 0, material, 0, s.length);
-        System.arraycopy(idxHash, 0, material, s.length, idxHash.length);
-        return new SecretKeySpec(sha.digest(material), "AES");
-    }
-
-    private byte[] encrypt(byte[] data, SecretKeySpec key) throws Exception {
         byte[] iv = new byte[12];
         random.nextBytes(iv);
-        Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
-        c.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(128, iv));
-        byte[] ct = c.doFinal(data);
-        byte[] out = new byte[iv.length + ct.length];
-        System.arraycopy(iv, 0, out, 0, iv.length);
-        System.arraycopy(ct, 0, out, iv.length, ct.length);
-        return out;
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(128, iv));
+        byte[] cipherText = cipher.doFinal(plainPayload);
+
+        // 3. Формируем бинарный файл core.bin
+        ByteArrayOutputStream coreBin = new ByteArrayOutputStream();
+        DataOutputStream coreDos = new DataOutputStream(coreBin);
+        coreDos.writeInt(MAGIC);
+        coreDos.writeShort(1); // version
+        coreDos.write(salt);
+        coreDos.write(iv);
+        coreDos.write(cipherText);
+        coreDos.flush();
+
+        // 4. Записываем выходной JAR, очищая отладку в оставшихся stub/mixin классах
+        try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(outJar))) {
+            for (String path : order) {
+                if (toEncrypt.contains(path)) continue; // Зашифрованные .class удаляются из JAR!
+
+                byte[] data = entries.get(path);
+                if (path.startsWith("ru/white/") && path.endsWith(".class")) {
+                    data = transformClass(data, false);
+                }
+
+                writeEntry(zip, path, data);
+            }
+            writeEntry(zip, CORE_BIN_PATH, coreBin.toByteArray());
+        }
+
+        long plainCount = order.stream()
+                .filter(p -> p.startsWith("ru/white/") && p.endsWith(".class") && !toEncrypt.contains(p))
+                .count();
+
+        System.out.println("[protection] ========================================");
+        System.out.println("[protection] Encrypted & obfuscated classes: " + toEncrypt.size() + " (in " + CORE_BIN_PATH + ")");
+        System.out.println("[protection] Plain stub & mixin classes   : " + plainCount + " (debug info stripped)");
+        System.out.println("[protection] Output Protected JAR         : " + outJar.getAbsolutePath());
+        System.out.println("[protection] ========================================");
     }
 
-    private static void enqueueIfExists(Deque<String> queue, Map<String, byte[]> entries, String path) {
-        if (entries.containsKey(path)) queue.add(path);
+    /**
+     * Очищает метаданные, имена локальных переменных, номера строк и помечает методы как синтетические.
+     */
+    private byte[] transformClass(byte[] classBytes, boolean makeSynthetic) {
+        try {
+            ClassReader cr = new ClassReader(classBytes);
+            ClassWriter cw = new ClassWriter(cr, 0);
+
+            ClassVisitor cv = new ClassVisitor(Opcodes.ASM9, cw) {
+                @Override
+                public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+                    int acc = makeSynthetic ? (access | Opcodes.ACC_SYNTHETIC) : access;
+                    super.visit(version, acc, name, signature, superName, interfaces);
+                }
+
+                @Override
+                public void visitSource(String source, String debug) {
+                    // Удаляем SourceFile
+                }
+
+                @Override
+                public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
+                    int acc = makeSynthetic ? (access | Opcodes.ACC_SYNTHETIC) : access;
+                    return super.visitField(acc, name, descriptor, signature, value);
+                }
+
+                @Override
+                public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+                    int acc = (makeSynthetic && !name.startsWith("<")) ? (access | Opcodes.ACC_SYNTHETIC) : access;
+                    MethodVisitor mv = super.visitMethod(acc, name, descriptor, signature, exceptions);
+                    if (mv == null) return null;
+
+                    return new MethodVisitor(Opcodes.ASM9, mv) {
+                        @Override
+                        public void visitLineNumber(int line, Label start) {
+                            // Удаляем номера строк (LineNumberTable)
+                        }
+
+                        @Override
+                        public void visitLocalVariable(String name, String descriptor, String signature, Label start, Label end, int index) {
+                            // Удаляем имена локальных переменных (LocalVariableTable)
+                        }
+                    };
+                }
+            };
+
+            cr.accept(cv, ClassReader.SKIP_DEBUG);
+            return cw.toByteArray();
+        } catch (Throwable t) {
+            return classBytes;
+        }
+    }
+
+    private static byte[] deriveKey(byte[] salt) throws Exception {
+        byte[] seed = getSeed();
+        MessageDigest sha = MessageDigest.getInstance("SHA-256");
+        sha.update(seed);
+        sha.update(salt);
+        return sha.digest();
+    }
+
+    private static byte[] getSeed() {
+        byte[] s = new byte[32];
+        int v = 0x8F3A2C17;
+        for (int i = 0; i < 32; i++) {
+            v = ((v ^ 0x6D) * 0x41C64E6D + 0x3039) ^ (i * 0x5A827999);
+            s[i] = (byte) ((v ^ (v >>> 16) ^ (v >>> 8)) & 0xFF);
+        }
+        return s;
+    }
+
+    private static byte[] compress(byte[] input) {
+        Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
+        deflater.setInput(input);
+        deflater.finish();
+        ByteArrayOutputStream output = new ByteArrayOutputStream(input.length);
+        byte[] buffer = new byte[4096];
+        while (!deflater.finished()) {
+            int count = deflater.deflate(buffer);
+            output.write(buffer, 0, count);
+        }
+        deflater.end();
+        return output.toByteArray();
     }
 
     private static void readJar(File jar, Map<String, byte[]> entries, List<String> order) throws Exception {

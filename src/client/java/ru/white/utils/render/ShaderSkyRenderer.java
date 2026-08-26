@@ -185,7 +185,6 @@ public class ShaderSkyRenderer {
         Color color2 = new Color(ShaderSky.geteColor2(), true);
         Color accentColor = Color.WHITE;
 
-        // integrate time with the current speed so slider changes never jump
         long now = System.currentTimeMillis();
         if (lastFrameMs > 0L) {
             float dt = (now - lastFrameMs) / 1000.0f;
@@ -252,6 +251,7 @@ public class ShaderSkyRenderer {
             case "Star" -> 4;
             case "Glow" -> 5;
             case "Plasma" -> 6;
+            case "Пасмурно", "Overcast" -> 7;
             default -> 0;
         };
     }
@@ -260,7 +260,6 @@ public class ShaderSkyRenderer {
         if (module.mode.is("Blur")) {
             return module.intensity.getValue();
         }
-        // Procedural modes fully replace the Minecraft sky.
         return 1.0f;
     }
 
@@ -291,10 +290,6 @@ public class ShaderSkyRenderer {
     }
 
     private static ByteBuffer createCelestialQuad() {
-        // Ванильный масштаб небесного купола: геометрия живёт в пространстве
-        // "только поворот камеры" вокруг наблюдателя, поэтому размер должен
-        // быть небольшим, иначе грани отсекаются far-плоскостью проекции
-        // (дырки с ванильным небом у горизонта).
         float s = 16.0f;
         float[] vertices = new float[] {
                 -s, -s, -s,  s, -s, -s,  s,  s, -s,

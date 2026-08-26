@@ -16,6 +16,9 @@
   "license": "All-Rights-Reserved",
   "environment": "client",
   "entrypoints": {
+    "preLaunch": [
+      "ru.white.NightixPreLaunch"
+    ],
     "client": [
       "ru.white.Client"
     ]

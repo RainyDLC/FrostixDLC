@@ -190,13 +190,8 @@ public class UAttack implements IMinecraft {
 
             };
             pre$post[1] = () -> {
-
-
                 mc.options.sprintKey.setPressed(true);
                 mc.player.setSprinting(true);
-
-                // mc.player.networkHandler.sendPacket(new ClientCommandC2SPacket(mc.player,
-                // ClientCommandC2SPacket.Mode.START_SPRINTING));
             };
         }
         return pre$post;
@@ -248,13 +243,7 @@ public class UAttack implements IMinecraft {
         if (preHit != null)
             preHit.run();
         if (livingIn != null && mc.interactionManager != null && mc.player != null) {
-
-
-
-
             mc.interactionManager.attackEntity(mc.player, livingIn);
-
-            //mc.player.sendMessage(Text.of("Удар сделан " + cooldownTimer.elapsedTime()),true);
             if (hand != null)
                 mc.player.swingHand(hand);
             if (cpsBypass)
@@ -262,7 +251,7 @@ public class UAttack implements IMinecraft {
             else
                 hitCounterCPSBypassReset();
 
-                cooldownTimer.reset();
+            cooldownTimer.reset();
 
         }
         if (postHit != null)

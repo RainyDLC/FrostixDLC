@@ -55,13 +55,6 @@ public class PotionFarmer extends Module {
         currentStage = 0;
 
         findBlocks();
-
-
-
-      //  if (orderedChests.size() < 3 || brewingStandPos == null) {
-      //      System.out.println("[PotionFarmer] Ошибка: Нужно 3 сундука друг на друге и 1 стойка!");
-      //      this.toggle();
-      //  }
     }
 
     private void findBlocks() {

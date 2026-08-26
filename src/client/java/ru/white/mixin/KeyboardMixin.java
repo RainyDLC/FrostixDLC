@@ -32,7 +32,7 @@ public class KeyboardMixin {
 
         if (action == 1 && screen == null) {
             EventKey event = new EventKey(key);
-            event.hook();;
+            event.hook();
         }
     }
 }

@@ -1,6 +1,9 @@
 package ru.white.module.impl.player;
 
-import ru.white.manager.event_impl.*;
+import net.minecraft.client.option.Perspective;
+import net.minecraft.network.packet.s2c.play.GameJoinS2CPacket;
+import net.minecraft.network.packet.s2c.play.PlayerRespawnS2CPacket;
+import net.minecraft.util.math.Vec3d;
 import ru.white.manager.event_impl.CameraPositionEvent;
 import ru.white.manager.event_impl.EventPacket;
 import ru.white.manager.event_impl.InputEvent;
@@ -10,27 +13,23 @@ import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
 import ru.white.utils.math.MathUtil;
-import net.minecraft.client.option.Perspective;
-import net.minecraft.network.packet.s2c.play.GameJoinS2CPacket;
-import net.minecraft.network.packet.s2c.play.PlayerRespawnS2CPacket;
-import net.minecraft.util.math.Vec3d;
 
 @ModuleInfo(
         name = "Free Camera",
-        desc = "Камера свободного палета",
+        desc = "Камера свободного полёта",
         category = Category.PLAYER
 )
 public class FreeCamera extends Module {
-
 
     public Vec3d pos, prevPos;
 
     @Override
     public void onEnable() {
-        prevPos = pos = new Vec3d(mc.getEntityRenderDispatcher().camera.getCameraPos().toVector3f());
+        if (mc.getEntityRenderDispatcher().camera != null) {
+            prevPos = pos = new Vec3d(mc.getEntityRenderDispatcher().camera.getCameraPos().toVector3f());
+        }
         super.onEnable();
     }
-
 
     @EventHandler
     public void onPacket(EventPacket e) {
@@ -41,15 +40,10 @@ public class FreeCamera extends Module {
         }
     }
 
-
-
     @EventHandler
     public void onMove(MoveEvent e) {
-        // if (freezeSetting.isValue()) {
         e.setMovement(Vec3d.ZERO);
-        // }
     }
-
 
     @EventHandler
     public void onInput(InputEvent e) {
@@ -63,6 +57,7 @@ public class FreeCamera extends Module {
     }
 
     public double[] calculateDirection(float forward, float sideways, double distance) {
+        if (mc.player == null) return new double[]{0.0, 0.0};
         float yaw = mc.player.getYaw();
         if (forward != 0.0f) {
             if (sideways > 0.0f) {
@@ -81,12 +76,12 @@ public class FreeCamera extends Module {
 
         return new double[]{xMovement, zMovement};
     }
+
     @EventHandler
     public void onCameraPosition(CameraPositionEvent e) {
-        e.setPos(MathUtil.interpolate(prevPos, pos));
-        mc.options.setPerspective(Perspective.FIRST_PERSON);
+        if (prevPos != null && pos != null) {
+            e.setPos(MathUtil.interpolate(prevPos, pos));
+            mc.options.setPerspective(Perspective.FIRST_PERSON);
+        }
     }
-
-
-
 }

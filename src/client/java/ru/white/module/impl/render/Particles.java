@@ -626,7 +626,7 @@ public class Particles extends Module implements ModulePreview {
         STAR_NEW("client",true),
         SNOOW("snowflake",true),
         DOLLAR("dollar",true),
-        PUMPKIN("pumpkin",true);;
+        PUMPKIN("pumpkin", true);
 
         Identifier texture;
         boolean rotatable;
@@ -678,12 +678,6 @@ public class Particles extends Module implements ModulePreview {
 
             double bounciness = 0.85;
             double gravity = isWorldParticle ? 0.0001 : 0.0005;
-
-          // if (isTotem) {
-          //     gravity = 0.0012;
-          //     double dragXZ = Math.pow(0.89, ticks);
-          //     velocity = new Vec3d(velocity.x * dragXZ, velocity.y, velocity.z * dragXZ);
-          // }
 
             double nextX = position.x + velocity.x * ticks;
             double nextY = position.y + velocity.y * ticks;

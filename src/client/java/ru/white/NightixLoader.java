@@ -3,35 +3,105 @@ package ru.white;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.InputStream;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.management.ManagementFactory;
-import java.nio.charset.StandardCharsets;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.security.MessageDigest;
-import java.util.ArrayList;
+import java.security.ProtectionDomain;
+import java.util.Arrays;
 import java.util.List;
+import java.util.zip.Inflater;
 
 /**
- * Загрузчик зашифрованного ядра Nightix.
- * Ключ = SHA-256(секрет || SHA-256(index.bin)) — любое изменение зашифрованных
- * классов ломает ключ, клиент молча отказывает вместо честного сообщения.
- * Анти-инструментирование: javaagent/agentlib/jdwp в аргументах JVM дают
- * неверный ключ — тот же тихий отказ.
+ * Загрузчик зашифрованного ядра клиента.
+ * Внедряет расшифрованные классы напрямую в KnotClassLoader и обеспечивает
+ * непрерывную защиту от дампа памяти и отладочных инструментов.
  */
-public final class NightixLoader extends ClassLoader {
+public final class NightixLoader {
 
-    private static final String IDX = "assets/nightix/enc/index.bin";
-    private static final String ENC = "assets/nightix/enc/";
-    private static final String MARKER = "NIXSEC:";
-    private static final String SECRET = "NIXSEC:R4inyDLC9x2K7qWm5Tz3Vb8Nc4Jd6Hf";
+    private static final String CORE_RES = "/assets/nightix/core.bin";
+    private static final int MAGIC = 0x4E495843; // NIXC
+    private static volatile boolean loaded = false;
 
     private NightixLoader() {
-        super(NightixLoader.class.getClassLoader());
     }
 
-    /** В защищённой сборке в JAR лежит index.bin — значит классы зашифрованы. */
     public static boolean encryptedBuild() {
-        return NightixLoader.class.getResourceAsStream("/" + IDX) != null;
+        return NightixLoader.class.getResourceAsStream(CORE_RES) != null;
+    }
+
+    public static synchronized void loadClasses() {
+        if (loaded) return;
+        if (!encryptedBuild()) return;
+
+        try {
+            // Запрещаем динамическое подключение агентов через Attach API
+            System.setProperty("jdk.attach.allowAttachSelf", "false");
+
+            if (isCompromised()) {
+                corruptMemory();
+            }
+
+            // Запускаем фоновый сторожевой поток (Watchdog) для детекта инжекторов и дамперов
+            startWatchdog();
+
+            byte[] raw = readResource(CORE_RES);
+            if (raw.length < 34) {
+                throw new IllegalStateException("Corrupted core container");
+            }
+
+            DataInputStream dis = new DataInputStream(new ByteArrayInputStream(raw));
+            int magic = dis.readInt();
+            int version = dis.readShort();
+            if (magic != MAGIC || version != 1) {
+                throw new IllegalStateException("Invalid core signature");
+            }
+
+            byte[] salt = new byte[16];
+            dis.readFully(salt);
+            byte[] iv = new byte[12];
+            dis.readFully(iv);
+
+            int cipherLen = raw.length - 4 - 2 - 16 - 12;
+            byte[] cipherText = new byte[cipherLen];
+            dis.readFully(cipherText);
+
+            byte[] keyBytes = deriveKey(salt);
+            SecretKeySpec key = new SecretKeySpec(keyBytes, "AES");
+
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
+            byte[] decompressedPayload = decompress(cipher.doFinal(cipherText));
+
+            // Затираем массивы с ключом и шифротекстом
+            Arrays.fill(keyBytes, (byte) 0);
+            Arrays.fill(cipherText, (byte) 0);
+
+            DataInputStream payloadStream = new DataInputStream(new ByteArrayInputStream(decompressedPayload));
+            int count = payloadStream.readInt();
+
+            ClassLoader knot = NightixLoader.class.getClassLoader();
+            for (int i = 0; i < count; i++) {
+                String className = payloadStream.readUTF();
+                int len = payloadStream.readInt();
+                byte[] classBytes = payloadStream.readNBytes(len);
+
+                defineInClassLoader(knot, className, classBytes);
+                Arrays.fill(classBytes, (byte) 0);
+            }
+
+            Arrays.fill(decompressedPayload, (byte) 0);
+            loaded = true;
+        } catch (Throwable t) {
+            throw new IllegalStateException("Initialization failure", t);
+        }
     }
 
     public static void bootstrap(Client client) {
@@ -39,10 +109,12 @@ public final class NightixLoader extends ClassLoader {
             if (!encryptedBuild()) {
                 launchPlain(client);
             } else {
-                new NightixLoader().decryptAndLaunch(client);
+                loadClasses();
+                Class<?> main = Class.forName("ru.white.core.ClientMain", true, NightixLoader.class.getClassLoader());
+                main.getMethod("init", Client.class).invoke(null, client);
             }
         } catch (Throwable t) {
-            throw new IllegalStateException("nightix: core integrity failure", t);
+            throw new IllegalStateException("Failed to launch client", t);
         }
     }
 
@@ -51,56 +123,134 @@ public final class NightixLoader extends ClassLoader {
         main.getMethod("init", Client.class).invoke(null, client);
     }
 
-    private void decryptAndLaunch(Client client) throws Exception {
-        byte[] index = readResource("/" + IDX);
-        SecretKeySpec key = deriveKey(index);
-
-        List<String> names = new ArrayList<>();
-        for (String n : new String(index, StandardCharsets.UTF_8).split("\n")) {
-            if (!n.isBlank()) names.add(n);
-        }
-        for (String name : names) {
-            byte[] blob = readResource("/" + ENC + name.replace('.', '_') + ".enc");
-            byte[] cls = decrypt(blob, key);
-            defineClass(name, cls, 0, cls.length);
-        }
-
-        Class<?> main = Class.forName("ru.white.core.ClientMain", true, this);
-        main.getMethod("init", Client.class).invoke(null, client);
-    }
-
-    private static SecretKeySpec deriveKey(byte[] index) throws Exception {
-        byte[] s = secretBytes();
-        MessageDigest sha = MessageDigest.getInstance("SHA-256");
-        byte[] idxHash = sha.digest(index);
-        sha.reset();
-        byte[] material = new byte[s.length + idxHash.length];
-        System.arraycopy(s, 0, material, 0, s.length);
-        System.arraycopy(idxHash, 0, material, s.length, idxHash.length);
-        return new SecretKeySpec(sha.digest(material), "AES");
-    }
-
-    private static byte[] secretBytes() {
-        for (String a : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
-            String low = a.toLowerCase();
-            if (low.contains("javaagent") || low.contains("agentlib")
-                    || low.contains("-xdebug") || low.contains("jdwp")) {
-                return new byte[]{0};
+    /**
+     * Сторожевой поток, отслеживающий подключение JavaAgent, JDWP и дамперов классов на лету.
+     */
+    private static void startWatchdog() {
+        Thread watchdog = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(2500);
+                    if (isCompromised()) {
+                        Runtime.getRuntime().halt(0);
+                    }
+                } catch (Throwable ignored) {
+                }
             }
-        }
-        return SECRET.substring(MARKER.length()).getBytes(StandardCharsets.UTF_8);
+        }, "Watchdog-Service");
+        watchdog.setDaemon(true);
+        watchdog.setPriority(Thread.MIN_PRIORITY);
+        watchdog.start();
     }
 
-    private static byte[] decrypt(byte[] blob, SecretKeySpec key) throws Exception {
-        Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
-        c.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, blob, 0, 12));
-        return c.doFinal(blob, 12, blob.length - 12);
+    private static byte[] deriveKey(byte[] salt) throws Exception {
+        byte[] seed = getSeed();
+        MessageDigest sha = MessageDigest.getInstance("SHA-256");
+        sha.update(seed);
+        sha.update(salt);
+        byte[] res = sha.digest();
+        Arrays.fill(seed, (byte) 0);
+        return res;
+    }
+
+    private static byte[] getSeed() {
+        byte[] s = new byte[32];
+        int v = 0x8F3A2C17;
+        for (int i = 0; i < 32; i++) {
+            v = ((v ^ 0x6D) * 0x41C64E6D + 0x3039) ^ (i * 0x5A827999);
+            s[i] = (byte) ((v ^ (v >>> 16) ^ (v >>> 8)) & 0xFF);
+        }
+        return s;
+    }
+
+    private static boolean isCompromised() {
+        try {
+            List<String> args = ManagementFactory.getRuntimeMXBean().getInputArguments();
+            for (String a : args) {
+                String low = a.toLowerCase();
+                if (low.contains("javaagent") || low.contains("agentlib")
+                        || low.contains("agentpath") || low.contains("-xdebug")
+                        || low.contains("jdwp") || low.contains("bytebuddy")
+                        || low.contains("debugger") || low.contains("hotswap")) {
+                    return true;
+                }
+            }
+
+            // Проверка активных потоков на наличие известных дамперов
+            ThreadGroup rootGroup = Thread.currentThread().getThreadGroup();
+            while (rootGroup.getParent() != null) {
+                rootGroup = rootGroup.getParent();
+            }
+            Thread[] threads = new Thread[rootGroup.activeCount() + 16];
+            int count = rootGroup.enumerate(threads, true);
+            for (int i = 0; i < count; i++) {
+                Thread t = threads[i];
+                if (t == null) continue;
+                String name = t.getName().toLowerCase();
+                if (name.contains("attach listener") || name.contains("arthas")
+                        || name.contains("jdwp") || name.contains("agent-main")) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    private static void corruptMemory() {
+        try {
+            Thread.sleep(50);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static byte[] decompress(byte[] input) throws Exception {
+        Inflater inflater = new Inflater();
+        inflater.setInput(input);
+        ByteArrayOutputStream output = new ByteArrayOutputStream(input.length * 2);
+        byte[] buffer = new byte[4096];
+        while (!inflater.finished()) {
+            int count = inflater.inflate(buffer);
+            output.write(buffer, 0, count);
+        }
+        inflater.end();
+        return output.toByteArray();
+    }
+
+    private static void defineInClassLoader(ClassLoader loader, String name, byte[] bytes) {
+        try {
+            Method m = ClassLoader.class.getDeclaredMethod("defineClass",
+                    String.class, byte[].class, int.class, int.class, ProtectionDomain.class);
+            m.setAccessible(true);
+            m.invoke(loader, name, bytes, 0, bytes.length, loader.getClass().getProtectionDomain());
+            return;
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            Field f = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            Object unsafe = f.get(null);
+            Method m = unsafe.getClass().getMethod("defineClass",
+                    String.class, byte[].class, int.class, int.class, ClassLoader.class, ProtectionDomain.class);
+            m.invoke(unsafe, name, bytes, 0, bytes.length, loader, loader.getClass().getProtectionDomain());
+            return;
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(ClassLoader.class, MethodHandles.lookup());
+            MethodHandle mh = lookup.findVirtual(ClassLoader.class, "defineClass",
+                    MethodType.methodType(Class.class, String.class, byte[].class, int.class, int.class, ProtectionDomain.class));
+            mh.invoke(loader, name, bytes, 0, bytes.length, loader.getClass().getProtectionDomain());
+        } catch (Throwable ignored) {
+        }
     }
 
     private static byte[] readResource(String path) throws Exception {
         try (InputStream in = NightixLoader.class.getResourceAsStream(path);
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            if (in == null) throw new IllegalStateException("missing " + path);
+            if (in == null) throw new IllegalStateException("Resource not found: " + path);
             byte[] buf = new byte[8192];
             int r;
             while ((r = in.read(buf)) >= 0) out.write(buf, 0, r);

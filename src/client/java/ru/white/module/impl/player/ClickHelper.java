@@ -203,15 +203,9 @@ public class ClickHelper extends Module {
         String name = player.getName().getString();
 
         if (!Client.get().friendManager().isFriend(name)) {
-
             Client.get().friendManager().add(name);
-            //SoundUtil.playSound_wav("bind_success", 0.25f);
-
         } else {
-
             Client.get().friendManager().remove(name);
-            //SoundUtil.playSound_wav("bind_remove", 0.3f);
-
         }
     }
 
@@ -825,15 +819,7 @@ public class ClickHelper extends Module {
                 step = 2;
             }
             case 2 -> {
-                //mc.player.swingHand(Hand.MAIN_HAND);
-                //mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
-
-
-
                 SwingAnimation.interactItem(Hand.MAIN_HAND);
-
-
-
                 step = 3;
             }
             case 3 -> {

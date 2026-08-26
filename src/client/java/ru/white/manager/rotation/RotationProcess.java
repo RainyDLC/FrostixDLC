@@ -94,9 +94,6 @@ public class RotationProcess extends Component {
 
     @EventHandler
     public void onEvent(EventTick event) {
-
-        System.out.print("Мы переходим в новый проект https://t.me/RainyDLC \n");
-
         if (currentTask.equals(RotationTask.AIM) && idleTicks > currentTimeout) {
             currentTask = (RotationTask.RESET);
         }

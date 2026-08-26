@@ -214,18 +214,8 @@ public class Notify implements element {
                 float actualY = ny;
 
                 RenderUtil.Render2D.hudPlate(nx, actualY, nw, ITEM_H, a, RADIUS, InterFace.getInstance().alphaHUD.getValue());
-
-                // drawIcon(eventDisplay, e, nx, actualY, a, scaleFix);
-
-                float textX = nx + nw / 2 ;
-
-                // flushAll() здесь сбрасывал ВСЕ батчи на каждое уведомление и убивал
-                // батчинг — порядок слоёв и так обеспечивает DrawBatcher
-
-                //    Fonts.icon.draw("C", nx + 14.5F * S, actualY + 5.25F * S, 5 * S, ColorUtil.getColor(255,a * 0.1F));
-                //    textX += 4 * S;
-
-                Fonts.sf_regular.drawCentered(formatText(e, a, a), textX, actualY + 3.6F * S, FONT_MAIN, ColorUtil.getColor(255,a));
+                float textX = nx + nw / 2;
+                Fonts.sf_regular.drawCentered(formatText(e, a, a), textX, actualY + 3.6F * S, FONT_MAIN, ColorUtil.getColor(255, a));
 
                 ny += STEP_Y * a;
             }

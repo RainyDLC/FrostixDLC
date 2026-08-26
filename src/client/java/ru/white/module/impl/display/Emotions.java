@@ -45,13 +45,10 @@ public class Emotions extends Module {
                     InputUtil.Type.KEYSYM,
                     GLFW.GLFW_KEY_B,
                     KeyBinding.Category.MISC));
-        } catch (Throwable t) {
-            System.out.println("[Emotions] vanilla key registration failed: " + t);
+        } catch (Throwable ignored) {
         }
 
-        // опрос в конце каждого тика — не зависит от шины событий
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
-        System.out.println("[Emotions] constructed, tick polling active");
     }
 
     private void onTick(MinecraftClient mc) {
@@ -108,10 +105,7 @@ public class Emotions extends Module {
 
         try {
             mc.setScreen(new EmoteWheelScreen());
-            System.out.println("[Emotions] wheel opened");
-        } catch (Throwable t) {
-            System.out.println("[Emotions] wheel FAILED:");
-            t.printStackTrace();
+        } catch (Throwable ignored) {
         }
     }
 
