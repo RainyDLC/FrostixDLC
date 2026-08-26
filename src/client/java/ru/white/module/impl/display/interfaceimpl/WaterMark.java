@@ -7,6 +7,7 @@ import ru.white.module.api.settings.impl.DragSetting;
 import ru.white.module.impl.display.InterFace;
 import ru.white.theme.ThemeColor;
 import ru.white.utils.colors.ColorUtil;
+import ru.white.utils.render.Draw;
 import ru.white.utils.render.RenderUtil;
 import ru.white.utils.render.RollingText;
 import ru.white.utils.render.font.Font;
@@ -142,14 +143,14 @@ public class WaterMark implements element {
         curX += sepW;
         drawValue(fontRegular, pingText, "ms", curX, textY);
 
-        // 3. Иконка беззвучного режима справа от островка (Silent mode / DND Moon)
+        // 3. Кастомная иконка беззвучного режима справа от островка (iPhone Silent Bell)
+        float iconSize = 7.0F * S;
         float iconStartX = islandStartX + islandW + 6.5F * S;
-        float iconY = y + (islandH - ICON) / 2.0F + 0.5F * S;
+        float iconY = y + (islandH - iconSize) / 2.0F;
 
-        // Иконка беззвучного режима (iPhone Silent / DND Moon)
-        Fonts.rainydlc_2.draw("M", iconStartX, iconY, ICON, ColorUtil.getClientColor(1));
+        drawSilentBell(iconStartX, iconY, iconSize, ThemeColor.getTextColor(), ColorUtil.getClientColor(1));
 
-        float totalW = (iconStartX + ICON + 2F * S) - x;
+        float totalW = (iconStartX + iconSize + 2F * S) - x;
         dragSetting.size.set(totalW, islandH);
     }
 
@@ -203,5 +204,53 @@ public class WaterMark implements element {
         float width = value.width(font, TEXT);
         font.draw(suffix, x + width, y, TEXT, ColorUtil.getColor(200));
         return width + font.getWidth(suffix, TEXT);
+    }
+
+    /**
+     * Кастомный 2D-векторный рендер иконки беззвучного режима (iPhone Silent Bell):
+     * колокольчик с классическим диагональным перечёркиванием.
+     */
+    private void drawSilentBell(float x, float y, float size, int bellColor, int slashColor) {
+        float cx = x + size / 2.0F;
+
+        // 1. Верхняя петелька колокольчика (Top loop)
+        float loopW = size * 0.22F;
+        float loopH = size * 0.14F;
+        Draw.rect(cx - loopW / 2.0F, y + size * 0.04F, loopW, loopH, bellColor, loopH / 2.0F);
+
+        // 2. Купол колокольчика (Bell dome)
+        float domeW = size * 0.44F;
+        float domeH = size * 0.36F;
+        Draw.rect(cx - domeW / 2.0F, y + size * 0.16F, domeW, domeH, bellColor, domeW / 2.0F, domeW / 2.0F, 0, 0);
+
+        // 3. Расширяющаяся юбка колокольчика (Bell flare)
+        float flareW = size * 0.62F;
+        float flareH = size * 0.28F;
+        Draw.rect(cx - flareW / 2.0F, y + size * 0.44F, flareW, flareH, bellColor, size * 0.08F);
+
+        // 4. Нижний ободок колокольчика (Bottom rim)
+        float rimW = size * 0.76F;
+        float rimH = size * 0.12F;
+        Draw.rect(cx - rimW / 2.0F, y + size * 0.68F, rimW, rimH, bellColor, rimH / 2.0F);
+
+        // 5. Язычок колокольчика (Clapper)
+        float clapperW = size * 0.20F;
+        float clapperH = size * 0.14F;
+        Draw.rect(cx - clapperW / 2.0F, y + size * 0.78F, clapperW, clapperH, bellColor, 0, 0, clapperW / 2.0F, clapperW / 2.0F);
+
+        // 6. Диагональное перечёркивание беззвучного режима (Diagonal slash)
+        float x0 = x + size * 0.08F;
+        float y0 = y + size * 0.06F;
+        float x1 = x + size * 0.92F;
+        float y1 = y + size * 0.94F;
+
+        float thick = Math.max(1.1F, size * 0.14F);
+        int steps = 16;
+        for (int i = 0; i <= steps; i++) {
+            float t = (float) i / (float) steps;
+            float px = x0 + (x1 - x0) * t;
+            float py = y0 + (y1 - y0) * t;
+            Draw.rect(px - thick / 2.0F, py - thick / 2.0F, thick, thick, slashColor, thick / 2.0F);
+        }
     }
 }
