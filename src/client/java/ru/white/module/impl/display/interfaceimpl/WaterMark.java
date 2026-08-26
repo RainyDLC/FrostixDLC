@@ -69,20 +69,6 @@ public class WaterMark implements element {
 
         float opacity = InterFace.getInstance().alphaHUD.getValue();
 
-<<<<<<< HEAD
-        // бейдж-логотип
-        RenderUtil.Render2D.hudPlate(x, y, H, H, 1, RADIUS, opacity);
-
-        float logoS = Math.min(H - 6F * S, LOGO * 1.2F);
-        RenderUtil.Images.texture(LOGO_TEXTURE,
-                x + (H - logoS) / 2F, y + (H - logoS) / 2F, logoS, logoS, ColorUtil.getClientColor(1));
-
-        x += 18.5F * S;
-
-        String user = "User";
-
-=======
->>>>>>> c323afc (Изменил файл Б)
         int pings = 0;
         if (mc.getNetworkHandler() != null && mc.player != null) {
             var entry = mc.getNetworkHandler().getPlayerListEntry(mc.player.getUuid());
