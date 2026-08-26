@@ -4,9 +4,9 @@ import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import ru.white.manager.event_impl.EventDisplay;
-import ru.white.manager.event_impl.EventRender3D;
 import ru.white.manager.event_impl.EventUpdate;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.lyrics.LrcLibClient;
@@ -31,33 +31,31 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * 3D Lyrics: слова трека всплывают в 3D-пространстве перед игроком —
  * частицы с фиксированной мировой позицией, статичным размером,
- * 3D-окклюзией и анимациями (LyricFlow / Typewriter / PopScale / KineticSlide / Fade).
+ * 3D-окклюзией и 2 анимациями: "Плавное появление" и "Печатание".
  */
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ModuleInfo(name = "3D Lyrics", desc = "Kinetic lyrics in 3D world space", category = Category.RENDER)
+@ModuleInfo(name = "3D Lyrics", desc = "Кинетические слова трека в 3D-пространстве", category = Category.RENDER)
 public class Lyrics3D extends Module {
 
-    public ModeSetting animation = new ModeSetting(this, "Animation", "LyricFlow", "Typewriter", "PopScale", "KineticSlide", "Fade");
-    public ModeSetting colorMode = new ModeSetting(this, "Color", "White", "Theme");
-    public ModeSetting splitMode = new ModeSetting(this, "Split Mode", "SmartSplit", "FullLine");
-    public SliderSetting maxLines = new SliderSetting(this, "Max Lines", 3.0F, 1.0F, 6.0F, 1.0F);
-    public SliderSetting minDistance = new SliderSetting(this, "Min Distance", 2.0F, 1.2F, 4.0F, 0.1F);
-    public SliderSetting maxDistance = new SliderSetting(this, "Max Distance", 4.5F, 2.0F, 7.0F, 0.1F);
-    public SliderSetting arcSpread = new SliderSetting(this, "Arc Spread", 70.0F, 20.0F, 85.0F, 5.0F);
-    public SliderSetting floatHeight = new SliderSetting(this, "Float Height", 0.5F, 0.1F, 2.0F, 0.1F);
-    public SliderSetting timeOffset = new SliderSetting(this, "Offset (ms)", 0.0F, -5000.0F, 5000.0F, 50.0F);
-    public SliderSetting textSize = new SliderSetting(this, "Text Scale", 1.0F, 0.5F, 2.0F, 0.1F);
-    public BooleanSetting debugMode = new BooleanSetting(this, "Debug Mode", false);
+    public ModeSetting animation = new ModeSetting(this, "Анимация", "Плавное появление", "Печатание");
+    public ModeSetting colorMode = new ModeSetting(this, "Цвет", "Белый", "Тема");
+    public ModeSetting splitMode = new ModeSetting(this, "Режим строк", "Разделять", "Целые строки");
+    public SliderSetting maxLines = new SliderSetting(this, "Макс. строк", 3.0F, 1.0F, 6.0F, 1.0F);
+    public SliderSetting minDistance = new SliderSetting(this, "Мин. дистанция", 2.0F, 1.2F, 4.0F, 0.1F);
+    public SliderSetting maxDistance = new SliderSetting(this, "Макс. дистанция", 4.5F, 2.0F, 7.0F, 0.1F);
+    public SliderSetting arcSpread = new SliderSetting(this, "Угол разброса", 65.0F, 20.0F, 85.0F, 5.0F);
+    public SliderSetting floatHeight = new SliderSetting(this, "Высота всплытия", 0.5F, 0.1F, 2.0F, 0.1F);
+    public SliderSetting timeOffset = new SliderSetting(this, "Смещение (мс)", 0.0F, -5000.0F, 5000.0F, 50.0F);
+    public SliderSetting textSize = new SliderSetting(this, "Размер текста", 1.0F, 0.5F, 2.0F, 0.1F);
+    public BooleanSetting debugMode = new BooleanSetting(this, "Режим отладки", false);
 
     private final List<LyricLine> rawLyrics = new ArrayList<>();
     private final List<LyricLine> lyricsQueue = new ArrayList<>();
     private final List<LyricParticle3D> activeParticles = new CopyOnWriteArrayList<>();
     private int currentLyricIndex = 0;
 
-    // внутренние аудио-часы
+    // Внутренние аудио-часы (работают непрерывно и синхронизируются с медиа)
     private long internalAudioClockMs = 0L;
-    private long lastUpdateRealTimeMs = 0L;
-    private long lastWindowsReportedPosMs = 0L;
     private long lastEffectiveAudioTimeMs = 0L;
     private long trackStartTimeSys = 0L;
     private boolean isPlaying = false;
@@ -66,7 +64,7 @@ public class Lyrics3D extends Module {
     private String currentTrackTitle = "";
     private String currentTrackArtist = "";
 
-    // кэш для рендера: нативные вызовы медиа — только из executor'а
+    // Кэш медиа-информации для безопасного доступа из потока рендера
     private volatile boolean mediaPlaying = false;
     private volatile long smtcReportedPos = 0L;
     private volatile long smtcReportedReal = 0L;
@@ -99,9 +97,9 @@ public class Lyrics3D extends Module {
         currentLyricIndex = 0;
         internalAudioClockMs = 0L;
         lastEffectiveAudioTimeMs = 0L;
-        lastUpdateRealTimeMs = System.currentTimeMillis();
         trackStartTimeSys = System.currentTimeMillis();
-        lastWindowsReportedPosMs = 0L;
+        smtcReportedPos = 0L;
+        smtcReportedReal = 0L;
         isPlaying = false;
     }
 
@@ -117,12 +115,14 @@ public class Lyrics3D extends Module {
         internalAudioClockMs = 0L;
         lastEffectiveAudioTimeMs = 0L;
         trackStartTimeSys = System.currentTimeMillis();
-        lastUpdateRealTimeMs = System.currentTimeMillis();
-        lastWindowsReportedPosMs = 0L;
+        smtcReportedPos = 0L;
+        smtcReportedReal = 0L;
         isPlaying = false;
 
         String expectedKey = this.lastTrackKey;
-        System.out.println("[Lyrics3D] track detected: " + currentTrackTitle + " - " + currentTrackArtist);
+        if (debugMode.getValue()) {
+            System.out.println("[Lyrics3D] track detected: " + currentTrackTitle + " - " + currentTrackArtist);
+        }
 
         LrcLibClient.fetchLyricsAsync(currentTrackTitle, currentTrackArtist, debugMode.getValue()).thenAccept(lines -> {
             if (!this.lastTrackKey.equalsIgnoreCase(expectedKey)) {
@@ -132,19 +132,23 @@ public class Lyrics3D extends Module {
             activeParticles.clear();
             rawLyrics.clear();
             lyricsQueue.clear();
-            rawLyrics.addAll(lines);
+            if (lines != null) {
+                rawLyrics.addAll(lines);
+            }
             rebuildLyricsQueue();
             currentLyricIndex = 0;
             isPlaying = !lyricsQueue.isEmpty();
-            System.out.println("[Lyrics3D] lyrics " + (lyricsQueue.isEmpty()
-                    ? "NOT FOUND (queue empty)"
-                    : "loaded: " + lyricsQueue.size() + " lines"));
+            if (debugMode.getValue()) {
+                System.out.println("[Lyrics3D] lyrics " + (lyricsQueue.isEmpty()
+                        ? "NOT FOUND (queue empty)"
+                        : "loaded: " + lyricsQueue.size() + " lines"));
+            }
         });
     }
 
     private void rebuildLyricsQueue() {
         lyricsQueue.clear();
-        if (splitMode.is("SmartSplit")) {
+        if (splitMode.is("Разделять") || splitMode.is("SmartSplit")) {
             lyricsQueue.addAll(LyricLineSplitter.splitLongLines(rawLyrics));
         } else {
             lyricsQueue.addAll(rawLyrics);
@@ -153,8 +157,7 @@ public class Lyrics3D extends Module {
 
     @EventHandler
     public void onUpdate(EventUpdate e) {
-        // нативный доступ к медиа (Windows SMTC) — ТОЛЬКО из фонового потока:
-        // вызовы из рендера параллельно с MusicHud рушат процесс на нативе
+        // Опрос медиа-сессии из фонового потока
         if (mc.player != null && mc.player.age % 5 == 0) {
             executor.submit(this::pollMedia);
         }
@@ -177,21 +180,17 @@ public class Lyrics3D extends Module {
             String artist = media.getArtist() != null ? media.getArtist().trim() : "";
             String key = (title + " - " + artist).toLowerCase();
 
-            // смена трека — из фонового потока безопасно
             if (!key.equalsIgnoreCase(lastTrackKey)) {
                 playTrack(title, artist);
                 return;
             }
 
-            // синхронизация с позицией Windows: якорь + интерполяция.
-            // SMTC отдаёт позицию снапшотами раз в ~5с (устаревшую), поэтому
-            // храним момент репорта и достраиваем время сами — без рывков и лагов.
             long reported = media.getPosition();
             long dur = media.getDuration();
             if (dur > 86_400_000L) { // микросекунды -> миллисекунды
                 reported /= 1000L;
             }
-            if (reported != smtcReportedPos) {
+            if (reported > 0) {
                 smtcReportedPos = reported;
                 smtcReportedReal = System.currentTimeMillis();
             }
@@ -203,22 +202,23 @@ public class Lyrics3D extends Module {
 
     private void syncPlaybackTime() {
         if (!isEnabled() || mc.player == null) return;
+        if (currentTrackTitle.isEmpty()) return;
 
         long now = System.currentTimeMillis();
 
-        // только кэш: никаких нативных вызовов из этого метода
-        if (!mediaPlaying) return;
-        if (smtcReportedReal == 0) return;
-        if (!isPlaying && !lyricsQueue.isEmpty()) {
-            isPlaying = true;
+        // Если есть актуальный снапшот SMTC — опираемся на него
+        if (smtcReportedReal > 0 && smtcReportedPos > 0) {
+            long elapsedSinceReport = now - smtcReportedReal;
+            internalAudioClockMs = smtcReportedPos + elapsedSinceReport;
+        } else if (trackStartTimeSys > 0) {
+            // Иначе используем плавный локальный таймер с момента обнаружения трека
+            internalAudioClockMs = now - trackStartTimeSys;
         }
 
-        // оценка реальной позиции: последний снапшот SMTC + прошедшее с него время
-        long estPos = smtcReportedPos + (now - smtcReportedReal);
-        long effectiveAudioTime = Math.max(0, estPos + timeOffset.getValue().longValue());
+        long effectiveAudioTime = Math.max(0, internalAudioClockMs + timeOffset.getValue().longValue());
 
-        // перемотка: резкий скачок — пересобираем активные частицы
-        if (Math.abs(effectiveAudioTime - lastEffectiveAudioTimeMs) > 1500L) {
+        // Обнаружение перемотки трека
+        if (Math.abs(effectiveAudioTime - lastEffectiveAudioTimeMs) > 1800L) {
             resyncQueue(effectiveAudioTime);
         }
         lastEffectiveAudioTimeMs = effectiveAudioTime;
@@ -245,7 +245,7 @@ public class Lyrics3D extends Module {
         for (int i = 0; i < lyricsQueue.size(); i++) {
             LyricLine line = lyricsQueue.get(i);
             long nextStartMs = (i + 1 < lyricsQueue.size()) ? lyricsQueue.get(i + 1).timestampMs() : line.timestampMs() + 3500L;
-            long durationMs = Math.max(1200L, Math.min(5000L, nextStartMs - line.timestampMs()));
+            long durationMs = Math.max(1200L, Math.min(5500L, nextStartMs - line.timestampMs()));
 
             if (audioTimeMs >= line.timestampMs()) {
                 long timeSinceLine = audioTimeMs - line.timestampMs();
@@ -260,14 +260,16 @@ public class Lyrics3D extends Module {
     }
 
     private void update(long audioTimeMs) {
-        if (!isPlaying || lyricsQueue.isEmpty() || mc.player == null) return;
+        if (lyricsQueue.isEmpty() || mc.player == null) return;
 
         long now = System.currentTimeMillis();
 
         while (currentLyricIndex < lyricsQueue.size()) {
             LyricLine line = lyricsQueue.get(currentLyricIndex);
-            long nextStartMs = (currentLyricIndex + 1 < lyricsQueue.size()) ? lyricsQueue.get(currentLyricIndex + 1).timestampMs() : line.timestampMs() + 3500L;
-            long durationMs = Math.max(1400L, Math.min(5500L, nextStartMs - line.timestampMs()));
+            long nextStartMs = (currentLyricIndex + 1 < lyricsQueue.size())
+                    ? lyricsQueue.get(currentLyricIndex + 1).timestampMs()
+                    : line.timestampMs() + 3500L;
+            long durationMs = Math.max(1400L, Math.min(6000L, nextStartMs - line.timestampMs()));
 
             if (audioTimeMs >= line.timestampMs()) {
                 long timeSinceLine = audioTimeMs - line.timestampMs();
@@ -283,8 +285,8 @@ public class Lyrics3D extends Module {
         activeParticles.removeIf(particle -> particle.isDead(now));
     }
 
-    /** Позиция спавна: случайный угол в дуге перед камерой, без перекрытий. */
-    private Vec3d findNonOverlappingSpawnPos(Vec3d headPos, float cameraYaw) {
+    /** Позиция спавна: расчет в конусе обзора камеры с учетом поворота и наклона (pitch/yaw). */
+    private Vec3d findNonOverlappingSpawnPos(Vec3d headPos, float cameraYaw, float cameraPitch) {
         double spread = arcSpread.getValue();
         double minD = minDistance.getValue();
         double maxD = Math.max(minD + 0.5, maxDistance.getValue());
@@ -293,18 +295,23 @@ public class Lyrics3D extends Module {
         double maxMinDistance = -1.0;
 
         for (int attempt = 0; attempt < 16; attempt++) {
-            double randomAngleOffset = ThreadLocalRandom.current().nextDouble(-spread, spread);
-            double targetYawDeg = cameraYaw + randomAngleOffset;
+            double randomYawOffset = ThreadLocalRandom.current().nextDouble(-spread, spread);
+            double randomPitchOffset = ThreadLocalRandom.current().nextDouble(-12.0, 18.0);
+            double targetYawDeg = cameraYaw + randomYawOffset;
+            double targetPitchDeg = MathHelper.clamp(cameraPitch + (float) randomPitchOffset, -55.0f, 55.0f);
             double distance = ThreadLocalRandom.current().nextDouble(minD, maxD);
-            double yOffset = ThreadLocalRandom.current().nextDouble(-0.25, 0.55);
 
             double yawRad = Math.toRadians(targetYawDeg);
-            double dirX = -Math.sin(yawRad);
-            double dirZ = Math.cos(yawRad);
+            double pitchRad = Math.toRadians(targetPitchDeg);
+            double cosPitch = Math.cos(pitchRad);
+
+            double dirX = -Math.sin(yawRad) * cosPitch;
+            double dirY = -Math.sin(pitchRad);
+            double dirZ = Math.cos(yawRad) * cosPitch;
 
             Vec3d candidate = new Vec3d(
                     headPos.x + (dirX * distance),
-                    headPos.y + yOffset,
+                    headPos.y + (dirY * distance) + 0.15,
                     headPos.z + (dirZ * distance));
 
             if (activeParticles.isEmpty()) {
@@ -319,7 +326,7 @@ public class Lyrics3D extends Module {
                 }
             }
 
-            if (minDistanceToOthers >= 1.35) {
+            if (minDistanceToOthers >= 1.0) {
                 return candidate;
             }
 
@@ -329,7 +336,7 @@ public class Lyrics3D extends Module {
             }
         }
 
-        return bestPos;
+        return bestPos != null ? bestPos : headPos.add(mc.player.getRotationVec(1.0f).multiply(minD));
     }
 
     private void spawnLyricParticle(String text, long spawnTimeMs, long durationMs) {
@@ -338,22 +345,25 @@ public class Lyrics3D extends Module {
         Camera camera = mc.gameRenderer.getCamera();
         Vec3d headPos = mc.player.getEyePos();
         float cameraYaw = camera.getYaw();
+        float cameraPitch = camera.getPitch();
 
         int maxAllowed = maxLines.getValue().intValue();
         while (activeParticles.size() >= maxAllowed) {
             activeParticles.remove(0);
         }
 
-        Vec3d spawnPos = findNonOverlappingSpawnPos(headPos, cameraYaw);
+        Vec3d spawnPos = findNonOverlappingSpawnPos(headPos, cameraYaw, cameraPitch);
         if (spawnPos == null) return;
 
         float riseHeight = floatHeight.getValue();
         activeParticles.add(new LyricParticle3D(text, spawnPos, spawnTimeMs, durationMs, riseHeight));
-        System.out.println("[Lyrics3D] spawned: \"" + text + "\"");
+        if (debugMode.getValue()) {
+            System.out.println("[Lyrics3D] spawned: \"" + text + "\"");
+        }
     }
 
     private int getActiveColorRgb() {
-        if (colorMode.is("Theme")) {
+        if (colorMode.is("Тема") || colorMode.is("Theme")) {
             int c = ColorUtil.getClientColor1(1);
             return c & 0x00FFFFFF;
         }

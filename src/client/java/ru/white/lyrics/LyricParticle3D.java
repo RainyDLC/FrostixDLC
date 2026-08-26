@@ -55,110 +55,89 @@ public class LyricParticle3D {
         float alpha = 1.0f;
         double offsetY = 0.0;
         float animScale = 1.0f;
-        float rotationTilt = 0.0f;
         String displayText = this.text;
 
-        switch (animMode) {
-            case "Typewriter" -> {
-                if (progress < 0.30f) {
-                    float typeProgress = progress / 0.30f;
-                    int visibleChars = Math.min(this.text.length(), (int) Math.ceil(this.text.length() * typeProgress));
-                    displayText = this.text.substring(0, Math.max(1, visibleChars));
-                    alpha = Math.min(1.0f, progress / 0.08f);
-                    offsetY = progress * (floatHeight * 0.2);
-                } else if (progress < 0.75f) {
-                    alpha = 1.0f;
-                    offsetY = progress * (floatHeight * 0.2);
-                } else {
-                    float eraseProgress = (progress - 0.75f) / 0.25f;
-                    int remainingChars = Math.max(0, this.text.length() - (int) Math.floor(this.text.length() * eraseProgress));
-                    displayText = this.text.substring(0, remainingChars);
-                    alpha = 1.0f - (eraseProgress * 0.7f);
-                    offsetY = progress * (floatHeight * 0.2);
-                }
+        boolean isTypewriter = animMode != null && (
+                animMode.equalsIgnoreCase("Печатание") ||
+                animMode.equalsIgnoreCase("Typewriter")
+        );
+
+        if (isTypewriter) {
+            // Режим "Печатание": буквы быстро печатаются одна за другой
+            int totalLen = this.text.length();
+            // Печать всей строки за первые ~35-40 мс на символ (или макс 40% от длительности строки)
+            long typingDurationMs = Math.min((long) (durationMs * 0.40f), Math.max(250L, totalLen * 38L));
+
+            if (elapsed < typingDurationMs) {
+                float typeFraction = (float) elapsed / (float) typingDurationMs;
+                int visibleChars = MathHelper.clamp((int) Math.ceil(totalLen * typeFraction), 1, totalLen);
+                displayText = this.text.substring(0, visibleChars);
+                alpha = Math.min(1.0f, (float) elapsed / 60.0f);
+                offsetY = progress * (floatHeight * 0.25);
+            } else if (progress < 0.82f) {
+                displayText = this.text;
+                alpha = 1.0f;
+                offsetY = progress * (floatHeight * 0.25);
+            } else {
+                displayText = this.text;
+                float fadeProgress = (progress - 0.82f) / 0.18f;
+                alpha = 1.0f - easeInCubic(fadeProgress);
+                offsetY = progress * (floatHeight * 0.25);
             }
-            case "PopScale" -> {
-                if (progress < 0.18f) {
-                    float t = progress / 0.18f;
-                    alpha = easeOutCubic(t);
-                    animScale = 0.35f + 0.65f * easeOutBack(t);
-                    offsetY = -0.04 * (1.0f - easeOutCubic(t));
-                } else if (progress < 0.80f) {
-                    alpha = 1.0f;
-                } else {
-                    float t = (progress - 0.80f) / 0.20f;
-                    alpha = 1.0f - easeInCubic(t);
-                    animScale = 1.0f - 0.05f * t;
-                    offsetY = 0.03 * easeInCubic(t);
-                }
-            }
-            case "KineticSlide" -> {
-                if (progress < 0.20f) {
-                    float t = progress / 0.20f;
-                    alpha = easeOutCubic(t);
-                    offsetY = -0.15 * (1.0f - easeOutCubic(t));
-                    animScale = 0.92f + 0.08f * t;
-                    rotationTilt = (1.0f - t) * 4.0f * tiltSign;
-                } else if (progress < 0.80f) {
-                    alpha = 1.0f;
-                } else {
-                    float t = (progress - 0.80f) / 0.20f;
-                    alpha = 1.0f - easeInCubic(t);
-                    offsetY = 0.05 * easeInCubic(t);
-                    animScale = 1.0f - 0.04f * t;
-                }
-            }
-            case "Fade" -> {
-                if (progress < 0.15f) {
-                    alpha = progress / 0.15f;
-                } else if (progress < 0.80f) {
-                    alpha = 1.0f;
-                } else {
-                    alpha = 1.0f - ((progress - 0.80f) / 0.20f);
-                }
-            }
-            default -> { // "LyricFlow"
-                if (progress < 0.15f) {
-                    float t = progress / 0.15f;
-                    alpha = easeOutCubic(t);
-                    offsetY = -0.06 * (1.0f - easeOutCubic(t));
-                    animScale = 0.93f + 0.07f * easeOutBack(t);
-                } else if (progress < 0.80f) {
-                    alpha = 1.0f;
-                } else {
-                    float t = (progress - 0.80f) / 0.20f;
-                    alpha = 1.0f - easeInCubic(t);
-                    offsetY = 0.04 * easeInCubic(t);
-                    animScale = 1.0f - 0.03f * t;
-                }
+        } else {
+            // Режим "Плавное появление": каждое слово плавно появляется, увеличиваясь и проявляясь
+            if (progress < 0.20f) {
+                float t = progress / 0.20f;
+                alpha = easeOutCubic(t);
+                offsetY = -0.07 * (1.0f - easeOutCubic(t)) + progress * (floatHeight * 0.25);
+                animScale = 0.88f + 0.12f * easeOutBack(t);
+            } else if (progress < 0.80f) {
+                alpha = 1.0f;
+                offsetY = progress * (floatHeight * 0.25);
+                animScale = 1.0f;
+            } else {
+                float t = (progress - 0.80f) / 0.20f;
+                alpha = 1.0f - easeInCubic(t);
+                offsetY = progress * (floatHeight * 0.25) + 0.03 * easeInCubic(t);
+                animScale = 1.0f - 0.03f * t;
             }
         }
 
         alpha = MathHelper.clamp(alpha, 0.0f, 1.0f);
-        if (alpha <= 0.001f || displayText == null || displayText.isBlank()) return;
+        if (alpha <= 0.005f || displayText == null || displayText.isBlank()) return;
 
         MinecraftClientBlock:
         {
             var mc = net.minecraft.client.MinecraftClient.getInstance();
+            if (mc == null || mc.player == null) break MinecraftClientBlock;
+
             Vec3d camPos = camera.getCameraPos();
             Vec3d worldPos = basePosition.add(0, offsetY, 0);
 
-            // 3D-окклюзия: стена между камерой и словом скрывает его
-            RaycastContext rc = new RaycastContext(camPos, worldPos,
-                    RaycastContext.ShapeType.COLLIDER,
-                    RaycastContext.FluidHandling.NONE, mc.player);
-            if (mc.world != null && mc.world.raycast(rc).getType() != HitResult.Type.MISS) {
-                break MinecraftClientBlock;
+            // 3D-окклюзия: если между камерой и точкой стена, подтягиваем позицию перед стеной
+            if (mc.world != null) {
+                RaycastContext rc = new RaycastContext(camPos, worldPos,
+                        RaycastContext.ShapeType.COLLIDER,
+                        RaycastContext.FluidHandling.NONE, mc.player);
+                HitResult hit = mc.world.raycast(rc);
+                if (hit.getType() != HitResult.Type.MISS) {
+                    double hitDist = hit.getPos().distanceTo(camPos);
+                    if (hitDist < 0.6) {
+                        break MinecraftClientBlock;
+                    }
+                    Vec3d toCam = camPos.subtract(worldPos).normalize();
+                    worldPos = hit.getPos().add(toCam.multiply(0.20));
+                }
             }
 
             Vec3d screen = ru.white.utils.other.Projection.worldSpaceToScreenSpace(worldPos);
             if (screen.z <= 0 || screen.z >= 1) break MinecraftClientBlock;
 
             float dist = (float) camPos.distanceTo(worldPos);
-            if (dist < 0.5f) break MinecraftClientBlock;
+            if (dist < 0.35f) break MinecraftClientBlock;
 
-            // статичный мировой размер: видимый размер обратно пропорционален дистанции
-            float fontSize = MathHelper.clamp(baseScale * 45.0f / dist, 2.0f, 30.0f) * animScale;
+            // Статичный мировой размер шрифта, обратно пропорциональный дистанции
+            float fontSize = MathHelper.clamp(baseScale * 46.0f / dist, 4.0f, 32.0f) * animScale;
 
             float textWidth = font.getWidth(displayText, fontSize);
             float x = (float) screen.x - textWidth / 2.0f;
@@ -166,7 +145,7 @@ public class LyricParticle3D {
 
             int alphaInt = (int) (alpha * 255.0f);
             int finalColor = (alphaInt << 24) | (colorRgb & 0x00FFFFFF);
-            int shadowColor = ((int) (alpha * 160.0f) << 24);
+            int shadowColor = ((int) (alpha * 170.0f) << 24);
 
             font.draw(displayText, x + fontSize * 0.04f, y + fontSize * 0.04f, fontSize, shadowColor & 0xFF000000);
             font.draw(displayText, x, y, fontSize, finalColor);
