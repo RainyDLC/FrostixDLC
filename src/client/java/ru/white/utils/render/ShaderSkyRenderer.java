@@ -190,10 +190,11 @@ public class ShaderSkyRenderer {
         long now = System.currentTimeMillis();
         if (lastFrameMs > 0L) {
             float dt = (now - lastFrameMs) / 1000.0f;
-            if (dt > 0.0f && dt < 0.25f) {
-                animTime += dt * module.speed.getValue();
+            if (dt > 0.0f) {
+                animTime += Math.min(dt, 0.5f) * Math.max(0.05f, module.speed.getValue());
             }
         }
+        lastFrameMs = now;
         float flashAmt = 0.0f;
         WorldTweaks wt = WorldTweaks.get();
         if (wt != null && wt.isEnabled() && wt.lightnings.getValue()) {
