@@ -142,12 +142,12 @@ public class WaterMark implements element {
         curX += sepW;
         drawValue(fontRegular, pingText, "ms", curX, textY);
 
-        // 3. Иконка беззвучного режима справа от островка (Silent mode)
+        // 3. Иконка беззвучного режима справа от островка (Silent mode / DND Moon)
         float iconStartX = islandStartX + islandW + 6.5F * S;
         float iconY = y + (islandH - ICON) / 2.0F + 0.5F * S;
 
-        // Иконка перечёркнутого колокольчика / беззвучного режима
-        Fonts.icon.draw("1", iconStartX, iconY, ICON, ColorUtil.getClientColor(1));
+        // Иконка беззвучного режима (iPhone Silent / DND Moon)
+        Fonts.rainydlc_2.draw("M", iconStartX, iconY, ICON, ColorUtil.getClientColor(1));
 
         float totalW = (iconStartX + ICON + 2F * S) - x;
         dragSetting.size.set(totalW, islandH);
