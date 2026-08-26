@@ -71,7 +71,24 @@ public final class LrcLibClient {
                 }
             }
 
-            // 4. Поиск только по названию трека
+            // 4. Если в названии содержится дефис/тире ("Song - Artist")
+            if (cleanTrack.contains(" - ") || cleanTrack.contains(" — ")) {
+                String[] parts = cleanTrack.split(" [—-] ", 2);
+                if (parts.length == 2) {
+                    lines = tryFetchSearch(parts[0].trim() + " " + parts[1].trim(), debugMode);
+                    if (!lines.isEmpty()) {
+                        LYRICS_CACHE.put(cacheKey, lines);
+                        return lines;
+                    }
+                    lines = tryFetchSearch(parts[0].trim(), debugMode);
+                    if (!lines.isEmpty()) {
+                        LYRICS_CACHE.put(cacheKey, lines);
+                        return lines;
+                    }
+                }
+            }
+
+            // 5. Поиск только по названию трека
             if (!cleanTrack.isEmpty()) {
                 lines = tryFetchSearch(cleanTrack, debugMode);
                 if (!lines.isEmpty()) {
@@ -80,7 +97,7 @@ public final class LrcLibClient {
                 }
             }
 
-            // 5. Поиск по сырым данным (на случай если чистка удалила что-то нужное)
+            // 6. Поиск по сырым данным (на случай если чистка удалила что-то нужное)
             if (!trackName.equalsIgnoreCase(cleanTrack)) {
                 lines = tryFetchSearch((trackName + " " + (artistName != null ? artistName : "")).trim(), debugMode);
                 if (!lines.isEmpty()) {

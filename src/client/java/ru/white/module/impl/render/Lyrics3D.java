@@ -148,10 +148,28 @@ public class Lyrics3D extends Module {
 
     private void rebuildLyricsQueue() {
         lyricsQueue.clear();
-        if (splitMode.is("Разделять") || splitMode.is("SmartSplit")) {
-            lyricsQueue.addAll(LyricLineSplitter.splitLongLines(rawLyrics));
-        } else {
-            lyricsQueue.addAll(rawLyrics);
+        if (!rawLyrics.isEmpty()) {
+            if (splitMode.is("Разделять") || splitMode.is("SmartSplit")) {
+                lyricsQueue.addAll(LyricLineSplitter.splitLongLines(rawLyrics));
+            } else {
+                lyricsQueue.addAll(rawLyrics);
+            }
+        } else if (!currentTrackTitle.isEmpty()) {
+            // Запасной генератор строк если трек не найден в базе LRCLIB,
+            // чтобы слова трека в 3D ВСЕГДА красиво появлялись
+            String cleanT = LrcLibClient.cleanTrackName(currentTrackTitle);
+            String cleanA = LrcLibClient.cleanArtistName(currentTrackArtist);
+            for (int sec = 0; sec < 400; sec += 4) {
+                String phrase;
+                if (sec % 12 == 0) {
+                    phrase = cleanT;
+                } else if (sec % 12 == 4 && !cleanA.isEmpty()) {
+                    phrase = cleanA;
+                } else {
+                    phrase = "♪ " + cleanT + " ♪";
+                }
+                lyricsQueue.add(new LyricLine(sec * 1000L, phrase));
+            }
         }
     }
 
@@ -187,12 +205,35 @@ public class Lyrics3D extends Module {
 
             long reported = media.getPosition();
             long dur = media.getDuration();
-            if (dur > 86_400_000L) { // микросекунды -> миллисекунды
-                reported /= 1000L;
+            long reportedMs = 0L;
+
+            // Корректная конвертация единиц SMTC (секунды / миллисекунды / микросекунды)
+            if (dur > 0) {
+                if (dur > 86_400_000L) { // микросекунды
+                    reportedMs = reported / 1000L;
+                } else if (dur > 10_000L) { // миллисекунды
+                    reportedMs = reported;
+                } else { // секунды (getDuration/getPosition в MediaPlayerInfo по умолчанию в секундах)
+                    reportedMs = reported * 1000L;
+                }
+            } else if (reported > 0) {
+                if (reported < 10_000L) {
+                    reportedMs = reported * 1000L;
+                } else if (reported > 86_400_000L) {
+                    reportedMs = reported / 1000L;
+                } else {
+                    reportedMs = reported;
+                }
             }
-            if (reported > 0) {
-                smtcReportedPos = reported;
-                smtcReportedReal = System.currentTimeMillis();
+
+            if (reportedMs > 0) {
+                // Если новое значение отличается больше чем на 1 секунду от расчетного, синхронизируем якорь
+                long now = System.currentTimeMillis();
+                long currentEst = smtcReportedReal > 0 ? (smtcReportedPos + (now - smtcReportedReal)) : 0L;
+                if (Math.abs(reportedMs - currentEst) > 1000L || smtcReportedReal == 0) {
+                    smtcReportedPos = reportedMs;
+                    smtcReportedReal = now;
+                }
             }
 
             mediaPlaying = media.getPlaying();
@@ -206,19 +247,18 @@ public class Lyrics3D extends Module {
 
         long now = System.currentTimeMillis();
 
-        // Если есть актуальный снапшот SMTC — опираемся на него
+        // Оценка реальной позиции без скачков
         if (smtcReportedReal > 0 && smtcReportedPos > 0) {
             long elapsedSinceReport = now - smtcReportedReal;
             internalAudioClockMs = smtcReportedPos + elapsedSinceReport;
         } else if (trackStartTimeSys > 0) {
-            // Иначе используем плавный локальный таймер с момента обнаружения трека
             internalAudioClockMs = now - trackStartTimeSys;
         }
 
         long effectiveAudioTime = Math.max(0, internalAudioClockMs + timeOffset.getValue().longValue());
 
-        // Обнаружение перемотки трека
-        if (Math.abs(effectiveAudioTime - lastEffectiveAudioTimeMs) > 1800L) {
+        // Перемотка: пересобираем очередь только при резком скачке (> 3000 мс)
+        if (lastEffectiveAudioTimeMs > 0 && Math.abs(effectiveAudioTime - lastEffectiveAudioTimeMs) > 3000L) {
             resyncQueue(effectiveAudioTime);
         }
         lastEffectiveAudioTimeMs = effectiveAudioTime;
