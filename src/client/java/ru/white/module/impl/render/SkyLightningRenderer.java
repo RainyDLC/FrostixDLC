@@ -280,6 +280,18 @@ public final class SkyLightningRenderer {
                 }
             }
         }
+
+        float skyFl = flashLevel();
+        WorldTweaks wt = WorldTweaks.get();
+        float flashSetting = (wt != null && wt.isEnabled()) ? wt.skyFlash.getValue() : 45.0f;
+        if (skyFl > 0.005f && flashSetting > 0.5f) {
+            float alpha = Math.min(1.0f, skyFl * (flashSetting / 100.0f) * 0.35f);
+            int flashSkyCol = argb(205, 225, 255, (int) (alpha * 255));
+            for (float dy = 20.0f; dy <= 60.0f; dy += 20.0f) {
+                sprite(glowBuf, matrix, new Vec3d(camPos.x, camPos.y + dy, camPos.z), camPos, right, up, 120.0f, flashSkyCol);
+            }
+        }
+
         consumers.draw(GLOW_LAYER);
 
         // ── Pass 2: внешняя лента канала ──

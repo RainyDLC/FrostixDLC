@@ -12,6 +12,8 @@ import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import ru.white.module.impl.render.ShaderSky;
+import ru.white.module.impl.render.SkyLightningRenderer;
+import ru.white.module.impl.render.WorldTweaks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.gl.GpuSampler;
@@ -192,7 +194,11 @@ public class ShaderSkyRenderer {
                 animTime += dt * module.speed.getValue();
             }
         }
-        lastFrameMs = now;
+        float flashAmt = 0.0f;
+        WorldTweaks wt = WorldTweaks.get();
+        if (wt != null && wt.isEnabled() && wt.lightnings.getValue()) {
+            flashAmt = SkyLightningRenderer.flashLevel() * (wt.skyFlash.getValue() / 100.0f);
+        }
 
         dataBuffer.clear();
         dataBuffer.putFloat(width);
@@ -209,7 +215,7 @@ public class ShaderSkyRenderer {
         dataBuffer.putFloat(module.stars.getValue());
         dataBuffer.putFloat(module.hideVanillaSky.getValue() ? 1.0f : 0.0f);
         dataBuffer.putFloat(0.0f);
-        dataBuffer.putFloat(0.0f);
+        dataBuffer.putFloat(flashAmt);
         dataBuffer.flip();
 
         RenderSystem.getDevice().createCommandEncoder().writeToBuffer(uniformBuffer.slice(), dataBuffer);
