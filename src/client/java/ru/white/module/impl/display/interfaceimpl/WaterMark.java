@@ -142,18 +142,14 @@ public class WaterMark implements element {
         curX += sepW;
         drawValue(fontRegular, pingText, "ms", curX, textY);
 
-        // 3. Иконки статуса справа от островка (Самолётик + Не беспокоить)
+        // 3. Иконка беззвучного режима справа от островка (Silent mode)
         float iconStartX = islandStartX + islandW + 6.5F * S;
         float iconY = y + (islandH - ICON) / 2.0F + 0.5F * S;
 
-        // Самолётик (Airplane mode)
-        Fonts.rainydlc_2.draw("S", iconStartX, iconY, ICON, ThemeColor.getTextColor());
+        // Иконка перечёркнутого колокольчика / беззвучного режима
+        Fonts.icon.draw("1", iconStartX, iconY, ICON, ColorUtil.getClientColor(1));
 
-        // Не беспокоить (Do Not Disturb)
-        float dndX = iconStartX + ICON + 4.0F * S;
-        Fonts.rainydlc_2.draw("M", dndX, iconY, ICON, ColorUtil.getClientColor(1));
-
-        float totalW = (dndX + ICON + 2F * S) - x;
+        float totalW = (iconStartX + ICON + 2F * S) - x;
         dragSetting.size.set(totalW, islandH);
     }
 
