@@ -27,7 +27,10 @@ public class SnapRotation implements RotationAura {
     }
 
     private void snap360(AttackAura aura, LivingEntity target, float[] ranges) {
-        boolean canAttack = UAttack.shouldAttack(target, false, true, true, -100L, ranges);
+        // Без крит-гейта (fallCheck = false): при !canAttack эта ротация уводит взгляд
+        // во FreeLook, и с крит-гейтом она наводилась на цель только тогда, когда крит
+        // уже разрешён — то есть на тик позже, чем нужно для удара.
+        boolean canAttack = UAttack.shouldAttack(target, false, true, false, -100L, ranges);
 
         Vec3d vec3d = AuraUtil.getVector3(target);
 

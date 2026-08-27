@@ -11,6 +11,7 @@ import ru.white.module.impl.combat.AttackAura;
 import ru.white.module.impl.combat.aura.RotationAura;
 import ru.white.utils.aura.LagCompensation;
 import ru.white.utils.aura.RayTraceUtil;
+import ru.white.utils.aura.UAttack;
 import ru.white.utils.aura.UBoxPoints;
 import ru.white.utils.math.MathUtil;
 
@@ -64,6 +65,20 @@ public class ConstructorRotation implements RotationAura {
                 ranges[0], target);
         long ms = System.currentTimeMillis();
 
+        // Тик, в котором удар уже готов (заряд добирается за этот тик, цель в радиусе).
+        // Наведение применяется в конце тика, а удар уходит на HEAD следующего — значит
+        // именно сейчас прицел обязан оказаться на хитбоксе, иначе рейкаст в
+        // UAttack.shouldAttack отбросит удар и заряд сгорит впустую.
+        boolean hitNow = canAttack && UAttack.chargeReadyIn(1);
+
+        // Перед ударом руке не до микро-пауз и перелётов: и то, и другое уводит прицел
+        // с бокса ровно в тот тик, когда он там нужен.
+        if (hitNow) {
+            pauseTicks = 0;
+            overshootYaw = 0F;
+            overshootPitch = 0F;
+        }
+
         // базовые скорости из конструктора ротации
         float speedYaw = MathUtil.randomLerp(aura.cYawMin.getValue(), aura.cYawMax.getValue());
         float speedPitch = MathUtil.randomLerp(aura.cPitchMin.getValue(), aura.cPitchMax.getValue());
@@ -102,7 +117,7 @@ public class ConstructorRotation implements RotationAura {
                     pitch += overshootPitch;
                     overshootYaw *= -0.35F;
                     overshootPitch *= -0.35F;
-                } else if (!onTarget && MathUtil.randomInt(0, 100) < 5) {
+                } else if (!hitNow && !onTarget && MathUtil.randomInt(0, 100) < 5) {
                     float yawDeltaAbs = Math.abs(MathHelper.wrapDegrees(yaw - mc.player.getYaw()));
                     if (yawDeltaAbs > 12F) {
                         float dir = Math.signum(MathHelper.wrapDegrees(yaw - mc.player.getYaw()));
@@ -162,6 +177,25 @@ public class ConstructorRotation implements RotationAura {
         pitch += MathUtil.randomLerp(-aura.cRandomPitch.getValue(), aura.cRandomPitch.getValue());
         yaw += (float) Math.sin(ms / 280D) * aura.cOscX.getValue() * 6F;
         pitch += (float) Math.cos(ms / 340D) * aura.cOscY.getValue() * 4F;
+
+        // Доводка в тик удара — здесь работают «Скорость удара Yaw/Pitch».
+        //
+        // Скорости в RotationProcess.updateRotation клампятся за вызов, то есть это
+        // ГРАДУСЫ ЗА ТИК. «Замирание» у цели (1.5-3.5°/тик у Grim, 3-6° у Matrix) не
+        // успевает за игроком, который стрейфит: уход на 0.2 блока за тик на дистанции
+        // 3 блока — это ~3.8°/тик. Прицел сползал с хитбокса, рейкаст резал удар, и так
+        // терялись удары в те моменты, когда бить было можно.
+        //
+        // Поэтому в тик удара шаг не меньше того, что реально нужно доехать до точки
+        // наведения, но не больше «Скорости удара» из конструктора. Рывка от этого не
+        // появляется: доводим ровно на столько, на сколько ушла цель, — при большом
+        // отставании прицел всё равно ещё не на боксе, и там работают обычные скорости.
+        if (hitNow) {
+            float needYaw = Math.abs(MathHelper.wrapDegrees(yaw - mc.player.getYaw()));
+            float needPitch = Math.abs(pitch - mc.player.getPitch());
+            speedYaw = Math.min(Math.max(speedYaw, needYaw), aura.cHitYaw.getValue());
+            speedPitch = Math.min(Math.max(speedPitch, needPitch), aura.cHitPitch.getValue());
+        }
 
         RotationProcess.update(new Rotation(yaw, pitch), speedYaw, speedPitch,
                 retYawSpeed, retPitchSpeed, MathUtil.randomInt(3, 5), 15, false);

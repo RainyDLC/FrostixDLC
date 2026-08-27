@@ -90,7 +90,10 @@ public class FunTimeRotation implements RotationAura {
             yawJitter = lastYawJitter;
             pitchJitter = lastPitchJitter;
 
-            canAttack = UAttack.shouldAttack(target, false, true, true, (long) -MathUtil.random(150,250), ranges);
+            // Без крит-гейта (fallCheck = false): ниже по canAttack эта ротация решает,
+            // тянуть ли угол к цели, и с крит-гейтом угол начинал двигаться только
+            // после того, как крит стал возможен — удар этого тика уходил по старому.
+            canAttack = UAttack.shouldAttack(target, false, true, false, (long) -MathUtil.random(150,250), ranges);
 
             long speedTime = System.currentTimeMillis();
 

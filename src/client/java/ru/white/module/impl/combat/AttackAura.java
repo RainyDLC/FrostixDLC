@@ -211,7 +211,12 @@ public class AttackAura extends Module {
         // Раз в 10 тиков (500 мс) аура успевала простоять полбоя с неудобной целью,
         // а каждые 2 тика при нескольких целях рядом начинала их перебирать —
         // резкие перескоки прицела сами по себе выглядят подозрительно.
-        boolean recheck = ++retargetClock % 4 == 0;
+        //
+        // Исключение — тик, в котором удар по текущей цели уже уходит (ниже в этом же
+        // методе): смена цели здесь уводит прицел, а удар валидируется по углу прошлого
+        // тика, так что набранный заряд сгорал бы впустую. Зацикливания не будет —
+        // после удара заряд сбрасывается, и следующая проверка проходит как обычно.
+        boolean recheck = ++retargetClock % 4 == 0 && !attackReadyNow();
         if (target == null || !isValidTarget(target) || recheck) {
             updateTarget();
         }
@@ -291,6 +296,19 @@ public class AttackAura extends Module {
         boolean screenCheck = noattackto.getValue("Открыт контейнер") && mc.currentScreen != null  && !(mc.currentScreen instanceof Menu);
 
         return baseCheck ||  screenCheck;
+    }
+
+    /** Уйдёт ли удар по текущей цели уже в этом тике — теми же условиями, что attackEntity(). */
+    private boolean attackReadyNow() {
+        if (target == null || mc.player == null || checkToAttack()) {
+            return false;
+        }
+        if (LagCompensation.attackDistance(target) >= LagCompensation.safeReach(attackRange.getValue())) {
+            return false;
+        }
+        float[] ranges = getRanges();
+        ranges = new float[]{ranges[0], ranges[1], ranges[0] + ranges[1]};
+        return UAttack.shouldAttack(target, !typeRotation.is("HvH"), true, true, 0L, ranges);
     }
 
     public void attackEntity() {
@@ -454,7 +472,13 @@ public static int lookUpDuration = 0;
         }
         float[] ranges = getRanges();
         ranges = new float[]{ranges[0], ranges[1], ranges[0] + ranges[1]};
-        boolean canAttack = UAttack.shouldAttack(target, false, true, true, -350, ranges);
+        // Предсказание «удар вот-вот» для ротаций — БЕЗ крит-гейта (fallCheck = false).
+        // С fallCheck здесь предсказание повторяло условие крита, и в режиме «Только
+        // криты» ротация узнавала о готовом ударе лишь тогда, когда крит уже разрешён.
+        // А наведение применяется в конце тика, то есть удар этого тика считался по
+        // старому углу: рейкаст в attackEntity() его отбрасывал, и удар пропадал.
+        // Ротация должна быть на цели ЗАРАНЕЕ — к моменту, когда окно крита откроется.
+        boolean canAttack = UAttack.shouldAttack(target, false, true, false, -350, ranges);
 
         for (RotationType type : RotationType.values()) {
             if (typeRotation.is(type.getName())) {

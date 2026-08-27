@@ -154,8 +154,28 @@ public class UBoxPoints implements IMinecraft {
                 (box.minX + box.maxX) * 0.5D,
                 MathHelper.clamp(eye.y, box.minY, box.maxY),
                 (box.minZ + box.maxZ) * 0.5D);
-        if (eye.squaredDistanceTo(ideal) <= reachSq && (throughWalls || pointVisible(eye, ideal))) {
-            return ideal;
+
+        // Ближайшая к глазам точка бокса: именно её меряет LagCompensation.attackDistance,
+        // поэтому она в пределах радиуса всегда, когда удар вообще разрешён.
+        Vec3d nearest = new Vec3d(
+                MathHelper.clamp(eye.x, box.minX, box.maxX),
+                MathHelper.clamp(eye.y, box.minY, box.maxY),
+                MathHelper.clamp(eye.z, box.minZ, box.maxZ));
+
+        // На дистанции у предела центр бокса уже за радиусом, а ближняя сторона — ещё
+        // нет. Раньше в этом случае выбор точки проваливался в перебор сетки, и прицел
+        // прыгал между центром и точкой сетки при каждом колебании дистанции: точка
+        // уезжала за тик на пол-блока, прицел гнался за ней и в момент удара оказывался
+        // мимо хитбокса — удар терялся на рейкасте. Вместо прыжка подтягиваем точку от
+        // центра к ближней стороне: она смещается плавно вместе с дистанцией.
+        for (double blend = 0.0D; blend <= 1.0001D; blend += 0.2D) {
+            Vec3d point = new Vec3d(
+                    lerp(ideal.x, nearest.x, blend),
+                    lerp(ideal.y, nearest.y, blend),
+                    lerp(ideal.z, nearest.z, blend));
+            if (eye.squaredDistanceTo(point) > reachSq) continue;
+            if (!throughWalls && !pointVisible(eye, point)) continue;
+            return point;
         }
 
         final double[] t = {0.0D, 0.125D, 0.25D, 0.375D, 0.5D, 0.625D, 0.75D, 0.875D, 1.0D};

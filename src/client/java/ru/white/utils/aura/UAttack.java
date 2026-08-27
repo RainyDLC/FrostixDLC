@@ -245,6 +245,30 @@ public class UAttack implements IMinecraft {
         return mc.player != null && mc.player.getAttackCooldownProgress(0.5F) >= 0.9F;
     }
 
+    /**
+     * Будет ли заряд достаточен для удара через {@code ticks} тиков — по ванильному
+     * счётчику, а не по миллисекундам.
+     *
+     * getMsCooldown() считает время до ПОЛНОГО заряда (1.0), а бить ваниль разрешает
+     * уже с 0.9 — на 1-2 тика раньше. Любое окно, посчитанное «за N мс до полного
+     * заряда», поэтому открывается ПОЗЖЕ первого возможного удара, и всё, что к этому
+     * окну привязано (гашение спринта, наведение), опаздывает.
+     *
+     * Шаг счётчика за тик = attackSpeed / 20, ровно как в getAttackCooldownProgress:
+     * (lastAttackedTicks + 0.5) / (20 / attackSpeed).
+     */
+    public static boolean chargeReadyIn(int ticks) {
+        if (mc.player == null)
+            return false;
+
+        double attackSpeed = mc.player.getAttributeValue(EntityAttributes.ATTACK_SPEED);
+        if (attackSpeed <= 0.0D)
+            return false;
+
+        float perTick = (float) (attackSpeed / 20.0D);
+        return mc.player.getAttackCooldownProgress(0.5F) + perTick * ticks >= 0.9F;
+    }
+
     /** Интервал полного заряда в мс — для предсказания удара (пре-наведение). */
     public static long getMsCooldown() {
         if (mc.player == null)
@@ -323,13 +347,33 @@ public class UAttack implements IMinecraft {
         return shouldAttack(livingTarget, rayCast, true, fallCheck, cooldownMSOffset, ranges);
     }
 
+    /**
+     * За сколько тиков до удара начинать гасить спринт: пакет уходит в конце тика
+     * (sendSprintingPacket), а удар — на HEAD следующего, плюс тик запаса на то,
+     * что клавиша бега успеет отпуститься до tickMovement().
+     */
+    private static final int SPRINT_LEAD_TICKS = 2;
+
     public static boolean resetSprintTick(LivingEntity targetIn, float[] ranges) {
-        if (targetIn != null && shouldAttack(targetIn, false, false, -50L, ranges)) {
-            if (!mc.player.isOnGround() && !mc.player.isSubmergedIn(FluidTags.WATER)) {
-                if (mc.player.getVelocity().y <= .0030162615090425808)
-                    return true;
-            }
-        }
-        return false;
+        if (targetIn == null || mc.player == null)
+            return false;
+
+        // Окно раньше считалось msCooldownReached(-50) — 50 мс до ПОЛНОГО заряда,
+        // тогда как удар открывается на 0.9: при скорости атаки 1.0 это тик 18
+        // (900 мс), а гашение включалось только на 950 мс. Спринт уезжал на сервер
+        // с опозданием на 1-2 тика, и на коротком прыжке окно крита успевало
+        // закрыться раньше, чем аура получала право ударить.
+        if (!chargeReadyIn(SPRINT_LEAD_TICKS))
+            return false;
+
+        // Запас по дистанции: гасить надо заранее, а за эти два тика цель ещё
+        // сближается — по точной дистанции удара окно бы не открылось вовремя.
+        if (!AuraUtil.validDistance(targetIn, ranges[0] + 0.5F, true))
+            return false;
+
+        if (mc.player.isOnGround() || mc.player.isSubmergedIn(FluidTags.WATER))
+            return false;
+
+        return mc.player.getVelocity().y <= .0030162615090425808;
     }
 }
