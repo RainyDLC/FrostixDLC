@@ -41,6 +41,9 @@ public class LagCompensation implements IMinecraft {
     private static final int MAX_SAMPLES = 64;
     private static final double MAX_TRACK_DIST = 12.0;
 
+    /** Расширение хитбокса для рейкаста — запас на погрешность интерполяции позиции цели. */
+    public static final double RAY_EPSILON = 0.03;
+
     /** Запись позиции цели каждый тик (вызывать из ауры). */
     public static void record(LivingEntity target) {
         if (target == null || mc.player == null || mc.world == null) return;
@@ -203,8 +206,23 @@ public class LagCompensation implements IMinecraft {
     }
 
     private static boolean rayHitsBox(Box raw, float range, boolean ignoreBlocks) {
-        Box box = raw.expand(0.03); // эпсилон на погрешность интерполяции
+        Box box = raw.expand(RAY_EPSILON);
         Vec3d eye = mc.player.getEyePos();
+
+        // Глаза внутри хитбокса — попадание есть под любым углом, и помешать ему
+        // нечему: на нулевой дистанции блока между нами и целью не бывает.
+        //
+        // Разбирать этот случай приходится отдельно, потому что Box.raycast изнутри
+        // бокса ВСЕГДА возвращает empty: он ищет точку ВХОДА и требует от параметра
+        // луча d > 0 (проверено по байткоду 1.21.11: traceCollisionSide сравнивает
+        // 0.0 < d, а гранью входа для +X берётся minX), тогда как изнутри все шесть
+        // граней дают d < 0. Ваниль это учитывает — ProjectileUtil.raycast:
+        // if (box.contains(min)) → попадание с дистанцией 0, — и здешний
+        // RayTraceUtil.rayTraceEntity тоже. Без этой проверки рейкаст-гейт молча
+        // резал каждый удар в упор: стоило войти в хитбокс цели, и аура перестала
+        // бить в самый выгодный для этого момент.
+        if (box.contains(eye)) return true;
+
         Vec3d dir = rotationVector(mc.player.getYaw(), mc.player.getPitch());
         Vec3d end = eye.add(dir.multiply(range));
 
