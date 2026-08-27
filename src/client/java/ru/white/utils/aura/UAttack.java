@@ -138,15 +138,42 @@ public class UAttack implements IMinecraft {
     }
 
     /**
-     * Ванильное условие крита на момент удара — как его считает PlayerEntity.attack().
+     * Спринт в том виде, в котором о нём знает сервер.
      *
-     * Спринт сюда намеренно не входит: его снимает preHit самого удара
-     * (skipSilentSprintingTaskForUse), поэтому проверять его заранее нельзя — иначе
-     * отсеются удары, которые как раз и станут критами. Заряд атаки тоже не входит,
-     * он проверяется отдельно в isCharged().
+     * Крит считает сервер, и ваниль требует в этот момент !isSprinting(). Но о
+     * снятом спринте сервер узнаёт только из sendSprintingPacket(), а он вызывается
+     * внутри sendMovementPackets() — то есть ПОЗЖЕ нашего удара в том же тике.
+     * Поэтому снимать флаг прямо перед ударом бесполезно: сервер всё ещё считает
+     * нас спринтующими и вместо крита выдаёт sprint-knockback. Значение
+     * фиксируется в ClientPlayerEntityMixin ровно там, откуда уходит пакет.
+     */
+    private static boolean sprintingOnServer;
+
+    public static void setSprintingOnServer(boolean value) {
+        sprintingOnServer = value;
+    }
+
+    public static boolean isSprintingOnServer() {
+        return sprintingOnServer;
+    }
+
+    /**
+     * Ванильное условие крита на момент удара — как его считает
+     * PlayerEntity.isCriticalHit() в 1.21.11 (проверено по байткоду).
      */
     public static boolean isCriticalHit() {
         if (mc.player == null) return false;
+
+        // Заряд для крита ваниль требует СТРОГО больше 0.9, тогда как isCharged()
+        // пропускает удар уже при 0.9. Для скорости атаки 1.0 (топор, лопата) заряд
+        // на 18-м тике равен ровно 0.90, для скорости 2.0 — на 9-м: гейт пропускал,
+        // а крита не выходило. Именно поэтому «иногда не критует» чаще всего с топором.
+        if (mc.player.getAttackCooldownProgress(0.5F) <= 0.9F) return false;
+
+        // Спринт: смотрим не на текущий флаг, а на тот, что уже уехал на сервер —
+        // именно по нему сервер и решает, крит или sprint-knockback. Гасит спринт
+        // заранее AttackAura.updateCritSprint().
+        if (sprintingOnServer) return false;
 
         return mc.player.fallDistance > 0.0F
                 && !mc.player.isOnGround()

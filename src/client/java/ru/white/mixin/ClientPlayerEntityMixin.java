@@ -6,6 +6,7 @@ import ru.white.manager.event_impl.*;
 import ru.white.manager.event_impl.*;
 import ru.white.module.impl.player.LockSlot;
 import ru.white.module.impl.player.NoPush;
+import ru.white.utils.aura.UAttack;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -63,6 +64,11 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
 
         ActionEvent actionEvent = new ActionEvent(flag);
         actionEvent.hook();
+
+        // Единственное место, откуда сервер узнаёт про спринт. Удар аура отправляет
+        // на HEAD тика игрока, то есть раньше этой точки, поэтому крит сервер считает
+        // по значению, ушедшему в предыдущем тике — его и запоминаем.
+        UAttack.setSprintingOnServer(actionEvent.isSprintState());
 
         return actionEvent.isSprintState();
     }

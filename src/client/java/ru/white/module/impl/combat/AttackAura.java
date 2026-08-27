@@ -220,6 +220,10 @@ public class AttackAura extends Module {
             stoptick--;
         }
 
+        // Спринт против крита: гасим его ЗА ТИК до удара, иначе крита не будет
+        // никогда, пока зажат бег (см. UAttack.isSprintingOnServer).
+        updateCritSprint();
+
         // Удар отправляется здесь — на HEAD тика игрока, то есть ДО пакета
         // движения этого тика (sendMovementPackets вызывается позже в том же
         // тике). Это ванильный порядок: doAttack() в MinecraftClient.tick()
@@ -234,6 +238,52 @@ public class AttackAura extends Module {
             attackEntity();
         }
     }
+    /** Ждём крит — значит спринт в момент удара помешает. */
+    private boolean wantsCrit() {
+        return others.getValue("Только криты") || others.getValue("Умные криты");
+    }
+
+    /** Мы сами отпустили клавишу бега — её нужно вернуть, когда удар уже не готовится. */
+    private boolean sprintKeyForcedOff;
+
+    /**
+     * Снимает спринт за тик до удара, чтобы сервер успел об этом узнать и выдал крит.
+     *
+     * Клавишу тоже отпускаем: canStartSprinting() в 1.21 больше не требует земли,
+     * поэтому при зажатом беге tickMovement() поставит флаг обратно в том же тике —
+     * пакет тогда не уйдёт, и сервер так и будет считать нас спринтующими.
+     * Скорость падает вместе с флагом, так что серверу мы сообщаем ровно то, как
+     * двигаемся, — лишнего расхождения для проверок движения не появляется.
+     *
+     * Режим «Legit» здесь не участвует: он гасит спринт своим способом — обнулением
+     * ввода в setCorrection(), ваниль после этого снимает флаг сама.
+     */
+    private void updateCritSprint() {
+        boolean hold = target != null && wantsCrit() && !typeSprint.is("Legit")
+                && !AttackUtil.hasMovementRestrictions()
+                && UAttack.resetSprintTick(target, getRanges());
+
+        if (hold) {
+            if (mc.options.sprintKey.isPressed()) {
+                mc.options.sprintKey.setPressed(false);
+                sprintKeyForcedOff = true;
+            }
+            if (mc.player.isSprinting()) {
+                mc.player.setSprinting(false);
+            }
+        } else if (sprintKeyForcedOff) {
+            mc.options.sprintKey.setPressed(true);
+            sprintKeyForcedOff = false;
+        }
+    }
+
+    private void releaseCritSprint() {
+        if (sprintKeyForcedOff) {
+            mc.options.sprintKey.setPressed(true);
+            sprintKeyForcedOff = false;
+        }
+    }
+
     private boolean checkToAttack() {
 
         boolean baseCheck = mc.player.isUsingItem() && noattackto.getValue("Используешь еду");
@@ -514,6 +564,7 @@ public static int lookUpDuration = 0;
         currentPoint = null;
         hitCount = 0;
         pitchFlickActive = false;
+        releaseCritSprint();
         resetCubeState();
 
     }
