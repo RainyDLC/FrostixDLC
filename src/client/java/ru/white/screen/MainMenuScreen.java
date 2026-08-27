@@ -36,7 +36,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     private static final int AQUA_R = 74, AQUA_G = 157, AQUA_B = 209;  // холодный синий
     private static final int TXT_R = 218, TXT_G = 235, TXT_B = 250;    // светлый текст
 
-    private static final Identifier MENU_BG = Identifier.of("client", "textures/frame/mainmenu.jpeg");
+    private static final Identifier MENU_BG = Identifier.of("client", "textures/frame/mainmenu.png");
     /** Фирменный логотип (R с листом) — иконка окна, худ-ватермарка и главное меню. */
     private static final Identifier ICON_LOGO = Identifier.of("client", "textures/icon.png");
     private static final Identifier GLOW_TEX = Identifier.of("client", "textures/particles/glow.png");
