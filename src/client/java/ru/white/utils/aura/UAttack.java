@@ -8,6 +8,7 @@ import lombok.experimental.UtilityClass;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.AxeItem;
 import net.minecraft.item.Item;
@@ -136,41 +137,48 @@ public class UAttack implements IMinecraft {
         return pre$post;
     }
 
-    /** Касание земли произойдёт в пределах указанных тиков (падаем с отрицательной скоростью). */
-    private static boolean isLandingWithinTicks(int ticks) {
-        Vec3d v = mc.player.getVelocity();
-        if (v.y >= -0.05F) return false;
-        Box box = mc.player.getBoundingBox();
-        double dy = v.y;
-        for (int i = 0; i < ticks; i++) {
-            Box shifted = box.offset(0, dy, 0);
-            if (!mc.world.isSpaceEmpty(mc.player, shifted)) return true;
-            box = shifted;
-            dy = Math.max(dy * 0.98 - 0.06, -3.92);
-        }
-        return false;
+    /**
+     * Ванильное условие крита на момент удара — как его считает PlayerEntity.attack().
+     *
+     * Спринт сюда намеренно не входит: его снимает preHit самого удара
+     * (skipSilentSprintingTaskForUse), поэтому проверять его заранее нельзя — иначе
+     * отсеются удары, которые как раз и станут критами. Заряд атаки тоже не входит,
+     * он проверяется отдельно в isCharged().
+     */
+    public static boolean isCriticalHit() {
+        if (mc.player == null) return false;
+
+        return mc.player.fallDistance > 0.0F
+                && !mc.player.isOnGround()
+                && !mc.player.isClimbing()
+                && !mc.player.isTouchingWater()
+                && !mc.player.hasStatusEffect(StatusEffects.BLINDNESS)
+                && !mc.player.hasVehicle();
     }
 
     public static boolean isBestMomentToHit(boolean fallCheck) {
         if (mc.player == null)
             return true;
 
+        if (!fallCheck) return true;
+
+        // Мейс: урон смэша считается по высоте падения, а не по криту,
+        // поэтому крит-гейт к нему не применяем
         if (mc.player.getMainHandStack().getItem() == Items.MACE) {
             return true;
         }
 
-        if (!fallCheck) return true;
-
-        boolean landingSoon = isLandingWithinTicks(2);
-        if (AttackUtil.isPlayerInCriticalState() || landingSoon) {
-            return true;
-        }
-
+        // «Только криты» — строго ванильное условие крита.
+        // Раньше здесь стояла проверка «скоро приземлимся», причём ДО этого гейта и
+        // безусловно его обходившая. Стоя на земле velocity.y равен -0.0784, а не
+        // нулю, поэтому она срабатывала непрерывно, и аура спокойно била с земли.
         if (AttackAura.get().others.getValue("Только криты")) {
-            return false;
+            return isCriticalHit();
         }
 
         if (AttackAura.get().others.getValue("Умные криты")) {
+            if (isCriticalHit()) return true;
+            // не бьём, пока зажат прыжок — придерживаем удар до падения
             return !mc.options.jumpKey.isPressed() || AttackUtil.hasMovementRestrictions();
         }
 
