@@ -135,7 +135,7 @@ public class AltManagerScreen extends Screen implements IMinecraft {
         float bgX = (screenWidth - bgW) / 2F + offsetX;
         float bgY = (screenHeight - bgH) / 2F + offsetY;
 
-        RenderUtil.Images.texture(Identifier.of("client","textures/frame/menu.png"), bgX, bgY, bgW, bgH, ColorUtil.getColor(255, a));
+        RenderUtil.Images.texture(Identifier.of("client","textures/frame/mainmenu.jpeg"), bgX, bgY, bgW, bgH, ColorUtil.getColor(255, a));
 
 
 

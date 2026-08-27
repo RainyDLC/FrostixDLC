@@ -44,7 +44,7 @@ public abstract class SplashOverlayMixin {
     @Shadow private long reloadStartTime;
 
     @Unique private static final int RAINYDLC_BG = 0x071426;
-    @Unique private static final Identifier MENU_BG = Identifier.of("client", "textures/frame/menu.png");
+    @Unique private static final Identifier MENU_BG = Identifier.of("client", "textures/frame/mainmenu.jpeg");
     @Unique private static final Identifier LOGO_TEX = Identifier.of("client", "textures/icon.png");
     @Unique private static final Identifier GLOW_TEX = Identifier.of("client", "textures/particles/glow.png");
 
