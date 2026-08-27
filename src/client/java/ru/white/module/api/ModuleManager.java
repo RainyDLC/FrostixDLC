@@ -12,7 +12,6 @@ import ru.white.module.impl.display.InterFace;
 import ru.white.module.impl.movement.*;
 import ru.white.module.impl.player.*;
 import ru.white.module.impl.render.*;
-import ru.white.module.impl.render.lyrics.Lyrics3D;
 import ru.white.module.impl.utils.*;
 
 import java.util.*;
@@ -76,7 +75,6 @@ public final class ModuleManager extends LinkedHashMap<Class<? extends Module>, 
                 new ScanWorld(),
                 new FogBlur(),
                 new TotemGhost(),
-                new Lyrics3D(),
                 new KillEffect(),
                 new Hands(),
                 new InterFace(),
