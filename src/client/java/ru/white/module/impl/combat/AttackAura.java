@@ -207,10 +207,11 @@ public class AttackAura extends Module {
         // запись истории позиций цели каждый тик (для лаг-компенсации удара)
         LagCompensation.record(target);
 
-        // переоценка цели: мгновенно при потере валидности, иначе каждые 2 тика —
-        // чтобы захватывать более выгодную цель (ближе/в радиусе удара).
-        // Раз в 10 тиков (500 мс) аура успевала простоять полбоя с неудобной целью.
-        boolean recheck = ++retargetClock % 2 == 0;
+        // переоценка цели: мгновенно при потере валидности, иначе каждые 4 тика.
+        // Раз в 10 тиков (500 мс) аура успевала простоять полбоя с неудобной целью,
+        // а каждые 2 тика при нескольких целях рядом начинала их перебирать —
+        // резкие перескоки прицела сами по себе выглядят подозрительно.
+        boolean recheck = ++retargetClock % 4 == 0;
         if (target == null || !isValidTarget(target) || recheck) {
             updateTarget();
         }
@@ -218,29 +219,17 @@ public class AttackAura extends Module {
         if(stoptick != 0) {
             stoptick--;
         }
-    }
 
-    /**
-     * Наведение — на HEAD sendMovementPackets. К этому моменту игрок уже сдвинулся
-     * в текущем тике, поэтому угол считается от той самой позиции глаз, которая
-     * сейчас уйдёт на сервер, и сам угол уезжает этим же пакетом.
-     */
-    @EventHandler
-    public void onMotion(MotionEvent e) {
-        doRotation();
-    }
-
-    /**
-     * Удар — на TAIL sendMovementPackets, то есть уже после того, как пакет с
-     * нужным углом ушёл на сервер.
-     *
-     * Раньше удар отправлялся из EventUpdate (HEAD тика игрока), а ротация
-     * считалась в EventTick (TAIL тика клиента) — то есть пакет атаки уходил на
-     * два тика раньше собственной ротации. Сервер валидировал удар углом
-     * двухтактовой давности, и при быстром флике аура промахивалась вхолостую.
-     */
-    @EventHandler
-    public void onPostMotion(PostMotionEvent e) {
+        // Удар отправляется здесь — на HEAD тика игрока, то есть ДО пакета
+        // движения этого тика (sendMovementPackets вызывается позже в том же
+        // тике). Это ванильный порядок: doAttack() в MinecraftClient.tick()
+        // тоже идёт раньше tickEntities().
+        //
+        // Бить после пакета движения (на TAIL sendMovementPackets) нельзя:
+        // именно так выглядит «post»-читерство, и Grim ловит это отдельной
+        // проверкой. Пока стоишь на месте, пакеты движения почти не идут и
+        // ловить нечего, а при ходьбе они уходят каждый тик — и флаг летит
+        // на каждый удар.
         if (!checkToAttack() && target != null) {
             attackEntity();
         }
@@ -260,7 +249,7 @@ public class AttackAura extends Module {
         }
 
         // дистанция удара: по наиболее выгодному из живого и отложенного хитбокса
-        if (LagCompensation.bestDistance(target) >= LagCompensation.safeReach(attackRange.getValue())) {
+        if (LagCompensation.attackDistance(target) >= LagCompensation.safeReach(attackRange.getValue())) {
             return;
         }
 
@@ -393,7 +382,22 @@ public static int lookUpDuration = 0;
     public TimerUtil timeSped2 = new TimerUtil();
 
 
-    /** Наведение на цель. Вызывается из onMotion — до отправки пакета поворота. */
+    /**
+     * Наведение — в конце тика клиента (TAIL MinecraftClient.tick), уже после того,
+     * как пакет движения этого тика ушёл. Выставленный здесь угол уедет на сервер
+     * в следующем тике, и там же им будет посчитана физика движения.
+     *
+     * Наводиться перед пакетом движения (на HEAD sendMovementPackets) нельзя:
+     * смещение за тик считается раньше, в travel(), старым углом, а в пакет попадёт
+     * новый — Grim восстанавливает скорость из угла в пакете и видит расхождение.
+     * Стоя на месте flag не летит (forward/strafe нулевые, угол на предсказание не
+     * влияет), а при ходьбе флагает каждый тик.
+     */
+    @EventHandler
+    public void onRotate(EventTick e) {
+        doRotation();
+    }
+
     private void doRotation() {
         if (target == null || mc.player == null || mc.world == null) {
             return;

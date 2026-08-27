@@ -116,16 +116,17 @@ public class UAttack implements IMinecraft {
             return pre$post;
 
         if (mc.player.isSprinting() && !mc.player.isOnGround()  && !AttackUtil.hasMovementRestrictions()) {
-            // Крит в ванили требует !isSprinting() в момент player.attack(), поэтому
-            // спринт снимаем ровно на время удара. Пакет STOP_SPRINTING при этом не
-            // уходит: удар выполняется на TAIL sendMovementPackets, а спринт-пакет
-            // отправляется в самом начале этого метода — к моменту удара он уже ушёл,
-            // а postHit возвращает флаг назад до следующего тика.
-            // Раньше режим «Silent» не снимал сам флаг, а только клавишу, поэтому
-            // isSprinting() оставался true и криты не срабатывали вообще.
             pre$post[0] = () -> {
-                mc.options.sprintKey.setPressed(false);
-                mc.player.setSprinting(false);
+                // «Silent» трогает только клавишу: снимать сам флаг спринта без
+                // пакета STOP_SPRINTING бессмысленно — сервер всё равно считает нас
+                // спринтующими и крит не даст, а клиент нарисует частицы крита,
+                // которого не было.
+                if (AttackAura.get().typeSprint.is("Silent")) {
+                    mc.options.sprintKey.setPressed(false);
+                } else {
+                    mc.options.sprintKey.setPressed(false);
+                    mc.player.setSprinting(false);
+                }
             };
             pre$post[1] = () -> {
                 mc.options.sprintKey.setPressed(true);

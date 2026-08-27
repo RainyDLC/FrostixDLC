@@ -158,7 +158,7 @@ public class AuraUtil implements IMinecraft {
         // дистанция по наиболее выгодному из живого и отложенного хитбокса,
         // с безопасным эпсилоном относительно лимита античита
         if (entity instanceof LivingEntity living) {
-            return LagCompensation.bestDistance(living) < LagCompensation.safeReach(distance);
+            return LagCompensation.attackDistance(living) < LagCompensation.safeReach(distance);
         }
         return getStrictDistance(entity) < distance;
     }

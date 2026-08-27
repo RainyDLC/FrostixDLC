@@ -88,12 +88,6 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
         if (event.isCancelled()) ci.cancel();
     }
 
-    /** Пакет поворота уже ушёл — можно бить этим же углом. */
-    @Inject(method = "sendMovementPackets", at = @At("TAIL"))
-    private void postMotion(CallbackInfo ci) {
-        new PostMotionEvent().hook();
-    }
-
     @Inject(method = "pushOutOfBlocks", at = @At("HEAD"), cancellable = true)
     public void pushOutOfBlocks(double x, double z, CallbackInfo ci) {
         NoPush noPush = Client.get().moduleManager().get(NoPush.class);

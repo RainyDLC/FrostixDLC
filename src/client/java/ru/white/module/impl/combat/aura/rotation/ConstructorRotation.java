@@ -51,9 +51,9 @@ public class ConstructorRotation implements RotationAura {
     public void onRotation(AttackAura aura, LivingEntity target, float[] ranges, boolean canAttack) {
         if (mc.player == null || target == null) return;
 
-        // античит валидирует удар по отложенному (лаг-компенсированному)
-        // хитбоксу — наводиться нужно тоже по нему, иначе рейкаст промахнётся
-        Vec3d aimPoint = UBoxPoints.getBestVector3dOnEntityBox(LagCompensation.delayedBox(target));
+        // наводимся по живому хитбоксу — той же системе отсчёта, по которой
+        // удар потом валидируется (LagCompensation.attackDistance / rayHits)
+        Vec3d aimPoint = UBoxPoints.getBestVector3dOnEntityBox(target.getBoundingBox());
         Vec3d vec = aimPoint.subtract(mc.player.getEyePos());
 
         float yaw = (float) Math.toDegrees(Math.atan2(-vec.x, vec.z));
