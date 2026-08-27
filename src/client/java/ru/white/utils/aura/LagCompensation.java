@@ -139,9 +139,8 @@ public class LagCompensation implements IMinecraft {
         return new Box(x - half, y, z - half, x + half, y + height, z + half);
     }
 
-    /** Дистанция от глаз до отложенного хитбокса (как getStrictDistance, но по-гримовски). */
-    public static double distanceToDelayed(LivingEntity target) {
-        Box box = delayedBox(target);
+    /** Дистанция от глаз до произвольного бокса. */
+    private static double distanceToBox(Box box) {
         Vec3d eye = mc.player.getEyePos();
         Vec3d closest = new Vec3d(
                 MathHelper.clamp(eye.x, box.minX, box.maxX),
@@ -150,20 +149,72 @@ public class LagCompensation implements IMinecraft {
         return closest.subtract(eye).length();
     }
 
+    /** Дистанция от глаз до отложенного хитбокса (как getStrictDistance, но по-гримовски). */
+    public static double distanceToDelayed(LivingEntity target) {
+        return distanceToBox(delayedBox(target));
+    }
+
+    /** Дистанция от глаз до живого (клиентского) хитбокса. */
+    public static double distanceToLive(LivingEntity target) {
+        return distanceToBox(target.getBoundingBox());
+    }
+
+    /**
+     * Наиболее выгодное из двух представлений цели.
+     *
+     * Раньше удар валидировался только по отложенному боксу, тогда как часть
+     * режимов наведения (FunTime и прочие, кроме конструкторных) целится в живой
+     * хитбокс. Получался тупик: аура смотрит туда, где цель сейчас, а проверка
+     * требует попадания туда, где цель была пинг+60 мс назад. При пинге 100 мс
+     * бегущая цель за это время уходит почти на ширину своего хитбокса, поэтому
+     * проверка отклоняла удары, которые сервер бы принял — отсюда «не бьёт».
+     *
+     * Берём минимум: удар проходит, если он корректен хотя бы в одном из двух
+     * представлений. Это строго мягче прежнего поведения и никогда не отклоняет
+     * то, что отклонялось бы раньше.
+     */
+    public static double bestDistance(LivingEntity target) {
+        return Math.min(distanceToLive(target), distanceToDelayed(target));
+    }
+
     /**
      * Рейкаст текущего взгляда по отложенному хитбоксу + проверка блоков на
      * пути. Именно так удар валидируют Grim (hitbox-интерполяция) и Matrix.
      */
-    public static boolean rayHitsDelayed(LivingEntity target, float range) {
-        if (mc.player == null || mc.world == null) return false;
+    /**
+     * Рейкаст текущего взгляда по цели: попадание принимается, если луч пересекает
+     * живой ИЛИ отложенный хитбокс. Проверять только отложенный — значит отклонять
+     * удары, которыми аура целилась в живой бокс (см. bestDistance).
+     */
+    public static boolean rayHits(LivingEntity target, float range) {
+        return rayHits(target, range, false);
+    }
 
-        Box box = delayedBox(target).expand(0.03); // эпсилон на погрешность интерполяции
+    /**
+     * @param ignoreBlocks не отбрасывать удар из-за блока на пути (настройка
+     *                     «Бить через блоки»). Без этого настройка не работала:
+     *                     выбор цели её учитывал, а рейкаст всё равно отклонял удар.
+     */
+    public static boolean rayHits(LivingEntity target, float range, boolean ignoreBlocks) {
+        if (mc.player == null || mc.world == null) return false;
+        return rayHitsBox(target.getBoundingBox(), range, ignoreBlocks)
+                || rayHitsBox(delayedBox(target), range, ignoreBlocks);
+    }
+
+    /** Совместимость: старое имя, теперь учитывает оба представления цели. */
+    public static boolean rayHitsDelayed(LivingEntity target, float range) {
+        return rayHits(target, range, false);
+    }
+
+    private static boolean rayHitsBox(Box raw, float range, boolean ignoreBlocks) {
+        Box box = raw.expand(0.03); // эпсилон на погрешность интерполяции
         Vec3d eye = mc.player.getEyePos();
         Vec3d dir = rotationVector(mc.player.getYaw(), mc.player.getPitch());
         Vec3d end = eye.add(dir.multiply(range));
 
         var hit = box.raycast(eye, end);
         if (hit.isEmpty()) return false;
+        if (ignoreBlocks) return true;
 
         // блок ближе точки попадания — удара нет
         BlockHitResult block = mc.world.raycast(new net.minecraft.world.RaycastContext(
@@ -174,6 +225,37 @@ public class LagCompensation implements IMinecraft {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Мягкая проверка видимости для выбора цели.
+     *
+     * Ванильный {@code Entity.canSee} стреляет лучом строго глаза→глаза, поэтому
+     * цель за забором, полублоком или углом считалась невидимой целиком, и аура
+     * отказывалась её брать, хотя корпус открыт. Проверяем несколько точек по
+     * высоте хитбокса — достаточно, чтобы была видна хоть одна.
+     */
+    public static boolean isVisibleLoose(LivingEntity target) {
+        if (mc.player == null || mc.world == null) return false;
+
+        Vec3d eye = mc.player.getEyePos();
+        Box box = target.getBoundingBox();
+        double cx = (box.minX + box.maxX) / 2.0;
+        double cz = (box.minZ + box.maxZ) / 2.0;
+
+        double[] heights = {
+                target.getEyeY() - target.getY(),   // голова
+                target.getHeight() * 0.5,           // корпус
+                0.15                                // ноги
+        };
+        for (double h : heights) {
+            Vec3d point = new Vec3d(cx, target.getY() + h, cz);
+            BlockHitResult block = mc.world.raycast(new net.minecraft.world.RaycastContext(
+                    eye, point, net.minecraft.world.RaycastContext.ShapeType.COLLIDER,
+                    net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+            if (block.getType() == HitResult.Type.MISS) return true;
+        }
+        return false;
     }
 
     /** Вектор направления по yaw/pitch (как в ванильной камере). */

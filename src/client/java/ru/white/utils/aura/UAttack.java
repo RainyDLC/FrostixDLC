@@ -173,21 +173,16 @@ public class UAttack implements IMinecraft {
             return pre$post;
 
         if (mc.player.isSprinting() && !mc.player.isOnGround()  && !AttackUtil.hasMovementRestrictions()) {
+            // Крит в ванили требует !isSprinting() в момент player.attack(), поэтому
+            // спринт снимаем ровно на время удара. Пакет STOP_SPRINTING при этом не
+            // уходит: удар выполняется на TAIL sendMovementPackets, а спринт-пакет
+            // отправляется в самом начале этого метода — к моменту удара он уже ушёл,
+            // а postHit возвращает флаг назад до следующего тика.
+            // Раньше режим «Silent» не снимал сам флаг, а только клавишу, поэтому
+            // isSprinting() оставался true и криты не срабатывали вообще.
             pre$post[0] = () -> {
-
-
-                if(AttackAura.get().typeSprint.is("Silent")) {
-                    mc.options.sprintKey.setPressed(false);
-
-                } else {
-                    mc.options.sprintKey.setPressed(false);
-                    mc.player.setSprinting(false);
-
-
-                }
-
-
-
+                mc.options.sprintKey.setPressed(false);
+                mc.player.setSprinting(false);
             };
             pre$post[1] = () -> {
                 mc.options.sprintKey.setPressed(true);
@@ -262,6 +257,16 @@ public class UAttack implements IMinecraft {
     @Getter
     private static final StopWatch cooldownTimer = new StopWatch();
 
+    /**
+     * Полный заряд атаки по ванильному счётчику. Только в этот момент удар наносит
+     * 100% урона и вообще может стать критом или свипом (для них нужно progress > 0.9).
+     * Бить раньше — это множитель урона 0.2 + p²·0.8, то есть замах почти без урона.
+     */
+    public static boolean isFullyCharged() {
+        return mc.player != null && mc.player.getAttackCooldownProgress(0.5F) >= 1.0F;
+    }
+
+    /** Интервал полного заряда в мс — для предсказания удара (пре-наведение). */
     public static long getMsCooldown() {
         if (mc.player == null)
             return 500L;
@@ -269,14 +274,12 @@ public class UAttack implements IMinecraft {
         double attackSpeed = mc.player.getAttributeValue(EntityAttributes.ATTACK_SPEED);
 
 
-        long msCooldown;
+        if (attackSpeed <= 0.0D)
+            return 500L;
 
-        float maxDeviation = .2F;
-        msCooldown = (long) ((1.F / attackSpeed) * 1000.F * (1.F - Math.min(maxDeviation, 1.F)));
-
-        if (attackSpeed == 4.D || attackSpeed == 4.4000000059604645 || attackSpeed == 4.800000011920929)
-            msCooldown = 450L;
-        msCooldown = Math.max(msCooldown, 450L);
+        // полный заряд = 1/attackSpeed секунды — ровно то, что считает ванильный
+        // счётчик lastAttackedTicks. Бить раньше = неполный урон и никаких критов.
+        long msCooldown = (long) Math.ceil(1000.0D / attackSpeed);
 
 
 
@@ -306,9 +309,10 @@ public class UAttack implements IMinecraft {
     }
 
     public static boolean anyEntityOnRay(LivingEntity livingIn, double range) {
-        // рейкаст по отложенному хитбоксу — ровно так удар валидирует античит
+        // рейкаст по хитбоксу цели — ровно так удар валидирует античит
         if (livingIn != null) {
-            return LagCompensation.rayHitsDelayed(livingIn, (float) range);
+            boolean ignoreBlocks = AttackAura.get().others.getValue("Бить через блоки");
+            return LagCompensation.rayHits(livingIn, (float) range, ignoreBlocks);
         }
         return false;
     }
@@ -322,14 +326,20 @@ public class UAttack implements IMinecraft {
         if (distanceCheck && livingTarget != null && !AuraUtil.validDistance(livingTarget, ranges[0], true))
             return false;
 
-        // Инвуль-тики цели: удар во время hurtTime не наносит урона («фотка»).
-        // Небольшой запас компенсирует задержку пакета в пути.
-        if (livingTarget != null && livingTarget.hurtTime > 3)
+        // Инвуль-тики цели: пока hurtTime > 0, сервер отбрасывает урон целиком
+        // (timeUntilRegen > 10), и удар превращается в «фотку» — замах без урона.
+        if (livingTarget != null && livingTarget.hurtTime > 0)
             return false;
 
-        // cooldown
-        if (!UAttack.msCooldownReached(cooldownMSOffset))
+        // Настоящий удар (offset >= 0) — только на полном ванильном заряде.
+        // Отрицательный offset означает предсказание «ударим скоро» для
+        // пре-наведения: там оставляем оценку по времени.
+        if (cooldownMSOffset >= 0L) {
+            if (!isFullyCharged())
+                return false;
+        } else if (!UAttack.msCooldownReached(cooldownMSOffset)) {
             return false;
+        }
 
         // best moment
         boolean validNext = UAttack.isBestMomentToHit(fallCheck);

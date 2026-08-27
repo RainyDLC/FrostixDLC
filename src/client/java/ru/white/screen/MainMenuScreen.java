@@ -174,8 +174,8 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
         RenderUtil.Images.texture(MENU_BG, bgX, bgY, bgW, bgH, ColorUtil.getColor(255, 255, 255, alphaVal));
 
-        ScreenBlur.capture(2);
-        RenderUtil.Blur.blur(0, 0, screenWidth, screenHeight, alphaVal,
+        // фон остаётся резким: вместо блюра только лёгкая тёмная вуаль под UI
+        Draw.rect(0, 0, screenWidth, screenHeight,
                 ColorUtil.getColor(5, 12, 30, alphaVal * 0.35F));
         ScreenBlur.capture(4);
 

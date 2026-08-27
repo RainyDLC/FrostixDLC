@@ -14,7 +14,6 @@ import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.render.Draw;
 import ru.white.utils.render.Render2D;
 import ru.white.utils.render.RenderUtil;
-import ru.white.utils.render.ScreenBlur;
 import ru.white.utils.render.font.Fonts;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -184,7 +183,7 @@ public abstract class SplashOverlayMixin {
         return true;
     }
 
-    // ── фон: картинка меню + вуаль + морозное размытие + виньетка ────────
+    // ── фон: картинка меню + вуаль + виньетка ────────────────────────────
 
     @Unique
     private void drawBackdrop(int sw, int sh, float a) {
@@ -197,8 +196,8 @@ public abstract class SplashOverlayMixin {
 
         Draw.rect(0, 0, sw, sh, ColorUtil.getColor(0, a * 0.20F));
 
-        ScreenBlur.capture(2);
-        Draw.blur(0, 0, sw, sh, a, ColorUtil.getColor(5, 12, 30, a * 0.35F));
+        // фон остаётся резким: вместо блюра только тёмная вуаль
+        Draw.rect(0, 0, sw, sh, ColorUtil.getColor(5, 12, 30, a * 0.35F));
 
         // виньетка сверху и снизу — фокус на центре
         int edge = ColorUtil.getColor(3, 8, 20, a * 0.8F);

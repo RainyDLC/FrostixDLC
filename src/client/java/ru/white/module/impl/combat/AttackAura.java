@@ -204,14 +204,13 @@ public class AttackAura extends Module {
     
     public void onEvent(EventUpdate e) {
 
-        LivingEntity prevTarget = target;
-
         // запись истории позиций цели каждый тик (для лаг-компенсации удара)
         LagCompensation.record(target);
 
-        // переоценка цели: мгновенно при потере валидности, иначе раз в 10 тиков —
-        // чтобы захватывать более выгодную цель (ближе/в радиусе удара)
-        boolean recheck = ++retargetClock % 10 == 0;
+        // переоценка цели: мгновенно при потере валидности, иначе каждые 2 тика —
+        // чтобы захватывать более выгодную цель (ближе/в радиусе удара).
+        // Раз в 10 тиков (500 мс) аура успевала простоять полбоя с неудобной целью.
+        boolean recheck = ++retargetClock % 2 == 0;
         if (target == null || !isValidTarget(target) || recheck) {
             updateTarget();
         }
@@ -219,12 +218,32 @@ public class AttackAura extends Module {
         if(stoptick != 0) {
             stoptick--;
         }
+    }
 
+    /**
+     * Наведение — на HEAD sendMovementPackets. К этому моменту игрок уже сдвинулся
+     * в текущем тике, поэтому угол считается от той самой позиции глаз, которая
+     * сейчас уйдёт на сервер, и сам угол уезжает этим же пакетом.
+     */
+    @EventHandler
+    public void onMotion(MotionEvent e) {
+        doRotation();
+    }
+
+    /**
+     * Удар — на TAIL sendMovementPackets, то есть уже после того, как пакет с
+     * нужным углом ушёл на сервер.
+     *
+     * Раньше удар отправлялся из EventUpdate (HEAD тика игрока), а ротация
+     * считалась в EventTick (TAIL тика клиента) — то есть пакет атаки уходил на
+     * два тика раньше собственной ротации. Сервер валидировал удар углом
+     * двухтактовой давности, и при быстром флике аура промахивалась вхолостую.
+     */
+    @EventHandler
+    public void onPostMotion(PostMotionEvent e) {
         if (!checkToAttack() && target != null) {
             attackEntity();
         }
-
-
     }
     private boolean checkToAttack() {
 
@@ -240,16 +259,13 @@ public class AttackAura extends Module {
             return;
         }
 
-        // дистанция удара: по отложенному хитбоксу — как её считает античит
-        if (LagCompensation.distanceToDelayed(target) >= LagCompensation.safeReach(attackRange.getValue())) {
+        // дистанция удара: по наиболее выгодному из живого и отложенного хитбокса
+        if (LagCompensation.bestDistance(target) >= LagCompensation.safeReach(attackRange.getValue())) {
             return;
         }
 
         float[] ranges = getRanges();
         ranges = new float[]{ranges[0], ranges[1], ranges[0] + ranges[1]};
-
-        UAttack.antiMissesHittingUpdate(target, false, true, false);
-
 
         boolean canAttack = UAttack.shouldAttack(target, !typeRotation.is("HvH"), true, true, 0L, ranges);
 
@@ -379,9 +395,8 @@ public static int lookUpDuration = 0;
     public TimerUtil timeSped2 = new TimerUtil();
 
 
-    @EventHandler
-    
-    public void onRotate(EventTick e) {
+    /** Наведение на цель. Вызывается из onMotion — до отправки пакета поворота. */
+    private void doRotation() {
         if (target == null || mc.player == null || mc.world == null) {
             return;
         }
@@ -539,7 +554,11 @@ public static int lookUpDuration = 0;
 
                     double over = Math.max(0, dist - atkRange);
                     score += over * 0.06;
-                    if (over > 0) score += 0.8;              // вне радиуса удара — большой штраф
+                    // Вне радиуса удара — штраф заведомо больше суммы остальных слагаемых:
+                    // цель, которую реально можно ударить, всегда важнее недосягаемой.
+                    // Со штрафом 0.8 дальняя цель прямо перед собой (angle≈0) обыгрывала
+                    // достижимую цель сбоку (angle*0.55 до 1.73), и аура молча стояла.
+                    if (over > 0) score += 5.0;
 
                     score += living.getHealth() * 0.06;      // слабых добиваем первыми
 
@@ -549,7 +568,9 @@ public static int lookUpDuration = 0;
                     if (dist <= atkRange * 1.4 && living.handSwingTicks >= 0 && living.handSwingTicks < 8)
                         score -= 0.30;
 
-                    score -= 0.35;                            // «липкость» текущей цели
+                    // «липкость» текущей цели: раньше вычиталось у всех кандидатов,
+                    // то есть не влияло на ранжирование вообще
+                    if (living == target) score -= 0.35;
                 }
             }
 
@@ -592,7 +613,9 @@ public static int lookUpDuration = 0;
         if (mc.player.distanceTo(entity) > maxDist) return false;
 
         if (!others.getValue("Бить через блоки")) {
-            if (!mc.player.canSee(entity)) return false;
+            // мягкая проверка: ванильный canSee (глаза→глаза) считал невидимой
+            // цель за забором или полублоком, и аура её просто не брала
+            if (!LagCompensation.isVisibleLoose(entity)) return false;
         }
 
         if (entity instanceof PlayerEntity p) {
