@@ -201,7 +201,7 @@ public class TpAura extends Module {
                     shieldPress[1].run();
                     skipSprint[1].run();
                 },
-                Hand.MAIN_HAND, false);
+                Hand.MAIN_HAND);
     }
 
     /** Удар с анти-промахом: i-frames, кулдаун; потом хопы назад. */

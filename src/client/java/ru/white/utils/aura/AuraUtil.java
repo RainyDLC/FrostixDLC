@@ -26,10 +26,7 @@ import static net.minecraft.util.math.MathHelper.clamp;
 @UtilityClass
 public class AuraUtil implements IMinecraft {
 
-    public static Vec3d getNearestPoint(LivingEntity entity) {
-        Vec3d pos = mc.player.getEyePos();
-        return new Vec3d(MathHelper.clamp((double)pos.x, (double)entity.getBoundingBox().minX, (double)entity.getBoundingBox().maxX), MathHelper.clamp((double)pos.y, (double)entity.getBoundingBox().minY, (double)entity.getBoundingBox().maxY), MathHelper.clamp((double)pos.z, (double)entity.getBoundingBox().minZ, (double)entity.getBoundingBox().maxZ));
-    }
+
 
     public double[] calculateDirection(double distance) {
         float[] movement = getMovementFromKeys();
@@ -110,47 +107,9 @@ public class AuraUtil implements IMinecraft {
         return new float[]{forward, strafe};
     }
 
-    public static float calculateCorrectYawOffset(float yaw) {
-
-        double xDiff = mc.player.getX() - mc.player.lastX;
-        double zDiff = mc.player.getZ() - mc.player.lastZ;
-        float distSquared = (float) (xDiff * xDiff + zDiff * zDiff);
-        float renderYawOffset = mc.player.lastBodyYaw;
-        float offset = renderYawOffset;
-        float yawOffsetDiff;
 
 
-        if (distSquared > 0.0025000002f) {
-            offset = (float) MathHelper.atan2(zDiff, xDiff) * 180.0f / (float) Math.PI - 90.0f;
-        }
-        if (mc.player != null && mc.player.handSwingProgress > 0.0f) {
-             offset = yaw;
-        }
-         yawOffsetDiff = MathHelper.wrapDegrees(yaw - (renderYawOffset + MathHelper.wrapDegrees(offset - renderYawOffset) * 0.3f));
-        yawOffsetDiff = MathHelper.clamp(yawOffsetDiff, -15.0f, 15.0f);
-        renderYawOffset = yaw - yawOffsetDiff;
-        if (yawOffsetDiff * yawOffsetDiff > 2500.0f) {
-            renderYawOffset += yawOffsetDiff * 0.2f;
-        }
 
-        return renderYawOffset;
-    }
-
-    public static boolean collideWith(LivingEntity entity, float grow) {
-        Box box = mc.player.getBoundingBox();
-        Box targetbox = entity.getBoundingBox().expand((double)grow, 0.0, (double)grow);
-        return box.maxX > targetbox.minX && box.maxY > targetbox.minY && box.maxZ > targetbox.minZ && box.minX < targetbox.maxX && box.minY < targetbox.maxY && box.minZ < targetbox.maxZ;
-    }public static float getAngleDiff(float targetYaw, float currentYaw) {
-
-        float diff = targetYaw - currentYaw;
-
-
-        while (diff <= -180.0F) diff += 360.0F;
-        while (diff > 180.0F) diff -= 360.0F;
-
-
-        return Math.abs(diff);
-    }
     public BlockHitResult raycast(Vec3d start, Vec3d end, RaycastContext.ShapeType shapeType, Entity entity) {
         return mc.world.raycast(new RaycastContext(start, end, shapeType, RaycastContext.FluidHandling.NONE, entity));
     }
@@ -196,8 +155,8 @@ public class AuraUtil implements IMinecraft {
         return (float)(oldValue + (newValue - oldValue) * interpolationValue);
     }
     public static boolean validDistance(Entity entity, float distance, boolean smart) {
-        // дистанция по отложенному хитбоксу с безопасным эпсилоном —
-        // как её считает серверный античит
+        // дистанция по наиболее выгодному из живого и отложенного хитбокса,
+        // с безопасным эпсилоном относительно лимита античита
         if (entity instanceof LivingEntity living) {
             return LagCompensation.bestDistance(living) < LagCompensation.safeReach(distance);
         }
@@ -221,21 +180,7 @@ public class AuraUtil implements IMinecraft {
         return getClosestVec(vec, entity.getBoundingBox());
     }
 
-    public static Vec3d getVector4(LivingEntity target) {
 
-        double wHalf = target.getWidth() / 2;
-
-        double yExpand = clamp(target.getY() - 6, 0, target.getHeight());
-
-        double xExpand = clamp(mc.player.getX() - target.getX(), -wHalf, wHalf);
-        double zExpand = clamp(mc.player.getZ() - target.getZ(), -wHalf, wHalf);
-
-        return new Vec3d(
-                target.getX() - mc.player.getX() + xExpand,
-                target.getY() - mc.player.getY()  - 0.8F,
-                target.getZ() - mc.player.getZ() + zExpand
-        );
-    }
     public static Vec3d getVector3(LivingEntity target) {
         double yExpand = net.minecraft.util.math.MathHelper.clamp(target.getY() - target.getY(), 0, target.getHeight());
         double xExpand = net.minecraft.util.math.MathHelper.clamp(mc.player.getX() - target.getX(), -0, 0);
@@ -249,37 +194,8 @@ public class AuraUtil implements IMinecraft {
     }
 
 
-    public static Vec2f getVecTAKSA1(Vec3d targetedEntity) {
-        double posX = targetedEntity.getX();
-        double posY = targetedEntity.getY();
-        double posZ = targetedEntity.getZ();
 
-        double deltaX = posX - mc.player.getX();
-        double deltaY = posY
-                - (mc.player.getY() + mc.player.getEyeHeight(mc.player.getPose()));
-        double deltaZ = posZ - mc.player.getZ();
 
-        double horizontalDistance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
-
-        float yaw = (float) Math.toDegrees(Math.atan2(deltaZ, deltaX)) - 90.0F;
-        float pitch = (float) -Math.toDegrees(Math.atan2(deltaY, horizontalDistance));
-
-        return new Vec2f(yaw, pitch);
-    }
-    public static float wrapAngleTo180(float angle) {
-        // Приводим угол к диапазону от -180 до 180
-        angle %= 360.0F;
-
-        if (angle >= 180.0F) {
-            angle -= 360.0F;
-        }
-
-        if (angle < -180.0F) {
-            angle += 360.0F;
-        }
-
-        return angle;
-    }
     public static Vec3d getVector2(LivingEntity target) {
         double yExpand = net.minecraft.util.math.MathHelper.clamp(target.getEyeY() - target.getY(), 0, target.getHeight());
         double xExpand = net.minecraft.util.math.MathHelper.clamp(mc.player.getX() - target.getX(), -0, 0);
@@ -397,29 +313,9 @@ public class AuraUtil implements IMinecraft {
                 Math.min(entity.getWidth(), entity.getHeight()) / 4F);
     }
 
-    public Vector4f calculateRotationFromCamera(LivingEntity target) {
-        float tickDelta = mc.getRenderTickCounter().getTickProgress(false);
-        Vec3d eyePos = mc.player.getCameraPosVec(tickDelta);
-        Vec3d vec = getClosestTargetPoint(target).subtract(eyePos);
 
-        float rawYaw = (float) MathHelper.wrapDegrees((float) (Math.toDegrees(Math.atan2(vec.z, vec.x)) - 90.0F));
-        float rawPitch = (float) (-Math.toDegrees(Math.atan2(vec.y, Math.sqrt(vec.x * vec.x + vec.z * vec.z))));
 
-        // В Fabric/Yarn yaw -> getYaw(), pitch -> getPitch()
-        float yawDelta = MathHelper.wrapDegrees(rawYaw - mc.player.getYaw());
-        float pitchDelta = rawPitch - mc.player.getPitch();
 
-        return new Vector4f(rawYaw, rawPitch, yawDelta, pitchDelta);
-    }
-
-    public double calculateFOVFromCamera(LivingEntity target) {
-        Vector4f rotation = calculateRotationFromCamera(target);
-        // В JOML 1.21+ поля x, y, z, w доступны напрямую или через методы
-        float yawDelta = rotation.z;
-        float pitchDelta = rotation.w;
-
-        return Math.sqrt(yawDelta * yawDelta + pitchDelta * pitchDelta);
-    }
 
 
 }

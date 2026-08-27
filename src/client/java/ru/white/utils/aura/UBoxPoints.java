@@ -1,6 +1,7 @@
 package ru.white.utils.aura;
 
 
+import ru.white.module.impl.combat.AttackAura;
 import ru.white.utils.animation.Easings;
 import ru.white.utils.annotation.IMinecraft;
 import lombok.experimental.UtilityClass;
@@ -110,10 +111,101 @@ public class UBoxPoints implements IMinecraft {
         final double xDiff, yDiff, zDiff;
         return Math.sqrt((xDiff = first.x - second.x) * xDiff + (yDiff = first.y - second.y) * yDiff + (zDiff = first.z - second.z) * zDiff);
     }
+
+    private static boolean pointVisible(Vec3d eye, Vec3d point) {
+        return mc.world != null && traceBlock(eye, point, RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE).getType() != HitResult.Type.BLOCK;
+    }
+
+    /** Радиус, в пределах которого точка прицела гарантированно проходит валидацию удара. */
+    private static double auraReach() {
+        try {
+            return LagCompensation.safeReach(AttackAura.get().attackRange.getValue());
+        } catch (Throwable ignored) {
+            return 2.94D;
+        }
+    }
+
+    /**
+     * Точка на хитбоксе, в которую реально можно попасть.
+     *
+     * Перебираем сетку точек по поверхности бокса и оставляем только те, что
+     * одновременно лежат в пределах радиуса атаки от глаз и не перекрыты блоками.
+     * Из оставшихся берём ближайшую к их центру масс — она устойчивее всего к
+     * дрожанию цели и к погрешности интерполяции.
+     *
+     * Смысл проверки радиуса: прежний выбор точки учитывал только видимость,
+     * поэтому прицел мог уехать на дальнюю сторону или на верх хитбокса — за
+     * предел досягаемости. Аура наводилась туда, а проверка удара по этой же
+     * точке уже не проходила, и получался замах в пустоту.
+     *
+     * @return null, если ни одна точка не подходит — вызывающий код откатывается
+     *         на прежнее поведение.
+     */
+    public static Vec3d getReachablePoint(Box box, double reach, boolean throughWalls) {
+        if (box == null || mc.player == null || mc.world == null) return null;
+
+        final Vec3d eye = mc.player.getEyePos();
+        final double reachSq = reach * reach;
+
+        // Естественный прицел: центр по X/Z, по высоте — уровень глаз, поджатый
+        // к боксу. В обычном бою он проходит сразу, и тогда хватает одного луча.
+        Vec3d ideal = new Vec3d(
+                (box.minX + box.maxX) * 0.5D,
+                MathHelper.clamp(eye.y, box.minY, box.maxY),
+                (box.minZ + box.maxZ) * 0.5D);
+        if (eye.squaredDistanceTo(ideal) <= reachSq && (throughWalls || pointVisible(eye, ideal))) {
+            return ideal;
+        }
+
+        final double[] t = {0.0D, 0.125D, 0.25D, 0.375D, 0.5D, 0.625D, 0.75D, 0.875D, 1.0D};
+        final int last = t.length - 1;
+        final List<Vec3d> reachable = new ArrayList<>();
+        for (int a = 0; a <= last; a++) {
+            for (int b = 0; b <= last; b++) {
+                for (int c = 0; c <= last; c++) {
+                    // только оболочка бокса: внутренние точки для прицела бесполезны
+                    if (a > 0 && a < last && b > 0 && b < last && c > 0 && c < last) continue;
+                    Vec3d point = new Vec3d(
+                            lerp(box.minX, box.maxX, t[a]),
+                            lerp(box.minY, box.maxY, t[b]),
+                            lerp(box.minZ, box.maxZ, t[c]));
+                    if (eye.squaredDistanceTo(point) > reachSq) continue;
+                    if (!throughWalls && !pointVisible(eye, point)) continue;
+                    reachable.add(point);
+                }
+            }
+        }
+        if (reachable.isEmpty()) return null;
+
+        Vec3d sum = Vec3d.ZERO;
+        for (Vec3d point : reachable) sum = sum.add(point);
+        final Vec3d centroid = sum.multiply(1.0D / reachable.size());
+        return reachable.stream()
+                .min(Comparator.comparingDouble(point -> point.squaredDistanceTo(centroid)))
+                .orElse(null);
+    }
+
     public static Vec3d getBestVector3dOnEntityBox(Box aabb) {
         return getBestVector3dOnEntityBox(aabb, false);
     }
+
     public static Vec3d getBestVector3dOnEntityBox(Box aabb, boolean alwaysMultipoints) {
+        if (aabb == null) return mc.player.getEyePos();
+
+        boolean throughWalls = false;
+        try {
+            throughWalls = AttackAura.get().others.getValue("Бить через блоки");
+        } catch (Throwable ignored) {
+        }
+        Vec3d reachable = getReachablePoint(aabb, auraReach(), throughWalls);
+        if (reachable != null) return reachable;
+
+        return getBestVector3dLegacy(aabb, alwaysMultipoints);
+    }
+
+    /** Прежний выбор точки — резерв, когда достижимых точек не нашлось. */
+    private static Vec3d getBestVector3dLegacy(Box aabb, boolean alwaysMultipoints) {
         if (aabb == null) return mc.player.getEyePos();
         double[] whh = new double[]{aabb.maxX - aabb.minX, aabb.maxY - aabb.minY, (aabb.maxY - aabb.minY) / 1.1F};
         double[] xyz = new double[]{aabb.minX + whh[0] / 2.D, aabb.minY, aabb.minZ + whh[0] / 2.D};

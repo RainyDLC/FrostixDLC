@@ -154,7 +154,7 @@ public class MaceHelper extends Module {
         if (!UAttack.anyEntityOnRay(target, 3.2F)) return false;
         if (!UAttack.msCooldownReached(0L)) return false;
 
-        return UAttack.useEntity(target, null, null, Hand.MAIN_HAND, false);
+        return UAttack.useEntity(target, null, null, Hand.MAIN_HAND);
     }
 
     private boolean withinReach(LivingEntity target) {

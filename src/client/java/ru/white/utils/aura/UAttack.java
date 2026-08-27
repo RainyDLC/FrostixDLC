@@ -1,13 +1,8 @@
 package ru.white.utils.aura;
 
 
-import net.minecraft.text.Text;
 import ru.white.module.impl.combat.AttackAura;
-import ru.white.module.impl.combat.Criticals;
 import ru.white.utils.annotation.IMinecraft;
-import ru.white.utils.math.ChatUtils;
-import ru.white.utils.math.MathUtil;
-import ru.white.utils.math.ServerUtil;
 import lombok.Getter;
 import lombok.experimental.UtilityClass;
 import net.minecraft.client.MinecraftClient;
@@ -20,71 +15,19 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
-import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
 
-import java.security.SecureRandom;
-import java.util.concurrent.ThreadLocalRandom;
 
 @UtilityClass
 public class UAttack implements IMinecraft {
 
-    private static final SecureRandom secureRandom = new SecureRandom();
     private static final MinecraftClient mc = MinecraftClient.getInstance();
-    public static long hitCounterCPSBypass;
-
-    public static void hitCounterCPSBypassNext() {
-        ++hitCounterCPSBypass;
-    }
-
-    public static void hitCounterCPSBypassReset() {
-        hitCounterCPSBypass = 0;
-    }
-
-    public static boolean cpsBypassTrigger() {
-        return hitCounterCPSBypass % 7 == 3;
-    }
-
-    public static PlayerEntity getSelf() {
-        return mc.player;
-    }
-
-    public static World getWorld() {
-        return mc.world;
-    }
-
-    public static float applyGaussianJitter(float rotation) {
-        final float strength = .2F;
-        return (float) (rotation + (secureRandom.nextGaussian() * strength * 2.F - strength));
-    }
-
-    public static boolean randomBoolean(int chance010) {
-        return secureRandom.nextInt(chance010 + 1) >= 1 * (1.F / Math.max(chance010, 1.F));
-    }
-
-    public static boolean randomBoolean() {
-        return secureRandom.nextInt(2) == 1;
-    }
-
-    public static float randomFloat(float min, float max) {
-        return secureRandom.nextFloat(min, max);
-    }
-
-    public static float randomFloat() {
-        return randomFloat(.0F, 1.F);
-    }
-
-    public static int randomInt1PosibleOrNot() {
-        return randomBoolean() ? 1 : -1;
-    }
 
     public static int getAxeSlot() {
         if (mc.player == null)
@@ -233,21 +176,20 @@ public class UAttack implements IMinecraft {
         return true;
     }
 
-    public static boolean useEntity(LivingEntity livingIn, Runnable preHit, Runnable postHit, Hand hand,
-                                    boolean cpsBypass) {
+    /**
+     * Отправка удара. Порядок повторяет ванильный MinecraftClient.doAttack():
+     * attackEntity (пакет + player.attack, который считает крит и сбрасывает заряд),
+     * затем swingHand.
+     */
+    public static boolean useEntity(LivingEntity livingIn, Runnable preHit, Runnable postHit, Hand hand) {
         if (preHit != null)
             preHit.run();
         if (livingIn != null && mc.interactionManager != null && mc.player != null) {
             mc.interactionManager.attackEntity(mc.player, livingIn);
             if (hand != null)
                 mc.player.swingHand(hand);
-            if (cpsBypass)
-                hitCounterCPSBypassNext();
-            else
-                hitCounterCPSBypassReset();
 
             cooldownTimer.reset();
-
         }
         if (postHit != null)
             postHit.run();
@@ -258,12 +200,13 @@ public class UAttack implements IMinecraft {
     private static final StopWatch cooldownTimer = new StopWatch();
 
     /**
-     * Полный заряд атаки по ванильному счётчику. Только в этот момент удар наносит
-     * 100% урона и вообще может стать критом или свипом (для них нужно progress > 0.9).
-     * Бить раньше — это множитель урона 0.2 + p²·0.8, то есть замах почти без урона.
+     * Заряд атаки по ванильному счётчику. Порог 0.9 — ровно тот, при котором ваниль
+     * разрешает крит и свип; урон при нём ≈88%, а до 100% пришлось бы ждать ещё тик.
+     * Бить сильно раньше бессмысленно: множитель урона равен 0.2 + p²·0.8, то есть
+     * при половинном заряде удар отнимает пятую часть от нормального.
      */
-    public static boolean isFullyCharged() {
-        return mc.player != null && mc.player.getAttackCooldownProgress(0.5F) >= 1.0F;
+    public static boolean isCharged() {
+        return mc.player != null && mc.player.getAttackCooldownProgress(0.5F) >= 0.9F;
     }
 
     /** Интервал полного заряда в мс — для предсказания удара (пре-наведение). */
@@ -292,22 +235,6 @@ public class UAttack implements IMinecraft {
         return cooldownTimer.finished(getMsCooldown() + msOffset);
     }
 
-    public static boolean msCooldownReached() {
-        return msCooldownReached(0);
-    }
-
-    public static boolean msCooldownHasMs(long ms) {
-        return cooldownTimer.finished(ms);
-    }
-
-    public static float msCooldownPC01() {
-        return Math.min(cooldownTimer.elapsedTime() / (float) getMsCooldown(), 1.F);
-    }
-
-    public static float msCooldownReach() {
-        return cooldownTimer.elapsedTime();
-    }
-
     public static boolean anyEntityOnRay(LivingEntity livingIn, double range) {
         // рейкаст по хитбоксу цели — ровно так удар валидирует античит
         if (livingIn != null) {
@@ -326,16 +253,19 @@ public class UAttack implements IMinecraft {
         if (distanceCheck && livingTarget != null && !AuraUtil.validDistance(livingTarget, ranges[0], true))
             return false;
 
-        // Инвуль-тики цели: пока hurtTime > 0, сервер отбрасывает урон целиком
-        // (timeUntilRegen > 10), и удар превращается в «фотку» — замах без урона.
-        if (livingTarget != null && livingTarget.hurtTime > 0)
-            return false;
-
-        // Настоящий удар (offset >= 0) — только на полном ванильном заряде.
-        // Отрицательный offset означает предсказание «ударим скоро» для
-        // пре-наведения: там оставляем оценку по времени.
+        // Настоящий удар (offset >= 0) — по ванильному счётчику заряда.
+        // Порог 0.9 — тот же, что требует ваниль для крита и свипа: удар проходит
+        // через 11 тиков после предыдущего, а серверный инвуль цели длится 10,
+        // поэтому «фотки» из-за собственного удара невозможны и без проверки
+        // hurtTime. Отдельная проверка hurtTime здесь только добавляла задержку:
+        // клиент узнаёт о попадании лишь через пинг, и инвуль на клиенте гас
+        // позже, чем накапливался заряд.
         if (cooldownMSOffset >= 0L) {
-            if (!isFullyCharged())
+            if (!isCharged())
+                return false;
+            // предмет на откате (мейс после смэша, жемчуг) — удар уйдёт впустую
+            if (mc.player != null
+                    && mc.player.getItemCooldownManager().isCoolingDown(mc.player.getMainHandStack()))
                 return false;
         } else if (!UAttack.msCooldownReached(cooldownMSOffset)) {
             return false;
@@ -357,16 +287,6 @@ public class UAttack implements IMinecraft {
         return shouldAttack(livingTarget, rayCast, true, fallCheck, cooldownMSOffset, ranges);
     }
 
-    public static boolean resetSprintTickP(LivingEntity targetIn, float[] ranges) {
-        if (targetIn != null && shouldAttack(targetIn, false, false, -20L, ranges)
-                && !mc.player.isOnGround()
-                && !mc.player.isSubmergedIn(FluidTags.WATER)
-                && mc.player.getVelocity().y <= 0.0030162615090425808) {
-            return true;
-        }
-        return false;
-    }
-
     public static boolean resetSprintTick(LivingEntity targetIn, float[] ranges) {
         if (targetIn != null && shouldAttack(targetIn, false, false, -50L, ranges)) {
             if (!mc.player.isOnGround() && !mc.player.isSubmergedIn(FluidTags.WATER)) {
@@ -375,38 +295,5 @@ public class UAttack implements IMinecraft {
             }
         }
         return false;
-    }
-
-    private static boolean missDetected;
-    private static int counterTo0PostMissHits;
-
-    private static int maxHitsCountOnMiss() {
-        return 3;
-    }
-
-    public static void antiMissesHittingReset() {
-        missDetected = false;
-        counterTo0PostMissHits = 0;
-    }
-
-
-    public static void antiMissesHittingUpdate(LivingEntity targetIn, boolean cpsBypass, boolean rayCastCheck,
-                                               boolean enabled) {
-        if (targetIn == null || counterTo0PostMissHits == 0 || !enabled || targetIn.hurtTime != 0)
-            antiMissesHittingReset();
-
-        if (enabled && targetIn != null && UAttack.msCooldownHasMs(cpsBypassTrigger() ? 250 : 150)
-                && mc.player.handSwinging) {
-            if (!missDetected && counterTo0PostMissHits == 0 && targetIn.hurtTime == 0) {
-                missDetected = true;
-                counterTo0PostMissHits = maxHitsCountOnMiss();
-            }
-            if (missDetected && counterTo0PostMissHits > 0 && targetIn != null) {
-                if ((!rayCastCheck || anyEntityOnRay(targetIn, 6.F)) && useEntity(targetIn, () -> {
-                }, () -> {
-                }, Hand.MAIN_HAND, cpsBypass))
-                    --counterTo0PostMissHits;
-            }
-        }
     }
 }

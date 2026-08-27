@@ -288,9 +288,7 @@ public class AttackAura extends Module {
 
 
 
-             UAttack.useEntity(target, preHitSendCodeSingleTick, postHitSendCodeSingleTick, MAIN_HAND,
-                             false);
-
+            UAttack.useEntity(target, preHitSendCodeSingleTick, postHitSendCodeSingleTick, MAIN_HAND);
 
             justAttacked = true;
             attackFlickAt = System.currentTimeMillis() + 250;
