@@ -1,6 +1,5 @@
 package ru.white.utils.aura;
 
-
 import ru.white.manager.rotation.Rotation;
 import ru.white.utils.annotation.IMinecraft;
 import ru.white.utils.math.MathUtil;
@@ -16,7 +15,6 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.*;
 import net.minecraft.world.RaycastContext;
 import org.joml.Vector2f;
-import org.joml.Vector4f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,9 +23,6 @@ import static net.minecraft.util.math.MathHelper.clamp;
 
 @UtilityClass
 public class AuraUtil implements IMinecraft {
-
-
-
     public double[] calculateDirection(double distance) {
         float[] movement = getMovementFromKeys();
         return calculateDirection(
@@ -107,9 +102,6 @@ public class AuraUtil implements IMinecraft {
         return new float[]{forward, strafe};
     }
 
-
-
-
     public BlockHitResult raycast(Vec3d start, Vec3d end, RaycastContext.ShapeType shapeType, Entity entity) {
         return mc.world.raycast(new RaycastContext(start, end, shapeType, RaycastContext.FluidHandling.NONE, entity));
     }
@@ -129,7 +121,6 @@ public class AuraUtil implements IMinecraft {
             offsetYaw = pitchSign * curveStrength * (1f - progress);
             offsetPitch = 0f;
         } else {
-
             if (pitchSign > 0 && yawSign >= 0) {
                 offsetYaw = -curveStrength * (1f - progress);
                 offsetPitch = -curveStrength * smoothness;
@@ -155,8 +146,6 @@ public class AuraUtil implements IMinecraft {
         return (float)(oldValue + (newValue - oldValue) * interpolationValue);
     }
     public static boolean validDistance(Entity entity, float distance, boolean smart) {
-        // дистанция по наиболее выгодному из живого и отложенного хитбокса,
-        // с безопасным эпсилоном относительно лимита античита
         if (entity instanceof LivingEntity living) {
             return LagCompensation.attackDistance(living) < LagCompensation.safeReach(distance);
         }
@@ -175,41 +164,29 @@ public class AuraUtil implements IMinecraft {
         );
     }
 
-
     public static Vec3d getClosestVec(Vec3d vec, Entity entity) {
         return getClosestVec(vec, entity.getBoundingBox());
     }
 
-
     public static Vec3d getVector3(LivingEntity target) {
-        double yExpand = net.minecraft.util.math.MathHelper.clamp(target.getY() - target.getY(), 0, target.getHeight());
-        double xExpand = net.minecraft.util.math.MathHelper.clamp(mc.player.getX() - target.getX(), -0, 0);
-        double zExpand = net.minecraft.util.math.MathHelper.clamp(mc.player.getZ() - target.getZ(), -0, 0);
-
         return new Vec3d(
-                target.getX() - mc.player.getX() + xExpand,
+                target.getX() - mc.player.getX(),
                 target.getY() - mc.player.getY()  - 0.8F,
-                target.getZ() - mc.player.getZ() + zExpand
+                target.getZ() - mc.player.getZ()
         );
     }
 
-
-
-
     public static Vec3d getVector2(LivingEntity target) {
-        double yExpand = net.minecraft.util.math.MathHelper.clamp(target.getEyeY() - target.getY(), 0, target.getHeight());
-        double xExpand = net.minecraft.util.math.MathHelper.clamp(mc.player.getX() - target.getX(), -0, 0);
-        double zExpand = net.minecraft.util.math.MathHelper.clamp(mc.player.getZ() - target.getZ(), -0, 0);
+        double yExpand = clamp(target.getEyeY() - target.getY(), 0, target.getHeight());
 
         return new Vec3d(
-                target.getX() - mc.player.getX() + xExpand,
+                target.getX() - mc.player.getX(),
                 target.getY() - mc.player.getEyeY() + yExpand,
-                target.getZ() - mc.player.getZ() + zExpand
+                target.getZ() - mc.player.getZ()
         );
     }
 
     public static Vec3d getVector(LivingEntity target) {
-
         double wHalf = target.getWidth() / 2;
 
         double yExpand = clamp(target.getEyeY() - target.getY(), 0, target.getHeight());
@@ -239,7 +216,6 @@ public class AuraUtil implements IMinecraft {
             return Vec3d.ZERO;
         }
 
-        // В Yarn grow -> expand, но чаще используется contraction (отрицательный expand)
         Box box = entity.getBoundingBox().expand(-point);
         Vec3d center = box.getCenter();
         Vec3d closestPoint = null;
@@ -256,10 +232,8 @@ public class AuraUtil implements IMinecraft {
                                 double z = center.z + signZ * offsetZ;
                                 Vec3d potentialPoint = new Vec3d(x, y, z);
 
-                                // Твой кастомный утилит для расчета углов к точке
                                 Vector2f rotation = calculate(potentialPoint);
 
-                                // Рейтрейс (нужно адаптировать твой RayTraceUtil под 1.21)
                                 HitResult result = RayTraceUtil.calculateRayTrace(
                                         6.0D,
                                         rotation.x,
@@ -284,14 +258,12 @@ public class AuraUtil implements IMinecraft {
             return closestPoint;
         }
 
-        // Кламп вектора к боксу
         double closestX = MathUtil.clamp(vec.x, box.minX, box.maxX);
         double closestY = MathUtil.clamp(vec.y, box.minY, box.maxY);
         double closestZ = MathUtil.clamp(vec.z, box.minZ, box.maxZ);
 
         return new Vec3d(closestX, closestY, closestZ);
     }
-
 
     public Vector2f calculate(final Vec3d toVec) {
         return calculate(mc.player.getEntityPos().add(0, mc.player.getEyeY(), 0), toVec);
@@ -305,17 +277,4 @@ public class AuraUtil implements IMinecraft {
         final float pitch = (float) (-(MathHelper.atan2(diff.y, distance) * TO_DEGREES));
         return new Vector2f(yaw, pitch);
     }
-
-    public Vec3d getClosestTargetPoint(Entity entity) {
-        // Получаем частичные тики в 1.21 Fabric
-        float tickDelta = mc.getRenderTickCounter().getTickProgress(false);
-        return getClosestTargetPoint(mc.player.getCameraPosVec(tickDelta), entity,
-                Math.min(entity.getWidth(), entity.getHeight()) / 4F);
-    }
-
-
-
-
-
-
 }

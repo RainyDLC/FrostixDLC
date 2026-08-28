@@ -20,39 +20,23 @@ import ru.white.utils.render.font.Fonts;
 
 import java.util.List;
 
-/**
- * Колесо эмоций в стиле референса: заблюренный фон, сверху табы
- * "Эмоции | Скины", крупное имя выбранной эмоции, вокруг центра —
- * полупрозрачные скруглённые карточки (имя + номер слота) в шахматном
- * порядке по двум радиусам, в центре крутится модель игрока.
- *
- * Наведение на карточку — живое превью позы на модели. Клик — играть.
- * Hold-эмоции играют, пока зажата ЛКМ. Цифры 1-9 — быстрый выбор.
- */
 public final class EmoteWheelScreen extends Screen {
-
     private static final float CARD_W = 116;
     private static final float CARD_H = 44;
     private static final float CARD_R = 14;
     private static final float TAB_W = 176;
     private static final float TAB_H = 26;
 
-    /**
-     * Слоты карточек вокруг модели (в долях радиуса): ровный "цветок"
-     * как на референсе — верх, верх-лево/право, бока, низ-лево/право,
-     * пара снизу. Фиксированные позиции вместо равных углов: карточки
-     * не налезают друг на друга и сидят симметрично.
-     */
     private static final float[][] SLOTS = {
-            { 0.00f, -1.00f},   // верх
-            {-0.78f, -0.68f},   // левый верх
-            { 0.78f, -0.68f},   // правый верх
-            {-1.14f,  0.02f},   // лево
-            { 1.14f,  0.02f},   // право
-            {-0.86f,  0.66f},   // левый низ
-            { 0.86f,  0.66f},   // правый низ
-            {-0.46f,  1.02f},   // низ лево
-            { 0.46f,  1.02f},   // низ право
+            { 0.00f, -1.00f},
+            {-0.78f, -0.68f},
+            { 0.78f, -0.68f},
+            {-1.14f,  0.02f},
+            { 1.14f,  0.02f},
+            {-0.86f,  0.66f},
+            { 0.86f,  0.66f},
+            {-0.46f,  1.02f},
+            { 0.46f,  1.02f},
     };
 
     private final MinecraftClient mc = MinecraftClient.getInstance();
@@ -60,13 +44,12 @@ public final class EmoteWheelScreen extends Screen {
     private final float[] hover;
 
     private float scaleFix = 1f;
-    private int tab = 0;            // 0 — Эмоции, 1 — Скины
+    private int tab = 0;
     private int selected = -1;
     private boolean holding = false;
     private boolean holdWasActive = false;
     private long holdPressMs;
 
-    // hit-зоны в клиентских координатах
     private float tabX, tabY;
     private float cx, cy, radius;
     private float cardW = CARD_W, cardH = CARD_H;
@@ -103,18 +86,16 @@ public final class EmoteWheelScreen extends Screen {
         cx = w / 2f;
         cy = h / 2f;
 
-        // радиус колеса: от меньшей стороны, не залезает на табы и края экрана
         radius = Math.min(w, h) * 0.34f;
         radius = Math.min(190f, Math.max(120f, radius));
         radius = Math.min(radius, cy - 96f);
         radius = Math.min(radius, (w * 0.5f - 66f) / 1.14f);
-        // карточки чуть сжимаются на маленьком радиусе
+
         cardW = Math.min(CARD_W, radius * 0.78f);
         cardH = cardW * (CARD_H / CARD_W);
 
         Render2D.beginOverlay();
 
-        // заблюренный мир + затемнение
         ScreenBlur.capture(2);
         RenderUtil.Blur.blur(0, 0, w, h, 1f, ColorUtil.getColor(9, 9, 16, 130));
 
@@ -130,12 +111,9 @@ public final class EmoteWheelScreen extends Screen {
         super.render(context, mouseX, mouseY, delta);
     }
 
-    // ── вкладка эмоций ───────────────────────────────────────────────────
-
     private void renderEmotes(DrawContext context, int guiMX, int guiMY, float mx, float my, float h) {
         int n = emotes.size();
 
-        // выбор карточки + живое превью позы на модели
         int sel = holding ? selected : pickCard(mx, my);
         if (sel != selected) {
             selected = sel;
@@ -149,13 +127,11 @@ public final class EmoteWheelScreen extends Screen {
             hover[i] += ((i == selected ? 1f : 0f) - hover[i]) * 0.14f;
         }
 
-        // подложка под модель + мягкое фиолетовое свечение
         Draw.glow(cx - 62f, cy - 78f, 124f, 156f, ColorUtil.getColorRaw(123, 77, 255, 255),
                 60f, 46f, 0.38f, 0.85f);
         RenderUtil.Render2D.rect(cx - 60f, cy - 76f, 120f, 152f,
                 ColorUtil.getColor(8, 8, 15, 70), 55f);
 
-        // модель игрока в центре (ванильный рендер в GUI-координатах, следит за курсором)
         if (mc.player != null) {
             int gx1 = Math.round((cx - 45f) * scaleFix);
             int gy1 = Math.round((cy - 78f) * scaleFix);
@@ -165,7 +141,6 @@ public final class EmoteWheelScreen extends Screen {
                     Math.round(44f * scaleFix), 0.0625f, (float) guiMX, (float) guiMY, mc.player);
         }
 
-        // карточки по слотам вокруг модели
         for (int i = 0; i < n; i++) {
             float px = cardX(i);
             float py = cardY(i);
@@ -185,12 +160,10 @@ public final class EmoteWheelScreen extends Screen {
                         CARD_R, 16f, 0.5f * p, 0.8f);
             }
 
-            // фон: тёмная полупрозрачная плашка, при ховере — плотнее
             int bg = mix(ColorUtil.getColor(16, 17, 26, 150),
                     ColorUtil.getColor(24, 25, 40, 232), p);
             RenderUtil.Render2D.rect(x, y, cw, ch, bg, CARD_R);
 
-            // рамка: едва заметная, при ховере — акцентная
             RenderUtil.Render2D.outline(x, y, cw, ch, 0.75f + p * 0.75f,
                     mix(ColorUtil.getColor(255, 255, 255, 34),
                             ColorUtil.getColor(139, 100, 255, 255), p), CARD_R);
@@ -205,7 +178,6 @@ public final class EmoteWheelScreen extends Screen {
                     ColorUtil.getColor(150, 152, 172, 200));
         }
 
-        // крупное имя выбранной эмоции под табами
         String title;
         if (selected >= 0) {
             title = emotes.get(selected).name();
@@ -216,14 +188,11 @@ public final class EmoteWheelScreen extends Screen {
         Fonts.sf_medium.drawCentered(title, cx, tabY + TAB_H + 14f, 10.5f,
                 ColorUtil.getColor(244, 244, 250, 235));
 
-        // подсказка внизу
         Fonts.sf_regular.drawCentered(
                 holding ? "отпусти ЛКМ, чтобы остановить"
                         : "ЛКМ — играть / удерживать · 1-9 — слоты · ESC — закрыть",
                 cx, h - 18f, 7f, ColorUtil.getColor(255, 255, 255, 80));
     }
-
-    // ── вкладка скинов (заглушка) ────────────────────────────────────────
 
     private void renderSkins(DrawContext context, int guiMX, int guiMY) {
         if (mc.player != null) {
@@ -240,8 +209,6 @@ public final class EmoteWheelScreen extends Screen {
                 ColorUtil.getColor(255, 255, 255, 90));
     }
 
-    // ── табы сверху ──────────────────────────────────────────────────────
-
     private void renderTabs(float mx, float my) {
         tabX = cx - TAB_W / 2f;
         tabY = 14f;
@@ -249,13 +216,11 @@ public final class EmoteWheelScreen extends Screen {
         float p0 = tabHover(tab == 0, mx, my, 0);
         float p1 = tabHover(tab == 1, mx, my, 1);
 
-        // контейнер
         RenderUtil.Render2D.rect(tabX, tabY, TAB_W, TAB_H,
                 ColorUtil.getColor(13, 14, 22, 185), TAB_H / 2f);
         RenderUtil.Render2D.outline(tabX, tabY, TAB_W, TAB_H, 0.75f,
                 ColorUtil.getColor(255, 255, 255, 26), TAB_H / 2f);
 
-        // активная половина — фиолетовая пилюля со свечением
         float segX = tabX + (tab == 0 ? 2f : TAB_W / 2f);
         float segW = TAB_W / 2f - 2f;
         float segP = tab == 0 ? p0 : p1;
@@ -288,8 +253,6 @@ public final class EmoteWheelScreen extends Screen {
         return cur;
     }
 
-    // ── геометрия / ввод ─────────────────────────────────────────────────
-
     private int pickCard(float mx, float my) {
         for (int i = 0; i < emotes.size(); i++) {
             if (isHovered(mx, my, cardX(i), cardY(i), cardW, cardH)) return i;
@@ -301,7 +264,6 @@ public final class EmoteWheelScreen extends Screen {
         return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
 
-    /** Линейное смешение ARGB-цветов. */
     private static int mix(int from, int to, float t) {
         t = Math.max(0f, Math.min(1f, t));
         int a = (int) (((from >>> 24) & 0xFF) + (((to >>> 24) & 0xFF) - ((from >>> 24) & 0xFF)) * t);
@@ -325,7 +287,6 @@ public final class EmoteWheelScreen extends Screen {
         float my = mouseClientY(click);
 
         if (click.button() == 0) {
-            // переключение табов
             if (isHovered(mx, my, tabX, tabY, TAB_W, TAB_H)) {
                 int newTab = mx < tabX + TAB_W / 2f ? 0 : 1;
                 if (newTab != tab) {
@@ -337,7 +298,6 @@ public final class EmoteWheelScreen extends Screen {
             }
 
             if (tab == 0) {
-                // клик по центру — выключить текущую эмоцию
                 double dist = Math.hypot(mx - cx, my - cy);
                 if (dist < 52f) {
                     if (!holding) EmoteManager.stop();
@@ -348,8 +308,6 @@ public final class EmoteWheelScreen extends Screen {
                 if (idx >= 0) {
                     Emote emote = emotes.get(idx);
                     if (emote.hold()) {
-                        // hold-эмоция: играет пока зажато; быстрый клик —
-                        // оставить играть (повторный клик выключит)
                         holdWasActive = EmoteManager.active() == emote;
                         holdPressMs = System.currentTimeMillis();
                         EmoteManager.startHold(emote);
@@ -372,11 +330,8 @@ public final class EmoteWheelScreen extends Screen {
             holding = false;
             boolean quickClick = System.currentTimeMillis() - holdPressMs < 300L;
             if (quickClick && !holdWasActive) {
-                // быстрый клик по неиграющей hold-эмоции — оставить играть
-                // (продолжаем с того места, где было превью)
                 EmoteManager.keepPreviewAsActive();
             } else {
-                // удержание или выключение — стоп
                 EmoteManager.stop();
             }
             close();
@@ -387,7 +342,6 @@ public final class EmoteWheelScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyInput input) {
-        // цифры 1-9 — быстрый выбор слота (переключатель)
         if (tab == 0 && input.key() >= GLFW.GLFW_KEY_1 && input.key() <= GLFW.GLFW_KEY_9) {
             int idx = input.key() - GLFW.GLFW_KEY_1;
             if (idx < emotes.size()) {
@@ -397,7 +351,6 @@ public final class EmoteWheelScreen extends Screen {
             }
         }
 
-        // закрытие ванильным биндом или клиентским
         if (Emotions.vanillaKey != null && Emotions.vanillaKey.matchesKey(input)) {
             close();
             return true;

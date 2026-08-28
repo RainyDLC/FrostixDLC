@@ -9,7 +9,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 
 public class GlassBlockRenderer {
-
     private static GlassBlockRenderer instance;
 
     private final MinecraftClient client;

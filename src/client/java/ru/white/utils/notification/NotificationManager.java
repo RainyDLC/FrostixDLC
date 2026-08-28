@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class NotificationManager {
-
     public enum Type {
         MODULE, EFFECT, INFO, WARNING
     }
@@ -52,7 +51,6 @@ public class NotificationManager {
         add(text, type, null, null, null, ms);
     }
 
-    /** MODULE — гляф категории ("e","i","n","l","u") */
     public static void send(String text, Type type, String glyph) {
         add(text, type, glyph, null, null, 3000);
     }
@@ -61,7 +59,6 @@ public class NotificationManager {
         add(text, type, glyph, null, null, ms);
     }
 
-    /** EFFECT — текстура эффекта */
     public static void send(String text, Type type, Identifier texture) {
         add(text, type, null, texture, null, 3000);
     }
@@ -70,7 +67,6 @@ public class NotificationManager {
         add(text, type, null, texture, null, ms);
     }
 
-    /** Иконка — предмет ItemStack */
     public static void send(String text, Type type, ItemStack item) {
         add(text, type, null, null, item, 3000);
     }

@@ -1,6 +1,5 @@
 package ru.white.utils.math;
 
-
 import ru.white.utils.annotation.IMinecraft;
 import ru.white.utils.colors.ColorUtil;
 import lombok.experimental.UtilityClass;
@@ -13,8 +12,6 @@ import java.awt.*;
 
 @UtilityClass
 public class ChatUtils implements IMinecraft {
-
-
     public void addChatMessage(String text) {
         MinecraftClient mc = MinecraftClient.getInstance();
 
@@ -28,8 +25,6 @@ public class ChatUtils implements IMinecraft {
         mc.inGameHud.getChatHud().addMessage(message);
     }
 
-
-
     public void addChatMessageDev(String text) {
         MinecraftClient mc = MinecraftClient.getInstance();
 
@@ -42,8 +37,6 @@ public class ChatUtils implements IMinecraft {
 
         mc.inGameHud.getChatHud().addMessage(message);
     }
-
-
 
     public Text gradientText(String text, Color start, Color end) {
         Text result = Text.empty();
@@ -71,6 +64,4 @@ public class ChatUtils implements IMinecraft {
         return Text.literal(text)
                 .styled(style -> style.withColor(mcColor));
     }
-
-
 }

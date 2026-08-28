@@ -16,7 +16,6 @@ import ru.white.module.api.ModuleInfo;
         category = Category.MOVEMENT
 )
 public class ElytraSpeed extends Module {
-
     private static final float TARGET_PITCH = 68.0F;
     private static final float ROTATION_SPEED = 0.65F;
 
@@ -82,7 +81,6 @@ public class ElytraSpeed extends Module {
         }
     }
 
-    /** Аналог PlayerIntersectionUtil.startFallFlying(): просим сервер начать полёт на элитре. */
     private void startFallFlying() {
         mc.player.networkHandler.sendPacket(
                 new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING)

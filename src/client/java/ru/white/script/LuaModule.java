@@ -24,26 +24,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Динамический модуль, управляемый Lua-скриптом.
- *
- * Скрипт исполняется один раз при загрузке в изолированном окружении
- * {@link LuaSandbox} и объявляет колбэки:
- * <pre>
- *   module.name = "Имя"
- *   module.desc = "Описание"
- *   local boost = module.setting_slider("Буст", 2, 0, 10, 0.5)
- *
- *   function on_enable()  end
- *   function on_disable() end
- *   function on_tick()    end
- *   function on_render(delta) end
- * </pre>
- * Ошибка внутри скрипта автоматически выключает модуль и пишет в чат.
- */
 @ModuleInfo(name = "Lua", desc = "Пользовательский скрипт", category = Category.OTHER)
 public class LuaModule extends Module {
-
     private final Path file;
     private final Category scriptCategory;
     private LuaTable env;
@@ -59,18 +41,14 @@ public class LuaModule extends Module {
         setAllowDisable(true);
     }
 
-    /** Файл, из которого загружен скрипт. */
     public Path getFile() {
         return file;
     }
 
-    /** Компилирует и выполняет скрипт; бросает LuaError при ошибке синтаксиса. */
     public void initialize(String code) throws LuaError {
         LuaTable scriptEnv = LuaSandbox.newEnv();
         scriptEnv.set("module", buildModuleTable());
 
-        // окружение скрипта передаётся напрямую в компилятор (_ENV):
-        // глобалы скрипта живут только в его собственной таблице
         LuaValue compiled = LuaSandbox.compilerGlobals().load(code, "=" + safeChunkName(), scriptEnv);
         compiled.call();
 
@@ -123,7 +101,6 @@ public class LuaModule extends Module {
             }
         });
 
-        // module.setting_mode("Режим", "Обычный", {"Обычный", "Агрессивный"})
         mod.set("setting_mode", new ThreeArgFunction() {
             @Override
             public LuaValue call(LuaValue name, LuaValue def, LuaValue variants) {
@@ -136,7 +113,7 @@ public class LuaModule extends Module {
                 }
                 String d = def.isstring() ? def.tojstring() : "Значение";
                 if (vals.isEmpty()) vals.add(d);
-                // первый вариант в ModeSetting — значение по умолчанию
+
                 List<String> ordered = new ArrayList<>();
                 ordered.add(vals.contains(d) ? d : vals.get(0));
                 for (String v : vals) if (!ordered.contains(v)) ordered.add(v);
@@ -151,7 +128,6 @@ public class LuaModule extends Module {
             }
         });
 
-        // module.setting_color("Цвет", 0xFF00FFFF)
         mod.set("setting_color", new TwoArgFunction() {
             @Override
             public LuaValue call(LuaValue name, LuaValue def) {
@@ -168,8 +144,6 @@ public class LuaModule extends Module {
 
         return mod;
     }
-
-    // ── события клиента → колбэки скрипта ──
 
     @EventHandler
     private void onClientTick(EventTick event) {
@@ -194,7 +168,7 @@ public class LuaModule extends Module {
 
     private void invoke(String fn, LuaValue... args) {
         if (broken || env == null) return;
-        // колбэки тикают только у включённого модуля (кроме финального on_disable)
+
         if (!"on_disable".equals(fn) && !isEnabled()) return;
         LuaValue f = env.get(fn);
         if (!f.isfunction()) return;
@@ -208,7 +182,6 @@ public class LuaModule extends Module {
         }
     }
 
-    /** Ошибка скрипта: модуль выключается, причина — в чат. */
     private void fail(LuaError e) {
         if (broken) return;
         broken = true;

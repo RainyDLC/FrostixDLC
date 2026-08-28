@@ -5,12 +5,10 @@ import ru.white.module.api.settings.Setting;
 import ru.white.utils.animation.satoshi.Animation;
 import ru.white.utils.animation.satoshi.EaseInOutQuad;
 
-
 import java.util.function.Supplier;
 
 public class BindSetting extends Setting<Integer> {
     public final boolean allowMouse;
-
 
     public Animation animation = new EaseInOutQuad(300,1);
 
@@ -21,7 +19,6 @@ public class BindSetting extends Setting<Integer> {
         this.allowMouse = true;
         cachedValue = -1;
     }
-
 
     public BindSetting(Module parent, String name, boolean allowMouse) {
         super(parent, name, -1);
@@ -65,7 +62,6 @@ public class BindSetting extends Setting<Integer> {
     public BindSetting onSetVisible(Runnable action) {
         return (BindSetting) super.onSetVisible(action);
     }
-
 
     public Integer get() {
         if (cachedValue == null) {

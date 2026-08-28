@@ -7,20 +7,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CompletableFuture;
 
 public class SoundUtil {
-    // Используем потокобезопасный список, чтобы избежать ошибок при удалении
     private static final CopyOnWriteArrayList<Clip> CLIPS_LIST = new CopyOnWriteArrayList<>();
 
     public static void playSound_wav(String location, float volume) {
         playSound_wav(location, volume, 1.0F);
     }
 
-    /**
-     * Тот же звук, но с изменённой высотой тона: pitch > 1 — выше и короче,
-     * pitch < 1 — ниже и длиннее. Позволяет из пары семплов собрать целую
-     * палитру звуков для интерфейса.
-     */
     public static void playSound_wav(String location, float volume, float pitch) {
-        // Запускаем в асинхронном режиме, чтобы не фризить игру/приложение
         CompletableFuture.runAsync(() -> {
             try {
                 cleanUpClips();
@@ -38,16 +31,14 @@ public class SoundUtil {
                         openPitched(clip, stream, pitch);
                     }
 
-                    // Установка громкости
                     if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
                         FloatControl volumeControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
                         float volumeVal = Math.max(0.0f, Math.min(1.0f, volume));
-                        // Используем Math.log10 для корректного децибельного преобразования
+
                         float dB = (float) (Math.log10(volumeVal <= 0 ? 0.0001 : volumeVal) * 20.0);
                         volumeControl.setValue(dB);
                     }
 
-                    // Автоматическое закрытие клипа после завершения проигрывания
                     clip.addLineListener(event -> {
                         if (event.getType() == LineEvent.Type.STOP) {
                             clip.close();
@@ -64,10 +55,6 @@ public class SoundUtil {
         });
     }
 
-    /**
-     * Сдвиг тона: пересемплируем кадры (pitch > 1 — берём кадры реже, звук выше и короче),
-     * формат при этом остаётся исходным — микшер не приходится просить о необычной частоте.
-     */
     private static void openPitched(Clip clip, AudioInputStream stream, float pitch) throws Exception {
         float p = Math.max(0.5F, Math.min(2.0F, pitch));
 
@@ -84,7 +71,7 @@ public class SoundUtil {
 
         int frameSize = src.getFrameSize();
 
-        if (frameSize <= 0) { // формат без фиксированного кадра — играем как есть
+        if (frameSize <= 0) {
             clip.open(src, data, 0, data.length);
             return;
         }
@@ -108,7 +95,6 @@ public class SoundUtil {
     }
 
     private static void cleanUpClips() {
-        // Очищаем только реально закрытые или невалидные клипы
         CLIPS_LIST.removeIf(clip -> !clip.isOpen());
     }
 }

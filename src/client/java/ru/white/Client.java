@@ -18,15 +18,10 @@ import ru.white.rpc.RPC;
 import ru.white.screen.Menu;
 import ru.white.utils.render.Render2D;
 
-/**
- * Тонкая точка входа: никакой логики, только состояние и делегация в ядро.
- * В защищённой сборке всё содержимое ядра зашифровано (NightixLoader).
- */
 @Getter
 @Accessors(fluent = true)
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class Client implements ClientModInitializer {
-
     public static Client get;
 
     public static Client get() {

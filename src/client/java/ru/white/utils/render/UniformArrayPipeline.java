@@ -11,20 +11,7 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-/**
- * База для 2D-пайплайнов с uniform-массивом примитивов (rect, outline,
- * circle_progress): элементы копятся в CPU-буфер, при переполнении или сбросе
- * «запечатываются» в чанк (uniform-буфер из кольца) и рисуются
- * {@code draw(0, count*6)} без вершинных данных.
- *
- * Заполнение чанка НЕ создаёт рендер-пасс — все чанки цикла рисуются в общий
- * пасс DrawBatcher одним setUniform+draw на чанк.
- *
- * Формат uniform-блока: 16-байтовый заголовок (screenW, screenH, guiScale, 0)
- * + maxItems элементов по itemSize байт. Должен совпадать с шейдером.
- */
 public abstract class UniformArrayPipeline implements DrawBatcher.Batched {
-
     protected static final float FIXED_GUI_SCALE = 2.0f;
     private static final int HEADER_SIZE = 16;
 
@@ -41,7 +28,6 @@ public abstract class UniformArrayPipeline implements DrawBatcher.Batched {
     private ByteBuffer dataBuffer;
     private boolean initialized = false;
 
-    /** Запечатанный чанк: uniform-буфер уже загружен, осталось нарисовать count элементов. */
     private record Chunk(GpuBuffer buffer, int count) {
     }
 
@@ -93,10 +79,6 @@ public abstract class UniformArrayPipeline implements DrawBatcher.Batched {
         return buf;
     }
 
-    /**
-     * Начать запись элемента: возвращает буфер с позицией на месте данных
-     * элемента. Записать ровно itemSize байт и вызвать {@link #endItem()}.
-     */
     protected final ByteBuffer beginItem() {
         ensureInitialized();
         if (batchedItems == 0) {
@@ -106,15 +88,12 @@ public abstract class UniformArrayPipeline implements DrawBatcher.Batched {
         return dataBuffer;
     }
 
-    /** Завершить элемент: регистрация в батчере или немедленная отрисовка. */
     protected final void endItem() {
         batchedItems++;
         if (DrawBatcher.isEnabled()) {
             DrawBatcher.register(this);
             if (batchedItems >= maxItems) {
                 if (chunks.size() >= uniformRing - 1) {
-                    // Кольцо чанков на исходе (крайне маловероятно) —
-                    // рисуем всё накопленное немедленно отдельным пассом
                     DrawBatcher.drawImmediate(this);
                 } else {
                     sealChunk();
@@ -125,7 +104,6 @@ public abstract class UniformArrayPipeline implements DrawBatcher.Batched {
         }
     }
 
-    /** Запечатать накопленное в чанк: бэкфилл заголовка + загрузка на GPU. */
     private void sealChunk() {
         if (batchedItems == 0) return;
 
@@ -173,12 +151,9 @@ public abstract class UniformArrayPipeline implements DrawBatcher.Batched {
 
     @Override
     public final void discardBatch() {
-        // Только запечатанные чанки: текущее CPU-накопление не трогаем —
-        // finally в DrawBatcher не должен убивать набор посреди цикла
         chunks.clear();
     }
 
-    /** Немедленно нарисовать всё накопленное (вне зоны батчинга — но-оп, если пусто). */
     public final void flush() {
         if (batchedItems == 0 && chunks.isEmpty()) return;
         DrawBatcher.drawImmediate(this);

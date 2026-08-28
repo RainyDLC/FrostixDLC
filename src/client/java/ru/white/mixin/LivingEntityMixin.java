@@ -1,6 +1,5 @@
 package ru.white.mixin;
 
-
 import ru.white.manager.event_impl.EventJump;
 import ru.white.manager.event_impl.SwingDurationEvent;
 import ru.white.module.impl.player.NoDelay;
@@ -25,7 +24,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin implements IMinecraft {
-
     @Shadow
     public abstract boolean hasStatusEffect(RegistryEntry<StatusEffect> effect);
 
@@ -45,8 +43,6 @@ public abstract class LivingEntityMixin implements IMinecraft {
         return original;
     }
 
-
-
     @Inject(method = "getHandSwingDuration", at = @At("HEAD"), cancellable = true)
     private void swingProgressHook(CallbackInfoReturnable<Integer> cir) {
         if ((Object) this != mc.player) {
@@ -64,7 +60,6 @@ public abstract class LivingEntityMixin implements IMinecraft {
         }
     }
 
-
     @Inject(method = "jump", at = @At("HEAD"))
     public void jumpYo(CallbackInfo ci) {
         LivingEntity self = (LivingEntity) (Object) this;
@@ -73,7 +68,4 @@ public abstract class LivingEntityMixin implements IMinecraft {
             new EventJump().hook();
         }
     }
-
-
-
 }

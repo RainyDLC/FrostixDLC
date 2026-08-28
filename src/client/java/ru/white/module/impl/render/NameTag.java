@@ -1,33 +1,5 @@
 package ru.white.module.impl.render;
 
-import net.minecraft.util.Identifier;
-import org.joml.Matrix3x2fStack;
-import ru.white.Client;
-import ru.white.manager.event_impl.EventDisplay;
-import ru.white.manager.event_impl.EventTick;
-import ru.white.manager.event_impl.TextFactoryEvent;
-import ru.white.manager.event_impl.WorldLoadEvent;
-import ru.white.manager.events.orbit.EventHandler;
-import ru.white.manager.events.orbit.EventPriority;
-import ru.white.module.api.Category;
-import ru.white.module.api.Module;
-import ru.white.module.api.ModuleInfo;
-import ru.white.module.api.settings.impl.BooleanSetting;
-import ru.white.module.impl.display.Hud;
-import ru.white.module.impl.display.InterFace;
-import ru.white.module.impl.player.WorldTracker;
-import ru.white.module.impl.utils.NameProtect;
-import ru.white.module.impl.utils.ReportHelper;
-import ru.white.theme.ThemeColor;
-import ru.white.utils.colors.ColorFormatting;
-import ru.white.utils.colors.ColorUtil;
-import ru.white.utils.math.ServerUtil;
-import ru.white.utils.other.Instance;
-import ru.white.utils.other.Projection;
-import ru.white.utils.render.ItemRender;
-import ru.white.utils.render.RenderUtil;
-import ru.white.utils.render.ScreenBlur;
-import ru.white.utils.render.font.Fonts;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
@@ -40,14 +12,42 @@ import net.minecraft.scoreboard.ScoreboardDisplaySlot;
 import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.scoreboard.number.StyledNumberFormat;
 import net.minecraft.text.MutableText;
+import net.minecraft.text.Style;
 import net.minecraft.text.Text;
 import net.minecraft.text.TextColor;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
+import org.joml.Matrix3x2fStack;
 import org.joml.Vector4d;
+import ru.white.Client;
+import ru.white.manager.event_impl.EventDisplay;
+import ru.white.manager.event_impl.EventTick;
+import ru.white.manager.event_impl.TextFactoryEvent;
+import ru.white.manager.event_impl.WorldLoadEvent;
+import ru.white.manager.events.orbit.EventHandler;
+import ru.white.manager.events.orbit.EventPriority;
+import ru.white.module.api.Category;
+import ru.white.module.api.Module;
+import ru.white.module.api.ModuleInfo;
+import ru.white.module.api.settings.impl.BooleanSetting;
+import ru.white.module.impl.display.InterFace;
+import ru.white.module.impl.player.WorldTracker;
+import ru.white.module.impl.utils.NameProtect;
+import ru.white.module.impl.utils.ReportHelper;
+import ru.white.utils.colors.ColorUtil;
+import ru.white.utils.math.ServerUtil;
+import ru.white.utils.other.Instance;
+import ru.white.utils.other.Projection;
+import ru.white.utils.render.ItemRender;
+import ru.white.utils.render.RenderUtil;
+import ru.white.utils.render.ScreenBlur;
+import ru.white.utils.render.font.Fonts;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @ModuleInfo(
         name = "Name Tag",
@@ -55,6 +55,18 @@ import java.util.List;
         desc = "Отображает ники, хп и броню сущностей"
 )
 public class NameTag extends Module {
+    private static final char[] HEX = "0123456789ABCDEF".toCharArray();
+
+    private static final float FONT_SIZE = 6F;
+    private static final float ICON_SIZE = 8F;
+    private static final float ITEM_STEP = 10F;
+    private static final float TAG_HEIGHT = 15F;
+    private static final float TAG_PADDING = 4F;
+    private static final float TAG_SPACING = 4F;
+    private static final float ROW_HEIGHT = 13F;
+    private static final float ROW_PADDING = 4F;
+    private static final float ROW_SPACING = 2F;
+    private static final float ROW_GAP = 2F;
 
     public static NameTag get() {
         return Instance.get(NameTag.class);
@@ -68,8 +80,14 @@ public class NameTag extends Module {
     public BooleanSetting mobs         = new BooleanSetting(this, "Отображения мобов", true);
     public BooleanSetting items        = new BooleanSetting(this, "Отображения предметов", true);
 
-
     private final List<Entity> entities = new ArrayList<>();
+    private final List<ItemStack> equipment = new ArrayList<>();
+    private final StringBuilder colored = new StringBuilder();
+
+    private float scaleFix = 1F;
+    private float bgAlpha;
+    private int neutralColor;
+    private int friendColor;
 
     @EventHandler
     public void onWorldLoad(WorldLoadEvent e) {
@@ -79,195 +97,171 @@ public class NameTag extends Module {
     @EventHandler
     public void onTick(EventTick e) {
         entities.clear();
-        if (mc.world != null) {
-            for (Entity entity : mc.world.getEntities()) {
-                if (entity instanceof PlayerEntity p) {
-                    if (player.getValue()
-                            && (p.getCustomName() == null || !p.getCustomName().getString().startsWith("Ghost_"))
-                            && (!ignoreNaked.getValue() || hasArmor(p))) {
-                        entities.add(entity);
-                    }
-                } else if (entity instanceof LivingEntity) {
-                    if (mobs.getValue()) entities.add(entity);
-                } else if (entity instanceof ItemEntity) {
-                    if (items.getValue()) entities.add(entity);
-                }
+        if (mc.world == null) return;
+
+        boolean showPlayers = player.getValue();
+        boolean skipNaked = ignoreNaked.getValue();
+        boolean showMobs = mobs.getValue();
+        boolean showItems = items.getValue();
+
+        for (Entity entity : mc.world.getEntities()) {
+            if (entity instanceof PlayerEntity p) {
+                if (!showPlayers) continue;
+                Text custom = p.getCustomName();
+                if (custom != null && custom.getString().startsWith("Ghost_")) continue;
+                if (skipNaked && !hasArmor(p)) continue;
+                entities.add(p);
+            } else if (entity instanceof LivingEntity) {
+                if (showMobs) entities.add(entity);
+            } else if (entity instanceof ItemEntity) {
+                if (showItems) entities.add(entity);
             }
         }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void onTick(EventDisplay e) {
-        DrawContext context = e.getDrawContext();
-        float tickDelta = e.getPartialTicks();
-
-
+    public void onDisplay(EventDisplay e) {
         ScreenBlur.capture();
 
-        if (mc.world == null || mc.player == null) return;
+        if (mc.world == null || mc.player == null || entities.isEmpty()) return;
+
+        DrawContext context = e.getDrawContext();
+        float tickDelta = e.getPartialTicks();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+
+        scaleFix = 2F / (float) mc.getWindow().getScaleFactor();
+        bgAlpha = InterFace.getInstance().alphaHUD.getValue() * 0.5F;
+        neutralColor = ColorUtil.background();
+        friendColor = ColorUtil.getColor(0, 255, 0);
+
+        boolean showPlayers = player.getValue();
+        boolean showHands = showPlayers && handItems.getValue();
+        NameProtect nameProtect = Client.get().moduleManager().get(NameProtect.class);
+        boolean hideFriends = nameProtect != null && nameProtect.isEnabled() && nameProtect.friends.getValue();
+        var friends = Client.get().friendManager();
+        String selfName = mc.player.getName().getString();
 
         for (Entity entity : entities) {
-            Vector4d vec4d = Projection.getVector4D(entity, tickDelta);
-            if (Projection.cantSee(vec4d)) continue;
+            Box box = entity.getBoundingBox();
+            double dx = (box.minX + box.maxX) * 0.5D - cameraPos.x;
+            double dy = (box.minY + box.maxY) * 0.5D - cameraPos.y;
+            double dz = (box.minZ + box.maxZ) * 0.5D - cameraPos.z;
+            if (dx * dx + dy * dy + dz * dz < 1.0D) continue;
 
-            float distance = (float) mc.gameRenderer.getCamera().getCameraPos().distanceTo(entity.getBoundingBox().getCenter());
-            if (distance < 1) continue;
+            Vector4d projected = Projection.getVector4D(entity, tickDelta);
+            if (Projection.cantSee(projected)) continue;
 
-            float x = (float) Projection.centerX(vec4d);
-            float y = (float) vec4d.y - 12;
+            float x = (float) Projection.centerX(projected);
+            float y = (float) projected.y - 12;
 
-
-            String displayName = "";
-            boolean isFriend = false;
+            boolean friend = false;
+            String tag = "";
 
             if (entity instanceof PlayerEntity p) {
-                isFriend = Client.get().friendManager().isFriend(p.getName().getString());
-                String playerName = Client.get().moduleManager().get(NameProtect.class).isEnabled() &&
-                        Client.get().moduleManager().get(NameProtect.class).friends.getValue() &&
-                        Client.get().friendManager().isFriend(p.getNameForScoreboard()) ? "Friend" :
-                        toColoredString(p.getDisplayName()).replace("⚡", "");
-                displayName = playerName.replace(mc.player.getName().getString(), "rainydlc.fun") + " " + Formatting.RED  + (entity.isInvisible() ? "null " : (int) getHealth(p)) + "hp";
-            } else if (entity instanceof LivingEntity le) {
-                displayName = le.getType().getName().getString() + Formatting.GRAY + " / " + Formatting.WHITE + (int) getHealth(le) + Formatting.GRAY + "hp";
+                friend = friends.isFriend(p.getName().getString());
+                String shown = hideFriends && friends.isFriend(p.getNameForScoreboard())
+                        ? "Friend"
+                        : toColoredString(p.getDisplayName()).replace("⚡", "");
+                tag = shown.replace(selfName, "rainydlc.fun") + " " + Formatting.RED
+                        + (entity.isInvisible() ? "null " : (int) getHealth(p)) + "hp";
+            } else if (entity instanceof LivingEntity living) {
+                tag = living.getType().getName().getString() + Formatting.GRAY + " / " + Formatting.WHITE
+                        + (int) getHealth(living) + Formatting.GRAY + "hp";
             } else if (entity instanceof ItemEntity item) {
                 ItemStack stack = item.getStack();
-                displayName = stack.getFormattedName().getString() + Formatting.GRAY + " x" + Formatting.WHITE + item.getStack().getCount();
+                tag = stack.getFormattedName().getString() + Formatting.GRAY + " x" + Formatting.WHITE + stack.getCount();
             }
 
-            renderTag(context, entity, displayName, x, y, isFriend, tickDelta);
+            renderTag(context, entity, tag, x, y, friend);
 
-            if (entity instanceof PlayerEntity handPlayer && player.getValue() && handItems.getValue()) {
-                renderHandItems(context, handPlayer, x, (float) vec4d.w);
-            }
-
-            // кулдауны хилок над ником — модуль сам решает, включён ли он
-            if (entity instanceof PlayerEntity tracked && player.getValue()) {
-                WorldTracker.get().render(context, tracked, x, y - 3);
+            if (showPlayers && entity instanceof PlayerEntity p) {
+                if (showHands) renderHandItems(context, p, friend, x, (float) projected.w);
+                WorldTracker.get().render(context, p, x, y - 3);
             }
         }
     }
 
-    private void renderHandItems(DrawContext context, PlayerEntity entity, float centerX, float feetY) {
-        ItemStack mainHand = entity.getMainHandStack();
-        ItemStack offHand = entity.getOffHandStack();
-
-        List<ItemStack> hands = new ArrayList<>();
-        if (!mainHand.isEmpty()) hands.add(mainHand);
-        if (!offHand.isEmpty()) hands.add(offHand);
-        if (hands.isEmpty()) return;
-
-        float fontSize = 6;
-        float iconSize = 8;
-        float padding = 4;
-        float spacing = 2;
-        float rowH = 13;
-        float gap = 2;
-
-        float targetScale = 2F;
-        float currentScale = (float) mc.getWindow().getScaleFactor();
-        float scaleFix = targetScale / currentScale;
-
-
-        int bgColor = Client.get().friendManager().isFriend(entity.getName().getString()) ? ColorUtil.getColor(0, 255, 0) : ColorUtil.background();
-        if (ReportHelper.isReported(entity)) {
-            bgColor = ReportHelper.getReportColor(bgColor);
-        }
-        float y = feetY + 2;
-        for (ItemStack stack : hands) {
-            String name = toColoredString(stack.getFormattedName());
-            float textWidth = Fonts.sf_regular.getWidth(name, fontSize);
-            float wr = padding * 2 + iconSize + spacing + textWidth;
-            float bgX = centerX - wr / 2f;
-
-
-
-            RenderUtil.Blur.blur(bgX, y - 0.75F, wr, rowH,1,4,ColorUtil.replAlpha(
-                    bgColor, InterFace.getInstance().alphaHUD.getValue() * 0.5F));
-
-
-
-            Matrix3x2fStack matrices = context.getMatrices();
-            matrices.pushMatrix();
-            matrices.translate((bgX  + padding + iconSize / 2f) * scaleFix, (y + rowH / 2f - 1) * scaleFix);
-            matrices.scale(0.5F, 0.5F);
-            ItemRender.drawItemWithContext(context, stack, -8, -8, 1F, 1.0F);
-            matrices.popMatrix();
-
-            float textX = bgX + padding + iconSize + spacing;
-            float textY = y + rowH / 2f - 4.8F;
-            Fonts.sf_regular.draw(name, textX, textY, fontSize, ColorUtil.WHITE);
-
-            y += rowH + gap;
-        }
-    }
-
-    private void renderTag(DrawContext context, Entity entity, String name, float x, float y, boolean isFriend, float tickDelta) {
+    private void renderTag(DrawContext context, Entity entity, String name, float x, float y, boolean friend) {
         TextFactoryEvent nameEvent = new TextFactoryEvent(name);
         nameEvent.hook();
         name = nameEvent.getText();
 
-        float fontSize = 6;
-        float padding = 4;
-        float spacing = 4;
-
-
-
-        List<ItemStack> armorItems = new ArrayList<>();
+        equipment.clear();
         if (entity instanceof LivingEntity living) {
             for (EquipmentSlot slot : EquipmentSlot.VALUES) {
                 ItemStack stack = living.getEquippedStack(slot);
-                if (!stack.isEmpty()) armorItems.add(stack);
+                if (!stack.isEmpty()) equipment.add(stack);
             }
         }
 
-        float itemStep = 10;
-        float iconSize = 8;
-        float itemsWidth = armorItems.isEmpty() ? 0 : spacing + (armorItems.size() - 1) * itemStep + iconSize;
+        float textWidth = Fonts.sf_regular.getWidth(name, FONT_SIZE);
+        float itemsWidth = equipment.isEmpty() ? 0 : TAG_SPACING + (equipment.size() - 1) * ITEM_STEP + ICON_SIZE;
+        float wr = textWidth + itemsWidth + TAG_PADDING * 2;
 
-        float textWidth = Fonts.sf_regular.getWidth(name, fontSize);
-        float contentWidth = textWidth + itemsWidth;
-        float wr = contentWidth + (padding * 2) ;
-        float h = 15;
-
-        float bgX = x - (wr / 2);
+        float bgX = x - wr / 2;
         float bgY = y - 3;
 
-        int bgColor = isFriend ? ColorUtil.getColor(0, 255, 0) :  ColorUtil.background();
-        if (ReportHelper.isReported(entity)) {
-            bgColor = ReportHelper.getReportColor(bgColor);
-        }
-
-
-            RenderUtil.Blur.blur(bgX, bgY, wr, h,1,4,ColorUtil.replAlpha(
-                    bgColor, InterFace.getInstance().alphaHUD.getValue() * 0.5F));
-
+        RenderUtil.Blur.blur(bgX, bgY, wr, TAG_HEIGHT, 1, 4,
+                ColorUtil.replAlpha(backgroundFor(entity, friend), bgAlpha));
 
         Client.get().render2D().flushAll();
 
-        float textX = bgX + padding;
-        float textY = bgY + (h / 2f) - Fonts.sf_regular.getHeight(fontSize) / 2 - 0.1F;
-        Fonts.sf_regular.draw(name, textX, textY, fontSize, ColorUtil.WHITE);
+        float textX = bgX + TAG_PADDING;
+        float textY = bgY + TAG_HEIGHT / 2F - Fonts.sf_regular.getHeight(FONT_SIZE) / 2 - 0.1F;
+        Fonts.sf_regular.draw(name, textX, textY, FONT_SIZE, ColorUtil.WHITE);
 
-        if (!armorItems.isEmpty()) {
-            float targetScale = 2F;
-            float currentScale = (float) mc.getWindow().getScaleFactor();
-            float scaleFix = targetScale / currentScale;
+        if (equipment.isEmpty()) return;
 
-            float itemX = textX + textWidth + spacing;
-            float itemCenterY = bgY + (h / 2f) - 0.5F;
+        Matrix3x2fStack matrices = context.getMatrices();
+        float itemX = textX + textWidth + TAG_SPACING;
+        float itemCenterY = bgY + TAG_HEIGHT / 2F - 0.5F;
 
-            float currentItemOffset = 0;
-            for (ItemStack stack : armorItems) {
-                Matrix3x2fStack matrix3x2f = context.getMatrices();
-                matrix3x2f.pushMatrix();
-                matrix3x2f.translate((itemX + currentItemOffset + iconSize / 2f) * scaleFix, itemCenterY * scaleFix);
-                matrix3x2f.scale(0.5F, 0.5F);
-                ItemRender.drawItemWithContext(context, stack, -8, -8, 1F, 1.0F);
-                matrix3x2f.popMatrix();
-
-                currentItemOffset += itemStep;
-            }
+        for (int i = 0; i < equipment.size(); i++) {
+            matrices.pushMatrix();
+            matrices.translate((itemX + i * ITEM_STEP + ICON_SIZE / 2F) * scaleFix, itemCenterY * scaleFix);
+            matrices.scale(0.5F, 0.5F);
+            ItemRender.drawItemWithContext(context, equipment.get(i), -8, -8, 1F, 1.0F);
+            matrices.popMatrix();
         }
+    }
+
+    private void renderHandItems(DrawContext context, PlayerEntity entity, boolean friend, float centerX, float feetY) {
+        ItemStack mainHand = entity.getMainHandStack();
+        ItemStack offHand = entity.getOffHandStack();
+        if (mainHand.isEmpty() && offHand.isEmpty()) return;
+
+        int background = ColorUtil.replAlpha(backgroundFor(entity, friend), bgAlpha);
+        Matrix3x2fStack matrices = context.getMatrices();
+
+        float y = feetY + 2;
+        if (!mainHand.isEmpty()) y = renderHandRow(context, matrices, mainHand, background, centerX, y);
+        if (!offHand.isEmpty()) renderHandRow(context, matrices, offHand, background, centerX, y);
+    }
+
+    private float renderHandRow(DrawContext context, Matrix3x2fStack matrices, ItemStack stack,
+                                int background, float centerX, float y) {
+        String name = toColoredString(stack.getFormattedName());
+        float textWidth = Fonts.sf_regular.getWidth(name, FONT_SIZE);
+        float wr = ROW_PADDING * 2 + ICON_SIZE + ROW_SPACING + textWidth;
+        float bgX = centerX - wr / 2f;
+
+        RenderUtil.Blur.blur(bgX, y - 0.75F, wr, ROW_HEIGHT, 1, 4, background);
+
+        matrices.pushMatrix();
+        matrices.translate((bgX + ROW_PADDING + ICON_SIZE / 2f) * scaleFix, (y + ROW_HEIGHT / 2f - 1) * scaleFix);
+        matrices.scale(0.5F, 0.5F);
+        ItemRender.drawItemWithContext(context, stack, -8, -8, 1F, 1.0F);
+        matrices.popMatrix();
+
+        Fonts.sf_regular.draw(name, bgX + ROW_PADDING + ICON_SIZE + ROW_SPACING,
+                y + ROW_HEIGHT / 2f - 4.8F, FONT_SIZE, ColorUtil.WHITE);
+
+        return y + ROW_HEIGHT + ROW_GAP;
+    }
+
+    private int backgroundFor(Entity entity, boolean friend) {
+        int color = friend ? friendColor : neutralColor;
+        return ReportHelper.isReported(entity) ? ReportHelper.getReportColor(color) : color;
     }
 
     public static boolean hasArmor(PlayerEntity p) {
@@ -294,14 +288,18 @@ public class NameTag extends Module {
         return ServerUtil.isCopyTime() ? entity.getHealth() : MathHelper.clamp(hp, 0, entity.getMaxHealth() + entity.getAbsorptionAmount());
     }
 
-    private static String toColoredString(Text text) {
-        StringBuilder sb = new StringBuilder();
-        text.visit((style, str) -> {
+    private String toColoredString(Text text) {
+        colored.setLength(0);
+        text.visit((style, string) -> {
             TextColor tc = style.getColor();
-            if (tc != null) sb.append("§#").append(String.format("%06X", tc.getRgb()));
-            sb.append(str);
-            return java.util.Optional.empty();
-        }, net.minecraft.text.Style.EMPTY);
-        return sb.toString();
+            if (tc != null) {
+                int rgb = tc.getRgb();
+                colored.append("§#");
+                for (int shift = 20; shift >= 0; shift -= 4) colored.append(HEX[(rgb >> shift) & 0xF]);
+            }
+            colored.append(string);
+            return Optional.empty();
+        }, Style.EMPTY);
+        return colored.toString();
     }
 }

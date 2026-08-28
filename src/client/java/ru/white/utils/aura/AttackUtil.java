@@ -1,6 +1,5 @@
 package ru.white.utils.aura;
 
-
 import ru.white.utils.annotation.IMinecraft;
 import ru.white.utils.math.MathUtil;
 import ru.white.utils.math.ServerUtil;
@@ -23,22 +22,14 @@ import java.util.function.Predicate;
 @Getter
 @UtilityClass
 public class AttackUtil implements IMinecraft {
-
     private int count = 0;
-
-
-
 
     public void attackEntity(Entity entity) {
         mc.interactionManager.attackEntity(mc.player, entity);
         mc.player.swingHand(Hand.MAIN_HAND);
 
         count++;
-
     }
-
-
-
 
     public boolean hasMovementRestrictions() {
         return mc.player.hasStatusEffect(StatusEffects.BLINDNESS)
@@ -49,7 +40,6 @@ public class AttackUtil implements IMinecraft {
                 || mc.player.isClimbing()
                 || !canChangeIntoPose(EntityPose.STANDING) && mc.player.isInSneakingPose()
                 || mc.player.getAbilities().flying;
-
     }
 
     public boolean hasPreMovementRestrictions(SimulatedPlayer simulatedPlayer) {
@@ -62,7 +52,6 @@ public class AttackUtil implements IMinecraft {
                 || !canChangeIntoPose(EntityPose.STANDING) && mc.player.isInSneakingPose()
                 || mc.player.getAbilities().flying;
     }
-
 
     public boolean canChangeIntoPose(EntityPose pose) {
         return mc.player.getEntityWorld().isSpaceEmpty(mc.player, mc.player.getDimensions(pose).getBoxAt(mc.player.getEntityPos()).contract(1.0E-7));
@@ -87,5 +76,4 @@ public class AttackUtil implements IMinecraft {
         boolean crit = simulatedPlayer.fallDistance > 0 && (simulatedPlayer.fallDistance < 0.08 || !SimulatedPlayer.simulateLocalPlayer(2).onGround);
         return !simulatedPlayer.onGround && (crit );
     }
-
 }

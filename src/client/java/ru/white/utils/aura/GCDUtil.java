@@ -1,6 +1,5 @@
 package ru.white.utils.aura;
 
-
 import ru.white.utils.annotation.IMinecraft;
 
 import static java.lang.Math.round;
@@ -23,20 +22,15 @@ public class GCDUtil implements IMinecraft {
         return round(delta / getGCDValue());
     }
     public static float applyGCD(float targetRotation, float currentRotation) {
-
         float sensitivity = mc.options.getMouseSensitivity().getValue().floatValue();
 
         float f = sensitivity * 0.6F + 0.2F;
         float f1 = f * f * f * 8.0F;
 
-
         float delta = targetRotation - currentRotation;
 
         float adjustedDelta = Math.round(delta / (f1 * 0.15F)) * (f1 * 0.15F);
 
-
         return currentRotation + adjustedDelta;
     }
 }
-
-

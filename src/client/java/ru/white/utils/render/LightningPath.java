@@ -6,26 +6,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Математика ломаного пути разряда — рекурсивное смещение середины (midpoint displacement).
- *
- * Вынесено из {@link ru.white.module.impl.render.LightningRenderer}, чтобы тем же
- * алгоритмом пользовались и молнии вокруг таргета, и молнии вокруг рук.
- * Функции чистые: всё состояние — переданный {@link Random}.
- */
 public final class LightningPath {
-
     private LightningPath() {
     }
 
-    /**
-     * Ломаная от {@code start} до {@code end}. На каждом уровне середина отрезка
-     * смещается в случайную сторону перпендикулярно направлению, амплитуда
-     * смещения вдвое уменьшается с каждым уровнем.
-     *
-     * @param depth     число уровней дробления (итого 2^depth отрезков)
-     * @param maxOffset максимальное смещение середины на текущем уровне
-     */
     public static List<Vec3d> generate(Vec3d start, Vec3d end, int depth, double maxOffset, Random random) {
         if (depth <= 0) {
             List<Vec3d> result = new ArrayList<>(2);
@@ -47,7 +31,6 @@ public final class LightningPath {
         return left;
     }
 
-    /** Случайный единичный вектор в плоскости, перпендикулярной {@code dir}. */
     public static Vec3d randomPerpendicular(Vec3d dir, Random random) {
         Vec3d normDir = dir.normalize();
         Vec3d arbitrary = Math.abs(normDir.y) < 0.9 ? new Vec3d(0, 1, 0) : new Vec3d(1, 0, 0);

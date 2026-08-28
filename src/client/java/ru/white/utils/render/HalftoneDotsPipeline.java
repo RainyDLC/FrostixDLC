@@ -23,12 +23,7 @@ import java.nio.ByteBuffer;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
-/**
- * Полутоновая сетка точек на весь экран: у курсора точки крупные, к краям мельчают.
- * Вся сетка — один пасс, размеры считает шейдер.
- */
 public class HalftoneDotsPipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/halftone_dots");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/halftone_dots");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/halftone_dots");
@@ -76,12 +71,6 @@ public class HalftoneDotsPipeline {
         initialized = true;
     }
 
-    /**
-     * @param spacing   шаг сетки в пикселях гуи
-     * @param minRadius радиус точки вдали от курсора
-     * @param maxRadius радиус точки под курсором (меньше половины шага)
-     * @param reach     на каком расстоянии от курсора точки успевают измельчать
-     */
     public void draw(float width, float height, float mouseX, float mouseY, float alpha, int color,
                      float spacing, float minRadius, float maxRadius, float reach, float patternMode) {
         if (alpha <= 0.01f || width <= 0f || height <= 0f) return;
@@ -91,7 +80,6 @@ public class HalftoneDotsPipeline {
 
         ensureInitialized();
 
-        // рисуем немедленно — сначала выпускаем накопленные батчи (порядок отрисовки)
         DrawBatcher.flushPending();
 
         dataBuffer.clear();
@@ -146,7 +134,6 @@ public class HalftoneDotsPipeline {
                 OptionalInt.empty(),
                 client.getFramebuffer().getDepthAttachmentView(),
                 OptionalDouble.empty())) {
-
             renderPass.setPipeline(PIPELINE);
             renderPass.setVertexBuffer(0, dummyVertexBuffer);
 

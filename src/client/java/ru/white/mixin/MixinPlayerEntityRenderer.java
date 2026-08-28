@@ -13,7 +13,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(PlayerEntityRenderer.class)
 public class MixinPlayerEntityRenderer {
-
     @SuppressWarnings("unchecked")
     @Inject(method = "<init>", at = @At("TAIL"))
     private void onInit(EntityRendererFactory.Context ctx, boolean slim, CallbackInfo ci) {
@@ -28,5 +27,4 @@ public class MixinPlayerEntityRenderer {
         state.playerName = null;
         state.displayName = null;
     }
-
 }

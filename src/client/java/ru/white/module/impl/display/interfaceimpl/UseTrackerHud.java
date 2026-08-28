@@ -23,50 +23,39 @@ import java.util.List;
 import java.util.Map;
 
 public class UseTrackerHud implements element {
-
-    /** Общий масштаб плашки. */
     private static  float S = 1.0F;
 
-    // Базовые размеры
     private static  float H = 16F * S;
     private static  float MIN_W = 60F * S;
     private static  float RADIUS = 5F * S;
     private static  float BASE_H = 4F * S;
 
-    // Размеры шриф иконок
     private static  float TITLE_TEXT = 7F * S;
     private static  float TITLE_ICON = 5F * S;
     private static  float ROW_TEXT = 6.5F * S;
 
-    // Отступы для овка
     private static  float TITLE_ICON_X = 5F * S;
     private static  float TITLE_ICON_Y = 5.5F * S;
     private static  float TITLE_TEXT_X = 12.5F * S;
     private static  float TITLE_TEXT_Y = 3.4F * S;
 
-    // Отступы и ра для строк
     private static  float ROW_HEIGHT = 14F * S;
     private static  float ROW_BASE_W = 22F * S;
     private static  float ROW_PADDING_X = 5F * S;
     private static  float ROW_START_Y = 5F * S;
     private static  float ROW_ANIM_OFFSET = 15F * S;
 
-    // Дополнительнступы для заголовка-игрока
     private static  float HEAD_TEXT_X = 15F * S;
     private static  float HEAD_ICON_Y = 0.9F * S;
 
-    // Отступы для лителя
     private static  float SEP_PADDING_X = 4F * S;
     private static  float SEP_OFFSET_Y = 3.2F * S;
-
 
     private final ru.white.utils.animation.satoshi.Animation animation1 = new EaseInOutQuad(300, 1);
     private final ru.white.utils.animation.satoshi.Animation animation2 = new EaseInOutQuad(300, 1);
 
-    /** Плавная ширина фона — подгоняется под самую длинную строку. */
     private float widthAnim = 0;
 
-    /** Появление строки с ником цели — ей же двигаются все строки ниже. */
     private final Animation headAnimation = new Animation();
     private String head = "";
 
@@ -82,7 +71,6 @@ public class UseTrackerHud implements element {
 
     @Override
     public void onRender(DragSetting dragSetting, InterFace interFace) {
-
         UseTracker tracker = UseTracker.getInstance();
         S = InterFace.getInstance().sizeHud.getValue();
         H = 16F * S;
@@ -141,7 +129,6 @@ public class UseTrackerHud implements element {
             }
         }
 
-        // ник живёт только пока цель актуальна, но уезжает плавно — поэтому текст запоминаем
         String targetName = hasTarget ? tracker.getTargetName() : "";
 
         if (!targetName.isEmpty()) head = targetName;
@@ -173,7 +160,6 @@ public class UseTrackerHud implements element {
 
         float alpha2 = animation2.getOutput();
 
-        // Отрисовка состояния пустого списка (в чате)
         RenderUtil.Render2D.hudPlate(x, y, MIN_W, H, alpha2, RADIUS, InterFace.getInstance().alphaHUD.getValue());
 
         Font font = Fonts.sf_regular;
@@ -214,13 +200,11 @@ public class UseTrackerHud implements element {
 
         widthAnim += (w - widthAnim) * 0.2F;
 
-        // Отрисовка основного фона
         RenderUtil.Render2D.hudPlate(x, y, widthAnim, h, alpha, RADIUS, InterFace.getInstance().alphaHUD.getValue());
 
         float offsetY = y + ROW_START_Y;
         float offsetY2 = 0;
 
-        // Отрисовка заголовка (ника)
         if (ha > 0.01F) {
             float addX =0;
 
@@ -233,9 +217,7 @@ public class UseTrackerHud implements element {
 
         boolean firstRow = ha <= 0.01F;
 
-        // Отрисовка строк
         for (Row row : rows.values()) {
-
             float a = row.animation.get();
             if (a <= 0.01F && !row.active) continue;
 

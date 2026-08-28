@@ -1,6 +1,5 @@
 package ru.white.manager.rotation;
 
-
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
@@ -25,13 +24,9 @@ import ru.white.manager.events.orbit.EventHandler;
 import ru.white.manager.events.orbit.EventPriority;
 import ru.white.module.impl.combat.AttackAura;
 import ru.white.module.impl.render.LightningRenderer;
-import ru.white.module.impl.combat.aura.rotation.FunTimeRotation;
-import ru.white.module.impl.player.ClickHelper;
 import ru.white.utils.animation.Animation;
 import ru.white.utils.animation.Easings;
 import ru.white.utils.aura.GCDUtil;
-import ru.white.utils.aura.RayTraceUtil;
-import ru.white.utils.aura.UAttack;
 import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.math.MathUtil;
 import ru.white.utils.math.ServerUtil;
@@ -45,7 +40,6 @@ import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_
 import static net.minecraft.util.math.MathHelper.wrapDegrees;
 
 public class RotationProcess extends Component {
-
     public static RotationTask currentTask = RotationTask.IDLE;
     public static float currentYawSpeed;
     public static float currentPitchSpeed;
@@ -62,7 +56,6 @@ public class RotationProcess extends Component {
 
     private void resetRotation() {
         Rotation targetRotation = new Rotation(FreeLookUtil.freeYaw, FreeLookUtil.freePitch);
-
 
         if (ServerUtil.isHolyWorld()) {
             stopRotation();
@@ -81,23 +74,18 @@ public class RotationProcess extends Component {
         FreeLookUtil.setActive(false);
     }
 
-
     @EventHandler
     public void onEventMovement(EventMoveInput eventMoveInput) {
-
         if (currentTask.equals(RotationTask.RESET)) {
             MoveUtil.fixMovement(eventMoveInput, mc.player.getYaw(), mc.gameRenderer.getCamera().getYaw());
         }
-
     }
-
 
     @EventHandler
     public void onEvent(EventTick event) {
         if (currentTask.equals(RotationTask.AIM) && idleTicks > currentTimeout) {
             currentTask = (RotationTask.RESET);
         }
-
 
         if (currentTask.equals(RotationTask.RESET)) {
             if (ServerUtil.isHolyWorld() || ServerUtil.isCopyTime()) {
@@ -108,8 +96,6 @@ public class RotationProcess extends Component {
         }
         idleTicks++;
     }
-
-
 
     public static void update(Rotation target, float yawSpeed, float pitchSpeed, float yawReturnSpeed,
                               float pitchReturnSpeed, int timeout, int priority, boolean clientRotation) {
@@ -137,20 +123,17 @@ public class RotationProcess extends Component {
         update(targetRotation, turnSpeed, turnSpeed, returnSpeed, returnSpeed, timeout, priority, false);
     }
 
-
     static boolean updateRotation(Rotation targetRotation, float yawSpeed, float pitchSpeed) {
         if (mc.player == null)
             return false;
 
         Rotation currentRotation = new Rotation(mc.player);
 
-
         float pitchDelta = targetRotation.pitch - currentRotation.pitch;
         float yawDelta = wrapDegrees(targetRotation.yaw - currentRotation.yaw);
 
         float clampedYaw = Math.min(Math.abs(yawDelta), yawSpeed);
         float clampedPitch = Math.min(Math.abs(pitchDelta), pitchSpeed);
-
 
         mc.player.setYaw(
                 mc.player.headYaw += GCDUtil.getSensitivity(MathHelper.clamp(yawDelta, -clampedYaw, clampedYaw)));
@@ -160,7 +143,6 @@ public class RotationProcess extends Component {
                         + GCDUtil.getSensitivity(MathHelper.clamp(pitchDelta, -clampedPitch, clampedPitch)),
                 -90F, 90F));
 
-
         idleTicks = 0;
         return new Rotation(mc.player).getDelta(targetRotation) < 1F;
     }
@@ -169,9 +151,7 @@ public class RotationProcess extends Component {
         currentTask = (RotationTask.IDLE);
         currentPriority = (0);
         FreeLookUtil.setActive(false);
-
     }
-
 
     public enum RotationTask {
         AIM,
@@ -186,11 +166,10 @@ public class RotationProcess extends Component {
     }
     private float animationNurik = 0.0F;
     private long currentTimeSpirits = 0;
-    /** Фаза сердцебиения для режима «Сердце»: интеграл частоты по времени. */
+
     private long heartLastTime = 0L;
     private float heartPhase = 0f;
 
-    // ── скретч-буферы кадра для ESP-режимов: ноль аллокаций в цикле рендера ──
     private static final float[] SNOW_PX = new float[24], SNOW_PY = new float[24],
             SNOW_PZ = new float[24], SNOW_SPIN = new float[24];
     private static final float[] SWORD_PX = new float[16], SWORD_PY = new float[16],
@@ -250,14 +229,11 @@ public class RotationProcess extends Component {
     private static final RenderLayer RING_LINE_LAYER = RenderLayer.of("ring_esp_line",
             RenderSetup.builder(RING_LINE_PIPELINE).expectedBufferSize(1 << 14).build());
 
-
-
     private interface JitterPreset {
         float getYaw(long time);
         float getPitch(long time);
     }
     private final JitterPreset[] jitterPresets = new JitterPreset[] {
-
             new JitterPreset() {
                 public float getYaw(long t) {
                     return (float) ((Math.sin(t / 80D) + Math.cos(t / 35D) * 0.35) * 13);
@@ -355,7 +331,6 @@ public class RotationProcess extends Component {
     }
 
     private final SpeedPreset[] speedPresets = new SpeedPreset[]{
-
             new SpeedPreset() {
                 public float getYawSpeed() { return 40F; }
                 public float getPitchSpeed() { return 12F; }
@@ -462,7 +437,6 @@ public class RotationProcess extends Component {
 
     float jitterIntensity = 0;
 
-
     private long jitterSwitchTime = ThreadLocalRandom.current().nextLong(1000L, 2001L);
     private long nextJitterSwitch = System.currentTimeMillis() + jitterSwitchTime;
     private int currentJitterPreset = 0;
@@ -472,7 +446,6 @@ public class RotationProcess extends Component {
     private long nextSpeedSwitch = System.currentTimeMillis() + speedSwitchTime;
     private int currentSpeedPreset = 0;
     private int nextSpeedPreset = 1;
-
 
     private static final long JITTER_SWITCH_TIME = 1000L;
 
@@ -486,410 +459,6 @@ public class RotationProcess extends Component {
 
     int tick;
 
-
-  /*  @EventHandler
-    public void onTick(EventTick eventTick) {
-        if (AttackAura.get().typeRotation.is("FunTime Snap")) {
-            if (mc.player != null && mc.world != null) {
-
-                LivingEntity target = AttackAura.target;
-
-                boolean isActive = AttackAura.get().isEnabled() && target != null ;
-
-                float rawYaw;
-                float rawPitch;
-
-                long speedTime = System.currentTimeMillis();
-
-                if (speedTime >= nextSpeedSwitch) {
-                    currentSpeedPreset = nextSpeedPreset;
-                    nextSpeedPreset = ThreadLocalRandom.current().nextInt(speedPresets.length);
-
-                    while (nextSpeedPreset == currentSpeedPreset)
-                        nextSpeedPreset = ThreadLocalRandom.current().nextInt(speedPresets.length);
-
-                    speedSwitchTime = ThreadLocalRandom.current().nextLong(2000L, 4001L);
-                    nextSpeedSwitch = speedTime + speedSwitchTime;
-                }
-
-                SpeedPreset currentSpeed = speedPresets[currentSpeedPreset];
-                SpeedPreset nextSpeed = speedPresets[nextSpeedPreset];
-
-                float speedBlend = 1F - (nextSpeedSwitch - speedTime) / (float) speedSwitchTime;
-                speedBlend = MathHelper.clamp(speedBlend, 0F, 1F);
-                speedBlend = speedBlend * speedBlend * (3F - 2F * speedBlend);
-
-
-                speedBlend = speedBlend * speedBlend * (3F - 2F * speedBlend);
-
-                float targetYawSpeed = MathHelper.lerp(
-                        speedBlend,
-                        currentSpeed.getYawSpeed(),
-                        nextSpeed.getYawSpeed()
-                );
-
-                float targetPitchSpeed = MathHelper.lerp(
-                        speedBlend,
-                        currentSpeed.getPitchSpeed(),
-                        nextSpeed.getPitchSpeed()
-                );
-
-
-                float activeSpeedYaw = MathUtil.randomLerp(30,35);
-                float activeSpeedPitch = MathUtil.randomLerp(8,14);
-
-
-                lastYawSpeed += (targetYawSpeed - lastYawSpeed) * 0.5F;
-                lastPitchSpeed += (targetPitchSpeed - lastPitchSpeed) * 0.5F;
-
-                float speed = lastYawSpeed + MathUtil.randomLerp(-2.5F, 2.5F);
-                float speed2 = lastPitchSpeed + MathUtil.randomLerp(-1.0F, 1.0F);
-
-
-
-                activeSpeedYaw = speed;
-                activeSpeedPitch = speed2;
-
-                AttackAura aura = AttackAura.get();
-
-
-
-                if (isActive) {
-                    FreeLookUtil.active = true;
-
-                    jitterIntensity = Math.min(1.0f, jitterIntensity + 0.1f);
-                } else {
-
-                    jitterIntensity = Math.max(0.0f, jitterIntensity - 0.05f);
-                }
-
-
-
-
-
-
-                if (aura.justAttacked && System.currentTimeMillis() >= aura.attackFlickAt) {
-                    aura.justAttacked = false;
-                }
-
-                if (isActive) {
-
-                    Vec3d vec = target.getEntityPos().add(0.15F * Math.sin(System.currentTimeMillis() / 250D),target.getHeight() / 2 + (target.getHeight() /  4) *
-                                            Math.cos(System.currentTimeMillis() / 200D),
-                                    0.15F * Math.cos(System.currentTimeMillis() / 250D))
-                            .subtract(mc.player.getEyePos())
-                            .normalize();
-
-                    rawYaw = (float) Math.toDegrees(Math.atan2(-vec.x, vec.z));
-                    rawPitch = (float) MathHelper.clamp(
-                            -Math.toDegrees(Math.atan2(vec.y, Math.hypot(vec.x, vec.z))),
-                            -90F, 90F
-                    );
-
-
-                    float[] ranges = aura.getRanges();
-                    ranges = new float[]{ranges[0], ranges[1], ranges[0] + ranges[1]};
-                    boolean canAttack = UAttack.shouldAttack(target, false, true, true, -MathUtil.randomInt(400,450), ranges);
-
-                    activeSpeedYaw *= 1.4f;
-                    activeSpeedPitch *= 2.7F;
-
-
-                    if(canAttack) {
-                        tick += MathUtil.randomInt(2,3);
-                    }
-
-                    boolean canAttackSnap = false;
-
-                    if(tick != 0) {
-                        canAttackSnap = true;
-                        tick--;
-                    }
-
-                    if(canAttackSnap) {
-                       AttackAura.lastPitch = rawPitch;
-                       AttackAura.lastYaw = rawYaw;
-                    }
-                    if(!canAttackSnap) {
-                        AttackAura.lastYaw = FreeLookUtil.freeYaw;
-                        AttackAura.lastPitch = FreeLookUtil.freePitch;
-                    }
-
-
-                } else {
-
-
-
-                    AttackAura.lastYaw = FreeLookUtil.freeYaw;
-                    AttackAura.lastPitch = FreeLookUtil.freePitch;
-                }
-
-
-                long currentTime = System.currentTimeMillis();
-                int presetIndex = (int) ((currentTime / JITTER_SWITCH_TIME) % jitterPresets.length);
-
-                if (currentTime >= nextJitterSwitch) {
-                    currentJitterPreset = nextJitterPreset;
-                    nextJitterPreset = ThreadLocalRandom.current().nextInt(jitterPresets.length);
-
-                    while (nextJitterPreset == currentJitterPreset)
-                        nextJitterPreset = ThreadLocalRandom.current().nextInt(jitterPresets.length);
-
-                    jitterSwitchTime = ThreadLocalRandom.current().nextLong(1000L, 2001L);
-                    nextJitterSwitch = currentTime + jitterSwitchTime;
-                }
-
-                JitterPreset currentPreset = jitterPresets[currentJitterPreset];
-                JitterPreset nextPreset = jitterPresets[nextJitterPreset];
-
-                float blend = 1F - (nextJitterSwitch - currentTime) / (float) jitterSwitchTime;
-                blend = MathHelper.clamp(blend, 0F, 1F);
-                blend = blend * blend * (3F - 2F * blend);
-
-                blend = blend * blend * (3F - 2F * blend);
-
-                float currentYaw = currentPreset.getYaw(currentTime);
-                float nextYaw = nextPreset.getYaw(currentTime);
-
-                float currentPitch = currentPreset.getPitch(currentTime);
-                float nextPitch = nextPreset.getPitch(currentTime);
-
-                float yawJitter = MathHelper.lerp(blend, currentYaw, nextYaw);
-                float pitchJitter = MathHelper.lerp(blend, currentPitch, nextPitch);
-
-                lastYawJitter += (yawJitter - lastYawJitter) * 0.12F;
-                lastPitchJitter += (pitchJitter - lastPitchJitter) * 0.12F;
-
-                yawJitter = lastYawJitter * jitterIntensity;
-                pitchJitter = lastPitchJitter *jitterIntensity;
-
-                Rotation targetRotation = new Rotation(   AttackAura.lastYaw + yawJitter, AttackAura.lastPitch  + pitchJitter);
-                Rotation currentRotation = new Rotation(mc.player);
-
-                float pitchDelta = targetRotation.pitch - currentRotation.pitch;
-                float yawDelta = wrapDegrees(targetRotation.yaw - currentRotation.yaw);
-
-                if (!isActive && jitterIntensity <= 0.0f && Math.abs(yawDelta) < 0.5f && Math.abs(pitchDelta) < 0.5f) {
-                    FreeLookUtil.active = false;
-
-                    return;
-                }
-
-
-                float clampedYaw = Math.min(Math.abs(yawDelta), activeSpeedYaw);
-                float clampedPitch = Math.min(Math.abs(pitchDelta), activeSpeedPitch);
-
-
-                mc.player.setYaw(
-                        mc.player.headYaw += GCDUtil.getSensitivity(MathHelper.clamp(yawDelta, -clampedYaw, clampedYaw)));
-
-                mc.player.setPitch(MathHelper.clamp(
-                        mc.player.getPitch()
-                                + GCDUtil.getSensitivity(MathHelper.clamp(pitchDelta, -clampedPitch, clampedPitch)),
-                        -90F, 90F));
-            }
-        }
-       if (AttackAura.get().typeRotation.is("FunTime")) {
-            if (mc.player != null && mc.world != null) {
-
-                LivingEntity target = AttackAura.target;
-
-                boolean isActive = AttackAura.get().isEnabled() && target != null ;
-
-                float rawYaw;
-                float rawPitch;
-
-                long speedTime = System.currentTimeMillis();
-
-                if (speedTime >= nextSpeedSwitch) {
-                    currentSpeedPreset = nextSpeedPreset;
-                    nextSpeedPreset = ThreadLocalRandom.current().nextInt(speedPresets.length);
-
-                    while (nextSpeedPreset == currentSpeedPreset)
-                        nextSpeedPreset = ThreadLocalRandom.current().nextInt(speedPresets.length);
-
-                    speedSwitchTime = ThreadLocalRandom.current().nextLong(2000L, 4001L);
-                    nextSpeedSwitch = speedTime + speedSwitchTime;
-                }
-
-                SpeedPreset currentSpeed = speedPresets[currentSpeedPreset];
-                SpeedPreset nextSpeed = speedPresets[nextSpeedPreset];
-
-                float speedBlend = 1F - (nextSpeedSwitch - speedTime) / (float) speedSwitchTime;
-                speedBlend = MathHelper.clamp(speedBlend, 0F, 1F);
-                speedBlend = speedBlend * speedBlend * (3F - 2F * speedBlend);
-
-
-                speedBlend = speedBlend * speedBlend * (3F - 2F * speedBlend);
-
-                float targetYawSpeed = MathHelper.lerp(
-                        speedBlend,
-                        currentSpeed.getYawSpeed(),
-                        nextSpeed.getYawSpeed()
-                );
-
-                float targetPitchSpeed = MathHelper.lerp(
-                        speedBlend,
-                        currentSpeed.getPitchSpeed(),
-                        nextSpeed.getPitchSpeed()
-                );
-
-
-                float activeSpeedYaw = MathUtil.randomLerp(30,35);
-                float activeSpeedPitch = MathUtil.randomLerp(8,14);
-
-
-                lastYawSpeed += (targetYawSpeed - lastYawSpeed) * 0.5F;
-                lastPitchSpeed += (targetPitchSpeed - lastPitchSpeed) * 0.5F;
-
-                float speed = lastYawSpeed + MathUtil.randomLerp(-2.5F, 2.5F);
-                float speed2 = lastPitchSpeed + MathUtil.randomLerp(-1.0F, 1.0F);
-
-                activeSpeedYaw = speed;
-                activeSpeedPitch = speed2;
-
-                AttackAura aura = AttackAura.get();
-
-
-
-
-
-                if (isActive) {
-                    FreeLookUtil.active = true;
-
-                    jitterIntensity = Math.min(1.0f, jitterIntensity + 0.1f);
-                } else {
-
-                    jitterIntensity = Math.max(0.0f, jitterIntensity - 0.05f);
-                }
-
-
-                if (aura.pitchFlickActive) {
-                    if (System.currentTimeMillis() > aura.pitchFlickEndTime) {
-                        aura.pitchFlickActive = false;
-                    } else {
-                        AttackAura.lastYaw += MathUtil.random(-15, 15);
-                        AttackAura.lastPitch = -MathUtil.random(85, 90);
-                    }
-                }
-
-
-
-
-                if (aura.justAttacked && System.currentTimeMillis() >= aura.attackFlickAt) {
-                    aura.justAttacked = false;
-                }
-
-                if (isActive) {
-
-                    activeSpeedYaw *= 1.8f;
-                    activeSpeedPitch *= 1.6F;
-
-                    Vec3d vec = target.getEntityPos().add(0.15F * Math.sin(System.currentTimeMillis() / 250D),target.getHeight() / 2 + (target.getHeight() /  4) *
-                                    Math.cos(System.currentTimeMillis() / 200D),
-                                    0.15F * Math.cos(System.currentTimeMillis() / 250D))
-                            .subtract(mc.player.getEyePos())
-                            .normalize();
-
-                    rawYaw = (float) Math.toDegrees(Math.atan2(-vec.x, vec.z));
-                    rawPitch = (float) MathHelper.clamp(
-                            -Math.toDegrees(Math.atan2(vec.y, Math.hypot(vec.x, vec.z))),
-                            -90F, 90F
-                    );
-
-
-                    float[] ranges = aura.getRanges();
-                    ranges = new float[]{ranges[0], ranges[1], ranges[0] + ranges[1]};
-                    boolean canAttack = UAttack.shouldAttack(target, false, true, true, (long) -MathUtil.random(100,200), ranges) && !aura.pitchFlickActive;
-
-                    if(canAttack) {
-                        if (!aura.pitchFlickActive) AttackAura.lastPitch = rawPitch;
-                        if (!aura.pitchFlickActive) AttackAura.lastYaw = rawYaw;
-                    }
-
-
-                } else {
-
-
-
-                    AttackAura.lastYaw = FreeLookUtil.freeYaw;
-                    AttackAura.lastPitch = FreeLookUtil.freePitch;
-                }
-
-
-                long currentTime = System.currentTimeMillis();
-                int presetIndex = (int) ((currentTime / JITTER_SWITCH_TIME) % jitterPresets.length);
-
-                if (currentTime >= nextJitterSwitch) {
-                    currentJitterPreset = nextJitterPreset;
-                    nextJitterPreset = ThreadLocalRandom.current().nextInt(jitterPresets.length);
-
-                    while (nextJitterPreset == currentJitterPreset)
-                        nextJitterPreset = ThreadLocalRandom.current().nextInt(jitterPresets.length);
-
-                    jitterSwitchTime = ThreadLocalRandom.current().nextLong(1000L, 2001L);
-                    nextJitterSwitch = currentTime + jitterSwitchTime;
-                }
-
-                JitterPreset currentPreset = jitterPresets[currentJitterPreset];
-                JitterPreset nextPreset = jitterPresets[nextJitterPreset];
-
-                float blend = 1F - (nextJitterSwitch - currentTime) / (float) jitterSwitchTime;
-                blend = MathHelper.clamp(blend, 0F, 1F);
-                blend = blend * blend * (3F - 2F * blend);
-
-                blend = blend * blend * (3F - 2F * blend);
-
-                float currentYaw = currentPreset.getYaw(currentTime);
-                float nextYaw = nextPreset.getYaw(currentTime);
-
-                float currentPitch = currentPreset.getPitch(currentTime);
-                float nextPitch = nextPreset.getPitch(currentTime);
-
-                float yawJitter = MathHelper.lerp(blend, currentYaw, nextYaw);
-                float pitchJitter = MathHelper.lerp(blend, currentPitch, nextPitch);
-
-                lastYawJitter += (yawJitter - lastYawJitter) * 0.9F;
-                lastPitchJitter += (pitchJitter - lastPitchJitter) * 0.9F;
-
-                float waveA = (float) Math.cos(System.currentTimeMillis() / 40D);
-                float waveB = (float) Math.sin(System.currentTimeMillis() / 70D);
-
-                float yawJitter2 = waveA * MathUtil.randomLerp(9, 17);
-                float pitchJitter2 = waveB * MathUtil.randomLerp(4, 13);
-
-                yawJitter = yawJitter2 * jitterIntensity;
-                pitchJitter = pitchJitter2 *jitterIntensity;
-
-                Rotation targetRotation = new Rotation(   AttackAura.lastYaw + yawJitter, AttackAura.lastPitch  + pitchJitter);
-                Rotation currentRotation = new Rotation(mc.player);
-
-                float pitchDelta = targetRotation.pitch - currentRotation.pitch;
-                float yawDelta = wrapDegrees(targetRotation.yaw - currentRotation.yaw);
-
-                if (!isActive && jitterIntensity <= 0.0f && Math.abs(yawDelta) < 0.5f && Math.abs(pitchDelta) < 0.5f) {
-                    FreeLookUtil.active = false;
-
-                    return;
-                }
-
-
-                float clampedYaw = Math.min(Math.abs(yawDelta), activeSpeedYaw);
-                float clampedPitch = Math.min(Math.abs(pitchDelta), activeSpeedPitch);
-
-
-                mc.player.setYaw(
-                        mc.player.headYaw += GCDUtil.getSensitivity(MathHelper.clamp(yawDelta, -clampedYaw, clampedYaw)));
-
-                mc.player.setPitch(MathHelper.clamp(
-                        mc.player.getPitch()
-                                + GCDUtil.getSensitivity(MathHelper.clamp(pitchDelta, -clampedPitch, clampedPitch)),
-                        -90F, 90F));
-
-
-            }
-        }
-    } */
     private void renderCorner(MatrixStack matrices,
                               VertexConsumer consumer,
                               float x,
@@ -901,7 +470,6 @@ public class RotationProcess extends Component {
                               int c3,
                               int c4,
                               float alpha) {
-
         matrices.push();
 
         matrices.translate(x, y, 0);
@@ -942,11 +510,8 @@ public class RotationProcess extends Component {
         alpha.run(currentTarget != null ? 1 : 0, 0.2F, Easings.SINE_OUT);
         float alphaPC = alpha.get();
 
-
-
         VertexConsumerProvider.Immediate immediate = VertexConsumerProvider.immediate(boxAllocator);
         if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Картинка")) {
-
             int hurtTicks = target.hurtTime;
             float hurtPC = (float) Math.sin((double) hurtTicks * (Math.PI / 20D));
 
@@ -959,13 +524,10 @@ public class RotationProcess extends Component {
             int color3 = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(180), alphaPC), redColor, alpha_2.get());
             int color4 = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(360), alphaPC), redColor,alpha_2.get());
 
-
-
             MatrixStack matrices = e.getMatrixStack();
 
             VertexConsumer consumer = immediate
                     .getBuffer(ROMB_ESP.apply(Identifier.of("client", "textures/visuals/union.png")));
-
 
             Vec3d lerpedPos = target.getLerpedPos(e.getTickDelta());
             double x = lerpedPos.x;
@@ -985,8 +547,6 @@ public class RotationProcess extends Component {
                     ((Math.sin(currentTimeMillis / (1000D)) + 1F) / 2F) * 360 * 2);
             matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(rotate));
 
-
-
             Matrix4f bloomMatrix = matrices.peek().getPositionMatrix();
             float size = (0.7F );
             float offset = 0.3F * size;
@@ -1000,21 +560,13 @@ public class RotationProcess extends Component {
 
             float xan = 0.2F - 0.2F * alphaPC;
 
-
-            renderCorner(matrices, consumer, offset + sizeA * hitAnim + xan, offset + sizeA * hitAnim + xan, 135, size, color, color2, color3, color4, alphaPC);      // ↖
-            renderCorner(matrices, consumer, -offset - sizeA * hitAnim - xan, offset + sizeA * hitAnim + xan, -135   , size, color, color2, color3, color4, alphaPC); // ↗
-            renderCorner(matrices, consumer, -offset - sizeA * hitAnim - xan, -offset - sizeA * hitAnim - xan, -45 , size, color, color2, color3, color4, alphaPC);// ↘
-            renderCorner(matrices, consumer, offset + sizeA * hitAnim + xan, -offset - sizeA * hitAnim - xan, 45 , size, color, color2, color3, color4, alphaPC); // ↙
-
-
-
-
-
+            renderCorner(matrices, consumer, offset + sizeA * hitAnim + xan, offset + sizeA * hitAnim + xan, 135, size, color, color2, color3, color4, alphaPC);
+            renderCorner(matrices, consumer, -offset - sizeA * hitAnim - xan, offset + sizeA * hitAnim + xan, -135   , size, color, color2, color3, color4, alphaPC);
+            renderCorner(matrices, consumer, -offset - sizeA * hitAnim - xan, -offset - sizeA * hitAnim - xan, -45 , size, color, color2, color3, color4, alphaPC);
+            renderCorner(matrices, consumer, offset + sizeA * hitAnim + xan, -offset - sizeA * hitAnim - xan, 45 , size, color, color2, color3, color4, alphaPC);
 
             matrices.pop();
         }
-
-
 
         if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Кольцо")) {
             int hurtTicks = target.hurtTime;
@@ -1045,7 +597,6 @@ public class RotationProcess extends Component {
             float yBase  = (float)(height2 * progress);
             float yTop   = (float)(height2 * progress + eased);
 
-
             VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
             for (int seg = 0; seg < 360; seg++) {
                 float a0 = (float) Math.toRadians(seg);
@@ -1072,8 +623,6 @@ public class RotationProcess extends Component {
             matrices.pop();
         }
         if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Духи")) {
-
-
             long currentTime = System.currentTimeMillis();
             if (currentTimeSpirits == 0) {
                 currentTimeSpirits = currentTime;
@@ -1086,7 +635,6 @@ public class RotationProcess extends Component {
             currentTimeSpirits = currentTime;
 
             MatrixStack matrices = e.getMatrixStack();
-
 
             Vec3d lerpedPos = target.getLerpedPos(e.getTickDelta());
             Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
@@ -1107,7 +655,6 @@ public class RotationProcess extends Component {
             int fadeColor = ColorUtil.fade(1);
             int redColor = ColorUtil.getColor(200, 70, 70, (int) (255.0F * alphaPC));
             int baseColor = ColorUtil.overCol(ColorUtil.multAlpha(fadeColor, alphaPC), redColor, atts);
-
 
             int n2 = 3;
             int n3 = 12;
@@ -1144,7 +691,6 @@ public class RotationProcess extends Component {
 
                     int color = baseColor;
 
-
                     int n7 = -20;
                     int n8 = 35;
 
@@ -1175,8 +721,6 @@ public class RotationProcess extends Component {
                             .overlay(OverlayTexture.DEFAULT_UV)
                             .light(0xF000F0)
                             .normal(0, 0, 1);
-
-
 
                     n7 = (int) (-20  - 20 * 1.5F);
                     n8 = (int) (35 + 40 *1.5F);
@@ -1214,7 +758,6 @@ public class RotationProcess extends Component {
             }
 
             matrices.pop();
-
         }
 
         if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Кубики")) {
@@ -1273,7 +816,6 @@ public class RotationProcess extends Component {
                 matrices.pop();
             }
 
-            // Pass 2: cube fills
             for (int i = 0; i < 360; i += cound) {
                 float val = 1.2f - 0.5f ;
                 float sin = (float)(Math.sin((float) Math.toRadians(i + time)) * width * val);
@@ -1300,7 +842,6 @@ public class RotationProcess extends Component {
                 matrices.pop();
             }
 
-            // Pass 3: cube outlines
             for (int i = 0; i < 360; i += cound) {
                 float val = 1.2f - 0.5f ;
                 float sin = (float)(Math.sin((float) Math.toRadians(i + time)) * width * val);
@@ -1329,7 +870,6 @@ public class RotationProcess extends Component {
         }
 
         if (aura.typeTargetESP.is("Куб")) {
-            // осколки переживают смерть цели, поэтому рисуются вне проверки на таргет
             aura.renderTargetCubeFragments(e, immediate);
 
             if (alphaPC > 0.001f && target != null) {
@@ -1372,51 +912,46 @@ public class RotationProcess extends Component {
             renderTargetChainRing(e, immediate, aura, target, alphaPC);
         }
 
-
         immediate.draw();
-
     }
 
     private static void drawCubeFillTESP(VertexConsumer buf, Matrix4f m, float s, int color) {
-        // +Y
         buf.vertex(m, -s,  s, -s).color(color); buf.vertex(m,  s,  s, -s).color(color);
         buf.vertex(m,  s,  s,  s).color(color); buf.vertex(m, -s,  s,  s).color(color);
-        // -Y
+
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m,  s, -s,  s).color(color);
         buf.vertex(m,  s, -s, -s).color(color); buf.vertex(m, -s, -s, -s).color(color);
-        // +X
+
         buf.vertex(m,  s, -s, -s).color(color); buf.vertex(m,  s, -s,  s).color(color);
         buf.vertex(m,  s,  s,  s).color(color); buf.vertex(m,  s,  s, -s).color(color);
-        // -X
+
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m, -s, -s, -s).color(color);
         buf.vertex(m, -s,  s, -s).color(color); buf.vertex(m, -s,  s,  s).color(color);
-        // +Z
+
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m,  s, -s,  s).color(color);
         buf.vertex(m,  s,  s,  s).color(color); buf.vertex(m, -s,  s,  s).color(color);
-        // -Z
+
         buf.vertex(m,  s, -s, -s).color(color); buf.vertex(m, -s, -s, -s).color(color);
         buf.vertex(m, -s,  s, -s).color(color); buf.vertex(m,  s,  s, -s).color(color);
     }
 
     private static void drawCubeOutlineTESP(VertexConsumer buf, Matrix4f m, float s, int color) {
-        // bottom ring
         buf.vertex(m, -s, -s, -s).color(color); buf.vertex(m,  s, -s, -s).color(color);
         buf.vertex(m,  s, -s, -s).color(color); buf.vertex(m,  s, -s,  s).color(color);
         buf.vertex(m,  s, -s,  s).color(color); buf.vertex(m, -s, -s,  s).color(color);
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m, -s, -s, -s).color(color);
-        // top ring
+
         buf.vertex(m, -s,  s, -s).color(color); buf.vertex(m,  s,  s, -s).color(color);
         buf.vertex(m,  s,  s, -s).color(color); buf.vertex(m,  s,  s,  s).color(color);
         buf.vertex(m,  s,  s,  s).color(color); buf.vertex(m, -s,  s,  s).color(color);
         buf.vertex(m, -s,  s,  s).color(color); buf.vertex(m, -s,  s, -s).color(color);
-        // verticals
+
         buf.vertex(m, -s, -s, -s).color(color); buf.vertex(m, -s,  s, -s).color(color);
         buf.vertex(m,  s, -s, -s).color(color); buf.vertex(m,  s,  s, -s).color(color);
         buf.vertex(m,  s, -s,  s).color(color); buf.vertex(m,  s,  s,  s).color(color);
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m, -s,  s,  s).color(color);
     }
 
-    /** Рой кристаллов-октаэдров, вращающихся вокруг таргета. */
     private void renderTargetCrystals(EventRender3D e, VertexConsumerProvider.Immediate immediate,
                                       AttackAura aura, LivingEntity target, float alphaPC) {
         int hurtTicks = target.hurtTime;
@@ -1496,7 +1031,6 @@ public class RotationProcess extends Component {
         }
     }
 
-    /** Октаэдр: 8 треугольных граней (в QUADS дублируем последнюю вершину). */
     private static void drawCrystalFill(VertexConsumer buf, Matrix4f m, float r, float h, int topColor, int bottomColor) {
         float ax = r, az = 0;
         float bx = 0, bz = r;
@@ -1528,7 +1062,6 @@ public class RotationProcess extends Component {
         buf.vertex(m, dx, 0, dz).color(bottomColor); buf.vertex(m, dx, 0, dz).color(bottomColor);
     }
 
-    /** Рёбра октаэдра для DEBUG_LINES: парами вершин. */
     private static void drawCrystalOutline(VertexConsumer buf, Matrix4f m, float r, float h, int color) {
         float[][] eq = {{r, 0}, {0, r}, {-r, 0}, {0, -r}};
         for (int k = 0; k < 4; k++) {
@@ -1546,7 +1079,6 @@ public class RotationProcess extends Component {
         }
     }
 
-    /** Светящаяся пентаграмма на земле под целью. */
     private void renderTargetPentagram(EventRender3D e, VertexConsumerProvider.Immediate immediate,
                                        AttackAura aura, LivingEntity target, float alphaPC) {
         int hurtTicks = target.hurtTime;
@@ -1582,7 +1114,6 @@ public class RotationProcess extends Component {
                 targetPos.z - cameraPos.z);
         Matrix4f m = matrices.peek().getPositionMatrix();
 
-        // вершины пентакля
         float[] tipX = new float[5];
         float[] tipZ = new float[5];
         for (int k = 0; k < 5; k++) {
@@ -1591,7 +1122,6 @@ public class RotationProcess extends Component {
             tipZ[k] = (float) (Math.sin(a) * r);
         }
 
-        // --- Pass 1: свечение (текстурные квады лежат на земле) ---
         VertexConsumer texBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
 
@@ -1615,10 +1145,8 @@ public class RotationProcess extends Component {
             matrices.pop();
         }
 
-        // --- Pass 2: заливки-ленты ---
         VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
 
-        // мягкий диск под сигилой: центр ярче, край растворяется
         int discSegs = 64;
         for (int i = 0; i < discSegs; i++) {
             float a0 = (float) (Math.PI * 2.0 * i / discSegs);
@@ -1635,7 +1163,6 @@ public class RotationProcess extends Component {
 
         float w = r * 0.032f + 0.008f;
 
-        // классический пентакль: хорды 0-2-4-1-3 с градиентом по кончикам
         for (int k = 0; k < 5; k++) {
             int nk = (k + 2) % 5;
             int c0 = ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(k * 48), 0.85F), redColor, alpha_2.get());
@@ -1644,7 +1171,6 @@ public class RotationProcess extends Component {
                     ColorUtil.replAlpha(c0, aRibbon), ColorUtil.replAlpha(c1, aRibbon));
         }
 
-        // внутренний пятиугольник (пересечения хорд)
         for (int k = 0; k < 5; k++) {
             int nk = (k + 1) % 5;
             pentagramRibbon(fillBuf, m,
@@ -1655,7 +1181,6 @@ public class RotationProcess extends Component {
                     ColorUtil.replAlpha(base, (int) (alphaPC * 110)));
         }
 
-        // круги через кончики и внешний контур
         for (int i = 0; i < discSegs; i++) {
             float a0 = (float) (Math.PI * 2.0 * i / discSegs);
             float a1 = (float) (Math.PI * 2.0 * (i + 1) / discSegs);
@@ -1673,7 +1198,6 @@ public class RotationProcess extends Component {
                     ColorUtil.replAlpha(base, (int) (alphaPC * 80)));
         }
 
-        // внешняя контр-вращающаяся пентаграмма
         float rOuter = r * 1.32f;
         int faint = ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.multBright(ColorUtil.fade(180), 0.8F), redColor, alpha_2.get()),
                 (int) (alphaPC * 60));
@@ -1687,7 +1211,6 @@ public class RotationProcess extends Component {
                     w * 0.5f, faint, faint);
         }
 
-        // --- Pass 3: тонкие яркие сердцевины линий ---
         VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
         int coreCol = ColorUtil.replAlpha(base, aCore);
         for (int i = 0; i < discSegs; i++) {
@@ -1710,7 +1233,6 @@ public class RotationProcess extends Component {
         matrices.pop();
     }
 
-    /** Отрезок на плоскости XZ как тонкая лента-квад шириной width. */
     private static void pentagramRibbon(VertexConsumer buf, Matrix4f m,
                                         float x0, float z0, float x1, float z1,
                                         float width, int c0, int c1) {
@@ -1726,10 +1248,6 @@ public class RotationProcess extends Component {
         buf.vertex(m, x0 - nx, 0, z0 - nz).color(c0);
     }
 
-    /**
-     * «Цепь»: светящееся кольцо из звеньев-овалов вокруг пояса цели.
-     * Соседние звенья смещены радиально в противоположные стороны — эффект плетения.
-     */
     private void renderTargetChainRing(EventRender3D e, VertexConsumerProvider.Immediate immediate,
                                        AttackAura aura, LivingEntity target, float alphaPC) {
         int hurtTicks = target.hurtTime;
@@ -1740,7 +1258,7 @@ public class RotationProcess extends Component {
 
         int redColor = ColorUtil.getColor(255, 100, 100, (int) (255.0f * alphaPC));
         float atts = alpha_2.get();
-        // раскалённо-белые звенья как на референсе
+
         int coreCol = ColorUtil.overCol(ColorUtil.overCol(
                 ColorUtil.multAlpha(ColorUtil.fade(1), alphaPC),
                 ColorUtil.getColor(238, 244, 255), 0.75f), redColor, atts);
@@ -1754,7 +1272,7 @@ public class RotationProcess extends Component {
         int count = Math.max(6, aura.linkCount.getValue().intValue());
         float speed = aura.linkSpeed.getValue();
         float radius = aura.linkRadius.getValue() + target.getWidth() * 0.35f + 0.12f;
-        float size = aura.linkSize.getValue();          // полуширина овала звена
+        float size = aura.linkSize.getValue();
         float bodyH = target.getHeight();
 
         MatrixStack matrices = e.getMatrixStack();
@@ -1768,15 +1286,14 @@ public class RotationProcess extends Component {
         Matrix4f m = matrices.peek().getPositionMatrix();
 
         float step = 360f / count;
-        float span = step * 0.62f;                       // зазор между звеньями
+        float span = step * 0.62f;
         float baseAng = animationNurik * 1.15f * speed;
 
-        // ── Pass 1: свечение под каждым звеном ──
         VertexConsumer texBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_2.png")));
         for (int i = 0; i < count; i++) {
             float midA = baseAng + i * step + span * 0.5f;
-            double offAmp = size * 0.55f * Math.sin(i * Math.PI); // вплетение: чередование ±
+            double offAmp = size * 0.55f * Math.sin(i * Math.PI);
             float gx = (float) Math.cos(Math.toRadians(midA)) * (radius + (float) offAmp);
             float gz = (float) Math.sin(Math.toRadians(midA)) * (radius + (float) offAmp);
 
@@ -1790,7 +1307,6 @@ public class RotationProcess extends Component {
             matrices.pop();
         }
 
-        // ── Pass 2: сами звенья — объёмные торы с плетением ──
         VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
         int colTop = ColorUtil.replAlpha(ColorUtil.overCol(coreCol, ColorUtil.getColor(255), 0.55f),
                 (int) (alphaPC * 245));
@@ -1804,7 +1320,7 @@ public class RotationProcess extends Component {
             float midA = baseAng + i * step + span * 0.5f;
             float cx = (float) Math.cos(Math.toRadians(midA)) * (radius + (float) (offAmp * size * 0.55));
             float cz = (float) Math.sin(Math.toRadians(midA)) * (radius + (float) (offAmp * size * 0.55));
-            // плетение: соседние звенья чуть выше/ниже
+
             float cy = (float) (offAmp * size * 0.5);
 
             drawTorusLink(fillBuf, m, cx, cy, cz, size, size * 0.40f, 16, 8,
@@ -1814,7 +1330,6 @@ public class RotationProcess extends Component {
         matrices.pop();
     }
 
-    /** Объёмное звено-тор в горизонтальной плоскости; шейдинг по высоте трубки. */
     private static void drawTorusLink(VertexConsumer buf, Matrix4f m,
                                       float cx, float cy, float cz,
                                       float rMain, float rTube,
@@ -1837,7 +1352,6 @@ public class RotationProcess extends Component {
             pz[u] = cz + dzc * rMain;
         }
 
-        // цвет вершины трубки зависит только от её высоты на сечении
         int[] vCols = new int[segV];
         for (int v = 0; v < segV; v++) {
             double b = Math.PI * 2.0 * v / segV;
@@ -1864,12 +1378,6 @@ public class RotationProcess extends Component {
         }
     }
 
-    /**
-     * Снег вокруг цели: снежинки-биллборды на орбитах.
-     * Каждая — шесть заострённых лучей (три перекрестия) + мягкое свечение,
-     * крутится вокруг своей оси и плавно покачивается по высоте.
-     * Слои рисуются строго последовательно: сначала всё свечение, потом все лучи.
-     */
     private void renderTargetSnow(EventRender3D e, VertexConsumerProvider.Immediate immediate,
                                   AttackAura aura, LivingEntity target, float alphaPC) {
         int hurtTicks = target.hurtTime;
@@ -1900,14 +1408,12 @@ public class RotationProcess extends Component {
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
 
-        // геометрия считаем один раз, используем в обоих проходах (буферы без аллокаций)
         float[] pxArr = SNOW_PX;
         float[] pyArr = SNOW_PY;
         float[] pzArr = SNOW_PZ;
         float[] spinArr = SNOW_SPIN;
 
         for (int i = 0; i < count; i++) {
-            // золотое сечение — равномерный разброс высот без «рядов»
             float heightFrac = 0.22f + 0.6f * ((i * 0.618f) % 1f);
             double orbA = Math.toRadians(
                     animationNurik * 1.4f * speed * ((i % 2 == 0) ? 1f : -1f) + i * (360.0 / count));
@@ -1922,7 +1428,6 @@ public class RotationProcess extends Component {
         matrices.push();
         matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
 
-        // --- Pass 1: мягкое свечение под каждой снежинкой ---
         VertexConsumer texBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
 
@@ -1937,7 +1442,6 @@ public class RotationProcess extends Component {
             matrices.pop();
         }
 
-        // --- Pass 2: сами снежинки — три перекрестия заострённых лучей ---
         VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
 
         float L = size * 1.5f;
@@ -1956,7 +1460,6 @@ public class RotationProcess extends Component {
                 matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(k * 60f));
                 Matrix4f bm = matrices.peek().getPositionMatrix();
 
-                // луч-«шип»: вытянутый шестиугольник из двух квадов
                 fillBuf.vertex(bm, -L, -W * 0.45f, 0).color(col);
                 fillBuf.vertex(bm, -L * 0.42f, -W, 0).color(col);
                 fillBuf.vertex(bm, L * 0.42f, -W, 0).color(col);
@@ -1970,7 +1473,6 @@ public class RotationProcess extends Component {
                 matrices.pop();
             }
 
-            // яркая сердцевина
             Matrix4f dm = matrices.peek().getPositionMatrix();
             fillBuf.vertex(dm, -W, -W, 0).color(dotCol);
             fillBuf.vertex(dm, W, -W, 0).color(dotCol);
@@ -1983,10 +1485,6 @@ public class RotationProcess extends Component {
         matrices.pop();
     }
 
-    /**
-     * Сердце над целью: бьётся тем быстрее, чем меньше здоровья у противника.
-     * «Тук-тук» — два толчка за цикл, на каждом ударе расходится кольцо-волна.
-     */
     private void renderTargetHeart(EventRender3D e, VertexConsumerProvider.Immediate immediate,
                                    AttackAura aura, LivingEntity target, float alphaPC) {
         int hurtTicks = target.hurtTime;
@@ -1995,13 +1493,11 @@ public class RotationProcess extends Component {
         alpha_2.update();
         alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
 
-        // доля здоровья цели
         float hpMax = target.getMaxHealth() + target.getAbsorptionAmount();
         float hpNow = target.getHealth() + target.getAbsorptionAmount();
         float hpFrac = hpMax <= 0f ? 1f : Math.min(hpNow / hpMax, 1f);
         float lowHp = 1f - hpFrac;
 
-        // фаза сердцебиения: интегрируем частоту по времени (при низком ХП — быстрее)
         long now = System.currentTimeMillis();
         if (heartLastTime == 0L) heartLastTime = now;
         long dtMs = now - heartLastTime;
@@ -2010,7 +1506,7 @@ public class RotationProcess extends Component {
         heartPhase += dtMs / 1000f * (bpm / 60f);
 
         float f = heartPhase % 1f;
-        // «тук-тук»: основной толчок + второй слабее
+
         float pulse = (float) (Math.exp(-7.0 * f) + 0.5 * Math.exp(-11.0 * Math.abs(f - 0.24)));
         pulse = Math.min(pulse, 1.4f);
 
@@ -2041,7 +1537,6 @@ public class RotationProcess extends Component {
 
         float k = size / 34f * beatScale;
 
-        // контур сердца: классическая параметрическая кривая (буферы без аллокаций)
         final int SEGS = 48;
         float[] hxArr = HEART_HX;
         float[] hyArr = HEART_HY;
@@ -2050,10 +1545,9 @@ public class RotationProcess extends Component {
             hxArr[i] = (float) (16.0 * Math.pow(Math.sin(t), 3)) * k;
             hyArr[i] = (float) (13.0 * Math.cos(t) - 5.0 * Math.cos(2 * t)
                     - 2.0 * Math.cos(3 * t) - Math.cos(4 * t)) * k
-                    + 6f * k;   // вертикальное центрирование
+                    + 6f * k;
         }
 
-        // --- Pass 1: свечение ---
         VertexConsumer texBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
         matrices.push();
@@ -2063,7 +1557,6 @@ public class RotationProcess extends Component {
                 col, col, col, col, (int) (alphaPC * (85 + 55 * pulse)));
         matrices.pop();
 
-        // --- Pass 2: заливка сердца веером ---
         VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
         Matrix4f m = matrices.peek().getPositionMatrix();
         for (int i = 0; i < SEGS; i++) {
@@ -2074,7 +1567,6 @@ public class RotationProcess extends Component {
             fillBuf.vertex(m, hxArr[j], hyArr[j], 0).color(fillCol);
         }
 
-        // волна от удара: расширяющееся кольцо в плоскости биллборда
         if (f < 0.38f) {
             float rf = f / 0.38f;
             float ringR = size * (0.65f + 0.85f * rf) * beatScale;
@@ -2090,7 +1582,6 @@ public class RotationProcess extends Component {
             }
         }
 
-        // --- Pass 3: яркий контур ---
         VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
         for (int i = 0; i < SEGS; i++) {
             int j = (i + 1) % SEGS;
@@ -2102,11 +1593,6 @@ public class RotationProcess extends Component {
         matrices.pop();
     }
 
-    /**
-     * Огненный вихрь вокруг цели: частицы закручиваются по спирали и поднимаются
-     * вверх, меняя цвет красный → оранжевый → жёлтый и сужаясь к вершине.
-     * Слои рисуются строго последовательно: сначала внешнее свечение, потом ядра.
-     */
     private void renderTargetFire(EventRender3D e, VertexConsumerProvider.Immediate immediate,
                                   AttackAura aura, LivingEntity target, float alphaPC) {
         int hurtTicks = target.hurtTime;
@@ -2139,7 +1625,6 @@ public class RotationProcess extends Component {
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
         var camRot = mc.gameRenderer.getCamera().getRotation();
 
-        // предрасчёт частиц кадра (буферы без аллокаций)
         float[] oxArr = FIRE_OX;
         float[] oyArr = FIRE_OY;
         float[] ozArr = FIRE_OZ;
@@ -2150,9 +1635,8 @@ public class RotationProcess extends Component {
 
         for (int i = 0; i < count; i++) {
             float seed = (i * 0.618034f) % 1f;
-            float cyc = (tSec * 0.85f * speed + seed * 13.7f) % 1f;   // цикл жизни частицы
+            float cyc = (tSec * 0.85f * speed + seed * 13.7f) % 1f;
 
-            // вихрь: подъём с докручиванием, сужение кверху
             float ang = seed * (float) Math.PI * 2f + tSec * 1.5f * speed + cyc * 2.6f;
             float r = baseR * (1f - 0.45f * cyc) * (0.82f + 0.36f * (float) Math.sin(seed * 41f));
             oxArr[i] = (float) Math.cos(ang) * r;
@@ -2160,13 +1644,11 @@ public class RotationProcess extends Component {
             oyArr[i] = 0.05f + cyc * riseH
                     + 0.03f * (float) Math.sin(tSec * 3f + seed * 31f);
 
-            // появление/затухание за цикл
             float fadeIn = smooth01(cyc / 0.14f);
             float fadeOut = 1f - smooth01((cyc - 0.7f) / 0.3f);
             float env = Math.max(0f, fadeIn * fadeOut);
             float flicker = 0.72f + 0.28f * (float) Math.sin(tSec * 13f + seed * 97f);
 
-            // цвет по высоте пламени: красный → оранжевый → жёлтый
             int rgb;
             if (cyc < 0.5f) rgb = fireLerp(0xFF3C0A, 0xFF8C19, cyc * 2f);
             else rgb = fireLerp(0xFF8C19, 0xFFE16E, (cyc - 0.5f) * 2f);
@@ -2180,7 +1662,6 @@ public class RotationProcess extends Component {
         matrices.push();
         matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
 
-        // --- Pass 1: мягкое внешнее свечение ---
         VertexConsumer glowBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_2.png")));
         for (int i = 0; i < count; i++) {
@@ -2198,7 +1679,6 @@ public class RotationProcess extends Component {
             matrices.pop();
         }
 
-        // --- Pass 2: яркие ядра языков ---
         VertexConsumer coreBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
         for (int i = 0; i < count; i++) {
@@ -2219,7 +1699,6 @@ public class RotationProcess extends Component {
         matrices.pop();
     }
 
-    /** Плавный step 0..1 с клампом. */
     private static float smooth01(float x) {
         x = Math.max(0f, Math.min(1f, x));
         return x * x * (3f - 2f * x);
@@ -2234,7 +1713,6 @@ public class RotationProcess extends Component {
                 | (int) (ba + (bb - ba) * t);
     }
 
-    /** Лента-отрезок в плоскости XY (для билбордов: мечи и т.п.). */
     private static void xyRibbon(VertexConsumer buf, Matrix4f m,
                                  float x0, float y0, float x1, float y1,
                                  float w, int c) {
@@ -2250,11 +1728,6 @@ public class RotationProcess extends Component {
         buf.vertex(m, x0 - nx, y0 - ny, 0).color(c);
     }
 
-    /**
-     * Мечи вокруг цели: пары клинков остриём вниз кружат по орбите.
-     * Каждый меч — биллборд: заострённый клинок, гарда, рукоять, навершие;
-     * лёгкое покачивание и вертикальный дрейф. Слои строго последовательные.
-     */
     private void renderTargetSwords(EventRender3D e, VertexConsumerProvider.Immediate immediate,
                                     AttackAura aura, LivingEntity target, float alphaPC) {
         int hurtTicks = target.hurtTime;
@@ -2283,7 +1756,6 @@ public class RotationProcess extends Component {
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
 
-        // геометрия кадра (переиспользуемые буферы)
         float[] pxArr = SWORD_PX;
         float[] pyArr = SWORD_PY;
         float[] pzArr = SWORD_PZ;
@@ -2296,7 +1768,7 @@ public class RotationProcess extends Component {
             pzArr[i] = (float) (Math.sin(orbA) * radius);
             pyArr[i] = bodyH * 0.55f
                     + (float) Math.sin(Math.toRadians(animationNurik * 1.2f + i * 71.0)) * bodyH * 0.06f;
-            // лёгкий наклон в сторону вращения
+
             tiltArr[i] = 10f * (float) Math.sin(Math.toRadians(animationNurik * 1.8f + i * 47f))
                     * ((i % 2 == 0) ? 1f : -1f);
         }
@@ -2304,7 +1776,6 @@ public class RotationProcess extends Component {
         matrices.push();
         matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
 
-        // ── Pass 1: мягкое свечение под каждым мечом ──
         VertexConsumer texBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_2.png")));
         for (int i = 0; i < count; i++) {
@@ -2318,7 +1789,6 @@ public class RotationProcess extends Component {
             matrices.pop();
         }
 
-        // ── Pass 2: сам меч ──
         VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
 
         for (int i = 0; i < count; i++) {
@@ -2329,11 +1799,10 @@ public class RotationProcess extends Component {
 
             Matrix4f m = matrices.peek().getPositionMatrix();
 
-            // пропорции меча (остриё вниз): s — полная длина
-            float bladeTipY = -size * 0.50f;   // остриё
-            float bladeBaseY = size * 0.18f;   // основание клинка у гарды
-            float wb = size * 0.055f;          // полуширина клинка
-            float shoulderY = -size * 0.30f;   // начало скоса к острию
+            float bladeTipY = -size * 0.50f;
+            float bladeBaseY = size * 0.18f;
+            float wb = size * 0.055f;
+            float shoulderY = -size * 0.30f;
 
             int bladeCol = ColorUtil.replAlpha(
                     ColorUtil.overCol(ColorUtil.getColor(225, 232, 245), redColor, atts),
@@ -2345,7 +1814,6 @@ public class RotationProcess extends Component {
                     ColorUtil.overCol(ColorUtil.getColor(120, 90, 60), redColor, atts), (int) (alphaPC * 210));
             int pommelCol = guardCol;
 
-            // клинок: вытянутый шестиугольник остриём вниз (2 квада)
             fillBuf.vertex(m, 0, bladeTipY, 0).color(bladeCol);
             fillBuf.vertex(m, -wb, shoulderY, 0).color(edgeCol);
             fillBuf.vertex(m, -wb, bladeBaseY, 0).color(bladeCol);
@@ -2356,19 +1824,15 @@ public class RotationProcess extends Component {
             fillBuf.vertex(m, wb, shoulderY, 0).color(edgeCol);
             fillBuf.vertex(m, 0, bladeTipY, 0).color(bladeCol);
 
-            // дол: тонкая светлая линия вдоль середины клинка
             xyRibbon(fillBuf, m, 0, bladeTipY + size * 0.06f, 0, bladeBaseY - size * 0.02f,
                     size * 0.012f, ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (alphaPC * 150)));
 
-            // гарда: горизонтальная перекладина
             xyRibbon(fillBuf, m, -size * 0.13f, bladeBaseY + size * 0.02f,
                     size * 0.13f, bladeBaseY + size * 0.02f, size * 0.032f, guardCol);
 
-            // рукоять
             xyRibbon(fillBuf, m, 0, bladeBaseY + size * 0.04f,
                     0, bladeBaseY + size * 0.17f, size * 0.024f, gripCol);
 
-            // навершие
             float py = bladeBaseY + size * 0.20f;
             float pq = size * 0.028f;
             fillBuf.vertex(m, -pq, py - pq, 0).color(pommelCol);
@@ -2382,15 +1846,10 @@ public class RotationProcess extends Component {
         matrices.pop();
     }
 
-
-
-
     private static void drawGradientQuad(VertexConsumer buffer, Matrix4f matrix,int color,int color2,int color3,int color4, int alpha) {
-
         buffer.vertex(matrix, -0.5f, -0.5f, 0.0f).color(ColorUtil.replAlpha(color, alpha)).texture(0, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
         buffer.vertex(matrix, 0.5f, -0.5f, 0.0f).color(ColorUtil.replAlpha(color2, alpha)).texture(1, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
         buffer.vertex(matrix, 0.5f, 0.5f, 0.0f).color(ColorUtil.replAlpha(color3, alpha)).texture(1, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
         buffer.vertex(matrix, -0.5f, 0.5f, 0.0f).color(ColorUtil.replAlpha(color4, alpha)).texture(0, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
     }
-
 }

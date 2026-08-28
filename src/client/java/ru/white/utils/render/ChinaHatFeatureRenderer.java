@@ -1,6 +1,5 @@
 package ru.white.utils.render;
 
-
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
@@ -24,7 +23,6 @@ import org.joml.Matrix4f;
 import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_SNIPPET;
 
 public class ChinaHatFeatureRenderer extends FeatureRenderer<PlayerEntityRenderState, PlayerEntityModel> {
-
     private static final float PI2 = (float) (Math.PI * 2);
     private static final int CIRCLE_SEGMENTS = 128;
     private static final int OUTLINE_SEGMENTS = 64;

@@ -18,20 +18,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
 
-/**
- * Хранилище пользовательских Lua-модулей.
- *
- * Скрипты лежат в C:/rainydlc/client1_21_11/scripts/&lt;Категория&gt;/&lt;Имя&gt;.lua
- * и грузятся при старте клиента. Каждый скрипт получает собственное
- * изолированное окружение из {@link LuaSandbox}.
- */
 public final class LuaScriptManager {
-
     private static final Path ROOT = Path.of("C:/rainydlc/client1_21_11/scripts");
 
     private static LuaScriptManager instance;
 
-    /** Загруженные скрипты: файл → модуль. */
     private final Map<Path, LuaModule> loaded = new HashMap<>();
 
     private LuaScriptManager() {
@@ -46,7 +37,6 @@ public final class LuaScriptManager {
         return ROOT;
     }
 
-    /** Загрузка всех скриптов при старте клиента. */
     public synchronized void loadAll() {
         if (!Files.isDirectory(ROOT)) return;
 
@@ -67,7 +57,6 @@ public final class LuaScriptManager {
             try {
                 String code = Files.readString(file, StandardCharsets.UTF_8);
                 if (register(file, code, category) == null) {
-                    // ошибка уже показана в register(); молча продолжаем остальные
                 }
             } catch (IOException e) {
                 ChatUtils.addChatMessage("§cLua: не удалось прочитать " + file.getFileName() + ": " + e.getMessage());
@@ -81,10 +70,6 @@ public final class LuaScriptManager {
         }
     }
 
-    /**
-     * Создание нового скрипта: проверка синтаксиса → сохранение файла →
-     * регистрация живого модуля в клик-ГУИ.
-     */
     public synchronized Result create(Category category, String displayName, String code) {
         String name = sanitizeName(displayName);
         if (name.isEmpty()) return new Result(null, "Введите имя модуля");
@@ -116,7 +101,6 @@ public final class LuaScriptManager {
                 : new Result(null, "Ошибка выполнения скрипта (см. чат)");
     }
 
-    /** Проверка синтаксиса без запуска. null — ошибок нет. */
     public static String validate(String code) {
         try {
             LuaSandbox.compilerGlobals().load(code, "=check");
@@ -127,7 +111,6 @@ public final class LuaScriptManager {
         }
     }
 
-    /** Перезапись существующего скрипта: сохранить файл и перезагрузить модуль. */
     public synchronized Result update(Path file, Category category, String code) {
         String syntax = validate(code);
         if (syntax != null) return new Result(null, syntax);
@@ -143,12 +126,10 @@ public final class LuaScriptManager {
                 : new Result(null, "Ошибка выполнения скрипта (см. чат)");
     }
 
-    /** Открытые вкладки редактора: файл → категория (чтобы новые вкладки знали, куда сохранять). */
     public synchronized LuaModule moduleOf(Path file) {
         return loaded.get(file);
     }
 
-    /** Удаление модуля: снять с регистрации и стереть .lua-файл с диска. */
     public synchronized boolean delete(LuaModule module) {
         Path file = module.getFile();
         unload(file);
@@ -168,7 +149,6 @@ public final class LuaScriptManager {
     private synchronized LuaModule register(Path file, String code, Category category) {
         unload(file);
 
-        // анонимный подкласс → уникальный ключ в ModuleManager на каждый скрипт
         LuaModule module = new LuaModule(file, category) {};
         try {
             module.initialize(code);

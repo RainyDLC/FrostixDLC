@@ -5,14 +5,11 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
-
 public class FontInitializer {
-
     private static final Logger LOGGER = LoggerFactory.getLogger("client/FontInitializer");
     private static boolean registered = false;
     private static boolean initialized = false;
-    
+
     public static void register() {
         if (registered) return;
         registered = true;

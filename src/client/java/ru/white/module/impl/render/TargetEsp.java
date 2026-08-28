@@ -48,7 +48,6 @@ import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_
         category = Category.RENDER
 )
 public class TargetEsp extends Module implements ModulePreview {
-
     public ButtonSetting previewButton = PreviewSettings.button(this);
 
     public ModeSetting type = new ModeSetting(this,"Режим","Призраки","Картинка","Кольцо","Бублик","Кубики","Молнии");
@@ -82,7 +81,6 @@ public class TargetEsp extends Module implements ModulePreview {
         boxAllocator.clear();
     }
 
-    /** Пока открыт предпоказ, таргетом считается болванчик, а не цель ауры. */
     private LivingEntity previewTarget;
 
     public LivingEntity target = null;
@@ -91,8 +89,6 @@ public class TargetEsp extends Module implements ModulePreview {
 
     private float animationNurik = 0.0F;
     private long currentTimeSpirits = 0;
-
-    // ───────────────────────────── предпоказ ─────────────────────────────
 
     @Override
     public PreviewSettings previewSettings() {
@@ -114,7 +110,6 @@ public class TargetEsp extends Module implements ModulePreview {
         previewTarget = ctx.dummy();
     }
 
-    /** Цикл показа — вспышка урона: по ней видно, как эффект краснеет и сжимается. */
     @Override
     public void previewSpawn(PreviewContext ctx) {
         if (ctx.dummy() != null) ctx.dummy().hurtTime = 10;
@@ -141,8 +136,6 @@ public class TargetEsp extends Module implements ModulePreview {
         alpha.run(currentTarget != null ? 1 : 0, 0.15F, Easings.SINE_OUT);
         float alphaPC = alpha.get();
 
-
-
         VertexConsumerProvider.Immediate immediate = VertexConsumerProvider.immediate(boxAllocator);
         if (alphaPC > 0.001f && target != null && type.is("Призраки") && typeGhost.is("2")) {
             long currentTime = System.currentTimeMillis();
@@ -157,7 +150,6 @@ public class TargetEsp extends Module implements ModulePreview {
             currentTimeSpirits = currentTime;
 
             MatrixStack matrices = e.getMatrixStack();
-
 
             Vec3d lerpedPos = target.getLerpedPos(e.getTickDelta());
             Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
@@ -178,7 +170,6 @@ public class TargetEsp extends Module implements ModulePreview {
             int fadeColor = ColorUtil.fade(1);
             int redColor = ColorUtil.getColor(200, 70, 70, (int) (255.0F * alphaPC));
             int baseColor = ColorUtil.overCol(ColorUtil.multAlpha(fadeColor, alphaPC), redColor, atts);
-
 
             int n2 = 3;
             int n3 = 12;
@@ -214,7 +205,6 @@ public class TargetEsp extends Module implements ModulePreview {
                     VertexConsumer consumer = immediate.getBuffer(ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_3.png")));
 
                     int color = baseColor;
- 
 
                     int n7 = -20;
                     int n8 = 35;
@@ -246,8 +236,6 @@ public class TargetEsp extends Module implements ModulePreview {
                             .overlay(OverlayTexture.DEFAULT_UV)
                             .light(0xF000F0)
                             .normal(0, 0, 1);
-
-
 
                      n7 = (int) (-20  - 20 * sizeGlowOFF.getValue());
                      n8 = (int) (35 + 40 * sizeGlowOFF.getValue());
@@ -300,7 +288,6 @@ public class TargetEsp extends Module implements ModulePreview {
 
             MatrixStack matrices = e.getMatrixStack();
 
-
             Vec3d lerpedPos = target.getLerpedPos(e.getTickDelta());
             Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
 
@@ -320,7 +307,6 @@ public class TargetEsp extends Module implements ModulePreview {
             int fadeColor = ColorUtil.fade(1);
             int redColor = ColorUtil.getColor(200, 70, 70, (int) (255.0F * alphaPC));
             int baseColor = ColorUtil.overCol(ColorUtil.multAlpha(fadeColor, alphaPC), redColor, atts);
-
 
             int n2 = 3;
             int n3 = 24;
@@ -357,7 +343,6 @@ public class TargetEsp extends Module implements ModulePreview {
 
                     int color = baseColor;
 
-
                     int n7 = -12;
                     int n8 = 16;
 
@@ -388,8 +373,6 @@ public class TargetEsp extends Module implements ModulePreview {
                             .overlay(OverlayTexture.DEFAULT_UV)
                             .light(0xF000F0)
                             .normal(0, 0, 1);
-
-
 
                     n7 = (int) (-12  - 20 * sizeGlowOFF.getValue());
                     n8 = (int) (16 + 40 * sizeGlowOFF.getValue());
@@ -429,7 +412,6 @@ public class TargetEsp extends Module implements ModulePreview {
             matrices.pop();
         }
         if (alphaPC > 0.001f && target != null && type.is("Призраки") && typeGhost.is("1")) {
-
             long speed_f = this.speed.getValue().longValue() ;
 
             long currentTime = System.currentTimeMillis();
@@ -450,8 +432,6 @@ public class TargetEsp extends Module implements ModulePreview {
             int color2 = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(90), alphaPC), redColor,  hurtPC);
             int color3 = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(180), alphaPC), redColor, hurtPC);
             int color4 = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(360), alphaPC), redColor, hurtPC);
-
-
 
             MatrixStack matrices = e.getMatrixStack();
 
@@ -477,24 +457,20 @@ public class TargetEsp extends Module implements ModulePreview {
 
                     double offY = Math.sin(speed + i) * 0.6 + 0.15  * Math.sin(speed + (float) s * 0.11F);
 
-
                     matrices.translate(
                             lerpedPos.x - cameraPos.x + offX,
                             lerpedPos.y - cameraPos.y + (target.getHeight() / 2.0F) + offY,
                             lerpedPos.z - cameraPos.z + offZ
                     );
 
-
                     matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-mc.gameRenderer.getCamera().getYaw()));
                     matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(mc.gameRenderer.getCamera().getPitch()));
-
 
                     float scale =  ((0.12F + (float) s /40.0F) * 1.25F) * alphaPC;
                     matrices.scale(scale, scale, scale);
 
                     Matrix4f matrix = matrices.peek().getPositionMatrix();
                     VertexConsumer consumer = immediate.getBuffer(ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_3.png")));
-
 
                     drawGradientQuad(consumer, matrix, color,color2,color3,color4, (int) (255 * alphaPC));
 
@@ -504,13 +480,11 @@ public class TargetEsp extends Module implements ModulePreview {
 
                     drawGradientQuad(consumer2, matrix, color,color2,color3,color4, (int) ((255 * sizeGlow.getValue() * 1) * alphaPC));
 
-
                     matrices.pop();
                 }
             }
         }
         if (alphaPC > 0.001f && target != null && type.is("Призраки") && typeGhost.is("3")) {
-
             long speed_f = this.speed.getValue().longValue() ;
 
             long currentTime = System.currentTimeMillis();
@@ -531,8 +505,6 @@ public class TargetEsp extends Module implements ModulePreview {
             int color2 = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(90), alphaPC), redColor,  hurtPC);
             int color3 = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(180), alphaPC), redColor, hurtPC);
             int color4 = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(360), alphaPC), redColor, hurtPC);
-
-
 
             MatrixStack matrices = e.getMatrixStack();
 
@@ -558,24 +530,20 @@ public class TargetEsp extends Module implements ModulePreview {
 
                     double offY = Math.sin(speed ) * 0.7  + 0.2  * Math.sin(speed + (float) s * 0.11F);
 
-
                     matrices.translate(
                             lerpedPos.x - cameraPos.x + offX,
                             lerpedPos.y - cameraPos.y + (target.getHeight() / 2.0F) + offY,
                             lerpedPos.z - cameraPos.z + offZ
                     );
 
-
                     matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-mc.gameRenderer.getCamera().getYaw()));
                     matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(mc.gameRenderer.getCamera().getPitch()));
-
 
                     float scale =  (0.12F + (float) s /50.0F) * 1.5F;
                     matrices.scale(scale, scale, scale);
 
                     Matrix4f matrix = matrices.peek().getPositionMatrix();
                     VertexConsumer consumer = immediate.getBuffer(ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_3.png")));
-
 
                     drawGradientQuad(consumer, matrix, color,color2,color3,color4, (int) (255 * alphaPC));
 
@@ -585,15 +553,12 @@ public class TargetEsp extends Module implements ModulePreview {
 
                     drawGradientQuad(consumer2, matrix, color,color2,color3,color4, (int) ((255 * sizeGlow.getValue() * 1) * alphaPC));
 
-
                     matrices.pop();
                 }
             }
         }
 
-
         if (alphaPC > 0.001f && target != null && type.is("Картинка")) {
-
             int hurtTicks = target.hurtTime;
             float hurtPC = (float) Math.sin((double) hurtTicks * (Math.PI / 20D));
 
@@ -606,8 +571,6 @@ public class TargetEsp extends Module implements ModulePreview {
             int color3 = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(180), alphaPC), redColor, alpha_2.get());
             int color4 = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.fade(360), alphaPC), redColor,alpha_2.get());
 
-
-
             MatrixStack matrices = e.getMatrixStack();
 
             VertexConsumer consumer = immediate
@@ -616,19 +579,15 @@ public class TargetEsp extends Module implements ModulePreview {
             if(typeImages.is("2")) {
                  consumer = immediate
                         .getBuffer(ROMB_ESP.apply(Identifier.of("client", "textures/visuals/marker.png")));
-
             }
             if(typeImages.is("3")) {
                 consumer = immediate
                         .getBuffer(ROMB_ESP.apply(Identifier.of("client", "textures/visuals/targets.png")));
-
             }
             if(typeImages.is("4")) {
                 consumer = immediate
                         .getBuffer(ROMB_ESP.apply(Identifier.of("client", "textures/visuals/target1.png")));
-
             }
-
 
             Vec3d lerpedPos = target.getLerpedPos(e.getTickDelta());
             double x = lerpedPos.x;
@@ -653,7 +612,6 @@ public class TargetEsp extends Module implements ModulePreview {
             Matrix4f bloomMatrix = matrices.peek().getPositionMatrix();
 
             drawGradientQuad(consumer, bloomMatrix, color,color2,color3,color4, (int) (255 * alphaPC));
-
 
             matrices.pop();
         }
@@ -704,8 +662,6 @@ public class TargetEsp extends Module implements ModulePreview {
                     float size = (0.2F + layer * 0.018F) * bublikSize.getValue();
                     int localAlpha = (int) ((layer == 0 ? 255 : 105) * layerAlpha);
 
-
-
                     if (layer != 0) continue;
 
                     matrices.push();
@@ -753,7 +709,6 @@ public class TargetEsp extends Module implements ModulePreview {
             float radius = (target.getWidth() - 0.1F) + 0.35F - 0.35F * alphaPC;
             float yBase  = (float)(height2 * progress);
             float yTop   = (float)(height2 * progress + eased);
-
 
             VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
             for (int seg = 0; seg < 360; seg++) {
@@ -831,7 +786,6 @@ public class TargetEsp extends Module implements ModulePreview {
                 matrices.pop();
             }
 
-            // Pass 2: cube fills
             for (int i = 0; i < 360; i += cound) {
                 float val = 1.2f - 0.5f ;
                 float sin = (float)(Math.sin((float) Math.toRadians(i + time)) * width * val);
@@ -858,7 +812,6 @@ public class TargetEsp extends Module implements ModulePreview {
                 matrices.pop();
             }
 
-            // Pass 3: cube outlines
             for (int i = 0; i < 360; i += cound) {
                 float val = 1.2f - 0.5f ;
                 float sin = (float)(Math.sin((float) Math.toRadians(i + time)) * width * val);
@@ -940,13 +893,9 @@ public class TargetEsp extends Module implements ModulePreview {
         int r = (color >> 16) & 0xFF;
         int g = (color >> 8) & 0xFF;
         int b = color & 0xFF;
-
-
     }
 
-
     private static void drawGradientQuad(VertexConsumer buffer, Matrix4f matrix,int color,int color2,int color3,int color4, int alpha) {
-
         buffer.vertex(matrix, -0.5f, -0.5f, 0.0f).color(ColorUtil.replAlpha(color, alpha)).texture(0, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
         buffer.vertex(matrix, 0.5f, -0.5f, 0.0f).color(ColorUtil.replAlpha(color2, alpha)).texture(1, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
         buffer.vertex(matrix, 0.5f, 0.5f, 0.0f).color(ColorUtil.replAlpha(color3, alpha)).texture(1, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
@@ -954,42 +903,39 @@ public class TargetEsp extends Module implements ModulePreview {
     }
 
     private static void drawCubeFillTESP(VertexConsumer buf, Matrix4f m, float s, int color) {
-        // +Y
         buf.vertex(m, -s,  s, -s).color(color); buf.vertex(m,  s,  s, -s).color(color);
         buf.vertex(m,  s,  s,  s).color(color); buf.vertex(m, -s,  s,  s).color(color);
-        // -Y
+
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m,  s, -s,  s).color(color);
         buf.vertex(m,  s, -s, -s).color(color); buf.vertex(m, -s, -s, -s).color(color);
-        // +X
+
         buf.vertex(m,  s, -s, -s).color(color); buf.vertex(m,  s, -s,  s).color(color);
         buf.vertex(m,  s,  s,  s).color(color); buf.vertex(m,  s,  s, -s).color(color);
-        // -X
+
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m, -s, -s, -s).color(color);
         buf.vertex(m, -s,  s, -s).color(color); buf.vertex(m, -s,  s,  s).color(color);
-        // +Z
+
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m,  s, -s,  s).color(color);
         buf.vertex(m,  s,  s,  s).color(color); buf.vertex(m, -s,  s,  s).color(color);
-        // -Z
+
         buf.vertex(m,  s, -s, -s).color(color); buf.vertex(m, -s, -s, -s).color(color);
         buf.vertex(m, -s,  s, -s).color(color); buf.vertex(m,  s,  s, -s).color(color);
     }
 
     private static void drawCubeOutlineTESP(VertexConsumer buf, Matrix4f m, float s, int color) {
-        // bottom ring
         buf.vertex(m, -s, -s, -s).color(color); buf.vertex(m,  s, -s, -s).color(color);
         buf.vertex(m,  s, -s, -s).color(color); buf.vertex(m,  s, -s,  s).color(color);
         buf.vertex(m,  s, -s,  s).color(color); buf.vertex(m, -s, -s,  s).color(color);
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m, -s, -s, -s).color(color);
-        // top ring
+
         buf.vertex(m, -s,  s, -s).color(color); buf.vertex(m,  s,  s, -s).color(color);
         buf.vertex(m,  s,  s, -s).color(color); buf.vertex(m,  s,  s,  s).color(color);
         buf.vertex(m,  s,  s,  s).color(color); buf.vertex(m, -s,  s,  s).color(color);
         buf.vertex(m, -s,  s,  s).color(color); buf.vertex(m, -s,  s, -s).color(color);
-        // verticals
+
         buf.vertex(m, -s, -s, -s).color(color); buf.vertex(m, -s,  s, -s).color(color);
         buf.vertex(m,  s, -s, -s).color(color); buf.vertex(m,  s,  s, -s).color(color);
         buf.vertex(m,  s, -s,  s).color(color); buf.vertex(m,  s,  s,  s).color(color);
         buf.vertex(m, -s, -s,  s).color(color); buf.vertex(m, -s,  s,  s).color(color);
     }
-
 }

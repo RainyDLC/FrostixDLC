@@ -1,4 +1,4 @@
-package ru.white.utils.player; // Или ваш собственный пакет для интерфейсов
+package ru.white.utils.player;
 
 public interface ITimerSpeed {
     float getSpeed();

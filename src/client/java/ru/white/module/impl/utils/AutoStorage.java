@@ -1,6 +1,5 @@
 package ru.white.module.impl.utils;
 
-
 import ru.white.manager.event_impl.EventKey;
 import ru.white.manager.event_impl.EventTick;
 import ru.white.manager.events.orbit.EventHandler;
@@ -20,11 +19,8 @@ import net.minecraft.screen.slot.SlotActionType;
 
 @ModuleInfo(name = "Auto Storage",desc = "Данный модуль был сделан акарачком поэтому может работать через жопу", category = Category.OTHER)
 public class AutoStorage extends Module {
-
     public final BindSetting bind = new BindSetting(this, "Бинд", -1);
     public final ModeSetting mode = new ModeSetting(this, "Режим", "Только ценные", "Все предметы");
-
-
 
     private enum State {
         IDLE,
@@ -52,7 +48,7 @@ public class AutoStorage extends Module {
         if (mc.player == null)
             return;
         if (state != State.IDLE)
-            return; // Prevent double trigger
+            return;
 
         mc.player.networkHandler.sendChatCommand("clan storage");
         state = State.WAITING_FOR_OPEN;
@@ -77,7 +73,7 @@ public class AutoStorage extends Module {
                     state = State.MOVING_ITEMS;
                     timer.reset();
                     nextDelay = 0;
-                } else if (timer.hasTimePassed(5000)) { // Timeout
+                } else if (timer.hasTimePassed(5000)) {
                     state = State.IDLE;
                     if (triggeredByChestStealer) {
                         triggeredByChestStealer = false;
@@ -109,18 +105,12 @@ public class AutoStorage extends Module {
     }
 
     private void processInventory(GenericContainerScreen screen) {
-        // Inventory slots are usually the last 36 slots in the container
-        // But for moving TO container, we click our inventory slots.
-        // Container slots: 0 to (rows * 9) - 1
-        // Player inventory: (rows * 9) to (rows * 9) + 35
-
         int rows = screen.getScreenHandler().getRows();
         int containerSize = rows * 9;
         int totalSlots = screen.getScreenHandler().slots.size();
 
         boolean movedItem = false;
 
-        // Iterate player inventory slots
         for (int i = containerSize; i < totalSlots; i++) {
             Slot slot = screen.getScreenHandler().getSlot(i);
             if (slot.hasStack()) {
@@ -132,7 +122,7 @@ public class AutoStorage extends Module {
                     nextDelay = (long) MathUtil.random(120, 150);
                     timer.reset();
                     movedItem = true;
-                    return; // One item per delay tick to avoid kick
+                    return;
                 }
             }
         }

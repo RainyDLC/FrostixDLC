@@ -4,9 +4,7 @@ import ru.white.utils.animation.Animation;
 import ru.white.utils.animation.Easings;
 import ru.white.utils.math.MathUtil;
 
-/** Кнопка оверлей-редактора: ховер и вспышка нажатия живут внутри самой кнопки. */
 public final class EditorButton {
-
     private final String label;
     private final boolean accent;
     private final Animation hover = new Animation();

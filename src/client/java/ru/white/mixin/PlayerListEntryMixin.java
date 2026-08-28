@@ -14,7 +14,6 @@ import ru.white.Client;
 
 @Mixin(AbstractClientPlayerEntity.class)
 public abstract class PlayerListEntryMixin {
-
     @Unique
     private static final Identifier CAPE_ID = Identifier.of("client", "cape");
     @Unique

@@ -1,20 +1,15 @@
 package ru.white.rpc;
 
-
 import ru.white.utils.annotation.IMinecraft;
-
 
 import ru.white.utils.math.ServerUtil;
 
 public class RPC implements IMinecraft {
-
     public static DiscordRichPresence presence = new DiscordRichPresence();
     public static boolean started;
     private static Thread thread;
 
-    
     public void startRpc() {
-        // Проверяем, доступна ли библиотека Discord RPC
         if (!DiscordRPC.Loader.isAvailable()) {
             return;
         }
@@ -41,11 +36,8 @@ public class RPC implements IMinecraft {
                     presence.button_label_2 = "Discord";
                     presence.button_url_2 = "https://discord.gg/5jRJjDYW5T";
 
-
                     presence.largeImageKey = "https://i.ibb.co/LdjX1rYL/Tim6eline-1.gif";
                     presence.largeImageText = "Best client 1.21.11";
-                    //presence.smallImageKey = Profile.getAvatarUrl();
-                    //presence.smallImageText = Profile.getUsername() + " | " + Profile.getUid();
 
                     rpc.Discord_UpdatePresence(presence);
                     try {
@@ -55,7 +47,6 @@ public class RPC implements IMinecraft {
                 }
             }, "TH-RPC-Handler");
             thread.start();
-
         }
     }
 }

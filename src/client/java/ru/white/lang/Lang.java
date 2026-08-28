@@ -5,34 +5,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
-/**
- * Локализация клиента: переключение РУС/АНГ.
- *
- * Все исходные строки в коде написаны на русском. На английском строка прогоняется
- * через словарь рус→англ из {@link Translations}. Если перевода нет — возвращается
- * исходная русская строка, поэтому ничего не ломается.
- *
- * Словарь зашит в код ({@link Translations#build()}), грузится один раз при загрузке
- * класса. Никаких json-ресурсов и файлов — поэтому ничего не "не находится" и {@link #tr}
- * это просто O(1) поиск по HashMap (без I/O, без лагов).
- */
 public final class Lang {
-
     public enum Language { RUSSIAN, ENGLISH }
 
-    /** Файл, где запоминается выбранный язык между сессиями. */
     private static final Path LANG_FILE = Path.of("C:/rainydlc/client1_21_11/language.txt");
 
-    /** Словарь рус→англ. Строится один раз при инициализации класса. */
     private static final Map<String, String> DICT = Translations.build();
 
     private static Language current = readSavedLanguage();
 
     private Lang() {}
 
-    /** Оставлено для совместимости со старым вызовом в Client. */
     public static void init() {
-        // первый запуск (нет сохранённого файла) — стартуем с языка самой игры
         if (!Files.exists(LANG_FILE)) {
             String game = gameLanguageCode();
             boolean en = game != null && game.toLowerCase(java.util.Locale.ROOT).startsWith("en");
@@ -50,7 +34,6 @@ public final class Lang {
         return current == Language.ENGLISH;
     }
 
-    /** Короткая метка для кнопки в меню. */
     public static String tag() {
         return current == Language.ENGLISH ? "EN" : "RU";
     }
@@ -66,10 +49,6 @@ public final class Lang {
         setLanguage(current == Language.ENGLISH ? Language.RUSSIAN : Language.ENGLISH);
     }
 
-    /**
-     * Применяет выбранный язык к самой игре: меняет язык в настройках Minecraft
-     * и перезагружает ресурсы — как это делает ванильный экран выбора языка.
-     */
     private static void applyToGame() {
         try {
             var client = net.minecraft.client.MinecraftClient.getInstance();
@@ -82,11 +61,9 @@ public final class Lang {
             client.options.language = code;
             client.reloadResources();
         } catch (Exception ignored) {
-            // игра ещё не готова — язык применится при следующем переключении
         }
     }
 
-    /** Текущий код языка игры (например «ru_ru») или null, если клиент ещё не создан. */
     private static String gameLanguageCode() {
         try {
             var client = net.minecraft.client.MinecraftClient.getInstance();
@@ -97,25 +74,17 @@ public final class Lang {
         }
     }
 
-    /** Совместимость: словарь зашит в код, перечитывать нечего. */
-    public static void reloadDict() { /* no-op */ }
+    public static void reloadDict() {  }
 
-    /**
-     * Переводит русскую строку на текущий язык. На русском возвращает как есть.
-     * На английском — значение из словаря либо исходную строку, если перевода нет.
-     */
     public static String tr(String ru) {
         if (ru == null || current != Language.ENGLISH) return ru;
         String en = DICT.get(ru);
         return en != null ? en : ru;
     }
 
-    /** Явный выбор строки по текущему языку (когда есть оба варианта). */
     public static String pick(String ru, String en) {
         return current == Language.ENGLISH ? en : ru;
     }
-
-    // ----------------------------------------------------------------- saved language
 
     private static Language readSavedLanguage() {
         try {

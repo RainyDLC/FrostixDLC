@@ -4,10 +4,7 @@ import ru.white.screen.CrosshairEditor;
 import ru.white.screen.HandsEditor;
 import ru.white.screen.PreviewEditor;
 
-/** Реестр оверлей-редакторов: одновременно активным может быть только один. */
 public final class OverlayEditors {
-
-    /** Проверяется каждый кадр и на каждый клик, поэтому список собран один раз. */
     private static final OverlayEditor[] ALL = {
             HandsEditor.getInstance(),
             PreviewEditor.getInstance(),
@@ -32,7 +29,6 @@ public final class OverlayEditors {
         return active() != null;
     }
 
-    /** Меню закрывается — гасим всё, что могло остаться открытым. */
     public static void closeAll() {
         for (OverlayEditor editor : all()) {
             if (editor.isActive()) editor.closeFromMenuRemoval();

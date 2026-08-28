@@ -12,4 +12,3 @@ import lombok.experimental.FieldDefaults;
 public class SwingDurationEvent extends CancellableEvent {
     float animation;
 }
-

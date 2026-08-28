@@ -32,7 +32,6 @@ import java.util.*;
         category = Category.MOVEMENT
 )
 public class InventoryMove extends Module {
-
     public final ModeSetting mode = new ModeSetting(this, "Тип", "FunTime","Vanilla");
 
     private final List<Packet<?>> packetQueue = new ArrayList<>();
@@ -45,7 +44,6 @@ public class InventoryMove extends Module {
     private boolean pendingClose = false;
     private long closeTime = 0;
 
-    // Переменные для обновленного режима FunTime_2
     private int stopTicksOut;
     private boolean stoppedStatus;
     private boolean previousStoppedStatus;
@@ -64,19 +62,15 @@ public class InventoryMove extends Module {
                     mc.options.jumpKey
             };
 
-
             if (mc.currentScreen instanceof ChatScreen) {
-
             } else if (mc.currentScreen instanceof InventoryScreen ||
                     mc.currentScreen instanceof TripleWheelScreen ||    mc.currentScreen instanceof Menu&& !Menu.searchActive ||
                     mc.currentScreen instanceof TriplePickerScreen ||
                     mc.currentScreen instanceof GenericContainerScreen) {
-
                 updateKeyBindingState(movementKeys);
             }
         }
 
-        // Логика тиков остановки для FunTime_2
         if (mode.is("FunTime_2")) {
             if (this.previousStoppedStatus && this.stoppedStatus && this.stopTicksOut > 0) {
                 this.useAccumulatedPackets();
@@ -93,7 +87,6 @@ public class InventoryMove extends Module {
             }
         }
 
-        // Логика закрытия контейнеров для FunTime
         if (pendingClose && System.currentTimeMillis() >= closeTime) {
             pendingClose = false;
             for (Packet<?> p : packetQueue) {
@@ -125,9 +118,6 @@ public class InventoryMove extends Module {
         if (e.getPacket() instanceof CraftRequestC2SPacket) return;
         if (ReportHelper.isAutoListActive()) return;
 
-
-
-        // Блокируем пакет закрытия окна от сервера в FunTime_2
         if (e.getPacket() instanceof CloseScreenS2CPacket) {
             if (mode.is("FunTime_2")) {
                 e.cancel();
@@ -137,7 +127,6 @@ public class InventoryMove extends Module {
 
         if (!(e.getPacket() instanceof ClickSlotC2SPacket packet)) return;
 
-        // Пропускаем пакеты, отправленные самой функцией useAccumulatedPackets
         if (sendingPackets.contains(packet)) {
             sendingPackets.remove(packet);
             return;
@@ -146,7 +135,6 @@ public class InventoryMove extends Module {
         boolean isTargetScreen = mc.currentScreen instanceof InventoryScreen || mc.currentScreen instanceof GenericContainerScreen;
 
         if (e.isSend() && isTargetScreen) {
-            // Новая логика кликов для FunTime_2
             if (mode.is("FunTime_2")) {
                 if (this.canStoppingOnWindowClick() && packet.slot() != -1) {
                     this.setStop(packet.actionType());
@@ -160,7 +148,6 @@ public class InventoryMove extends Module {
                 }
             }
 
-            // Старая логика кликов для FunTime
             if (mode.is("FunTime") && (isMoving() || mc.options.jumpKey.isPressed())) {
                 packetQueue.add(packet);
                 e.cancel();
@@ -212,12 +199,10 @@ public class InventoryMove extends Module {
         }
 
         if (mc.currentScreen instanceof ChatScreen) {
-            // В чате не прожимаем клавиши движения
         } else if (mc.currentScreen instanceof InventoryScreen ||
                 mc.currentScreen instanceof TripleWheelScreen ||    mc.currentScreen instanceof Menu && !Menu.searchActive||
                 mc.currentScreen instanceof TriplePickerScreen ||
                 mc.currentScreen instanceof GenericContainerScreen) {
-
             updateKeyBindingState(movementKeys);
         }
     }
@@ -245,7 +230,6 @@ public class InventoryMove extends Module {
         }
     }
 
-    // Вспомогательные методы для логики FunTime_2
     private boolean canStoppingOnWindowClick() {
         return (isMoving() || mc.options.jumpKey.isPressed()) || this.stoppedStatus;
     }

@@ -37,13 +37,11 @@ import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_
         category = Category.RENDER
 )
 public class WorldCubes extends Module {
-
     public ModeSetting typeColor = new ModeSetting(this,"Режим цвета","Тема","Свой");
 
     public ColorSetting tintColor = new ColorSetting(this, "Цвет", 0xFF00FFFF).setVisible(() -> typeColor.is("Свой"));
 
     public int getColor() {
-
         if(typeColor.is("Тема")) {
             return ColorUtil.getClientColor1(1);
         }
@@ -60,7 +58,6 @@ public class WorldCubes extends Module {
     public SliderSetting  glowBright = new SliderSetting(this, "Яркость свечения", 1.8f, 0.5f, 4.0f, 0.1f)
             .setVisible(() -> showGlow.getValue());
 
-
     private final Animation shiftAnim = new Animation();
     private int  currOx, currOy, currOz;
     private int  prevOx, prevOy, prevOz;
@@ -69,17 +66,14 @@ public class WorldCubes extends Module {
     private static final int CELL = 12;
     private final BufferAllocator allocator = new BufferAllocator(1 << 18);
 
-
     @Override
     protected void onEnable() {
         firstFrame = true;
     }
 
-
     @EventHandler
     public void onRender3D(EventRender3D e) {
         if (mc.player == null || mc.world == null) return;
-
 
         int ox = snapDown(mc.player.getX());
         int oy = snapDown(mc.player.getY());
@@ -91,7 +85,6 @@ public class WorldCubes extends Module {
             shiftAnim.set(1.0);
             firstFrame = false;
         } else if (ox != currOx || oy != currOy || oz != currOz) {
-
             prevOx = currOx; prevOy = currOy; prevOz = currOz;
             currOx = ox;     currOy = oy;     currOz = oz;
             shiftAnim.set(0.0);
@@ -117,7 +110,6 @@ public class WorldCubes extends Module {
         VertexConsumerProvider.Immediate immediate = VertexConsumerProvider.immediate(allocator);
         VertexConsumer lb = immediate.getBuffer(LINE_LAYER);
 
-
         if (t < 0.999f) {
             int oldA = (int)(baseAlpha * (1f - t));
             drawLines(lb, mat, cam, prevOx, prevOy, prevOz, cr, cg, cb, oldA, rI, vI);
@@ -125,7 +117,6 @@ public class WorldCubes extends Module {
 
         int newA = (int)(baseAlpha * t);
         drawLines(lb, mat, cam, currOx, currOy, currOz, cr, cg, cb, newA, rI, vI);
-
 
         if (showGlow.getValue()) {
             float gs    = glowSize.getValue();
@@ -143,7 +134,6 @@ public class WorldCubes extends Module {
         immediate.draw();
     }
 
-
     private void drawLines(VertexConsumer lb, Matrix4f mat, Vec3d cam,
                            int ox, int oy, int oz,
                            int cr, int cg, int cb, int alpha,
@@ -154,7 +144,6 @@ public class WorldCubes extends Module {
         int zMin = oz - rI * CELL,  zMax = oz + rI * CELL;
         int yMin = oy - (vI - 1) * CELL;
         int yMax = oy +  vI      * CELL;
-
 
         for (int x = xMin; x <= xMax; x += CELL) {
             for (int z = zMin; z <= zMax; z += CELL) {
@@ -196,15 +185,12 @@ public class WorldCubes extends Module {
 
         Camera camera = mc.gameRenderer.getCamera();
 
-        // биллборд одинаково повёрнут к камере во всех ячейках —
-        // углы квада считаем один раз, дальше только сложение с позицией ячейки
         Quaternionf q = camera.getRotation();
         Vector3f c0 = new Vector3f(-gs, -gs, 0).rotate(q);
         Vector3f c1 = new Vector3f( gs, -gs, 0).rotate(q);
         Vector3f c2 = new Vector3f( gs,  gs, 0).rotate(q);
         Vector3f c3 = new Vector3f(-gs,  gs, 0).rotate(q);
 
-        // направление взгляда — ячейки за спиной в буфер не пишем
         float yawRad   = (float) Math.toRadians(camera.getYaw());
         float pitchRad = (float) Math.toRadians(camera.getPitch());
         float cosPitch = (float) Math.cos(pitchRad);
@@ -231,7 +217,6 @@ public class WorldCubes extends Module {
             }
         }
     }
-
 
     public static final RenderPipeline ROMB_ESP_PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(TRANSFORMS_AND_PROJECTION_SNIPPET)

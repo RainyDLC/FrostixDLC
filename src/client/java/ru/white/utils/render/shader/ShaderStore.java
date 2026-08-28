@@ -13,64 +13,43 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * Раздаёт GLSL-исходники из зашифрованных Java-констант ({@link ShaderData}) вместо
- * файлов в ресурс-паке. {@code ShaderLoaderMixin} перехватывает
- * {@code ShaderLoader.getSource(Identifier, ShaderType)} и для namespace "client"
- * берёт исходник отсюда.
- *
- * Шифрование (XOR + Base64) — это только сокрытие от grep/strings по jar, не криптозащита.
- * Ключ ОБЯЗАН совпадать с tools/GenShaderData.java.
- */
 public final class ShaderStore {
-
     private ShaderStore() {}
 
-    /** Ключ встроенных шейдеров; хранится числовым массивом, чтобы не светить строку в grep/jar. */
     private static final byte[] KEY = {
             82, 97, 105, 110, 121, 68, 76, 67, 47, 47, 115, 104, 97, 100,
             101, 114, 45, 118, 101, 105, 108, 47, 47, 50, 48, 50, 54
     };
 
-    /** namespace, в котором лежат наши шейдеры (assets/client/...) */
     private static final String NAMESPACE = "client";
 
     private static final String INCLUDE_DIR = "shaders/include/";
 
-    /**
-     * @return полностью готовый (с разрешёнными #moj_import) GLSL-исходник
-     *         для данного шейдера, либо {@code null} если это не наш шейдер —
-     *         тогда движок грузит его штатно.
-     */
     public static String getSource(Identifier id, ShaderType type) {
         if (id == null || !NAMESPACE.equals(id.getNamespace())) return null;
 
         String ext = (type == ShaderType.VERTEX) ? "vsh" : "fsh";
-        String key = id.getPath() + "|" + ext;          // напр. "core/rect|vsh"
+        String key = id.getPath() + "|" + ext;
 
         String enc = ShaderData.SOURCES.get(key);
-        // New shaders may intentionally remain regular resources while the
-        // generated embedded bundle is kept backwards-compatible.
+
         String raw = enc != null
                 ? decrypt(enc)
                 : readResource(Identifier.of(id.getNamespace(), "shaders/" + id.getPath() + "." + ext));
         if (raw == null) return null;
-        // owner в форме ресурса — нужен только для относительных #moj_import "..."
+
         Identifier owner = Identifier.of(id.getNamespace(), "shaders/" + id.getPath() + "." + ext);
         String resolved = resolveImports(raw, owner, new HashSet<>());
-        // Ванильные include'ы (dynamictransforms.glsl, projection.glsl) сами содержат
-        // #version 330 — как и GlImportProcessor, оставляем только ОДИН #version наверху,
-        // иначе GLSL не компилируется (несколько #version) и весь reload падает.
+
         return dedupeVersion(resolved);
     }
 
-    /** Оставляет только первую директиву #version, остальные удаляет (как extractVersion в ванилле). */
     private static String dedupeVersion(String source) {
         StringBuilder out = new StringBuilder(source.length());
         boolean versionSeen = false;
         for (String line : source.split("\n", -1)) {
             if (line.trim().startsWith("#version")) {
-                if (versionSeen) continue;   // дубликат — выкидываем
+                if (versionSeen) continue;
                 versionSeen = true;
             }
             out.append(line).append('\n');
@@ -87,11 +66,6 @@ public final class ShaderStore {
         return new String(out, StandardCharsets.UTF_8);
     }
 
-    /**
-     * Минимальная замена GlImportProcessor: инлайнит #moj_import, читая include-ресурсы
-     * из ResourceManager (так ванильные includes остаются version-correct). Каждый
-     * уникальный include подставляется один раз — как в ванилле.
-     */
     private static String resolveImports(String source, Identifier owner, Set<String> seen) {
         StringBuilder out = new StringBuilder(source.length() + 256);
         for (String line : source.split("\n", -1)) {
@@ -108,7 +82,7 @@ public final class ShaderStore {
                             }
                         }
                     }
-                    continue; // строку #moj_import в вывод не пишем
+                    continue;
                 }
             }
             out.append(line).append('\n');
@@ -116,12 +90,10 @@ public final class ShaderStore {
         return out.toString();
     }
 
-    /** Превращает строку #moj_import в Identifier include-ресурса (shaders/include/...). */
     private static Identifier parseImport(String line, Identifier owner) {
         int lt = line.indexOf('<');
         int gt = line.indexOf('>');
         if (lt >= 0 && gt > lt) {
-            // абсолютный namespaced импорт: <ns:file.glsl>
             String ref = line.substring(lt + 1, gt).trim();
             Identifier id = Identifier.of(ref);
             return Identifier.of(id.getNamespace(), INCLUDE_DIR + id.getPath());
@@ -129,7 +101,6 @@ public final class ShaderStore {
         int q1 = line.indexOf('"');
         int q2 = line.lastIndexOf('"');
         if (q1 >= 0 && q2 > q1) {
-            // относительный импорт: "file.glsl" — относительно каталога owner'а
             String ref = line.substring(q1 + 1, q2).trim();
             String ownerPath = owner.getPath();
             int slash = ownerPath.lastIndexOf('/');

@@ -15,20 +15,14 @@ import java.util.List;
 
 import static ru.white.utils.annotation.IMinecraft.mc;
 
-/**
- * Compact item-picker: shows only the unique item types the player currently has
- * in their inventory. Opens when the player clicks an empty wheel slot.
- */
 public class TriplePickerScreen extends Screen {
-
     private float scaleFix = 1F;
 
     private final AutoSwap module;
     private final int      slotIndex;
-    /** Screen to return to when this picker closes (null → return to game). */
+
     private final Screen   parent;
 
-    // Layout
     private static final float CELL_SIZE = 20F;
     private static final float CELL_GAP  = 4F;
     private static final float PAD       = 5F;
@@ -37,11 +31,9 @@ public class TriplePickerScreen extends Screen {
     private static final float BTN_W     = 44f;
     private static final int   MAX_COLS  = 7;
 
-
     @Override
     public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {}
 
-    /** All non-empty item stacks found in inventory this frame. */
     private final List<ItemStack> items = new ArrayList<>();
 
     public TriplePickerScreen(AutoSwap module, int slotIndex) {
@@ -54,8 +46,6 @@ public class TriplePickerScreen extends Screen {
         this.slotIndex = slotIndex;
         this.parent    = parent;
     }
-
-    // ── Layout helpers ────────────────────────────────────────────────────────
 
     private void refreshItems() {
         items.clear();
@@ -79,11 +69,8 @@ public class TriplePickerScreen extends Screen {
     private float gridX() { return panelX() + (panelW() - gridW()) / 2f; }
     private float gridY() { return panelY() + PAD + TITLE_H + 4; }
 
-    /** Screen-space rect for a cell at linear index i. */
     private float cellX(int i) { return gridX() + (i % cols()) * (CELL_SIZE + CELL_GAP); }
     private float cellY(int i) { return gridY() + (i / cols()) * (CELL_SIZE + CELL_GAP); }
-
-    // ── Render ────────────────────────────────────────────────────────────────
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
@@ -91,7 +78,6 @@ public class TriplePickerScreen extends Screen {
         mouseX = (int)(mouseX / scaleFix);
         mouseY = (int)(mouseY / scaleFix);
         refreshItems();
-
 
         float px = panelX(), py = panelY(), pw = panelW(), ph = panelH();
         RenderUtil.Blur.blur(px, py, pw, ph,1,8,0);
@@ -101,7 +87,6 @@ public class TriplePickerScreen extends Screen {
         float tw = Fonts.sf_regular.getWidth(title, 7);
         Fonts.sf_regular.draw(title, px + (pw - tw) / 2f, py + PAD + 2, 7, ColorUtil.getColor(255, 1F));
 
-        // Items grid
         if (items.isEmpty()) {
             String empty = "Инвентарь пуст";
             float ew = Fonts.sf_regular.getWidth(empty, 7);
@@ -117,7 +102,6 @@ public class TriplePickerScreen extends Screen {
                                 && mouseY >= cy && mouseY <= cy + CELL_SIZE;
                 boolean selected = selectedItem != null && ItemStack.areItemsAndComponentsEqual(stack, selectedItem);
 
-
                 int bg = selected ? ColorUtil.getColor(255, 255, 255, 0.15f)
                        : hover    ? ColorUtil.getColor(255, 255, 255, 0.12f)
                                   : ColorUtil.getColor(255, 255, 255, 0.05f);
@@ -132,7 +116,6 @@ public class TriplePickerScreen extends Screen {
                 ItemRender.drawItemCenteredWithContext(context, stack,
                         (cx + CELL_SIZE / 2f) * scaleFix, (cy + CELL_SIZE / 2f) * scaleFix, 0.85f, 1.0f);
 
-                // Tooltip: item name below the grid row when hovered
                 if (hover) {
                     String name = stack.getName().getString();
                     float nw = Fonts.sf_bold.getWidth(name, 7);
@@ -143,7 +126,6 @@ public class TriplePickerScreen extends Screen {
             }
         }
 
-        // Clear button
         float btnX = px + (pw - BTN_W) / 2f;
         float btnY = gridY() + (items.isEmpty() ? 20 : gridH()) + 6;
         boolean btnHov = mouseX >= btnX && mouseX <= btnX + BTN_W
@@ -160,8 +142,6 @@ public class TriplePickerScreen extends Screen {
         super.render(context, mouseX, mouseY, delta);
     }
 
-    // ── Input ─────────────────────────────────────────────────────────────────
-
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
         double mouseX = click.x() / scaleFix;
@@ -171,7 +151,6 @@ public class TriplePickerScreen extends Screen {
 
         float px = panelX(), py = panelY();
 
-        // Item cells
         for (int idx = 0; idx < items.size(); idx++) {
             float cx = cellX(idx);
             float cy = cellY(idx);
@@ -183,7 +162,6 @@ public class TriplePickerScreen extends Screen {
             }
         }
 
-        // Clear button
         float btnX = px + (panelW() - BTN_W) / 2f;
         float btnY = gridY() + (items.isEmpty() ? 20 : gridH()) + 6;
         if (mouseX >= btnX && mouseX <= btnX + BTN_W
@@ -193,7 +171,6 @@ public class TriplePickerScreen extends Screen {
             return true;
         }
 
-        // Click outside panel → close
         if (mouseX < px || mouseX > px + panelW()
          || mouseY < py || mouseY > py + panelH()) {
             this.close();
@@ -204,7 +181,6 @@ public class TriplePickerScreen extends Screen {
 
     @Override
     public void close() {
-        // Return to the wheel screen (or close completely if no parent)
         mc.setScreen(parent);
     }
 

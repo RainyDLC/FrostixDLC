@@ -23,7 +23,6 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 @Mixin(Mouse.class)
 public class MouseMixin {
-
     @Shadow
     @Final
     private MinecraftClient client;
@@ -42,7 +41,6 @@ public class MouseMixin {
         }
 
         if (action == 1 && client.currentScreen == null || action == 1 && client.currentScreen instanceof ChatScreen) {
-
             double mouseX = client.mouse.getX();
             double mouseY = client.mouse.getY();
 
@@ -52,14 +50,13 @@ public class MouseMixin {
             double d1 = mouseY * client.getWindow().getScaledHeight()
                     / client.getWindow().getHeight();
 
-
             Screen screen = client.currentScreen;
             MousePressEvent event = new MousePressEvent(input.button(), action, input.modifiers(), screen,d0,d1);
 
             event.hook();
         }
 
-        if (action != 0) return; // GLFW_RELEASE
+        if (action != 0) return;
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.currentScreen == null) return;
 
@@ -72,10 +69,8 @@ public class MouseMixin {
                 / mc.getWindow().getHeight();
 
         new MouseReleaseEvent(x, y, input.button(), mc.currentScreen).hook();
-
     }
 
-    /** Редакторы тянут содержимое сырым курсором — Screen'у события мыши при этом не приходят. */
     @Inject(method = "onCursorPos", at = @At("TAIL"))
     private void onEditorCursorPos(long window, double x, double y, CallbackInfo ci) {
         OverlayEditor editor = OverlayEditors.active();
@@ -108,7 +103,6 @@ public class MouseMixin {
     private void onLook(double timeDelta, CallbackInfo ci, double i, double j) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client != null && client.player != null) {
-
             EventLook event = new EventLook(i, j);
             event.hook();
             if (!event.isCancelled()) {
@@ -117,5 +111,4 @@ public class MouseMixin {
             ci.cancel();
         }
     }
-
 }

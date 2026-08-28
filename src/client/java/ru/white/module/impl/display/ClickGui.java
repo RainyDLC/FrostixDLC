@@ -11,7 +11,6 @@ import ru.white.module.api.settings.impl.BooleanSetting;
 import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.MultiBooleanSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
-import ru.white.utils.math.Keyboard;
 
 @ModuleInfo(
         name = "Click Gui",
@@ -22,7 +21,6 @@ import ru.white.utils.math.Keyboard;
         allowDisable = false
 )
 public class ClickGui extends Module {
-
     public MultiBooleanSetting effect = new MultiBooleanSetting(this, "Эффекты",
             new BooleanSetting("Серый фон", false),
             new BooleanSetting("Затемнять фон", true),
@@ -33,7 +31,6 @@ public class ClickGui extends Module {
             new BooleanSetting("Свечение", true),
             new BooleanSetting("Точки", true),
             new BooleanSetting("Сборка", true));
-
 
     public SliderSetting size = new SliderSetting(this,"Размер",1.0F,0.5F,1.5F,0.1F);
 

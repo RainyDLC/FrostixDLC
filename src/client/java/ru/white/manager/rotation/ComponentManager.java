@@ -6,7 +6,6 @@ import ru.white.manager.DragComponent;
 import java.util.HashMap;
 
 public final class ComponentManager extends HashMap<Class<? extends Component>, Component> {
-
     public void init() {
         add(new RotationProcess(), new FreeLookUtil(), new DragComponent(), new TestRotation());
         this.values().forEach(component -> Client.eventHandler().subscribe(component));

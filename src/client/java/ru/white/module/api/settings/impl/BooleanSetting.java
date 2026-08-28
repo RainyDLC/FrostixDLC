@@ -5,19 +5,16 @@ import ru.white.module.api.settings.Setting;
 import ru.white.utils.animation.satoshi.Animation;
 import ru.white.utils.animation.satoshi.EaseInOutQuad;
 
-
 import java.util.function.Supplier;
 
 public class BooleanSetting extends Setting<Boolean> {
     private Boolean cachedValue;
-
 
     public Animation animation = new EaseInOutQuad(300,1);
 
     public  Animation animation2 = new EaseInOutQuad(300,1);
 
     public  Animation animation3 = new EaseInOutQuad(300,1);
-
 
     public BooleanSetting(String name, Boolean value) {
         super(name, value);

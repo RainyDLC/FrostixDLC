@@ -12,7 +12,6 @@ import java.util.regex.Pattern;
 
 @UtilityClass
 public class ColorFormatting {
-
     public static final Pattern PATTERN = Pattern.compile(
             "\\$\\{(rgba|rgb)\\((\\d{1,3}),(\\d{1,3}),(\\d{1,3})(?:,(\\d{1,3}))?\\)}|\\$\\{reset}",
             Pattern.CASE_INSENSITIVE
@@ -45,8 +44,7 @@ public class ColorFormatting {
         if (input == null || input.isEmpty()) {
             return input;
         }
-        // Быстрый путь: без "${" замены невозможны — не гоняем 18 replace
-        // по каждой HUD-строке каждый кадр
+
         if (input.indexOf("${") < 0) {
             return input;
         }
@@ -58,7 +56,6 @@ public class ColorFormatting {
     }
 
     public static String getColor(int red, int green, int blue) {
-        // Ручная конкатенация: String.format слишком дорог для вызовов на каждый символ градиента
         return "${rgb(" + red + ',' + green + ',' + blue + ")}";
     }
 
@@ -92,7 +89,7 @@ public class ColorFormatting {
         if (text == null || text.isEmpty()) {
             return text;
         }
-        // Без "${" тегов нет — regex не нужен
+
         if (text.indexOf("${") < 0) {
             return text;
         }
@@ -115,11 +112,6 @@ public class ColorFormatting {
         return PATTERN.matcher(text).replaceAll(Matcher.quoteReplacement(getColor(red, green, blue, alpha)));
     }
 
-    /**
-     * Парсит тег цвета в позиции {@code index}. Поддерживает ${rgb(...)}, ${rgba(...)}, ${reset}.
-     *
-     * @return {@code null}, если в этой позиции нет тега
-     */
     public static ColorTag parseTag(String text, int index, int defaultColor) {
         if (text == null || index < 0 || index >= text.length() - 1) {
             return null;

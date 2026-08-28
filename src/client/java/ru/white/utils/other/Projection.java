@@ -1,6 +1,5 @@
 package ru.white.utils.other;
 
-
 import ru.white.utils.annotation.IMinecraft;
 import ru.white.utils.render.RenderUtil;
 import lombok.experimental.UtilityClass;
@@ -18,7 +17,6 @@ import static net.minecraft.util.math.MathHelper.wrapDegrees;
 
 @UtilityClass
 public class Projection implements IMinecraft {
-
     private static final double NEAR_PLANE = 0.05;
 
     public Vec3d worldSpaceToScreenSpace(Vec3d pos) {
@@ -26,8 +24,7 @@ public class Projection implements IMinecraft {
         if (camera == null) return Vec3d.ZERO;
 
         int displayHeight = mc.getWindow().getFramebufferHeight();
-        // glGetIntegerv(GL_VIEWPORT) — синхронный запрос к драйверу, стопорит пайплайн;
-        // в момент наших рендер-ивентов вьюпорт всегда равен фреймбуферу
+
         int[] viewport = {0, 0, mc.getWindow().getFramebufferWidth(), displayHeight};
         Vector3f target = new Vector3f();
 
@@ -63,19 +60,12 @@ public class Projection implements IMinecraft {
         return getViewZ(pos, cameraPos, toMatrix4d(RenderUtil.Render3D.lastWorldSpaceMatrix), new Vector4d());
     }
 
-    /** Вариант с уже сконвертированной матрицей и переиспользуемым вектором. */
     private double getViewZ(Vec3d pos, Vec3d cameraPos, Matrix4d worldSpace, Vector4d view) {
         view.set(pos.x - cameraPos.x, pos.y - cameraPos.y, pos.z - cameraPos.z, 1.0);
         worldSpace.transform(view);
         return -view.z;
     }
 
-    /**
-     * Клип-координаты угла бокса. Матрицы (worldSpace и combined = proj * model)
-     * передаются готовыми: раньше они конвертировались и перемножались заново
-     * на КАЖДЫЙ из 8 углов, т.е. 9 умножений матриц 4x4 и 32 аллокации Matrix4d
-     * на одну сущность на кадр. Значения при этом ровно те же.
-     */
     private void worldSpaceToClipSpaceDouble(Vec3d pos, Vec3d cameraPos,
                                              Matrix4d worldSpace, Matrix4d combined,
                                              Vector4d view, double[] out, int offset) {
@@ -89,10 +79,6 @@ public class Projection implements IMinecraft {
         out[offset + 4] = -view.z;
     }
 
-    /**
-     * Клип -> экран. Пишет x,y в {@code out} (z вызывающим не используется),
-     * чтобы не плодить Vec3d на каждый угол и каждое ребро.
-     */
     private void clipToScreenDouble(double clipX, double clipY, double clipW,
                                     int[] viewport, int displayHeight, double scale,
                                     double[] out) {
@@ -145,8 +131,6 @@ public class Projection implements IMinecraft {
 
         Vec3d boxCenter = box.getCenter();
 
-        // Матрицы конвертируются и перемножаются ОДИН раз на сущность,
-        // а не заново на каждый из 8 углов бокса
         Matrix4d worldSpace = toMatrix4d(RenderUtil.Render3D.lastWorldSpaceMatrix);
         Matrix4d combined = toMatrix4d(RenderUtil.Render3D.lastProjMat)
                 .mul(toMatrix4d(RenderUtil.Render3D.lastModMat));
@@ -176,8 +160,6 @@ public class Projection implements IMinecraft {
         corners[6] = new Vec3d(box.maxX, box.maxY, box.minZ);
         corners[7] = new Vec3d(box.maxX, box.maxY, box.maxZ);
 
-        // clips[i * 5 + {0..4}] = {x, y, z, w, viewZ} — плоский массив вместо
-        // массива record'ов ClipResult
         double[] clips = CLIPS;
         for (int i = 0; i < 8; i++) {
             worldSpaceToClipSpaceDouble(corners[i], cameraPos, worldSpace, combined, view, clips, i * 5);
@@ -253,15 +235,12 @@ public class Projection implements IMinecraft {
         return new Vector4d(minX, minY, maxX, maxY);
     }
 
-    // Константа — раньше пересоздавалась (13 массивов) на каждую сущность
     private static final int[][] EDGES = {
             {0, 1}, {0, 2}, {1, 3}, {2, 3},
             {4, 5}, {4, 6}, {5, 7}, {6, 7},
             {0, 4}, {1, 5}, {2, 6}, {3, 7}
     };
 
-    // Скретч-буферы: getVector4D вызывается для каждой сущности каждый кадр
-    // из одного (рендерного) потока и не вложен сам в себя
     private static final int[] VIEWPORT = new int[4];
     private static final Vec3d[] CORNERS = new Vec3d[8];
     private static final double[] CLIPS = new double[8 * 5];

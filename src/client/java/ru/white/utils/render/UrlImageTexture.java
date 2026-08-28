@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class UrlImageTexture {
-
     private static final Map<String, UrlImageTexture> CACHE = new ConcurrentHashMap<>();
 
     private final String url;

@@ -1,8 +1,5 @@
 package ru.white.manager.events.orbit;
 
-/**
- * Default event priorities.
- */
 public class EventPriority {
     public static final int HIGHEST = 500;
     public static final int HIGH = 250;

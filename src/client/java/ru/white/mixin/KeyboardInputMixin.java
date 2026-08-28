@@ -1,6 +1,5 @@
 package ru.white.mixin;
 
-
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import ru.white.manager.event_impl.EventMoveInput;
 import ru.white.manager.event_impl.InputEvent;
@@ -19,7 +18,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(KeyboardInput.class)
 public abstract class KeyboardInputMixin extends Input {
-
     @ModifyExpressionValue(method = "tick", at = @At(value = "NEW", target = "(ZZZZZZZ)Lnet/minecraft/util/PlayerInput;"))
     private PlayerInput tickHook(PlayerInput original) {
         InputEvent event = new InputEvent(original);
@@ -39,10 +37,8 @@ public abstract class KeyboardInputMixin extends Input {
         }
     }
 
-
     @Inject(method = "tick",at = @At(value = "FIELD", target = "Lnet/minecraft/client/input/KeyboardInput;playerInput:Lnet/minecraft/util/PlayerInput;",ordinal = 0, shift = At.Shift.AFTER), cancellable = true)
     public void injectInputEvent(CallbackInfo ci) {
-
         EventMoveInput event = new EventMoveInput(this.playerInput,
                 abobaGetMovementMultiplier(this.playerInput.forward(), this.playerInput.backward()),
                 abobaGetMovementMultiplier(this.playerInput.left(), this.playerInput.right())

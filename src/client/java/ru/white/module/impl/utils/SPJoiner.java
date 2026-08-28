@@ -23,9 +23,6 @@ import net.minecraft.util.Hand;
         category = Category.OTHER
 )
 public class SPJoiner extends Module {
-
-
-
     @EventHandler
     public void onEvent(EventUpdate event) {
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -37,7 +34,6 @@ public class SPJoiner extends Module {
             this.toggle();
             return;
         }
-
 
         if (screen instanceof HandledScreen<?> handledScreen) {
             ScreenHandler handler = handledScreen.getScreenHandler();
@@ -61,8 +57,6 @@ public class SPJoiner extends Module {
             selectCompass();
         }
     }
-
-
 
     public static void selectCompass() {
         MinecraftClient mc = MinecraftClient.getInstance();

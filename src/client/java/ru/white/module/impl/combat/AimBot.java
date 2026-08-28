@@ -11,7 +11,6 @@ import ru.white.module.api.ModuleInfo;
 import ru.white.module.api.settings.impl.BooleanSetting;
 import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
-import ru.white.utils.aura.AuraUtil;
 import ru.white.utils.aura.GCDUtil;
 import ru.white.utils.aura.RayTraceUtil;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -35,15 +34,12 @@ import java.util.concurrent.ThreadLocalRandom;
         category = Category.COMBAT
 )
 public class AimBot extends Module {
-
     public ModeSetting mode = new ModeSetting(this, "Режим", "Обычный", "Нейро");
-
 
     public BooleanSetting player = new BooleanSetting(this, "Атаковать игроков", true);
     public BooleanSetting golyPlayer = new BooleanSetting(this, "Атаковать голых (без брони)", true);
     public BooleanSetting mobs = new BooleanSetting(this, "Атаковать мобов", false);
     public BooleanSetting friend = new BooleanSetting(this, "Атаковать друзей", false);
-
 
     public SliderSetting speed = new SliderSetting(this, "Плавность по горизонтали", 0.08F,
             0.01F, 1.0F, 0.01F)  .setVisible(() -> mode.is("Обычный"));
@@ -54,7 +50,6 @@ public class AimBot extends Module {
     public BooleanSetting onlyHelpToInput = new BooleanSetting(this, "Умная остановка (не дергать при наведении)"
             , true)  .setVisible(() -> mode.is("Обычный"));
 
-
     public BooleanSetting DynamicSpeed = new BooleanSetting(this, "Умная скорость (Реализм)", true)  .setVisible(() -> mode.is("Обычный"));
 
     public SliderSetting attackSpeedBoost = new SliderSetting(this, "Доводка при ударе (Множитель)",
@@ -62,7 +57,6 @@ public class AimBot extends Module {
 
     public SliderSetting speedRandomness = new SliderSetting(this, "Случайное изменение скорости",
             0.02F, 0.00F, 0.1F, 0.01F)  .setVisible(() -> mode.is("Обычный") && DynamicSpeed.getValue());
-
 
     public BooleanSetting useNoise = new BooleanSetting(this, "Дрожание прицела (Шум)", true)  .setVisible(() -> mode.is("Обычный"));
 
@@ -113,7 +107,6 @@ public class AimBot extends Module {
 
     @EventHandler
     public void onEvent(EventDisplay eventUpdate) {
-
         if (mode.is("Нейро")) {
             return;
         }
@@ -136,27 +129,22 @@ public class AimBot extends Module {
                 noiseY = 0;
             }
 
-
             float finalSpeedX = this.speed.getValue();
             float finalSpeedY = this.speed2.getValue();
 
             if (DynamicSpeed.getValue()) {
-
                 float randomFactor = (float) ThreadLocalRandom.current().nextDouble(-speedRandomness.getValue(), speedRandomness.getValue());
                 finalSpeedX += randomFactor;
                 finalSpeedY += randomFactor;
-
 
                 if (mc.player.handSwingProgress > 0) {
                     finalSpeedX *= attackSpeedBoost.getValue();
                     finalSpeedY *= attackSpeedBoost.getValue();
                 }
 
-
                 finalSpeedX = MathHelper.clamp(finalSpeedX, 0.01F, 1.5F);
                 finalSpeedY = MathHelper.clamp(finalSpeedY, 0.00F, 1.5F);
             }
-
 
             float targetYaw = (float) Math.toDegrees(Math.atan2(-vec.x, vec.z)) + noiseX;
             float currentYaw = mc.player.getYaw();

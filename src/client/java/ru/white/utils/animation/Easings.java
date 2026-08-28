@@ -64,7 +64,6 @@ public final class Easings {
     public final Easing BOUNCE_IN = (value) -> 1.0D - BOUNCE_OUT.ease(1.0D - value);
     public final Easing BOUNCE_IN_OUT = (value) -> value < 0.5D ? (1.0D - BOUNCE_OUT.ease(1.0D - 2.0D * value)) / 2.0D : (1.0D + BOUNCE_OUT.ease(2.0D * value - 1.0D)) / 2.0D;
 
-
     public Easing powIn(double n) {
         return (value) -> Math.pow(value, n);
     }

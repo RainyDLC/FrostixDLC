@@ -1,6 +1,5 @@
 package ru.white.mixin;
 
-
 import ru.white.manager.event_impl.AttackEvent;
 import ru.white.manager.event_impl.EventType;
 import ru.white.manager.event_impl.UsingItemEvent;
@@ -17,7 +16,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ClientPlayerInteractionManager.class)
 public class ClientPlayerInteractionManagerMixin {
-
     @Inject(method = "interactItem", at = @At(value = "RETURN"))
     public void interactItemHook(PlayerEntity player, Hand hand, CallbackInfoReturnable<ActionResult> cir) {
         if (cir.getReturnValue() instanceof ActionResult.Success success && !success.swingSource().equals(ActionResult.SwingSource.CLIENT)) {
@@ -49,7 +47,4 @@ public class ClientPlayerInteractionManagerMixin {
         event.hook();
         if (event.isCancelled()) cir.setReturnValue(ActionResult.PASS);
     }
-
-
-
 }

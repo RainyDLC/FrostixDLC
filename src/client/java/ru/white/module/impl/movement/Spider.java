@@ -15,7 +15,6 @@ import ru.white.module.api.settings.impl.SliderSetting;
         category = Category.MOVEMENT
 )
 public class Spider extends Module {
-
     public ModeSetting type = new ModeSetting(this, "Режим", "Vanilla");
     public SliderSetting speed = new SliderSetting(this, "Скорость", 0.2F, 0.1F, 1.0F, 0.05F);
 

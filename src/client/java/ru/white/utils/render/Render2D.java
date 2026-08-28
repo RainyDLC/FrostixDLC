@@ -9,7 +9,6 @@ import org.lwjgl.opengl.GL14;
 import static ru.white.utils.render.RenderUtil.Images.texture;
 
 public class Render2D {
-
     private final FontRenderer fontRenderer;
     private final RectPipeline rectPipeline;
     private final CircleProgressPipeline circleProgressPipeline;
@@ -94,7 +93,6 @@ public class Render2D {
     public static void beginOverlay() {
         inOverlayMode = true;
 
-        // HUD — контролируемая зона: включаем батчинг 2D-примитивов
         DrawBatcher.setEnabled(true);
 
         savedDepthTest = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
@@ -108,7 +106,6 @@ public class Render2D {
     }
 
     public static void endOverlay() {
-        // Сбрасываем недорисованные батчи и выключаем батчинг (экраны рисуют немедленно)
         DrawBatcher.setEnabled(false);
 
         if (savedDepthMask) {
@@ -135,7 +132,4 @@ public class Render2D {
                 sprite.getMaxU(), sprite.getMaxV(),
                 color, smoothness, 0f);
     }
-
-
-
     }

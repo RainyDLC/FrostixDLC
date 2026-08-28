@@ -1,6 +1,5 @@
 package ru.white.utils.aura;
 
-
 import ru.white.module.impl.combat.AttackAura;
 import ru.white.utils.annotation.IMinecraft;
 import lombok.Getter;
@@ -20,14 +19,10 @@ import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-
 
 @UtilityClass
 public class UAttack implements IMinecraft {
-
     private static final MinecraftClient mc = MinecraftClient.getInstance();
 
     public static int getAxeSlot() {
@@ -41,7 +36,6 @@ public class UAttack implements IMinecraft {
         return -1;
     }
 
-
     public static Runnable[] hitShieldBreakTaskForUse(LivingEntity livingIn, boolean enabled) {
         final Runnable[] pre$post = new Runnable[] { () -> {
         }, () -> {
@@ -51,7 +45,6 @@ public class UAttack implements IMinecraft {
             return pre$post;
 
         if (livingIn instanceof PlayerEntity player) {
-
             if (!player.isBlocking())
                 return pre$post;
 
@@ -60,19 +53,16 @@ public class UAttack implements IMinecraft {
             final Item mainItem = main.isEmpty() ? null : main.getItem();
             final Item offItem = off.isEmpty() ? null : off.getItem();
 
-
             if (mainItem == Items.SHIELD || offItem == Items.SHIELD) {
                 final int axeSlot = getAxeSlot();
                 final int handSlot = mc.player.getInventory().getSelectedSlot();
 
                 if (axeSlot != -1 && axeSlot != handSlot) {
-
                     pre$post[0] = () -> {
                         if (mc.getNetworkHandler() != null) {
                             mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(axeSlot));
                         }
                     };
-
 
                     pre$post[1] = () -> {
                         if (mc.getNetworkHandler() != null) {
@@ -85,7 +75,6 @@ public class UAttack implements IMinecraft {
 
         return pre$post;
     }
-
 
     public static Runnable[] resetShieldSilentTaskForUse(boolean enabled) {
         final Runnable[] pre$post = new Runnable[] { () -> {
@@ -118,10 +107,6 @@ public class UAttack implements IMinecraft {
 
         if (mc.player.isSprinting() && !mc.player.isOnGround()  && !AttackUtil.hasMovementRestrictions()) {
             pre$post[0] = () -> {
-                // «Silent» трогает только клавишу: снимать сам флаг спринта без
-                // пакета STOP_SPRINTING бессмысленно — сервер всё равно считает нас
-                // спринтующими и крит не даст, а клиент нарисует частицы крита,
-                // которого не было.
                 if (AttackAura.get().typeSprint.is("Silent")) {
                     mc.options.sprintKey.setPressed(false);
                 } else {
@@ -137,16 +122,6 @@ public class UAttack implements IMinecraft {
         return pre$post;
     }
 
-    /**
-     * Спринт в том виде, в котором о нём знает сервер.
-     *
-     * Крит считает сервер, и ваниль требует в этот момент !isSprinting(). Но о
-     * снятом спринте сервер узнаёт только из sendSprintingPacket(), а он вызывается
-     * внутри sendMovementPackets() — то есть ПОЗЖЕ нашего удара в том же тике.
-     * Поэтому снимать флаг прямо перед ударом бесполезно: сервер всё ещё считает
-     * нас спринтующими и вместо крита выдаёт sprint-knockback. Значение
-     * фиксируется в ClientPlayerEntityMixin ровно там, откуда уходит пакет.
-     */
     private static boolean sprintingOnServer;
 
     public static void setSprintingOnServer(boolean value) {
@@ -157,22 +132,11 @@ public class UAttack implements IMinecraft {
         return sprintingOnServer;
     }
 
-    /**
-     * Ванильное условие крита на момент удара — как его считает
-     * PlayerEntity.isCriticalHit() в 1.21.11 (проверено по байткоду).
-     */
     public static boolean isCriticalHit() {
         if (mc.player == null) return false;
 
-        // Заряд для крита ваниль требует СТРОГО больше 0.9, тогда как isCharged()
-        // пропускает удар уже при 0.9. Для скорости атаки 1.0 (топор, лопата) заряд
-        // на 18-м тике равен ровно 0.90, для скорости 2.0 — на 9-м: гейт пропускал,
-        // а крита не выходило. Именно поэтому «иногда не критует» чаще всего с топором.
         if (mc.player.getAttackCooldownProgress(0.5F) <= 0.9F) return false;
 
-        // Спринт: смотрим не на текущий флаг, а на тот, что уже уехал на сервер —
-        // именно по нему сервер и решает, крит или sprint-knockback. Гасит спринт
-        // заранее AttackAura.updateCritSprint().
         if (sprintingOnServer) return false;
 
         return mc.player.fallDistance > 0.0F
@@ -189,34 +153,23 @@ public class UAttack implements IMinecraft {
 
         if (!fallCheck) return true;
 
-        // Мейс: урон смэша считается по высоте падения, а не по криту,
-        // поэтому крит-гейт к нему не применяем
         if (mc.player.getMainHandStack().getItem() == Items.MACE) {
             return true;
         }
 
-        // «Только криты» — строго ванильное условие крита.
-        // Раньше здесь стояла проверка «скоро приземлимся», причём ДО этого гейта и
-        // безусловно его обходившая. Стоя на земле velocity.y равен -0.0784, а не
-        // нулю, поэтому она срабатывала непрерывно, и аура спокойно била с земли.
         if (AttackAura.get().others.getValue("Только криты")) {
             return isCriticalHit();
         }
 
         if (AttackAura.get().others.getValue("Умные криты")) {
             if (isCriticalHit()) return true;
-            // не бьём, пока зажат прыжок — придерживаем удар до падения
+
             return !mc.options.jumpKey.isPressed() || AttackUtil.hasMovementRestrictions();
         }
 
         return true;
     }
 
-    /**
-     * Отправка удара. Порядок повторяет ванильный MinecraftClient.doAttack():
-     * attackEntity (пакет + player.attack, который считает крит и сбрасывает заряд),
-     * затем swingHand.
-     */
     public static boolean useEntity(LivingEntity livingIn, Runnable preHit, Runnable postHit, Hand hand) {
         if (preHit != null)
             preHit.run();
@@ -235,28 +188,10 @@ public class UAttack implements IMinecraft {
     @Getter
     private static final StopWatch cooldownTimer = new StopWatch();
 
-    /**
-     * Заряд атаки по ванильному счётчику. Порог 0.9 — ровно тот, при котором ваниль
-     * разрешает крит и свип; урон при нём ≈88%, а до 100% пришлось бы ждать ещё тик.
-     * Бить сильно раньше бессмысленно: множитель урона равен 0.2 + p²·0.8, то есть
-     * при половинном заряде удар отнимает пятую часть от нормального.
-     */
     public static boolean isCharged() {
         return mc.player != null && mc.player.getAttackCooldownProgress(0.5F) >= 0.9F;
     }
 
-    /**
-     * Будет ли заряд достаточен для удара через {@code ticks} тиков — по ванильному
-     * счётчику, а не по миллисекундам.
-     *
-     * getMsCooldown() считает время до ПОЛНОГО заряда (1.0), а бить ваниль разрешает
-     * уже с 0.9 — на 1-2 тика раньше. Любое окно, посчитанное «за N мс до полного
-     * заряда», поэтому открывается ПОЗЖЕ первого возможного удара, и всё, что к этому
-     * окну привязано (гашение спринта, наведение), опаздывает.
-     *
-     * Шаг счётчика за тик = attackSpeed / 20, ровно как в getAttackCooldownProgress:
-     * (lastAttackedTicks + 0.5) / (20 / attackSpeed).
-     */
     public static boolean chargeReadyIn(int ticks) {
         if (mc.player == null)
             return false;
@@ -269,24 +204,16 @@ public class UAttack implements IMinecraft {
         return mc.player.getAttackCooldownProgress(0.5F) + perTick * ticks >= 0.9F;
     }
 
-    /** Интервал полного заряда в мс — для предсказания удара (пре-наведение). */
     public static long getMsCooldown() {
         if (mc.player == null)
             return 500L;
 
         double attackSpeed = mc.player.getAttributeValue(EntityAttributes.ATTACK_SPEED);
 
-
         if (attackSpeed <= 0.0D)
             return 500L;
 
-        // полный заряд = 1/attackSpeed секунды — ровно то, что считает ванильный
-        // счётчик lastAttackedTicks. Бить раньше = неполный урон и никаких критов.
         long msCooldown = (long) Math.ceil(1000.0D / attackSpeed);
-
-
-
-
 
         return msCooldown;
     }
@@ -296,7 +223,6 @@ public class UAttack implements IMinecraft {
     }
 
     public static boolean anyEntityOnRay(LivingEntity livingIn, double range) {
-        // рейкаст по хитбоксу цели — ровно так удар валидирует античит
         if (livingIn != null) {
             boolean ignoreBlocks = AttackAura.get().others.getValue("Бить через блоки");
             return LagCompensation.rayHits(livingIn, (float) range, ignoreBlocks);
@@ -304,26 +230,15 @@ public class UAttack implements IMinecraft {
         return false;
     }
 
-
     public static boolean shouldAttack(LivingEntity livingTarget, boolean rayCast, boolean distanceCheck,
                                        boolean fallCheck, long cooldownMSOffset, float[] ranges) {
-        // dst - validDistance кастомный метод? Если стандартный - distanceTo
-        // Предполагаем, что IMinecraft или миксин добавляет validDistance. Если нет,
-        // замените на livingTarget.distanceTo(mc.player) <= ranges[0]
         if (distanceCheck && livingTarget != null && !AuraUtil.validDistance(livingTarget, ranges[0], true))
             return false;
 
-        // Настоящий удар (offset >= 0) — по ванильному счётчику заряда.
-        // Порог 0.9 — тот же, что требует ваниль для крита и свипа: удар проходит
-        // через 11 тиков после предыдущего, а серверный инвуль цели длится 10,
-        // поэтому «фотки» из-за собственного удара невозможны и без проверки
-        // hurtTime. Отдельная проверка hurtTime здесь только добавляла задержку:
-        // клиент узнаёт о попадании лишь через пинг, и инвуль на клиенте гас
-        // позже, чем накапливался заряд.
         if (cooldownMSOffset >= 0L) {
             if (!isCharged())
                 return false;
-            // предмет на откате (мейс после смэша, жемчуг) — удар уйдёт впустую
+
             if (mc.player != null
                     && mc.player.getItemCooldownManager().isCoolingDown(mc.player.getMainHandStack()))
                 return false;
@@ -331,11 +246,8 @@ public class UAttack implements IMinecraft {
             return false;
         }
 
-        // best moment
         boolean validNext = UAttack.isBestMomentToHit(fallCheck);
 
-
-        // ray cast rule
         if (validNext && rayCast && !anyEntityOnRay(livingTarget, ranges[0]))
             validNext = false;
 
@@ -347,27 +259,15 @@ public class UAttack implements IMinecraft {
         return shouldAttack(livingTarget, rayCast, true, fallCheck, cooldownMSOffset, ranges);
     }
 
-    /**
-     * За сколько тиков до удара начинать гасить спринт: пакет уходит в конце тика
-     * (sendSprintingPacket), а удар — на HEAD следующего, плюс тик запаса на то,
-     * что клавиша бега успеет отпуститься до tickMovement().
-     */
     private static final int SPRINT_LEAD_TICKS = 2;
 
     public static boolean resetSprintTick(LivingEntity targetIn, float[] ranges) {
         if (targetIn == null || mc.player == null)
             return false;
 
-        // Окно раньше считалось msCooldownReached(-50) — 50 мс до ПОЛНОГО заряда,
-        // тогда как удар открывается на 0.9: при скорости атаки 1.0 это тик 18
-        // (900 мс), а гашение включалось только на 950 мс. Спринт уезжал на сервер
-        // с опозданием на 1-2 тика, и на коротком прыжке окно крита успевало
-        // закрыться раньше, чем аура получала право ударить.
         if (!chargeReadyIn(SPRINT_LEAD_TICKS))
             return false;
 
-        // Запас по дистанции: гасить надо заранее, а за эти два тика цель ещё
-        // сближается — по точной дистанции удара окно бы не открылось вовремя.
         if (!AuraUtil.validDistance(targetIn, ranges[0] + 0.5F, true))
             return false;
 

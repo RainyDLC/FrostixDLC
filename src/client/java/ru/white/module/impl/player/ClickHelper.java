@@ -1,6 +1,5 @@
 package ru.white.module.impl.player;
 
-import org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter;
 import ru.white.Client;
 import ru.white.manager.event_impl.EventKey;
 import ru.white.manager.event_impl.EventTick;
@@ -15,7 +14,6 @@ import ru.white.module.api.ModuleInfo;
 import ru.white.module.api.settings.impl.BindSetting;
 import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.impl.combat.AttackAura;
-import ru.white.module.impl.display.Hud;
 import ru.white.module.impl.display.InterFace;
 import ru.white.theme.ThemeColor;
 import ru.white.utils.animation.Animation;
@@ -57,10 +55,6 @@ import java.util.concurrent.ConcurrentHashMap;
         category = Category.PLAYER
 )
 public class ClickHelper extends Module {
-
-
-
-
     public BindSetting friend = new BindSetting(this, "Клавиша добавления в друзья", -1);
     public BindSetting perka = new BindSetting(this, "Клавиша кидание Эндер жемчуга", -1);
     public BindSetting coordsKey = new BindSetting(this, "Клавиша координат", -1);
@@ -69,7 +63,6 @@ public class ClickHelper extends Module {
     public final BindSetting expKey = new BindSetting(this, "Клавиша опыта", -1);
 
     public ModeSetting type = new ModeSetting(this,"Режим","FunTime","HolyWorld");
-    
 
     public final BindSetting eyeKey = new BindSetting(this, "Клавиша дезки", -1).setVisible(() -> type.is("FunTime"));
     public final BindSetting sugarKey = new BindSetting(this, "Клавиша явки", -1).setVisible(() -> type.is("FunTime"));
@@ -79,15 +72,12 @@ public class ClickHelper extends Module {
     public final BindSetting windKey = new BindSetting(this, "Клавиша з.ветра", -1).setVisible(() -> type.is("FunTime"));
     public final BindSetting bojAurakey = new BindSetting(this, "Клавиша бож.ауры", -1).setVisible(() -> type.is("FunTime"));
 
-
     public final BindSetting keySerka = new BindSetting(this, "Клавиша радейки", -1).setVisible(() -> type.is("FunTime"));
     public final BindSetting keyHilka = new BindSetting(this, "Клавиша бож.воды", -1).setVisible(() -> type.is("FunTime"));
     public final BindSetting palladinKey = new BindSetting(this, "Клавиша Палладина", -1).setVisible(() -> type.is("FunTime"));
     public final BindSetting assassinKey = new BindSetting(this, "Клавиша Ассасина", -1).setVisible(() -> type.is("FunTime"));
     public final BindSetting sleepKey = new BindSetting(this, "Клавиша Снотворного", -1).setVisible(() -> type.is("FunTime"));
     public final BindSetting angerKey = new BindSetting(this, "Клавиша Гнева", -1).setVisible(() -> type.is("FunTime"));
-
-
 
     public final BindSetting holyStunKey = new BindSetting(this, "Клавиша стана", -1).setVisible(() -> type.is("HolyWorld"));
     public final BindSetting holyTrapKey = new BindSetting(this, "Клавиша трапки", -1).setVisible(() -> type.is("HolyWorld"));
@@ -105,7 +95,6 @@ public class ClickHelper extends Module {
         return Instance.get(ClickHelper.class);
     }
 
-
     private int oldSlot = -1;
 
     private int step = 0;
@@ -117,18 +106,14 @@ public class ClickHelper extends Module {
     private int chorusStep = 0;
     private final StopGPT chorusTimer = new StopGPT();
 
-
     @EventHandler
     public void onKey(EventKey e) {
         if (mc.player == null || mc.world == null) return;
 
-
         handleBind_2(e.getKey());
     }
 
-
     private void startPearlSwap() {
-
         itemSlot = -1;
 
         for (int i = 0; i < 36; i++) {
@@ -151,8 +136,6 @@ public class ClickHelper extends Module {
     }
 
     private void setKey(boolean state) {
-
-
         KeyBinding[] movementKeys = {
                 mc.options.forwardKey,
                 mc.options.backKey,
@@ -164,10 +147,8 @@ public class ClickHelper extends Module {
         long handle = mc.getWindow().getHandle();
 
         for (KeyBinding keyBinding : movementKeys) {
-
             boolean pressed = state && InputUtil.isKeyPressed(mc.getWindow(), keyBinding.getDefaultKey().getCode());
             keyBinding.setPressed(pressed);
-
         }
     }
 
@@ -175,7 +156,6 @@ public class ClickHelper extends Module {
         if (mc.player == null) return;
         mc.player.networkHandler.sendChatMessage("/cc " + mc.player.getBlockX() + " " + mc.player.getBlockY() + " " + mc.player.getBlockZ());
     }
-
 
     @Override
     public void onDisable() {
@@ -186,7 +166,6 @@ public class ClickHelper extends Module {
     }
 
     private void handleFriendAction() {
-
         if (AttackAura.target != null)
             return;
 
@@ -209,24 +188,19 @@ public class ClickHelper extends Module {
         }
     }
 
-
-
     private int itemSlot = -1;
     private Item targetItem = null;
     private String targetName = null;
 
-
     private final Map<Item, Float> animations = new HashMap<>();
-    // cdTracker: item -> [startTick, durationTicks] (-1 until computed on 2nd tick)
+
     private final Map<Item, long[]> cdTracker = new ConcurrentHashMap<>();
 
     private static final int HUD_COLS = 20, HUD_CW = 24, HUD_CH = 24, HUD_GAP = 1;
     private static final float BADGE_PAD_X = 4, BADGE_PAD_Y = 3, BADGE_FONT = 5F;
 
-    /** Плавная высота красной заливки кулдауна по предметам. */
     private final Map<Item, Animation> cdAnimations = new HashMap<>();
 
-    // кэши item-hud: без new ItemStack и полного обхода инвентаря на каждом кадре
     private final Map<Item, ItemStack> defaultStacks = new HashMap<>();
     private final Map<Item, Integer> itemCounts = new HashMap<>();
     private final Map<Item, String> countTexts = new HashMap<>();
@@ -236,7 +210,6 @@ public class ClickHelper extends Module {
         return defaultStacks.computeIfAbsent(item, Item::getDefaultStack);
     }
 
-    /** Счётчик предметов пересобирается не чаще раза в 250 мс. */
     private int itemCountCached(Item item) {
         long now = System.currentTimeMillis();
         if (now - lastCountMs >= 250L) {
@@ -276,8 +249,6 @@ public class ClickHelper extends Module {
         }
     }
     private void handleBind_2(int key) {
-
-
         if (key == friend.get() && key != -1) {
             handleFriendAction();
         }
@@ -286,15 +257,10 @@ public class ClickHelper extends Module {
         Item toUse = null;
 
         if (key == perka.get()) {
-
             toUse = Items.ENDER_PEARL;
         }
 
-
-
         if(type.is("FunTime")) {
-
-
             if (key == sugarKey.get()) toUse = Items.SUGAR;
             else if (key == eyeKey.get()) toUse = Items.ENDER_EYE;
             else if (key == snowKey.get()) toUse = Items.SNOWBALL;
@@ -302,7 +268,6 @@ public class ClickHelper extends Module {
             else if (key == trapKey.get()) toUse = Items.NETHERITE_SCRAP;
             else if (key == windKey.get()) toUse = Items.WIND_CHARGE;
             else if (key == bojAurakey.get()) toUse = Items.PHANTOM_MEMBRANE;
-
 
             if (key == keyHilka.get()) {
                 RotationProcess.update(new Rotation(mc.player.getYaw() + MathUtil.randomValue(-3, 3), 80 + MathUtil.randomValue(2, 8)), 360, 360, 2, 200);
@@ -334,7 +299,6 @@ public class ClickHelper extends Module {
                 return;
             }
             if (toUse != null) {
-
                 startAction(toUse);
             }
         } else if(type.is("HolyWorld")) {
@@ -361,7 +325,6 @@ public class ClickHelper extends Module {
 
         boolean nowPressed = InputUtil.isKeyPressed(mc.getWindow(), ek);
 
-        // Начало нажатия
         if (!expHeld && nowPressed && step == 0 && expStep == 0) {
             int slot = -1;
             for (int i = 0; i < 36; i++) {
@@ -382,14 +345,13 @@ public class ClickHelper extends Module {
 
         expHeld = nowPressed;
 
-        // Когда отпустили клавишу
         if (expStep == 2 && !nowPressed) {
             expStep = 3;
             expTimer.reset();
         }
 
         switch (expStep) {
-            case 1 -> { // Свап предмета
+            case 1 -> {
                 if (expSlot > 9) setKey(false);
                 if (expTimer.hasTimePassed(50)) {
                     if (expSlot < 9) {
@@ -402,11 +364,11 @@ public class ClickHelper extends Module {
                     expStep = 2;
                 }
             }
-            case 2 -> { // Зажатие ПКМ
+            case 2 -> {
                 mc.options.useKey.setPressed(true);
                 RotationProcess.update(new Rotation(FreeLookUtil.freeYaw,90),90,90,2,25);
             }
-            case 3 -> { // Возврат слота
+            case 3 -> {
                 mc.options.useKey.setPressed(false);
                 if (expSlot > 9) setKey(false);
                 if (expTimer.hasTimePassed(50)) {
@@ -448,7 +410,6 @@ public class ClickHelper extends Module {
         findSlotAndStart();
     }
 
-
     private void startActionByName(String name) {
         if (mc.player == null) return;
         targetItem = null;
@@ -463,7 +424,6 @@ public class ClickHelper extends Module {
             if (stack.isEmpty()) continue;
 
             if (targetName != null) {
-
                 String stackName = stack.getName().getString().toLowerCase();
                 if (stackName.contains(targetName)) {
                     itemSlot = i;
@@ -512,15 +472,10 @@ public class ClickHelper extends Module {
         return active;
     }
 
-    /** Ширина плашки с названием клавиши — она может быть шире самой ячейки. */
     private float badgeWidth(int key) {
         return Fonts.sf_regular.getWidth(Keyboard.keyName(key), BADGE_FONT) + BADGE_PAD_X * 2;
     }
 
-    /**
-     * X-смещения ячеек: если у соседних биндов длинные названия, шаг между предметами растёт,
-     * чтобы плашки клавиш не наезжали друг на друга.
-     */
     private float[] hudOffsets(List<Integer> active, BindSetting[] keys) {
         float[] xs = new float[active.size()];
         float x = 0;
@@ -541,26 +496,22 @@ public class ClickHelper extends Module {
         return xs;
     }
 
-    /** реальный размер худа биндов — той же логикой, что и renderHud */
     public org.joml.Vector2f getHudSize() {
         BindSetting[] keys = hudKeys();
 
         List<Integer> active = hudActive(keys);
         if (active.isEmpty()) return new org.joml.Vector2f(0, 0);
 
-        // Получаем текущее значение ползунка размера
         float S = ru.white.module.impl.display.InterFace.getInstance().sizeHud.getValue();
 
         float[] xs = hudOffsets(active, keys);
 
-        // Масштабируем базовые константы
         float scaledHUD_CW = HUD_CW * S;
         float scaledHUD_CH = HUD_CH * S;
         float scaledHUD_GAP = HUD_GAP * S;
 
         float width = 0;
         for (int n = 0; n < active.size(); n++) {
-            // Умножаем badgeWidth и отступ на S, так же как мы делали при рендере
             float bw = badgeWidth(keys[active.get(n)].get()) * S;
             float scaledX = xs[n] * S;
 
@@ -569,7 +520,6 @@ public class ClickHelper extends Module {
 
         int rows = (active.size() + HUD_COLS - 1) / HUD_COLS;
 
-        // Вычисляем итоговую высоту с учетом отмасштабированных ячеек и отступов
         return new org.joml.Vector2f(width, rows * scaledHUD_CH + (rows - 1) * scaledHUD_GAP);
     }
     public void renderHud(DrawContext ctx, float sx, float sy) {
@@ -581,10 +531,8 @@ public class ClickHelper extends Module {
         List<Integer> active = hudActive(keys);
         if (active.isEmpty()) return;
 
-        // Получаем текущее значение ползунка размера
         float S = InterFace.getInstance().sizeHud.getValue();
 
-        // Масштабируем константы ячеек
         final float CW = 20f * S;
         final float CH = 20f * S;
         final float TH = 0f * S;
@@ -598,14 +546,12 @@ public class ClickHelper extends Module {
             Item item = its[idx];
             int  row  = n / HUD_COLS;
 
-            // Умножаем xs[n] на S (если внутри hudOffsets еще нет масштабирования)
             float cx  = sx + xs[n] * S;
             float cy  = sy + row * (CH + TH + GAP);
 
             RenderUtil.Render2D.glow(cx, cy, CW, CH - 0.5F * S, ColorUtil.getColor(0, 0.1F), 5f * S, 12f * S, 1);
             RenderUtil.Blur.blur(cx, cy, CW, CH, 1, 5f * S, ColorUtil.replAlpha(ColorUtil.background(),InterFace.getInstance().alphaHUD.getValue()));
 
-            // красная заливка опускается вместе с кулдауном
             Animation cdAnim = cdAnimations.computeIfAbsent(item, i -> new Animation());
             cdAnim.update();
             cdAnim.run(mc.player.getItemCooldownManager().getCooldownProgress(defaultStack(item), 0F), 0.12F, Easings.LINEAR);
@@ -615,7 +561,6 @@ public class ClickHelper extends Module {
             if (fill > 0.001F) {
                 float fh = CH * fill;
 
-                // верхние углы округляются только когда заливка дошла до края ячейки
                 float top = 5f * S * MathUtil.clamp((fill - 0.85F) / 0.15F, 0F, 1F);
 
                 RenderUtil.Render2D.rect(cx, cy + CH - fh, CW, fh,
@@ -627,7 +572,7 @@ public class ClickHelper extends Module {
             float scaleFix = targetScale / currentScale;
 
             ctx.getMatrices().pushMatrix();
-            // Применяем масштаб S к сдвигу и итоговому размеру предмета
+
             ctx.getMatrices().translate((cx + CW / 2f) * scaleFix, (cy + CH / 2f - 1f * S) * scaleFix);
             ctx.getMatrices().scale(scaleFix * 0.5F * S, scaleFix * 0.5F * S);
             ctx.drawItem(defaultStack(item), -8, -9);
@@ -643,7 +588,6 @@ public class ClickHelper extends Module {
             float cntW = Fonts.sf_regular.getWidth(cnt, cntSize);
             Fonts.sf_regular.draw(cnt, cx + CW - cntW - 3f * S, cy + CH - 8f * S, cntSize, ThemeColor.getTextColor());
 
-            // timer cell
             float ty = cy + CH + GAP;
             RenderUtil.Render2D.rect(cx, ty, CW, TH, 0xCC181920, 2f * S);
 
@@ -664,7 +608,6 @@ public class ClickHelper extends Module {
             float scaledBadgeFont = BADGE_FONT * S;
             float textHeight = Fonts.sf_regular.getHeight(scaledBadgeFont);
 
-            // ширина считается тем же badgeWidth, умноженным на S
             float CW2 = badgeWidth(key) * S;
             float CH2 = textHeight + (BADGE_PAD_Y * 2f * S);
 
@@ -695,8 +638,6 @@ public class ClickHelper extends Module {
         }
         return n;
     }
-
-
 
     private void handleChorusKey() {
         if (mc.player == null || mc.interactionManager == null || mc.currentScreen != null) return;
@@ -745,7 +686,6 @@ public class ClickHelper extends Module {
                         mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, chorusSlot, chorusOldSlot, SlotActionType.SWAP, mc.player);
                     }
                     chorusStep = 2;
-
                 }
             }
             case 2 -> {mc.options.useKey.setPressed(true);}
@@ -766,7 +706,6 @@ public class ClickHelper extends Module {
                     }
                     chorusSlot = -1;
                     chorusStep = 0;
-
                 }
             }
         }
@@ -790,7 +729,6 @@ public class ClickHelper extends Module {
 
     @EventHandler
     public void onUpdate2(EventUpdate e) {
-
         if (mc.player == null || mc.interactionManager == null) return;
 
         handleChorusKey();
@@ -807,7 +745,6 @@ public class ClickHelper extends Module {
 
         switch (step) {
             case 1 -> {
-
                 RotationProcess.update(new Rotation(mc.gameRenderer.getCamera().getYaw(), mc.gameRenderer.getCamera().getPitch()), MathUtil.randomLerp(400, 900), MathUtil.randomLerp(400, 900), (int) MathUtil.randomLerp(4, 7), 100);
 
                 if (itemSlot < 9) {
@@ -827,9 +764,7 @@ public class ClickHelper extends Module {
                     mc.player.getInventory().setSelectedSlot(oldSlot);
                     mc.interactionManager.syncSelectedSlot();
                 } else {
-
                     mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, itemSlot, oldSlot, SlotActionType.SWAP, mc.player);
-
                 }
                 step = 4;
             }
@@ -844,7 +779,5 @@ public class ClickHelper extends Module {
                 targetName = null;
             }
         }
-
     }
-
 }

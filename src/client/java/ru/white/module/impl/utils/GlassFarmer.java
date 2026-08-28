@@ -21,7 +21,6 @@ import net.minecraft.util.math.Vec3d;
         category = Category.OTHER
 )
 public class GlassFarmer extends Module {
-
     protected static final MinecraftClient mc = MinecraftClient.getInstance();
 
     private BlockPos startPos = null;
@@ -33,7 +32,6 @@ public class GlassFarmer extends Module {
     private long actionTimer = 0L;
     private boolean isRotated = false;
     private BlockPos lastTargetPos = null;
-
 
     private final long clickDelayMs = 35L;
     private final int buildDelayTicks = 3;
@@ -50,7 +48,6 @@ public class GlassFarmer extends Module {
             this.toggle();
             return;
         }
-
 
         startPos = mc.player.getBlockPos();
         currentState = State.BUILDING;
@@ -78,7 +75,6 @@ public class GlassFarmer extends Module {
 
         if (currentState == State.BUILDING) {
             mc.options.attackKey.setPressed(false);
-
 
             if (buildTickCounter < buildDelayTicks) {
                 buildTickCounter++;
@@ -110,7 +106,6 @@ public class GlassFarmer extends Module {
             return;
         }
 
-        // Если нужно прыгнуть под себя
         if (currentX == 0 && currentZ == 0 && mc.player.getBlockPos().getY() <= targetPos.getY()) {
             if (mc.player.isOnGround()) {
                 mc.options.jumpKey.setPressed(true);
@@ -120,10 +115,8 @@ public class GlassFarmer extends Module {
             }
         }
 
-
         mc.player.getInventory().setSelectedSlot(sandSlot);
         lookAt(targetPos);
-
 
         if (!isRotated || !targetPos.equals(lastTargetPos)) {
             actionTimer = System.currentTimeMillis();
@@ -132,11 +125,9 @@ public class GlassFarmer extends Module {
             return;
         }
 
-
         if (System.currentTimeMillis() - actionTimer < clickDelayMs) {
             return;
         }
-
 
         BlockHitResult hitResult = new BlockHitResult(
                 new Vec3d(targetPos.getX() + 0.5, targetPos.getY() + 0.5, targetPos.getZ() + 0.5),
@@ -162,7 +153,6 @@ public class GlassFarmer extends Module {
         BlockPos targetPos = startPos.add(0, currentY, 0);
 
         if (mc.world.getBlockState(targetPos).getBlock() == Blocks.SAND) {
-
             mc.player.getInventory().setSelectedSlot(shovelSlot);
             lookAt(targetPos);
 
@@ -170,17 +160,14 @@ public class GlassFarmer extends Module {
                 actionTimer = System.currentTimeMillis();
                 isRotated = true;
                 lastTargetPos = targetPos;
-                return; // Ждем доводки головы
+                return;
             }
 
-            // 2. Легитная микрозадержка перед началом ломания
             if (System.currentTimeMillis() - actionTimer < clickDelayMs) {
                 return;
             }
 
-
             if (mc.interactionManager.updateBlockBreakingProgress(targetPos, Direction.UP)) {
-
                 if(!mc.options.attackKey.isPressed()) {
                     mc.options.attackKey.setPressed(true);
                 }
@@ -243,8 +230,6 @@ public class GlassFarmer extends Module {
         float yaw = (float) (Math.toDegrees(Math.atan2(diffZ, diffX)) - 90.0);
         float pitch = (float) (-Math.toDegrees(Math.atan2(diffY, diffXZ)));
 
-        // Используем твой RotationProcess.
-        // Параметры скорости yaw/pitch (180, 180) можно снизить (например до 80, 80), чтобы голова двигалась еще плавнее и легитнее.
         RotationProcess.update(new Rotation(yaw, pitch), 140, 140, 6, 1);
     }
 }

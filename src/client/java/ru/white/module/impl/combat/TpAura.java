@@ -18,25 +18,9 @@ import ru.white.module.api.settings.impl.BooleanSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.aura.UAttack;
 
-/**
- * TpAura: HvH телепорт-удар на ЛЮБОЙ дистанции через хопы.
- *
- * Дальняя дистанция разбивается на рывки по N блоков за тик (по умолчанию 6 —
- * ниже ванильного порога "moved too quickly" = 10), поэтому сервер принимает
- * каждую позицию и удар доходит даже с 50 блоков.
- *
- * Крит: честный прыжок -> хопы строго горизонтально на текущей высоте
- * (серверный fallDistance не сбрасывается) -> удар в падении = крит.
- *
- * Булава: хопы к цели -> подъём на высоту смэша -> сброс (серверный
- * fallDistance = высоте -> смэш + крит) -> удар -> хопы назад.
- *
- * Анти-промах: линия огня (8 углов, рейкаст), hurtTime == 0, полный кулдаун.
- */
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ModuleInfo(name = "TpAura", desc = "Teleport strike at any range via hops, always crit", category = Category.COMBAT)
 public class TpAura extends Module {
-
     public SliderSetting tpRadius = new SliderSetting(this, "Радиус телепорта", 15.0F, 3.0F, 50.0F, 0.5F);
     public SliderSetting standOff = new SliderSetting(this, "Дистанция удара", 2.2F, 1.5F, 3.0F, 0.1F);
     public SliderSetting cooldown = new SliderSetting(this, "Перезарядка", 800F, 250F, 2000F, 50F);
@@ -56,9 +40,9 @@ public class TpAura extends Module {
 
     private int phase = PHASE_IDLE;
     private Vec3d returnPos = null;
-    private Vec3d strikePos = null;   // точка над целью (последний хоп)
-    private Vec3d upPos = null;       // верхняя точка смэша булавы
-    private Vec3d dropPos = null;     // точка сброса для булавы
+    private Vec3d strikePos = null;
+    private Vec3d upPos = null;
+    private Vec3d dropPos = null;
     private LivingEntity strikeTarget = null;
     private long phaseDeadline = 0L;
     private long nextStrike = 0L;
@@ -94,7 +78,6 @@ public class TpAura extends Module {
 
         boolean mace = mc.player.getMainHandStack().getItem() == Items.MACE;
 
-        // крит-гейт: прыжок и ожидание падения (только не булава)
         if (!mace && critOnly.getValue()) {
             if (mc.player.isOnGround()) {
                 if (autoJump.getValue()) {
@@ -105,7 +88,6 @@ public class TpAura extends Module {
             if (mc.player.getVelocity().y >= 0) return;
         }
 
-        // точка удара на ТЕКУЩЕЙ высоте: хопы горизонтальные, крит не сбрасывается
         Vec3d landing = throughWalls.getValue()
                 ? landingSimple(target, standOff.getValue())
                 : findLanding(target, standOff.getValue());
@@ -125,7 +107,6 @@ public class TpAura extends Module {
         phaseDeadline = ms + 3000L;
     }
 
-    /** После прихода к цели: булава делает смэш-подъём/сброс, остальное бьёт сразу. */
     private void afterHopOut() {
         boolean mace = mc.player.getMainHandStack().getItem() == Items.MACE;
         if (!mace) {
@@ -161,7 +142,6 @@ public class TpAura extends Module {
         pin(dropPos);
         if (++phaseTicks < 2) return;
 
-        // анти-промах: не бьём в i-frames, ждём с зафиксированной позицией
         if (t.hurtTime > 0 || !UAttack.shouldAttack(t, false, false, false, 0L, AttackAura.get().getRanges())) {
             if (System.currentTimeMillis() > phaseDeadline) {
                 abort();
@@ -171,21 +151,18 @@ public class TpAura extends Module {
 
         hitTarget(t);
 
-        // подскок вверх: сервер видит набор высоты — fallDistance гасится, свой урон не прилетает
         mc.player.setPosition(dropPos.x, dropPos.y + 1.2, dropPos.z);
         mc.player.setVelocity(Vec3d.ZERO);
         phase = PHASE_HOP_BACK;
         phaseTicks = 0;
     }
 
-    /** Фиксация позиции: физика не таскает игрока во время фаз. */
     private void pin(Vec3d pos) {
         mc.player.setPosition(pos.x, pos.y, pos.z);
         mc.player.setVelocity(Vec3d.ZERO);
         mc.player.fallDistance = 0;
     }
 
-    /** Сам удар: щит-брейк + атака. */
     private void hitTarget(LivingEntity t) {
         final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(t, true);
         final Runnable[] shieldPress = UAttack.resetShieldSilentTaskForUse(true);
@@ -204,7 +181,6 @@ public class TpAura extends Module {
                 Hand.MAIN_HAND);
     }
 
-    /** Удар с анти-промахом: i-frames, кулдаун; потом хопы назад. */
     private void strikeNow() {
         LivingEntity t = strikeTarget;
         if (!valid(t)) {
@@ -226,7 +202,6 @@ public class TpAura extends Module {
         phaseTicks = 0;
     }
 
-    /** Прыжок-хоп к точке: <= hopSpeed блоков за тик, физика заморожена — дэш не провисает. */
     private void hopTo(Vec3d target, Runnable onArrive) {
         if (!valid(strikeTarget) && phase == PHASE_HOP_OUT) {
             abort();
@@ -241,7 +216,6 @@ public class TpAura extends Module {
 
         double step = hopSpeed.getValue();
         if (horizontal <= step) {
-            // прибытие: фиксируем только X/Z, Y живой
             mc.player.setPosition(target.x, p.y, target.z);
             mc.player.setVelocity(Vec3d.ZERO);
             onArrive.run();
@@ -250,7 +224,7 @@ public class TpAura extends Module {
 
         double k = step / horizontal;
         mc.player.setPosition(p.x + dx * k, p.y, p.z + dz * k);
-        // гравитация в хопах выключена: дэш прямой, fallDistance не растёт и не сбрасывается
+
         mc.player.setVelocity(Vec3d.ZERO);
     }
 
@@ -291,7 +265,6 @@ public class TpAura extends Module {
         super.onDisable();
     }
 
-    /** Точка удара без проверки стен: просто со стороны игрока на дистанции удара. */
     private Vec3d landingSimple(LivingEntity target, double stand) {
         Vec3d tpos = target.getEntityPos();
         double y = mc.player.getY();
@@ -304,10 +277,6 @@ public class TpAura extends Module {
                 tpos.z + Math.sin(a) * stand);
     }
 
-    /**
-     * Точка удара на текущей высоте: 8 углов вокруг цели (старт со своей),
-     * первая с чистой линией огня от глаз до корпуса цели.
-     */
     private Vec3d findLanding(LivingEntity target, double stand) {
         Vec3d tpos = target.getEntityPos();
         Vec3d targetEye = tpos.add(0, target.getHeight() * 0.9, 0);
@@ -335,7 +304,6 @@ public class TpAura extends Module {
         return null;
     }
 
-    /** Ближайшая валидная цель в радиусе телепорта — фильтры самой ауры. */
     private LivingEntity findTarget() {
         LivingEntity best = null;
         double bestDist = Double.MAX_VALUE;

@@ -27,7 +27,6 @@ import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
 public class KawaseBlurPipeline {
-
     private static final Identifier DOWN_PIPELINE_ID = Identifier.of("client", "pipeline/kawase_down");
     private static final Identifier DOWN_VERTEX_SHADER = Identifier.of("client", "core/kawase_down");
     private static final Identifier DOWN_FRAGMENT_SHADER = Identifier.of("client", "core/kawase_down");
@@ -71,9 +70,9 @@ public class KawaseBlurPipeline {
     private static final Matrix4f TEXTURE_MATRIX = new Matrix4f();
 
     private static final int MAX_ITERATIONS = 8;
-    // down + up passes + 1 final
+
     private static final int MAX_PASSES = 2 * MAX_ITERATIONS + 1;
-    // vec4 (4 floats × 4 bytes) with std140
+
     private static final int UNIFORM_DATA_SIZE = 16;
 
     private GpuBuffer[] passUniformBuffers;
@@ -115,7 +114,6 @@ public class KawaseBlurPipeline {
         );
         MemoryUtil.memFree(dummyData);
 
-        // one buffer per pass so each pass has its own uniform data
         this.passUniformBuffers = new GpuBuffer[MAX_PASSES];
         for (int i = 0; i < MAX_PASSES; i++) {
             final int idx = i;
@@ -215,8 +213,6 @@ public class KawaseBlurPipeline {
         CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
         GpuSampler sampler = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
 
-        // Матрицы одинаковы для всех проходов блюра — пишем динамические трансформы ОДИН раз
-        // вместо 2*iterations+1 раз. Результат идентичен, меньше нагрузка на драйвер.
         GpuBufferSlice dynTransforms = RenderSystem.getDynamicUniforms()
                 .write(RenderSystem.getModelViewMatrix(), COLOR_MODULATOR, MODEL_OFFSET, TEXTURE_MATRIX);
 
@@ -225,7 +221,6 @@ public class KawaseBlurPipeline {
         int currentHeight = height;
         int passIdx = 0;
 
-        // ── down passes ──────────────────────────────────────────────────────
         for (int i = 0; i < iterations; i++) {
             GpuBuffer passBuf = passUniformBuffers[passIdx++];
             writeUniform(encoder, passBuf, currentWidth, currentHeight, offset);
@@ -247,7 +242,6 @@ public class KawaseBlurPipeline {
             currentHeight = downHeights[i];
         }
 
-        // ── up passes ────────────────────────────────────────────────────────
         for (int i = iterations - 1; i >= 0; i--) {
             GpuBuffer passBuf = passUniformBuffers[passIdx++];
             writeUniform(encoder, passBuf, currentWidth, currentHeight, offset);
@@ -269,7 +263,6 @@ public class KawaseBlurPipeline {
             currentHeight = upHeights[i];
         }
 
-        // ── final composite ──────────────────────────────────────────────────
         GpuBuffer passBuf = passUniformBuffers[passIdx];
         writeUniform(encoder, passBuf, currentWidth, currentHeight, offset);
 

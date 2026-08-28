@@ -45,7 +45,6 @@ import java.util.List;
         desc = "Боксы сущностей через стены"
 )
 public class EntityEsp extends Module {
-
     public static EntityEsp get() {
         return Instance.get(EntityEsp.class);
     }
@@ -57,7 +56,6 @@ public class EntityEsp extends Module {
     public BooleanSetting items        = new BooleanSetting(this, "Отображения предметов", true);
 
     public ModeSetting box = new ModeSetting(this, "Вид бокса",  "2д", "3д");
-
 
     private final List<Entity> entities = new ArrayList<>();
     private final BufferAllocator boxAllocator = new BufferAllocator(1 << 18);
@@ -73,7 +71,6 @@ public class EntityEsp extends Module {
         entities.clear();
         if (mc.world != null) {
             for (Entity entity : mc.world.getEntities()) {
-
                 if (entity instanceof PlayerEntity p) {
                     if (player.getValue()
                             && (p.getCustomName() == null || !p.getCustomName().getString().startsWith("Ghost_"))
@@ -102,8 +99,7 @@ public class EntityEsp extends Module {
             if (entity == mc.player && mc.options.getPerspective().isFirstPerson()) {
                 continue;
             }
-            // для 3д-бокса полная 2д-проекция (getVector4D — 8 углов через double-матрицы)
-            // не нужна: достаточно дёшево отсечь то, что за спиной
+
             if (!Projection.isInFrontOfCamera(entity.getBoundingBox().getCenter())) continue;
 
             renderBox(e.getMatrixStack(), immediate, entity, tickDelta);
@@ -257,37 +253,31 @@ public class EntityEsp extends Module {
         float y0 = (float) minY, y1 = (float) maxY;
         float z0 = (float) minZ, z1 = (float) maxZ;
 
-        // Bottom face
         buffer.vertex(matrix, x0, y0, z0).color(c0);
         buffer.vertex(matrix, x1, y0, z0).color(c1);
         buffer.vertex(matrix, x1, y0, z1).color(c2);
         buffer.vertex(matrix, x0, y0, z1).color(c3);
 
-        // Top face
         buffer.vertex(matrix, x0, y1, z0).color(c0);
         buffer.vertex(matrix, x0, y1, z1).color(c3);
         buffer.vertex(matrix, x1, y1, z1).color(c2);
         buffer.vertex(matrix, x1, y1, z0).color(c1);
 
-        // Front face (maxZ)
         buffer.vertex(matrix, x0, y0, z1).color(c3);
         buffer.vertex(matrix, x1, y0, z1).color(c2);
         buffer.vertex(matrix, x1, y1, z1).color(c2);
         buffer.vertex(matrix, x0, y1, z1).color(c3);
 
-        // Back face (minZ)
         buffer.vertex(matrix, x1, y0, z0).color(c1);
         buffer.vertex(matrix, x0, y0, z0).color(c0);
         buffer.vertex(matrix, x0, y1, z0).color(c0);
         buffer.vertex(matrix, x1, y1, z0).color(c1);
 
-        // Left face (minX)
         buffer.vertex(matrix, x0, y0, z0).color(c0);
         buffer.vertex(matrix, x0, y0, z1).color(c3);
         buffer.vertex(matrix, x0, y1, z1).color(c3);
         buffer.vertex(matrix, x0, y1, z0).color(c0);
 
-        // Right face (maxX)
         buffer.vertex(matrix, x1, y0, z1).color(c2);
         buffer.vertex(matrix, x1, y0, z0).color(c1);
         buffer.vertex(matrix, x1, y1, z0).color(c1);
@@ -303,19 +293,16 @@ public class EntityEsp extends Module {
             c[i] = ColorUtil.replAlpha(colors[i], outlineAlpha);
         }
 
-        // Bottom face edges
         drawDashedLineSegment(buffer, matrix, minX, minY, minZ, maxX, minY, minZ, c[0], c[1], dashLength, gapLength);
         drawDashedLineSegment(buffer, matrix, maxX, minY, minZ, maxX, minY, maxZ, c[1], c[2], dashLength, gapLength);
         drawDashedLineSegment(buffer, matrix, maxX, minY, maxZ, minX, minY, maxZ, c[2], c[3], dashLength, gapLength);
         drawDashedLineSegment(buffer, matrix, minX, minY, maxZ, minX, minY, minZ, c[3], c[0], dashLength, gapLength);
 
-        // Top face edges
         drawDashedLineSegment(buffer, matrix, minX, maxY, minZ, maxX, maxY, minZ, c[0], c[1], dashLength, gapLength);
         drawDashedLineSegment(buffer, matrix, maxX, maxY, minZ, maxX, maxY, maxZ, c[1], c[2], dashLength, gapLength);
         drawDashedLineSegment(buffer, matrix, maxX, maxY, maxZ, minX, maxY, maxZ, c[2], c[3], dashLength, gapLength);
         drawDashedLineSegment(buffer, matrix, minX, maxY, maxZ, minX, maxY, minZ, c[3], c[0], dashLength, gapLength);
 
-        // Vertical edges
         drawDashedLineSegment(buffer, matrix, minX, minY, minZ, minX, maxY, minZ, c[0], c[0], dashLength, gapLength);
         drawDashedLineSegment(buffer, matrix, maxX, minY, minZ, maxX, maxY, minZ, c[1], c[1], dashLength, gapLength);
         drawDashedLineSegment(buffer, matrix, maxX, minY, maxZ, maxX, maxY, maxZ, c[2], c[2], dashLength, gapLength);

@@ -28,7 +28,6 @@ import net.minecraft.util.math.Vec3d;
         category = Category.COMBAT
 )
 public class HitBoxes extends Module {
-
     public static HitBoxes get() {
         return Instance.get(HitBoxes.class);
     }
@@ -48,15 +47,12 @@ public class HitBoxes extends Module {
         }
     }
 
-
-
     @EventHandler
     public void onUpdate(EventUpdate e) {
         if (mc.player == null || mc.world == null || !type.is("Ротация")) return;
 
         if (typeRot.is("Постоянный")) {
             HitResult hitResult = mc.crosshairTarget;
-
 
             if (!(hitResult instanceof EntityHitResult entityHitResult)) {
                 pendingTarget = null;
@@ -69,7 +65,6 @@ public class HitBoxes extends Module {
                 pendingTarget = null;
                 return;
             }
-
 
             if (target instanceof PlayerEntity playerEntity) {
                 pendingTarget = playerEntity;

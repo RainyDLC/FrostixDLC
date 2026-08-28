@@ -4,7 +4,6 @@ import ru.white.Client;
 import ru.white.command.Command;
 import ru.white.utils.math.ChatUtils;
 
-
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -17,7 +16,7 @@ public class CfgCommand extends Command {
     }
 
     @Override
-    
+
     public void execute(String[] args) {
         if (args.length == 0) {
             showHelp();
@@ -62,7 +61,7 @@ public class CfgCommand extends Command {
                 .filter(s -> s.startsWith(subPrefix.toLowerCase()))
                 .collect(Collectors.toList());
     }
-    
+
     private void showHelp() {
         ChatUtils.addChatMessage("§7.cfg save/load §f<name> §8| §7.cfg list §8| §7.cfg dir");
     }

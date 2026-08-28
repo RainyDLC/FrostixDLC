@@ -22,7 +22,6 @@ import java.util.List;
         category = Category.COMBAT
 )
 public class AntiBot extends Module {
-
     public static AntiBot getInstance() {
         return Instance.get(AntiBot.class);
     }

@@ -24,15 +24,7 @@ import java.util.function.Function;
 
 import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_SNIPPET;
 
-/**
- * Рендерер молний вокруг таргета. Адаптирован под пайплайны RainyDLC
- * (текстурное свечение как у ROMB_ESP + 3D-линии как у кольца).
- * Матричные преобразования повторяют родной код проекта (translate(мир-камера) + локальные
- * вершины для линий; multiply(camera.getRotation()) для билборда свечения), чтобы не было
- * "полос" из-за рассинхрона матричного стека.
- */
 public class LightningRenderer implements IMinecraft {
-
     private static final int SPAWN_PER_TICK = 2;
     private static final int LIGHTNING_DEPTH = 3;
 
@@ -44,7 +36,6 @@ public class LightningRenderer implements IMinecraft {
 
     public boolean redOnHit = true;
 
-    /** Настраивается из TargetEsp / AttackAura (слайдеры). */
     public int maxBolts = 16;
     public long spawnIntervalMs = 42;
 
@@ -54,8 +45,6 @@ public class LightningRenderer implements IMinecraft {
     private long lastSpawn = 0;
     private long lastHitTime = -HIT_FLASH_DURATION_MS;
     private int lastHurtTime = 0;
-
-    // ── пайплайны рендера (регистрируются один раз) ──
 
     private static final RenderPipeline LIGHTNING_GLOW_PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(TRANSFORMS_AND_PROJECTION_SNIPPET)
@@ -103,7 +92,6 @@ public class LightningRenderer implements IMinecraft {
             return;
         }
 
-        // авто-вспышка красным при получении урона (если включено redOnHit)
         if (target.hurtTime > lastHurtTime) {
             notifyHit();
         }
@@ -130,7 +118,6 @@ public class LightningRenderer implements IMinecraft {
             }
         }
 
-        // чистка истёкших + предрасчёт цветов/альфы для кадра
         int visible = 0;
         for (int i = 0; i < boltCount; i++) {
             Bolt bolt = bolts[i];
@@ -156,11 +143,6 @@ public class LightningRenderer implements IMinecraft {
         }
         if (visible == 0) return;
 
-        // ВАЖНО: у Immediate вызов getBuffer() для нового слоя сбрасывает текущий,
-        // поэтому glow и линии НЕЛЬЗЯ чередовать — только двумя фазами
-        // (как в режиме "Кольцо": сначала вся заливка, потом все линии).
-
-        // ФАЗА 1: свечение — билборд у каждой точки (как drawCubeGlowSprite)
         VertexConsumer glowBuf = immediate.getBuffer(LIGHTNING_GLOW.apply(GLOW));
         for (int i = 0; i < boltCount; i++) {
             Bolt bolt = bolts[i];
@@ -184,7 +166,6 @@ public class LightningRenderer implements IMinecraft {
             }
         }
 
-        // ФАЗА 2: линии — translate(база-камера) + локальные вершины (как режим "Кольцо")
         VertexConsumer lineBuf = immediate.getBuffer(LIGHTNING_LINE_LAYER);
         for (int i = 0; i < boltCount; i++) {
             Bolt bolt = bolts[i];
@@ -253,22 +234,15 @@ public class LightningRenderer implements IMinecraft {
         List<Vec3d> points;
         long spawnTime;
         long lifetimeMs;
-        /** Пересчитываются каждый кадр в render(). */
+
         float drawAlpha = 0f;
         int glowColor;
         int coreColor;
     }
 
-    // ── молнии вокруг точки (для Glass Hands: предмет в руках) ──
-
     private final List<Bolt> pointBolts = new ArrayList<>();
     private long pointLastSpawn;
 
-    /**
-     * Короткие разряды вокруг произвольной точки мира — та же стилистика,
-     * что и у обводки цели (свечение-билборды + линии). Слои строго последовательные,
-     * после отрисовки буферы сбрасываются через consumers.draw(...).
-     */
     public void renderPoint(EventRender3D e, Vec3d center, float spread, float animAlpha) {
         if (center == null || animAlpha <= 0.03f) {
             pointBolts.clear();
@@ -290,7 +264,6 @@ public class LightningRenderer implements IMinecraft {
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Quaternionf cameraRotation = mc.gameRenderer.getCamera().getRotation();
 
-        // ФАЗА 1: свечение-билборды
         VertexConsumer glowBuf = consumers.getBuffer(LIGHTNING_GLOW.apply(GLOW));
         for (Bolt b : pointBolts) {
             float fade = 1f - (now - b.spawnTime) / (float) b.lifetimeMs;
@@ -325,7 +298,6 @@ public class LightningRenderer implements IMinecraft {
         }
         consumers.draw(LIGHTNING_GLOW.apply(GLOW));
 
-        // ФАЗА 2: линии ядра
         VertexConsumer lineBuf = consumers.getBuffer(LIGHTNING_LINE_LAYER);
         Matrix4f lm = matrices.peek().getPositionMatrix();
         for (Bolt b : pointBolts) {

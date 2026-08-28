@@ -31,13 +31,7 @@ import java.util.UUID;
 import static ru.white.screen.editor.EditorTheme.PANEL_W;
 import static ru.white.screen.editor.EditorTheme.ROW_H;
 
-/**
- * Общий редактор предпоказа рендер-модулей. Меню не ставит игру на паузу, поэтому мир
- * продолжает рисоваться — редактор лишь заводит болванчика перед игроком и раз в интервал
- * просит модуль проиграть один цикл эффекта, а рядом держит панель со всеми его настройками.
- */
 public final class PreviewEditor implements OverlayEditor, IMinecraft {
-
     private static final PreviewEditor INSTANCE = new PreviewEditor();
 
     private static final UUID DUMMY_UUID = UUID.fromString("32d0a964-137a-2c03-7cc9-df6700000101");
@@ -66,7 +60,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
     private float lastCameraMouseX;
     private float lastCameraMouseY;
 
-    /** Пока камера свободна, точка эффекта живёт в мире, а не перед носом игрока. */
     private Vec3d frozenOrigin;
     private double frozenForwardX;
     private double frozenForwardZ;
@@ -92,8 +85,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
         return module;
     }
 
-    // ───────────────────────────── жизненный цикл ─────────────────────────────
-
     public void open(Module target) {
         if (!(target instanceof ModulePreview modulePreview)) return;
         if (active) deactivate();
@@ -102,7 +93,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
         module = target;
         preview = modulePreview;
 
-        // без подписки на события модуль ничего не рисует, поэтому на время показа включаем его
         restoreEnabled = target.isEnabled();
         if (!target.isEnabled()) target.setEnabled(true, false);
 
@@ -153,8 +143,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
         context.reset();
     }
 
-    // ───────────────────────────── болванчик ─────────────────────────────
-
     private void spawnDummy() {
         if (mc.world == null || mc.player == null) return;
 
@@ -183,7 +171,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
         context.setDummy(null);
     }
 
-    /** Куда должен смотреть болванчик, чтобы стоять лицом к игроку. */
     private float facingYaw() {
         if (frozenOrigin != null) return frozenFacingYaw;
         return mc.player == null ? 0F : MathHelper.wrapDegrees(mc.player.getYaw() + 180F);
@@ -196,7 +183,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
         float distance = settings.distance(4F);
         float height = settings.height(0F);
 
-        // при свободной камере точка отсчёта заморожена — иначе эффект убегал бы вместе со взглядом
         Vec3d origin = frozenOrigin != null ? frozenOrigin : mc.player.getEntityPos();
         double forwardX;
         double forwardZ;
@@ -246,7 +232,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
         float yaw = mc.player.getYaw() + dx;
         float pitch = MathHelper.clamp(mc.player.getPitch() + dy, -90F, 90F);
 
-        // предыдущие углы двигаем вместе с текущими, иначе камера будет размазываться интерполяцией
         mc.player.setYaw(yaw);
         mc.player.setPitch(pitch);
         mc.player.lastYaw = yaw;
@@ -265,8 +250,7 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
                 spawnDummy();
             } else if (!preview.previewControlsDummy()) {
                 Vec3d anchor = context.anchor();
-                // setPosition, а не refreshPositionAndAngles: lastRenderX обновляет тик мира,
-                // и модулям вроде Trails остаётся видимая разница позиций для расчёта движения
+
                 dummy.setPosition(anchor.x, anchor.y, anchor.z);
                 float yaw = facingYaw();
                 dummy.setYaw(yaw);
@@ -278,7 +262,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
 
         preview.previewTick(context);
 
-        // у постоянных эффектов интервала нет — им нечего перезапускать
         if (!preview.previewSettings().repeats()) return;
 
         long now = System.currentTimeMillis();
@@ -288,8 +271,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
             nextSpawnAt = now + Math.max(200L, preview.previewSettings().intervalMs());
         }
     }
-
-    // ───────────────────────────── рендер ─────────────────────────────
 
     @Override
     public void render(float width, float height, float mouseX, float mouseY, float parentAlpha) {
@@ -309,7 +290,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
         visibility.update();
         float alpha = visibility.get() * parentAlpha;
 
-        // полноэкранное затемнение съело бы сам эффект, поэтому притеняем только полосы под текстом
         drawBand(0F, 0F, width, 62F, alpha, true);
         drawBand(0F, height - 62F, width, 62F, alpha, false);
 
@@ -356,8 +336,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
         freeCameraBounds = new Rect(width / 2F - 80F, rowY, 160F, ROW_H);
     }
 
-    // ───────────────────────────── ввод ─────────────────────────────
-
     @Override
     public boolean mouseClicked(float mouseX, float mouseY, int button) {
         if (!active) return false;
@@ -381,7 +359,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
         return true;
     }
 
-    /** Курсор на пустом месте — значит тянут камеру, а не контролы. */
     private boolean overControls(float mouseX, float mouseY) {
         return panel.bounds().contains(mouseX, mouseY)
                 || freeCameraBounds.contains(mouseX, mouseY)
@@ -442,7 +419,6 @@ public final class PreviewEditor implements OverlayEditor, IMinecraft {
         if (draggingCamera) rotateCamera(mouseX, mouseY);
     }
 
-    /** Хитбокс панели — чтобы редактор знал, что курсор занят контролами. */
     public Rect panelBounds() {
         return panel.bounds();
     }

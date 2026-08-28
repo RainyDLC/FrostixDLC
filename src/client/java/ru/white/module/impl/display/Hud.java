@@ -1,56 +1,19 @@
 package ru.white.module.impl.display;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import org.joml.Matrix3x2f;
-import org.joml.Matrix4f;
-import org.lwjgl.BufferUtils;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL20;
-import org.lwjgl.opengl.GL30;
-
-import ru.white.Client;
-import ru.white.manager.event_impl.EventDisplay;
 import ru.white.module.api.settings.impl.*;
-import ru.white.module.impl.player.ClickHelper;
-import ru.white.manager.events.orbit.EventHandler;
 import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
 import ru.white.module.api.settings.impl.*;
 import ru.white.theme.ThemeColor;
 import ru.white.utils.animation.Animation;
-import ru.white.utils.animation.Easings;
-import ru.white.utils.animation.satoshi.Direction;
 import ru.white.utils.animation.satoshi.EaseInOutQuad;
-import ru.white.utils.colors.ColorUtil;
-import ru.white.utils.math.Keyboard;
-import ru.white.utils.math.MathUtil;
-import ru.white.utils.math.ServerUtil;
-import ru.white.utils.other.Instance;
 import ru.white.utils.render.GifTexture;
-import ru.white.utils.render.ItemRender;
-import ru.white.utils.render.RenderUtil;
-import ru.white.utils.render.font.Fonts;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.ChatScreen;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.entity.effect.StatusEffectCategory;
 import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.util.math.MathHelper;
 
 import java.awt.*;
-import java.nio.FloatBuffer;
 import java.util.*;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @ModuleInfo(
         name = "Hud",
@@ -58,8 +21,6 @@ import java.util.stream.Collectors;
         category = Category.RENDER
 )
 public class Hud extends Module {
-
-
     public BooleanSetting waterMark = new BooleanSetting("Лого клиента", true);
 
     public BooleanSetting cortds = new BooleanSetting("Координаты", true);
@@ -74,32 +35,23 @@ public class Hud extends Module {
     public BooleanSetting armorHud = new BooleanSetting("Armor", true);
     public BooleanSetting inventoryHud = new BooleanSetting("Inventory", true);
 
-
     public MultiBooleanSetting elempt = new MultiBooleanSetting(this, "Отображать", waterMark, keybindslist, porionList, bpstps, cortds, arrayListHude, armorHud, inventoryHud);
-
 
     public SliderSetting volume = new SliderSetting(this, "Громкость уведомления", 0.5F, 0.1F, 1.0F, 0.1F);
     public ModeSetting typeNotify = new ModeSetting(this, "Тип уведомления",
             "Первый", "Второй", "Третий");
 
-
     public Animation withpan = new Animation();
-
 
     public static boolean getShadow() {
         return false;
     }
 
-
     public static int getVisualsColor() {
-
-
         return ThemeColor.getVisualColor();
     }
 
     public static int getHudColor() {
-
-
         return ThemeColor.getHudColor();
     }
 

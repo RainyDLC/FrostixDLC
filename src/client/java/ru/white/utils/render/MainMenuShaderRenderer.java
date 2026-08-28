@@ -24,7 +24,6 @@ import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
 public class MainMenuShaderRenderer {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/main_menu_grid");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/main_menu_grid");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/main_menu_grid");
@@ -80,7 +79,6 @@ public class MainMenuShaderRenderer {
 
         ensureInitialized();
 
-        // Рисуем немедленно — сначала выпускаем накопленные батчи (порядок отрисовки)
         DrawBatcher.flushPending();
 
         int framebufferWidth = client.getWindow().getFramebufferWidth();
@@ -127,7 +125,6 @@ public class MainMenuShaderRenderer {
                 OptionalInt.empty(),
                 client.getFramebuffer().getDepthAttachmentView(),
                 OptionalDouble.empty())) {
-
             renderPass.setPipeline(PIPELINE);
             renderPass.setVertexBuffer(0, dummyVertexBuffer);
 

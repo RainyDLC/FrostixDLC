@@ -6,7 +6,6 @@ import net.minecraft.client.gui.screen.Screen;
 
 @Getter
 public class MouseReleaseEvent extends Event {
-
     private final double mouseX;
     private final double mouseY;
     private final int button;

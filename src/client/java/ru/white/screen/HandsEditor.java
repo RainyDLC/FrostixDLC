@@ -33,12 +33,7 @@ import ru.white.utils.render.font.Fonts;
 import static ru.white.screen.editor.EditorTheme.PANEL_W;
 import static ru.white.screen.editor.EditorTheme.ROW_H;
 
-/**
- * Полноэкранный редактор положения рук. Рисуется внутри Menu, полностью перехватывает ввод
- * и оформлен тем же языком, что и ClickGUI: блюр-панели, строки с ховером, чипсы режимов.
- */
 public final class HandsEditor implements OverlayEditor {
-
     private static final HandsEditor INSTANCE = new HandsEditor();
 
     private static final long BOUNDS_TTL_MS = 250L;
@@ -167,8 +162,6 @@ public final class HandsEditor implements OverlayEditor {
         glassPanel.closePickers();
     }
 
-    // ───────────────────────────── рендер ─────────────────────────────
-
     @Override
     public void render(float width, float height, float mouseX, float mouseY, float parentAlpha) {
         if (!active) return;
@@ -194,7 +187,7 @@ public final class HandsEditor implements OverlayEditor {
         resetRightButton.update(mouseX, mouseY);
 
         RenderUtil.Render2D.rect(0, 0, width, height, ColorUtil.getColor(0, 0.30F * alpha));
-        // затемнение ложится поверх рук — возвращаем их пиксели по маске GlassHands
+
         Client.get().render2D().flushAll();
         GlassHandsRenderer.getInstance().restoreHandsAfterOverlay();
 
@@ -222,8 +215,6 @@ public final class HandsEditor implements OverlayEditor {
                 width / 2F, 39F, 5.5F, ColorUtil.getColor(255, alpha * 0.3F));
     }
 
-    // ───────────────────────────── раскладка ─────────────────────────────
-
     private void layoutButtons(float width, float height) {
         float buttonH = 18F;
         float sideW = 100F;
@@ -237,8 +228,6 @@ public final class HandsEditor implements OverlayEditor {
         resetRightButton.set(width - 20F - sideW, bottomY, sideW, buttonH);
         autoSwingBounds = new Rect(width / 2F - 80F, bottomY - 52F, 160F, ROW_H);
     }
-
-    // ───────────────────────────── ввод ─────────────────────────────
 
     @Override
     public boolean mouseClicked(float mouseX, float mouseY, int button) {
@@ -311,7 +300,6 @@ public final class HandsEditor implements OverlayEditor {
     public boolean mouseScrolled(float mouseX, float mouseY, double verticalAmount) {
         if (!active) return false;
 
-        // над панелями колесо крутит их содержимое, а не масштаб руки
         if (glassPanel.handleScroll(mouseX, mouseY, verticalAmount)
                 || swingPanel.handleScroll(mouseX, mouseY, verticalAmount)) {
             return true;
@@ -346,9 +334,6 @@ public final class HandsEditor implements OverlayEditor {
         return true;
     }
 
-    /**
-     * Сырой ввод из MouseMixin. Тянуть руку можно любой кнопкой, но контролы всегда в приоритете.
-     */
     @Override
     public void rawMouseButton(float mouseX, float mouseY, int button, boolean pressed) {
         if (!active) return;
@@ -401,7 +386,7 @@ public final class HandsEditor implements OverlayEditor {
         float valueY = dragStartValueY - (mouseY - dragStartMouseY) * sensitivity;
         SliderSetting xSetting = draggingArm == Arm.RIGHT ? hands.rx : hands.lx;
         SliderSetting ySetting = draggingArm == Arm.RIGHT ? hands.ry : hands.ly;
-        // курсор не квантуем шагом 0.05 — плавность движения руки важнее круглых значений
+
         xSetting.set(MathHelper.clamp(valueX, xSetting.min, xSetting.max));
         ySetting.set(MathHelper.clamp(valueY, ySetting.min, ySetting.max));
     }
@@ -430,7 +415,7 @@ public final class HandsEditor implements OverlayEditor {
         if (now < nextAutoSwingAt) return;
 
         Hand rightHand = client.player.getMainArm() == Arm.RIGHT ? Hand.MAIN_HAND : Hand.OFF_HAND;
-        // двухаргументный метод LivingEntity шлёт только локальную анимацию, без пакета
+
         client.player.swingHand(rightHand, false);
         nextAutoSwingAt = now + AUTO_SWING_INTERVAL_MS;
     }
@@ -452,17 +437,13 @@ public final class HandsEditor implements OverlayEditor {
         }
         if (overLeft) return Arm.LEFT;
         if (overRight) return Arm.RIGHT;
-        // большие невидимые зоны — чтобы рука хваталась даже когда анимация увела предмет
+
         if (mouseY >= screenHeight * 0.32F) {
             return mouseX < screenWidth / 2F ? Arm.LEFT : Arm.RIGHT;
         }
         return null;
     }
 
-    /**
-     * Стабильная прозрачная «ручка» руки. Она ходит по тем же X/Y и с той же чувствительностью,
-     * что и перетаскивание, поэтому не зависит от проекции геометрии предмета.
-     */
     private Rect controlRect(Arm arm) {
         Hands hands = Hands.get();
         float valueX = 0F;
@@ -488,7 +469,6 @@ public final class HandsEditor implements OverlayEditor {
     }
 
     private float dragPixelsPerUnit() {
-        // проекция руки от первого лица зависит от вертикального FOV, поэтому масштаб берём от высоты
         return Math.max(1F, screenHeight / 1.05F);
     }
 
@@ -507,11 +487,6 @@ public final class HandsEditor implements OverlayEditor {
         animation.run(hovered ? 1F : 0F, 0.18F, Easings.QUAD_OUT, true);
     }
 
-    // ───────────────────────────── проекция и захват ─────────────────────────────
-
-    /**
-     * Вызывается из HeldItemRendererMixin после применения всех трансформаций руки.
-     */
     public void updateHandBounds(Arm arm, MatrixStack matrices) {
         if (!active || matrices == null) return;
 
@@ -520,7 +495,7 @@ public final class HandsEditor implements OverlayEditor {
 
         Matrix4f position = new Matrix4f(matrices.peek().getPositionMatrix());
         Matrix4f modelView = new Matrix4f(RenderSystem.getModelViewMatrix());
-        // ванильные руки рисуются своей проекцией в 70°, независимо от мирового FOV
+
         Matrix4f projection = client.gameRenderer.getBasicProjectionMatrix(70F);
         float width = client.getWindow().getFramebufferWidth() / 2F;
         float height = client.getWindow().getFramebufferHeight() / 2F;
@@ -621,8 +596,6 @@ public final class HandsEditor implements OverlayEditor {
     private HandBounds boundsFor(Arm arm) {
         return arm == Arm.RIGHT ? rightBounds : leftBounds;
     }
-
-    // ───────────────────────────── модель ─────────────────────────────
 
     private static final class HandBounds {
         private float centerX;

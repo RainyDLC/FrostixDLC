@@ -17,13 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Панель недостающих предметов рядом с инвентарём.
- * Рисуется из GameRenderMixin уже после ванильного GUI: тот копит вызовы в GuiRenderState
- * и сабмитит их в конце кадра, поэтому из инжекта в InventoryScreen.render панель уходила под него.
- */
 public final class InventoryPresetOverlay {
-
     private static final float PANEL_W = 118F;
     private static final float ROW_H = 21F;
 
@@ -41,7 +35,6 @@ public final class InventoryPresetOverlay {
         int guiX = accessor.getScreenX();
         int guiY = accessor.getScreenY();
 
-        // RenderUtil живёт в пространстве «гуи-скейл 2», ванильный экран — в своём
         float scaleFix = 2F / (float) mc.getWindow().getScaleFactor();
 
         Render2D.beginOverlay();
@@ -94,7 +87,6 @@ public final class InventoryPresetOverlay {
         } else {
             for (int index = missingScroll;
                  index < Math.min(missingItems.size(), missingScroll + visibleRows); index++) {
-
                 InventoryPresetManager.MissingItem item = missingItems.get(index);
                 boolean hovered = inside(mx, my, panelX + 4, rowY, PANEL_W - 8, ROW_H - 2);
 
@@ -135,7 +127,6 @@ public final class InventoryPresetOverlay {
         Render2D.endOverlay();
     }
 
-    /** Предмет рисуется ванильно, поэтому центр переводится обратно в экранные координаты. */
     private static void drawItem(DrawContext context, ItemStack stack, float centerX, float centerY, float scaleFix) {
         var matrices = context.getMatrices();
         matrices.pushMatrix();

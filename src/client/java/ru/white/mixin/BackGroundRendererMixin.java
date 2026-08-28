@@ -17,7 +17,6 @@ import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 
 @Mixin(FogRenderer.class)
 public class BackGroundRendererMixin {
-
     @Unique
     private static final ThreadLocal<FogEvent> FOG_EVENT = new ThreadLocal<>();
 

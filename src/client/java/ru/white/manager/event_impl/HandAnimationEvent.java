@@ -20,6 +20,4 @@ public class HandAnimationEvent extends CancellableEvent {
     float swingProgress;
     float equipProgress;
     Arm arm;
-
 }
-

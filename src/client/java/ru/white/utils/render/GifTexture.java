@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.UUID;
 
 public class GifTexture {
-
     private final List<Identifier> frameIds  = new ArrayList<>();
     private final List<Integer>    delays     = new ArrayList<>();
     private int   totalDuration = 0;
@@ -43,14 +42,12 @@ public class GifTexture {
             int frameCount = reader.getNumImages(true);
             String uid = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
 
-            // GIF metadata for full canvas size
             IIOMetadataNode globalMeta = null;
             try {
                 globalMeta = (IIOMetadataNode) reader.getStreamMetadata()
                         .getAsTree(reader.getStreamMetadata().getNativeMetadataFormatName());
             } catch (Exception ignored) {}
 
-            // Determine canvas size from first frame
             BufferedImage firstFrame = reader.read(0);
             int canvasW = firstFrame.getWidth();
             int canvasH = firstFrame.getHeight();
@@ -76,7 +73,6 @@ public class GifTexture {
                             .getAsTree(reader.getImageMetadata(i).getNativeMetadataFormatName());
                 } catch (Exception ignored) {}
 
-                // Frame offset inside canvas
                 int fx = 0, fy = 0;
                 String disposal = "none";
                 if (frameMeta != null) {
@@ -89,22 +85,18 @@ public class GifTexture {
                     if (gce != null) disposal = gce.getAttribute("disposalMethod");
                 }
 
-                // Save canvas state before drawing if we might need to restore it
                 if ("restoreToPrevious".equalsIgnoreCase(disposal)) {
                     prevCanvas = copyImage(canvas);
                 }
 
-                // Draw raw frame onto canvas at offset
                 java.awt.Graphics2D g = canvas.createGraphics();
                 g.drawImage(rawFrame, fx, fy, null);
                 g.dispose();
 
-                // Store composited canvas pixels
                 pixelData.add(canvas.getRGB(0, 0, canvasW, canvasH, null, 0, canvasW));
                 delays.add(readDelay(reader, i));
                 frameIds.add(Identifier.of("white", "gif/" + uid + "/" + i));
 
-                // Apply disposal method for next frame
                 java.awt.Graphics2D gc = canvas.createGraphics();
                 gc.setComposite(java.awt.AlphaComposite.Clear);
                 if ("restoreToBackgroundColor".equalsIgnoreCase(disposal)) {
@@ -119,7 +111,6 @@ public class GifTexture {
             reader.dispose();
             for (int d : delays) totalDuration += d;
 
-            // Upload to GPU on render thread
             final int uploadW = canvasW;
             final int uploadH = canvasH;
             MinecraftClient.getInstance().execute(() -> {
@@ -140,7 +131,6 @@ public class GifTexture {
                 }
                 loaded = true;
             });
-
         } catch (Exception e) {
             e.printStackTrace();
         }

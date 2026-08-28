@@ -1,10 +1,8 @@
 package ru.white.module.impl.display.interfaceimpl;
 
-
 import ru.white.module.api.settings.impl.DragSetting;
 import ru.white.module.impl.display.InterFace;
 import ru.white.theme.ThemeColor;
-import ru.white.utils.colors.ColorFormatting;
 import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.math.ServerUtil;
 import ru.white.utils.render.RenderUtil;
@@ -13,8 +11,6 @@ import ru.white.utils.render.font.Font;
 import ru.white.utils.render.font.Fonts;
 
 public class Information implements element {
-
-    /** Общий масштаб плашки: один множитель на шрифты, иконки и все отступы. */
     private static  float S = 1.0F;
 
     private static  float TEXT = 5.5F * S;
@@ -34,22 +30,18 @@ public class Information implements element {
 
     private static final String SEPARATOR = " ; ";
 
-    /** Цифры прокручиваются при смене значения — как таймеры в Potions. */
     private final RollingText coordX = new RollingText(3F);
     private final RollingText coordY = new RollingText(3F);
     private final RollingText coordZ = new RollingText(3F);
     private final RollingText bpsText = new RollingText(3F);
     private final RollingText tpsText = new RollingText(3F);
 
-    // последние закэшированные значения — строки пересобираются только при изменении
     private int lastX = Integer.MIN_VALUE, lastY = Integer.MIN_VALUE, lastZ = Integer.MIN_VALUE;
     private int lastBpsTenths = Integer.MIN_VALUE;
     private int lastTpsTenths = Integer.MIN_VALUE;
 
     @Override
     public void onRender(DragSetting dragSetting, InterFace interFace) {
-
-
         S = InterFace.getInstance().sizeHud.getValue()* 1.1F;
         TEXT = 5.5F * S;
         ICON = 4.5F * S;
@@ -66,15 +58,12 @@ public class Information implements element {
         float x = dragSetting.position.x;
         float y = dragSetting.position.y;
 
-
-
         double dx = mc.player.getX() - mc.player.lastX;
         double dz = mc.player.getZ() - mc.player.lastZ;
 
         float bps = (float) (Math.sqrt(dx * dx + dz * dz) * 20.0F);
 
         Font fonts = Fonts.sf_regular;
-
 
         int xi = (int) mc.player.getX();
         if (xi != lastX) { coordX.set(String.valueOf(xi)); lastX = xi; }
@@ -83,7 +72,6 @@ public class Information implements element {
         int zi = (int) mc.player.getZ();
         if (zi != lastZ) { coordZ.set(String.valueOf(zi)); lastZ = zi; }
 
-        // %.1f — достаточно точности до десятых: сравниваем округлённое, чтобы не строить строку каждый кадр
         int bpsT = Math.round(bps * 10F);
         if (bpsT != lastBpsTenths) {
             bpsText.set(String.format(java.util.Locale.US, "%.1f", bpsT / 10F));
@@ -101,16 +89,13 @@ public class Information implements element {
         float bpsW = bpsText.width(fonts, TEXT) + fonts.getWidth("bps", TEXT);
         float tpsW = tpsText.width(fonts, TEXT) + fonts.getWidth("tps", TEXT);
 
-
         float w = BLOCK + coordsW;
 
-        // 15 + 5 + 15 + 3 + 4 + 15 отступов исходной вёрстки
         float w2 = 57F * S + coordsW + bpsW + tpsW;
 
         RenderUtil.Render2D.hudPlate(x, y, w2, H, 1, RADIUS, InterFace.getInstance().alphaHUD.getValue());
 
         Fonts.rainydlc_2.draw("W",x + ICON_X,y + ICON_Y,ICON,ColorUtil.getClientColor(1));
-
 
         float cursor = x + TEXT_X;
 
@@ -122,7 +107,6 @@ public class Information implements element {
 
         float x2 = x + w + 2 * S;
 
-
         Fonts.icon.draw("C",x2 ,y + ICON_Y,ICON, ThemeColor.getSeparatorColor());
 
         x2+= AFTER_SEP;
@@ -133,9 +117,7 @@ public class Information implements element {
 
         drawValue(fonts, bpsText, "bps", x2, y + TEXT_Y);
 
-
         float x3 = x + w + 20F * S + bpsW;
-
 
         Fonts.icon.draw("C",x3 ,y + ICON_Y,ICON, ThemeColor.getSeparatorColor());
 
@@ -147,15 +129,9 @@ public class Information implements element {
 
         drawValue(fonts, tpsText, "tps", x3, y + TEXT_Y);
 
-
         dragSetting.size.set(w2,H);
-
     }
 
-    /**
-     * Число рисуется прокруткой, подпись — обычным текстом: RollingText выводит символы по
-     * одному, и цветовой код внутри строки вылез бы буквами.
-     */
     private float drawValue(Font font, RollingText value, String suffix, float x, float y) {
         value.draw(font, x, y, TEXT, ThemeColor.getTextColor());
 

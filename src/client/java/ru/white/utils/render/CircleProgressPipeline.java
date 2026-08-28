@@ -12,12 +12,7 @@ import net.minecraft.util.Identifier;
 
 import java.nio.ByteBuffer;
 
-/**
- * Круговой прогресс: элементы копятся чанками и уходят в общий пасс
- * DrawBatcher. См. {@link UniformArrayPipeline}.
- */
 public class CircleProgressPipeline extends UniformArrayPipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/circle_progress");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/circle_progress");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/circle_progress");
@@ -46,7 +41,7 @@ public class CircleProgressPipeline extends UniformArrayPipeline {
 
     @Override
     public int batchLayer() {
-        return 0; // вместе с заливками
+        return 0;
     }
 
     public void draw(float centerX, float centerY, float radius, float thickness, float progress, int color) {

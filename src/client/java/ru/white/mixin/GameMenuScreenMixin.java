@@ -10,13 +10,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Делает кнопку выхода в меню паузы неактивной (нельзя нажать) во время ПВП,
- * если включён модуль {@link PvpSafe}.
- */
 @Mixin(GameMenuScreen.class)
 public class GameMenuScreenMixin {
-
     @Shadow
     private ButtonWidget exitButton;
 

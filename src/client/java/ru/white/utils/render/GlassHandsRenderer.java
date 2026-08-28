@@ -9,7 +9,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 
 public class GlassHandsRenderer {
-
     private static GlassHandsRenderer instance;
 
     private final MinecraftClient client;
@@ -40,7 +39,7 @@ public class GlassHandsRenderer {
 
     private boolean capturing = false;
     private boolean maskReady = false;
-    /** Держать в sceneAfter готовый кадр с эффектом — нужно только редактору рук. */
+
     private boolean keepHandsResult = false;
     private boolean enabled = false;
     private boolean initialized = false;
@@ -53,33 +52,29 @@ public class GlassHandsRenderer {
     private int tintColor = 0x00000000;
     private float tintIntensity = 0.1f;
     private float edgeGlowIntensity = 0.3f;
-    /** Радиус сглаживания кромки маски в px: 0 — силуэт копирует предмет. */
+
     private float edgeSoftness = 0.0f;
 
-    // Ice parameters
     private float iceIntensity = 0.0f;
     private float frostScale = 18.0f;
     private float crackIntensity = 0.5f;
 
-    // Frost smoke parameters
     private float smokeAmount = 0.0f;
     private float smokeScale = 6.0f;
     private float smokeSpeed = 0.25f;
     private float smokeReach = 40.0f;
 
-    // Burning hands (fire) parameters
     private boolean fireEnabled = false;
-    private float fireRadius = 15.0f;       // px, ширина ореола пламени
-    private float fireStrength = 1.18f;     // сила glow
-    private float fireSpeed = 1.1f;         // скорость анимации пламени/дыма
-    private float fireHeight = 28.0f;       // px, высота подъёма дыма
-    private float fireDecay = 0.94f;        // затухание трейла между кадрами
+    private float fireRadius = 15.0f;
+    private float fireStrength = 1.18f;
+    private float fireSpeed = 1.1f;
+    private float fireHeight = 28.0f;
+    private float fireDecay = 0.94f;
     private float fireTrailStrength = 1.16f;
-    private int fireColor = 0xFF8026;       // rgb
-    private float fireColorMix = 0.0f;      // 0=цвет предмета, 1=fireColor
-    private boolean fireFillMode = false;   // прожиг сквозь силуэт
+    private int fireColor = 0xFF8026;
+    private float fireColorMix = 0.0f;
+    private boolean fireFillMode = false;
 
-    // Outline parameters
     private boolean outlineEnabled = true;
     private float outlineGlowStrength = 20.0f;
     private int outlineColor = 0xFFFFFFFF;
@@ -135,7 +130,6 @@ public class GlassHandsRenderer {
 
     public boolean isEnabled() { return enabled; }
 
-    /** Есть ли хоть один активный эффект: если нет — весь пайплайн (копии кадра + маска) пропускается. */
     private boolean hasAnyEffect() {
         return blurEnabled || iceIntensity > 0.001f || smokeAmount > 0.001f
                 || outlineEnabled || fireEnabled;
@@ -236,12 +230,11 @@ public class GlassHandsRenderer {
                     TextureFormat.RGBA8, width, height, 1, 1
             );
             burnTrailTextureViews[i] = RenderSystem.getDevice().createTextureView(burnTrailTextures[i]);
-            // очистка мусора: трейл — накопительный буфер, стартовать должен с нуля
+
             CommandEncoder clearEncoder = RenderSystem.getDevice().createCommandEncoder();
             try (com.mojang.blaze3d.systems.RenderPass clearPass = clearEncoder.createRenderPass(
                     () -> "minecraft:burn_trail_clear", burnTrailTextureViews[i],
                     java.util.OptionalInt.of(0x00000000))) {
-                // пустой проход — только clear при старте пасса
             }
         }
         burnTrailIndex = 0;
@@ -271,8 +264,7 @@ public class GlassHandsRenderer {
 
     public void captureSceneBeforeHands() {
         if (!enabled) return;
-        // все эффекты выключены — не делаем 4 копии текстур полного разрешения и проход маски впустую.
-        // Исключение: редактор рук, которому нужен снимок кадра независимо от эффектов.
+
         if (!hasAnyEffect() && !ru.white.screen.HandsEditor.getInstance().isActive()) {
             capturing = false;
             return;
@@ -319,7 +311,6 @@ public class GlassHandsRenderer {
         maskDiff.createMask(maskTextureView, sceneBeforeTextureView, sceneAfterTextureView,
                 depthBeforeTextureView, depthAfterTextureView, lastWidth, lastHeight);
 
-        // маска рук этого кадра готова — редактор дорисует по ней руки поверх своего затемнения
         maskReady = true;
 
         boolean iceActive = iceIntensity > 0.001f;
@@ -331,7 +322,6 @@ public class GlassHandsRenderer {
                 blurredView = kawaseBlur.blur(
                         sceneBeforeTexture, sceneBeforeTextureView, lastWidth, lastHeight, blurIterations, blurRadius);
             } else {
-                // no blur requested — feed the raw scene so ice/smoke can still composite
                 blurredView = sceneBeforeTextureView;
             }
 
@@ -351,8 +341,6 @@ public class GlassHandsRenderer {
         }
 
         if (outlineEnabled) {
-
-
             glassOutline.renderOutline(maskTextureView, fb.getColorAttachmentView(),
                     lastWidth, lastHeight, outlineGlowStrength, outlineWidth,
                     outlineGlowMode, outlineColor, outlineColorFill,
@@ -377,8 +365,6 @@ public class GlassHandsRenderer {
                     burnGlowTextureView, burnTrailTextureViews[cur]);
         }
 
-        // редактору нужен снимок рук уже с эффектом: sceneAfter снят до композита,
-        // и если вернуть его поверх затемнения, блюр с искажением останутся под предметом
         if (keepHandsResult && sceneAfterTexture != null) {
             RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(
                     fb.getColorAttachment(), sceneAfterTexture, 0, 0, 0, 0, 0, lastWidth, lastHeight);
@@ -387,10 +373,6 @@ public class GlassHandsRenderer {
         capturing = false;
     }
 
-    /**
-     * Возвращает пиксели рук поверх затемнения редактора: тёмный кадр идёт как «сцена»,
-     * снимок с руками — как «эффект», и композит по маске рук оставляет тёмным только мир.
-     */
     public void restoreHandsAfterOverlay() {
         if (!enabled || !maskReady || sceneBeforeTexture == null || sceneAfterTextureView == null
                 || maskTextureView == null || glassComposite == null) {

@@ -1,6 +1,5 @@
 package ru.white.mixin;
 
-
 import ru.white.module.impl.render.NameTag;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.entity.EntityRenderer;
@@ -19,7 +18,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(EntityRenderer.class)
 public class EntityRendererMixin<T extends Entity, S extends EntityRenderState> {
-
     @Inject(method = "renderLabelIfPresent", at = @At("HEAD"), cancellable = true)
     private void onRenderLabelIfPresent(S state, MatrixStack matrices, OrderedRenderCommandQueue queue, CameraRenderState cameraRenderState, CallbackInfo ci) {
         NameTag esp = NameTag.get();

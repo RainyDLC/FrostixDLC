@@ -5,7 +5,6 @@ import ru.white.Client;
 import ru.white.manager.event_impl.WorldLoadEvent;
 import ru.white.manager.events.orbit.EventHandler;
 
-
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -16,7 +15,7 @@ public class FriendManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final Set<String> friends = new HashSet<>();
-    
+
     public void init() {
         load();
         Client.eventHandler().subscribe(this);
@@ -26,14 +25,13 @@ public class FriendManager {
     public void onWorldLoad(WorldLoadEvent event) {
         load();
     }
-    
+
     public boolean add(String name) {
         boolean added = friends.add(name.toLowerCase());
         if (added) save();
         return added;
     }
 
-    
     public boolean remove(String name) {
         boolean removed = friends.remove(name.toLowerCase());
         if (removed) save();
@@ -48,7 +46,6 @@ public class FriendManager {
         return Collections.unmodifiableSet(friends);
     }
 
-    
     private void save() {
         JsonArray arr = new JsonArray();
         friends.forEach(arr::add);
@@ -61,7 +58,7 @@ public class FriendManager {
             e.printStackTrace();
         }
     }
-    
+
     private void load() {
         if (!Files.exists(FILE)) return;
         try (Reader r = new InputStreamReader(new FileInputStream(FILE.toFile()), StandardCharsets.UTF_8)) {

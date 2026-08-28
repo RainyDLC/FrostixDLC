@@ -21,7 +21,6 @@ import net.minecraft.util.hit.BlockHitResult;
         category = Category.PLAYER
 )
 public class AutoTool extends Module {
-
     private static final long SWAP_STOP_MS = 60L;
 
     private State state = State.IDLE;
@@ -31,9 +30,6 @@ public class AutoTool extends Module {
 
     @EventHandler
     public void onUpdate(EventUpdate event) {
-
-
-
         if (mc.player == null || mc.world == null || mc.interactionManager == null) {
             state = State.IDLE;
             toolSlot = -1;
@@ -104,7 +100,6 @@ public class AutoTool extends Module {
         BlockState blockState = getTargetState();
 
         if (mc.options.attackKey.isPressed() && blockState != null) {
-            // цель сменилась — переключаемся на другой инструмент из хотбара на лету
             if (toolSlot < 9) {
                 int bestSlot = findBestTool(blockState);
                 if (bestSlot != -1 && bestSlot < 9 && bestSlot != mc.player.getInventory().getSelectedSlot()) {
@@ -204,7 +199,6 @@ public class AutoTool extends Module {
                 && (!stack.isDamageable() || stack.getMaxDamage() - stack.getDamage() > 1);
     }
 
-    /** мягкий сброс после нормального возврата предмета */
     private void reset() {
         setKey(true);
         state = State.IDLE;
@@ -212,7 +206,6 @@ public class AutoTool extends Module {
         previousHotbarSlot = -1;
     }
 
-    /** аварийный сброс (выключение модуля) — возвращаем предмет, если успели свапнуть */
     private void abort() {
         if (mc.player != null && mc.interactionManager != null) {
             if (state == State.MINING || state == State.PREPARE_RESTORE) {
@@ -245,7 +238,6 @@ public class AutoTool extends Module {
                 mc.options.rightKey,
                 mc.options.jumpKey,
         };
-
 
         for (KeyBinding keyBinding : movementKeys) {
             boolean pressed = state && InputUtil.isKeyPressed(mc.getWindow(), keyBinding.getDefaultKey().getCode());

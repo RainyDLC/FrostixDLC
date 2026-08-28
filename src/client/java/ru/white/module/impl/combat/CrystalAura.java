@@ -22,14 +22,12 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 
-
 @ModuleInfo(
         name = "Crystal Aura",
         desc = "Автоматическая аура под кристалы",
         category = Category.COMBAT
 )
 public class CrystalAura extends Module {
-
     private final SliderSetting range = new SliderSetting(this, "Дальность", 5.0F, 1.0F, 10.0F, 0.5F);
     private final SliderSetting placeDelay = new SliderSetting(this, "Задержка постановки (мс)", 200.0F, 50.0F, 1000.0F, 50.0F);
     private final SliderSetting breakDelay = new SliderSetting(this, "Задержка взрыва (мс)", 100.0F, 50.0F, 1000.0F, 50.0F);
@@ -107,7 +105,6 @@ public class CrystalAura extends Module {
                 for (int z = -r; z <= r; z++) {
                     BlockPos pos = playerPos.add(x, y, z);
 
-
                     var block = mc.world.getBlockState(pos).getBlock();
                     boolean isObsidian = block == Blocks.OBSIDIAN;
                     boolean isBedrock = !obsidianOnly.getValue() && block == Blocks.BEDROCK;
@@ -156,7 +153,7 @@ public class CrystalAura extends Module {
             mc.interactionManager.syncSelectedSlot();
         }
     }
-    
+
     private void restoreSlot() {
         if (prevSlot != -1) {
             mc.player.getInventory().setSelectedSlot(prevSlot);
@@ -165,7 +162,6 @@ public class CrystalAura extends Module {
         }
     }
 
-    
     private void aimAtBlock(BlockPos pos) {
         double dx = pos.getX() + 0.5 - mc.player.getX();
         double dy = pos.getY() + 1.0 - (mc.player.getY() + mc.player.getStandingEyeHeight());
@@ -175,7 +171,7 @@ public class CrystalAura extends Module {
         float pitch = (float) (-Math.toDegrees(Math.atan2(dy, dxz)));
         RotationProcess.update(new Rotation(yaw + MathUtil.random(-1.12481248F,1.21481248F), pitch + MathUtil.random(-1.12481248F,1.21481248F)), 140, 140, 1, 1);
     }
-    
+
     private void placeCrystal(BlockPos pos) {
         Vec3d hitVec = new Vec3d(pos.getX() + 0.5, pos.getY() + 1.0, pos.getZ() + 0.5);
         BlockHitResult hitResult = new BlockHitResult(hitVec, Direction.UP, pos, false);
@@ -184,7 +180,7 @@ public class CrystalAura extends Module {
     }
 
     @Override
-    
+
     protected void onDisable() {
         restoreSlot();
         placeTimer.reset();

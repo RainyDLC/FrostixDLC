@@ -1,6 +1,5 @@
 package ru.white.rpc.callbacks;
 
-
 import com.sun.jna.Callback;
 import ru.white.rpc.DiscordUser;
 

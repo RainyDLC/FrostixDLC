@@ -63,7 +63,6 @@ import org.joml.Vector2f;
         desc = "Крафт Божьей ауры, простая закупка и простая продажа по биндам."
 )
 public class AuraCrafter extends Module {
-
     private static final String AURA_NAME = "Божья аура";
     private static final int TICK_DELAY = 6;
     private static final int JOIN_AH_DELAY = 200;
@@ -1503,7 +1502,6 @@ public class AuraCrafter extends Module {
         if (Hud.getAlpha() != 1) {
             RenderUtil.Blur.glass(x, y, width, height, 1, 7, ColorUtil.getRectColor(Hud.getAlpha()), 15, 1, 1, 3);
         }
-
 
         String state = mode == Mode.IDLE ? "IDLE" : "ACTIVE";
         float stateW = Fonts.sf_medium.getWidth(state, 6.5F);

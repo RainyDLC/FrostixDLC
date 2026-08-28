@@ -20,28 +20,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
-/**
- * «Нейро-ротация»: маленькая MLP-сеть, которая обучается на ротации живого игрока
- * и потом повторяет её манеру доводки.
- *
- * Запись: каждый тик с валидной целью сохраняется сэмпл
- *   вход  (8): ошибка по yaw/pitch до цели, дистанция, скорость цели,
- *              боковое движение цели относительно взгляда, onGround,
- *              прошлый довод по yaw, кулдаун удара (тайминг наводки под удар)
- *   выход (2): фактический довод игрока мышью за этот тик (dYaw, dPitch)
- *
- * Сеть 8→24→16→2 (tanh, линейный выход), обучение — SGD с импульсом по MSE.
- * Веса сохраняются в JSON рядом с конфигами.
- */
 public class NeuroRotation {
-
     public static final int IN = 8, H1 = 24, H2 = 16, OUT = 2;
 
-    /** Нормировка входов/выходов. */
     public static final float YAW_ERR_NORM = 180F, PITCH_ERR_NORM = 90F,
             DIST_NORM = 6F, SPEED_NORM = 0.3F, DELTA_YAW_NORM = 20F, DELTA_PITCH_NORM = 10F;
 
-    /** Минимум сэмплов для обучения (~100 секунд записи). */
     public static final int MIN_SAMPLES = 300;
 
     private static final int MAX_SAMPLES = 40_000;
@@ -56,17 +40,16 @@ public class NeuroRotation {
     private final float[][] w3 = new float[OUT][H2];
     private final float[] b3 = new float[OUT];
 
-    private final List<float[]> samples = new ArrayList<>(); // [IN входов, OUT выходов]
+    private final List<float[]> samples = new ArrayList<>();
     private volatile boolean trained = false;
     private volatile boolean training = false;
 
     public NeuroRotation() {
         reinit();
         load();
-        loadSamples(); // буфер записи тоже переживает перезапуск
+        loadSamples();
     }
 
-    /** Полная переинициализация весов (свежая сеть). */
     private void reinit() {
         Random r = new Random();
         initLayer(w1, b1, r);
@@ -74,7 +57,6 @@ public class NeuroRotation {
         initLayer(w3, b3, r);
     }
 
-    /** true, если в весах NaN/Inf — сеть «сгорела» и непригодна. */
     private boolean hasInvalidWeights() {
         return invalid(w1) || invalid(b1) || invalid(w2) || invalid(b2) || invalid(w3) || invalid(b3);
     }
@@ -90,7 +72,7 @@ public class NeuroRotation {
     }
 
     private static void initLayer(float[][] w, float[] b, Random r) {
-        float scale = (float) Math.sqrt(2.0 / w[0].length); // Xavier/He
+        float scale = (float) Math.sqrt(2.0 / w[0].length);
         for (float[] row : w)
             for (int i = 0; i < row.length; i++)
                 row[i] = (float) (r.nextGaussian() * scale);
@@ -127,9 +109,6 @@ public class NeuroRotation {
         }
     }
 
-    // ── запись ───────────────────────────────────────────────────────────────
-
-    /** Сэмпл одного тика: features уже нормированы, deltas — сырые градусы за тик. */
     public void record(float[] features, float dYaw, float dPitch) {
         if (features.length != IN) return;
         if (invalid(features) || Float.isNaN(dYaw) || Float.isNaN(dPitch)
@@ -147,9 +126,6 @@ public class NeuroRotation {
         }
     }
 
-    // ── инференс ─────────────────────────────────────────────────────────────
-
-    /** Предсказанный довод за тик: [dYaw, dPitch] в градусах. */
     public float[] predict(float[] features) {
         float[] remembered = predictFromMemory(features);
         if (remembered != null) return remembered;
@@ -158,7 +134,7 @@ public class NeuroRotation {
         float[] h2 = new float[H2];
         float[] out = new float[OUT];
         forward(features, h1, h2, out);
-        // повреждённая сеть не должна ломать камеру NaN-ами
+
         if (Float.isNaN(out[0]) || Float.isNaN(out[1])
                 || Float.isInfinite(out[0]) || Float.isInfinite(out[1])) {
             return new float[]{0F, 0F};
@@ -248,16 +224,10 @@ public class NeuroRotation {
         for (int i = 0; i < OUT; i++) {
             float sum = b3[i];
             for (int j = 0; j < H2; j++) sum += w3[i][j] * h2[j];
-            out[i] = sum; // линейный выход
+            out[i] = sum;
         }
     }
 
-    // ── обучение ─────────────────────────────────────────────────────────────
-
-    /**
-     * Обучение в фоне; onDone(успех, кол-во сэмплов) дёргается из потока обучения.
-     * Возвращает false, если предыдущее обучение ещё не закончилось.
-     */
     public boolean trainAsync(java.util.function.BiConsumer<Boolean, Integer> onDone) {
         if (training) return false;
         List<float[]> data;
@@ -268,18 +238,14 @@ public class NeuroRotation {
         Thread t = new Thread(() -> {
             boolean ok = false;
             try {
-                // прогресс записи сохраняем всегда — даже если данных мало,
-                // после перезахода буфер продолжит копиться, а не начнётся с нуля
                 saveSamples(data);
 
                 if (data.size() >= MIN_SAMPLES) {
-                    // стартуем не со «сгоревших» весов
                     if (hasInvalidWeights()) reinit();
 
                     train(data);
 
                     if (hasInvalidWeights()) {
-                        // обучение разошлось — сбрасываем сеть, не сохраняем мусор
                         reinit();
                         trained = false;
                     } else {
@@ -289,7 +255,6 @@ public class NeuroRotation {
                     }
                 }
             } catch (Throwable t2) {
-                // любое падение обучения не должно оставлять сеть в полумёртвом виде
                 reinit();
                 trained = false;
             } finally {
@@ -306,9 +271,8 @@ public class NeuroRotation {
         int epochs = 60;
         float lr = 0.004F;
         float momentum = 0.85F;
-        float clip = 3F; // ограничение градиентов — против разлёта в NaN
+        float clip = 3F;
 
-        // импульс
         float[][] vw1 = new float[H1][IN]; float[] vb1 = new float[H1];
         float[][] vw2 = new float[H2][H1]; float[] vb2 = new float[H2];
         float[][] vw3 = new float[OUT][H2]; float[] vb3 = new float[OUT];
@@ -321,15 +285,14 @@ public class NeuroRotation {
 
         for (int epoch = 0; epoch < epochs; epoch++) {
             Collections.shuffle(shuffled, rnd);
-            float curLr = lr * (1F - (float) epoch / epochs * 0.9F); // затухание
+            float curLr = lr * (1F - (float) epoch / epochs * 0.9F);
 
             for (float[] s : shuffled) {
-                forward(s, h1, h2, out); // первые IN элементов — вход
+                forward(s, h1, h2, out);
 
                 for (int i = 0; i < OUT; i++)
-                    dOut[i] = clamp(out[i] - s[IN + i], -clip, clip); // dMSE/dOut
+                    dOut[i] = clamp(out[i] - s[IN + i], -clip, clip);
 
-                // выходной слой
                 for (int i = 0; i < OUT; i++) {
                     for (int j = 0; j < H2; j++) {
                         vw3[i][j] = momentum * vw3[i][j] - curLr * dOut[i] * h2[j];
@@ -339,11 +302,10 @@ public class NeuroRotation {
                     b3[i] += vb3[i];
                 }
 
-                // второй скрытый
                 for (int j = 0; j < H2; j++) {
                     float g = 0;
                     for (int i = 0; i < OUT; i++) g += dOut[i] * w3[i][j];
-                    dH2[j] = clamp(g * (1F - h2[j] * h2[j]), -clip, clip); // tanh'
+                    dH2[j] = clamp(g * (1F - h2[j] * h2[j]), -clip, clip);
                 }
                 for (int i = 0; i < H2; i++) {
                     for (int j = 0; j < H1; j++) {
@@ -354,7 +316,6 @@ public class NeuroRotation {
                     b2[i] += vb2[i];
                 }
 
-                // первый скрытый
                 for (int j = 0; j < H1; j++) {
                     float g = 0;
                     for (int i = 0; i < H2; i++) g += dH2[i] * w2[i][j];
@@ -372,9 +333,6 @@ public class NeuroRotation {
         }
     }
 
-    // ── персистентность ──────────────────────────────────────────────────────
-
-    /** Сэмплы на диск: int ширина строки, int кол-во, потом float-ы подряд. */
     private void saveSamples(List<float[]> data) {
         try {
             Files.createDirectories(SAMPLES_PATH.getParent());
@@ -394,7 +352,7 @@ public class NeuroRotation {
         try (DataInputStream in = new DataInputStream(
                 new BufferedInputStream(Files.newInputStream(SAMPLES_PATH)))) {
             int width = in.readInt();
-            if (width != IN + OUT) return; // формат старой версии сети — пропускаем
+            if (width != IN + OUT) return;
             int count = Math.min(in.readInt(), MAX_SAMPLES);
             synchronized (samples) {
                 samples.clear();
@@ -409,7 +367,7 @@ public class NeuroRotation {
     }
 
     public void save() {
-        if (hasInvalidWeights()) return; // мусор на диск не пишем
+        if (hasInvalidWeights()) return;
         try {
             Files.createDirectories(MODEL_PATH.getParent());
             JsonObject root = new JsonObject();
@@ -442,7 +400,7 @@ public class NeuroRotation {
             }
             trained = true;
         } catch (Exception e) {
-            reinit(); // файл битый/старого формата — начинаем с чистой сети
+            reinit();
         }
     }
 

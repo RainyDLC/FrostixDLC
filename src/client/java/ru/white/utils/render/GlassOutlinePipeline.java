@@ -27,7 +27,6 @@ import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
 public class GlassOutlinePipeline {
-
     private static final int MIP_LEVELS = 3;
 
     private static final Identifier DOWN_PIPELINE_ID = Identifier.of("client", "pipeline/glass_outline_down");
@@ -93,7 +92,6 @@ public class GlassOutlinePipeline {
     private static final Vector3f MODEL_OFFSET = new Vector3f(0, 0, 0);
     private static final Matrix4f TEXTURE_MATRIX = new Matrix4f();
 
-    // Mip level textures
     private final GpuTexture[] mipTextures = new GpuTexture[MIP_LEVELS];
     private final GpuTextureView[] mipViews = new GpuTextureView[MIP_LEVELS];
     private final int[] mipWidths = new int[MIP_LEVELS];
@@ -101,8 +99,8 @@ public class GlassOutlinePipeline {
 
     private static final int MAX_FRIEND_RECTS = 8;
 
-    private GpuBuffer kawaseBuffer;   // 16 bytes: KawaseOutlineData (vec4)
-    private GpuBuffer combineBuffer;  // 208 bytes: OutlineData (13 * vec4)
+    private GpuBuffer kawaseBuffer;
+    private GpuBuffer combineBuffer;
     private GpuBuffer dummyVertexBuffer;
     private ByteBuffer kawaseData;
     private ByteBuffer combineData;
@@ -114,7 +112,6 @@ public class GlassOutlinePipeline {
     private float shimmerWidth = 0.04f;
     private float shimmerPeriodSec = 5.0f;
 
-    // friend rects: [u1, v1, u2, v2] in UV space, up to 8 entries
     private final float[] friendRects = new float[MAX_FRIEND_RECTS * 4];
     private int friendCount = 0;
 
@@ -133,7 +130,7 @@ public class GlassOutlinePipeline {
         if (initialized) return;
 
         kawaseData = MemoryUtil.memAlloc(16);
-        combineData = MemoryUtil.memAlloc(208); // 5 × vec4 + 8 × vec4 (friend rects)
+        combineData = MemoryUtil.memAlloc(208);
 
         ByteBuffer dummy = MemoryUtil.memAlloc(4);
         dummy.putInt(0);
@@ -213,7 +210,7 @@ public class GlassOutlinePipeline {
         combineData.putFloat(glowMode); combineData.putFloat(0);
         combineData.putFloat(shimmerT); combineData.putFloat(shimmerEnabled ? 1.0f : 0.0f);
         combineData.putFloat(shimmerWidth); combineData.putFloat(useItemColor ? 1.0f : 0.0f); combineData.putFloat(itemColorReach); combineData.putFloat(0);
-        // friend rects: 8 × vec4 (u1, v1, u2, v2)
+
         for (int i = 0; i < MAX_FRIEND_RECTS; i++) {
             int base = i * 4;
             if (i < friendCount) {
@@ -240,7 +237,6 @@ public class GlassOutlinePipeline {
     public void renderOutline(GpuTextureView maskView, GpuTextureView targetView,
                               int width, int height, float glowStrength, int outlineWidth,
                               int glowMode, int fillColor, int outlineColor) {
-        // старый вызов без цвета предмета — сцена не сэмплится, привязываем маску как заглушку
         renderOutline(maskView, targetView, width, height, glowStrength, outlineWidth,
                 glowMode, fillColor, outlineColor, maskView, false);
     }
@@ -255,7 +251,6 @@ public class GlassOutlinePipeline {
         CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
         GpuSampler linearSampler = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
 
-        // -- Downsample: maskView → mip[0] → mip[1] → mip[2] --
         GpuTextureView currentInput = maskView;
         int inputW = width, inputH = height;
 
@@ -284,7 +279,6 @@ public class GlassOutlinePipeline {
             inputH = mipHeights[i];
         }
 
-        // -- Upsample: mip[2] → mip[1] → mip[0] --
         for (int i = MIP_LEVELS - 1; i > 0; i--) {
             float rawOffset = Math.max(0.5f, glowStrength / 4.0f);
             float offset = Math.min(rawOffset, 4.0f);
@@ -308,10 +302,9 @@ public class GlassOutlinePipeline {
             }
         }
 
-        // -- Combine: mask + mip[0] → framebuffer --
         long periodMs = (long)(shimmerPeriodSec * 1000f);
         float shimmerT = (System.currentTimeMillis() % periodMs) / (float) periodMs;
-        // дальность марша к силуэту — примерно ширина свечения в пикселях (+запас)
+
         float itemColorReach = Math.max(8.0f, glowStrength + (float) outlineWidth + 6.0f);
         writeCombineUbo(encoder, width, height, fillColor, outlineColor, outlineWidth, glowMode, shimmerT, useItemColor, itemColorReach);
 

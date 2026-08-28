@@ -10,16 +10,10 @@ import org.joml.Matrix4f;
 
 import java.awt.*;
 
-/**
- * Старый фасад рендера. Оставлен для совместимости — вся логика в {@link Draw}.
- * В новом коде используй {@code Draw.rect / Draw.blur / Draw.outline / ...} напрямую.
- */
 @UtilityClass
 public class RenderUtil implements IMinecraft {
-
     @UtilityClass
     public static class Blur {
-        // alpha: 0.0–1.0 controls fade in/out of the blur rect
         public static void blur(float x, float y, float width, float height, float alpha, int tintColor) {
             Draw.blur(x, y, width, height, alpha, tintColor);
         }
@@ -55,7 +49,6 @@ public class RenderUtil implements IMinecraft {
 
     @UtilityClass
     public static class Images {
-
         public static Identifier urlIdentifier(String url) {
             return UrlImageTexture.getIdentifier(url);
         }
@@ -131,7 +124,6 @@ public class RenderUtil implements IMinecraft {
 
     @UtilityClass
     public static class Render2D {
-
         public static void outline(float x, float y, float width, float height, float thickness, int color) {
             Draw.outline(x, y, width, height, thickness, color);
         }
@@ -160,21 +152,16 @@ public class RenderUtil implements IMinecraft {
             Draw.rect(x, y, width, height, color);
         }
 
-        /**
-         * Единая подложка худа: глубокое тёмное стекло с размытием и тонкая
-         * светлая обводка с бликом сверху. opacity — множитель слайдера прозрачности HUD.
-         */
         public static void hudPlate(float x, float y, float width, float height,
                                     float alpha, float radius, float opacity) {
             float a = Math.max(0f, Math.min(1f, alpha));
             int tint = ((int) (a * Math.max(0f, Math.min(1f, opacity)) * 255f) << 24) | 0x0A0B0F;
 
             Blur.blur(x, y, width, height, a, radius, tint);
-            // приглушённая обводка: ниже общая яркость и блик сверху
+
             glassOutline(x, y, width, height, 0.5f, radius, Math.min(1f, a) * 0.42f, 0.10f);
         }
 
-        /** Вертикальная акцентная полоса цвета темы на левой кромке подложки. */
         public static void hudAccent(float x, float y, float height, float alpha, float radius) {
             float barW = Math.max(1.25f, radius * 0.22f);
             float inset = Math.max(1.6f, radius * 0.55f);
@@ -199,18 +186,15 @@ public class RenderUtil implements IMinecraft {
 
         public static void glow(float x, float y, float width, float height,
                                 int color, float radius, float glowSize, float strength) {
-           // Draw.glow(x, y, width, height, color, radius, glowSize, strength);
         }
 
         public static void glow(float x, float y, float width, float height,
                                 int color, float radius, float glowSize, float strength, float softness) {
-        //    Draw.glow(x, y, width, height, color, radius, glowSize, strength, softness);
         }
 
         public static void glow(float x, float y, float width, float height,
                                 int color, float topLeft, float topRight, float bottomRight, float bottomLeft,
                                 float glowSize, float strength, float softness) {
-          //  Draw.glow(x, y, width, height, color, topLeft, topRight, bottomRight, bottomLeft, glowSize, strength, softness);
         }
 
         private static final int[] CLIENT_RECT_COLORS = new int[4];
@@ -220,9 +204,7 @@ public class RenderUtil implements IMinecraft {
             int color = ColorUtil.getColor(255, alphaPC);
             int a = ColorUtil.alpha(color) << 24;
 
-            // Те же ARGB-значения, что и раньше через new Color(...).getRGB(),
-            // но без аллокаций на каждый кадр
-            CLIENT_RECT_COLORS[0] = a | (24 << 16) | (25 << 8) | 31;  // верх
+            CLIENT_RECT_COLORS[0] = a | (24 << 16) | (25 << 8) | 31;
             CLIENT_RECT_COLORS[1] = a | (30 << 16) | (32 << 8) | 37;
             CLIENT_RECT_COLORS[2] = a | (14 << 16) | (15 << 8) | 21;
             CLIENT_RECT_COLORS[3] = a | (13 << 16) | (14 << 8) | 20;
@@ -262,15 +244,12 @@ public class RenderUtil implements IMinecraft {
 
     @UtilityClass
     public static class Render3D {
-
         public final Matrix4f lastProjMat = new Matrix4f();
         public final Matrix4f lastModMat = new Matrix4f();
         public final Matrix4f lastWorldSpaceMatrix = new Matrix4f();
-
     }
 
     @UtilityClass
     public static class RenderPlayer3DMatrix {
-
     }
 }

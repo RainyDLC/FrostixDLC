@@ -1,6 +1,5 @@
 package ru.white.utils.render;
 
-
 import net.minecraft.client.MinecraftClient;
 import org.lwjgl.opengl.GL11;
 
@@ -12,7 +11,6 @@ public class Scissor {
     private static final Deque<int[]> scissorStack = new ArrayDeque<>();
 
     public static void enable(float x, float y, float width, float height, float guiScale) {
-        // Батч не должен пересекать границу клиппинга
         DrawBatcher.flushPending();
 
         int windowHeight = mc.getWindow().getHeight();
@@ -21,7 +19,6 @@ public class Scissor {
         int scissorY = (int) (windowHeight - (y + height) * guiScale);
         int scissorWidth = (int) (width * guiScale);
         int scissorHeight = (int) (height * guiScale);
-
 
         if (!scissorStack.isEmpty()) {
             int[] parent = scissorStack.peek();

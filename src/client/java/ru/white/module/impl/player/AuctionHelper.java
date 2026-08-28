@@ -35,7 +35,6 @@ import java.util.List;
         desc = "Подсвечивает 3 самых дешёвых лота. Поиск и автопродажа по биндам."
 )
 public class AuctionHelper extends Module {
-
     public static AuctionHelper get() {
         return Instance.get(AuctionHelper.class);
     }
@@ -55,15 +54,14 @@ public class AuctionHelper extends Module {
     private long   savedSellPrice = 0;
     private int    waitTicks      = 0;
     private List<String> handEnchants = new ArrayList<>();
-    // vanilla enchantment component (null = item not enchanted or only custom enchants)
+
     private ItemEnchantmentsComponent handEnchantComp = null;
-    // -1 = no durability check (new item or has Mending)
+
     private float handDurabilityPercent = -1f;
     private static final float DURABILITY_TOLERANCE = 0.15f;
     private Item savedItem   = null;
     private int nextPageSlot = -1;
     private int pagesScanned = 0;
-
 
     @EventHandler
     public void onKey(EventKey e) {
@@ -93,7 +91,6 @@ public class AuctionHelper extends Module {
         savedItemCount = hand.getCount();
         savedItem      = hand.getItem();
         handEnchants   = getEnchantNames(hand);
-
 
         ItemEnchantmentsComponent comp = hand.get(DataComponentTypes.ENCHANTMENTS);
         handEnchantComp = (comp != null && !comp.isEmpty()) ? comp : null;
@@ -125,15 +122,12 @@ public class AuctionHelper extends Module {
         waitTicks = 0;
     }
 
-
     @EventHandler
     public void onTick(EventTick e) {
         if (mc.player == null || sellState == SellState.IDLE) return;
 
         switch (sellState) {
-
             case WAITING_AH_OPEN -> {
-
                 if (++waitTicks > 10) { chat("§c[AH] Аукцион не открылся."); resetState(); return; }
                 if (mc.currentScreen instanceof GenericContainerScreen) {
                     if (waitTicks < 4) return;
@@ -150,7 +144,6 @@ public class AuctionHelper extends Module {
                 long cheapestPerOne = Long.MAX_VALUE;
                 int found = 0;
 
-
                 float closestDurDiff = Float.MAX_VALUE;
                 long closestCheapest = Long.MAX_VALUE;
 
@@ -159,9 +152,7 @@ public class AuctionHelper extends Module {
                     int price = getPrice(slot);
                     if (price <= 0) continue;
 
-
                     if (savedItem != null && slot.getStack().getItem() != savedItem) continue;
-
 
                     if (handEnchantComp != null) {
                         ItemEnchantmentsComponent slotComp = slot.getStack().get(DataComponentTypes.ENCHANTMENTS);
@@ -174,11 +165,9 @@ public class AuctionHelper extends Module {
 
                     long perOne = (long) price / Math.max(slot.getStack().getCount(), 1);
 
-
                     if (handDurabilityPercent >= 0) {
                         float slotDur = getDurabilityPercent(slot.getStack());
                         float diff = Math.abs(slotDur - handDurabilityPercent);
-
 
                         if (diff < closestDurDiff || (diff == closestDurDiff && perOne < closestCheapest)) {
                             closestDurDiff = diff;
@@ -236,7 +225,6 @@ public class AuctionHelper extends Module {
             }
 
             case SEND -> {
-
                 if (++waitTicks < 4) return;
                 if (savedSellPrice > 0) {
                     mc.player.networkHandler.sendChatCommand("ah sell " + savedSellPrice);
@@ -245,7 +233,6 @@ public class AuctionHelper extends Module {
             }
         }
     }
-
 
     public void renderSlot(DrawContext context, Slot slot, int rank) {
         int fill = switch (rank) {
@@ -282,15 +269,13 @@ public class AuctionHelper extends Module {
         return 0;
     }
 
-
     private long roundPrice(long price) {
         if (price <= 0) return 1;
 
         if (price >= 1000) {
-            long thousands = price / 1000;      // 350321 -> 350
-            long lastDigit = (price % 1000) / 100; // первая цифра последних 3
+            long thousands = price / 1000;
+            long lastDigit = (price % 1000) / 100;
 
-            // если последние 3 цифры >= 500 -> добавляем 500
             if (price % 1000 >= 500) {
                 return thousands * 1000 + 500;
             }
@@ -298,7 +283,6 @@ public class AuctionHelper extends Module {
             return thousands * 1000;
         }
 
-        // для маленьких чисел
         return (price / 10) * 10;
     }
 
@@ -330,7 +314,6 @@ public class AuctionHelper extends Module {
                 || s.contains("Книга");
     }
 
-    // сравниваем по ванильному компоненту — каждое зачарование и его уровень должны совпасть
     private boolean enchantCompMatch(ItemEnchantmentsComponent hand, ItemEnchantmentsComponent slot) {
         if (slot == null || slot.isEmpty()) return false;
         for (RegistryEntry<Enchantment> entry : hand.getEnchantments()) {
@@ -423,7 +406,6 @@ public class AuctionHelper extends Module {
     }
 
     private int findNextPageSlot(GenericContainerScreenHandler handler, int containerSlots) {
-
         int lastRowStart = containerSlots - 9;
         for (int i = lastRowStart; i < containerSlots; i++) {
             Slot slot = handler.getSlot(i);

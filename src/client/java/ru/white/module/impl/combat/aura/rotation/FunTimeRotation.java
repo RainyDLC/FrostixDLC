@@ -8,7 +8,6 @@ import ru.white.manager.rotation.Rotation;
 import ru.white.manager.rotation.RotationProcess;
 import ru.white.module.impl.combat.AttackAura;
 import ru.white.module.impl.combat.aura.RotationAura;
-import ru.white.utils.aura.RayTraceUtil;
 import ru.white.utils.aura.UAttack;
 import ru.white.utils.aura.UBoxPoints;
 import ru.white.utils.math.MathUtil;
@@ -16,7 +15,6 @@ import ru.white.utils.math.MathUtil;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class FunTimeRotation implements RotationAura {
-
     private long jitterSwitchTime = ThreadLocalRandom.current().nextLong(1000L, 2001L);
     private long nextJitterSwitch = System.currentTimeMillis() + jitterSwitchTime;
     private int currentJitterPreset = 0;
@@ -26,7 +24,6 @@ public class FunTimeRotation implements RotationAura {
     private long nextSpeedSwitch = System.currentTimeMillis() + speedSwitchTime;
     private int currentSpeedPreset = 0;
     private int nextSpeedPreset = 1;
-
 
     private static final long JITTER_SWITCH_TIME = 1000L;
 
@@ -39,18 +36,15 @@ public class FunTimeRotation implements RotationAura {
     private float lastPitchSpeed;
 
     @Override
-    
-    public void onRotation(AttackAura aura, LivingEntity target, float[] ranges, boolean canAttack) {
 
+    public void onRotation(AttackAura aura, LivingEntity target, float[] ranges, boolean canAttack) {
         if (!mc.player.isSubmergedInWater()) {
             Vec3d vec = UBoxPoints.getBestVector3dOnEntityBox(target.getBoundingBox()).subtract(mc.player.getEyePos()).normalize();
-
 
             float rawYaw = (float) Math.toDegrees(Math.atan2(-vec.x, vec.z));
             float rawPitch = (float) MathHelper.clamp(-Math.toDegrees(Math.atan2(vec.y, Math.hypot(vec.x, vec.z))), -90F, 90F);
 
             float randomBoga = (float) (MathUtil.randomLerp(-1,1) * MathUtil.random(-1,1) * MathUtil.randomInt(-2,2) * ThreadLocalRandom.current().nextDouble(-4.3535F,3.3553F));
-
 
             long currentTime = System.currentTimeMillis();
             int presetIndex = (int) ((currentTime / JITTER_SWITCH_TIME) % jitterPresets.length);
@@ -90,9 +84,6 @@ public class FunTimeRotation implements RotationAura {
             yawJitter = lastYawJitter;
             pitchJitter = lastPitchJitter;
 
-            // Без крит-гейта (fallCheck = false): ниже по canAttack эта ротация решает,
-            // тянуть ли угол к цели, и с крит-гейтом угол начинал двигаться только
-            // после того, как крит стал возможен — удар этого тика уходил по старому.
             canAttack = UAttack.shouldAttack(target, false, true, false, (long) -MathUtil.random(150,250), ranges);
 
             long speedTime = System.currentTimeMillis();
@@ -115,7 +106,6 @@ public class FunTimeRotation implements RotationAura {
             speedBlend = MathHelper.clamp(speedBlend, 0F, 1F);
             speedBlend = speedBlend * speedBlend * (3F - 2F * speedBlend);
 
-
             speedBlend = speedBlend * speedBlend * (3F - 2F * speedBlend);
 
             float targetYawSpeed = MathHelper.lerp(
@@ -130,7 +120,6 @@ public class FunTimeRotation implements RotationAura {
                     nextSpeed.getPitchSpeed()
             );
 
-
             lastYawSpeed += (targetYawSpeed - lastYawSpeed) * 0.5F;
             lastPitchSpeed += (targetPitchSpeed - lastPitchSpeed) * 0.5F;
 
@@ -144,7 +133,6 @@ public class FunTimeRotation implements RotationAura {
                     AttackAura.lastYaw += MathUtil.random(-60, 60);
                 }
             }
-
 
             if(canAttack) {
                 if (!aura.pitchFlickActive) AttackAura.lastPitch = rawPitch;
@@ -168,7 +156,6 @@ public class FunTimeRotation implements RotationAura {
         float getPitch(long time);
     }
     private final JitterPreset[] jitterPresets = new JitterPreset[] {
-
             new JitterPreset() {
                 public float getYaw(long t) { return (float) (Math.cos(t / 90D) * 12); }
                 public float getPitch(long t) { return (float) (Math.sin(t / 90D) * 16); }
@@ -276,7 +263,6 @@ public class FunTimeRotation implements RotationAura {
     }
 
     private final SpeedPreset[] speedPresets = new SpeedPreset[]{
-
             new SpeedPreset() {
                 public float getYawSpeed() { return 40F; }
                 public float getPitchSpeed() { return 12F; }
@@ -377,5 +363,4 @@ public class FunTimeRotation implements RotationAura {
                 public float getPitchSpeed() { return 12F; }
             }
     };
-
 }

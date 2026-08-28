@@ -1,6 +1,5 @@
 package ru.white.module.api.settings.impl;
 
-
 import ru.white.module.api.Module;
 import ru.white.module.api.settings.Setting;
 import ru.white.utils.animation.satoshi.EaseInOutQuad;
@@ -12,9 +11,8 @@ import java.util.function.Supplier;
 public class ColorSetting extends Setting<Integer> {
     private Integer cachedValue;
 
-    /** Whether the inline color picker is expanded in the GUI. */
     public boolean pickerOpen = false;
-    /** Animation for picker expand/collapse (0 → collapsed, 1 → open). */
+
     public Animation pickerAnim = new EaseInOutQuad(220, 1);
 
     public ColorSetting(Module parent, String name) {

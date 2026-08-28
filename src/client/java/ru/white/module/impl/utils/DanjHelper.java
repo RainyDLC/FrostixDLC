@@ -40,7 +40,6 @@ import java.util.regex.Pattern;
         category = Category.OTHER
 )
 public class DanjHelper extends Module {
-
     private final Map<BlockPos, DanjBlockData> trackedBlocks = new ConcurrentHashMap<>();
     private final Set<BlockPos> gpsNotified = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final Set<BlockPos> chatNotified = Collections.newSetFromMap(new ConcurrentHashMap<>());

@@ -12,14 +12,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
 
-/**
- * Список блоков (по их registry-id), которые можно добавлять/удалять прямо в GUI.
- * Значение — список строк-идентификаторов ("minecraft:diamond_ore"). Буфер ввода
- * ({@link #input}) не сохраняется.
- */
 public class BlockListSetting extends Setting<List<String>> {
-
-    /** Текущий текст в поле ввода (не персистится). */
     public String input = "";
 
     public BlockListSetting(Module parent, String name) {
@@ -30,7 +23,6 @@ public class BlockListSetting extends Setting<List<String>> {
         return getValue();
     }
 
-    /** Добавляет блок по «сырому» вводу (с авто-namespace и проверкой существования). */
     public boolean addId(String raw) {
         String id = normalize(raw);
         if (id == null || getValue().contains(id)) return false;
@@ -50,7 +42,6 @@ public class BlockListSetting extends Setting<List<String>> {
         getValue().remove(id);
     }
 
-    /** Преобразует id-строки в реальные блоки (несуществующие пропускаются). */
     public Set<Block> resolveBlocks() {
         Set<Block> blocks = new HashSet<>();
         for (String id : getValue()) {
@@ -62,7 +53,6 @@ public class BlockListSetting extends Setting<List<String>> {
         return blocks;
     }
 
-    /** "diamond_ore" → "minecraft:diamond_ore"; null, если такого блока нет. */
     public static String normalize(String raw) {
         if (raw == null) return null;
         String s = raw.trim().toLowerCase();
@@ -73,15 +63,13 @@ public class BlockListSetting extends Setting<List<String>> {
         return s;
     }
 
-    /** Имя без namespace для компактного отображения. */
     public static String shortName(String id) {
         int i = id.indexOf(':');
         return i >= 0 ? id.substring(i + 1) : id;
     }
 
-    // ── каталог всех блоков (строится ОДИН раз — иначе лагает GUI) ──
     private static List<String> ALL_IDS;
-    private static String[] SEARCH_KEYS;                      // параллельно ALL_IDS, в нижнем регистре
+    private static String[] SEARCH_KEYS;
     private static final java.util.Map<String, String> DISPLAY = new java.util.HashMap<>();
     private static final java.util.Map<String, Integer> SWATCH = new java.util.HashMap<>();
 
@@ -103,8 +91,7 @@ public class BlockListSetting extends Setting<List<String>> {
             SWATCH.put(id, sw);
             keys[i] = (shortName(id) + " " + name + " " + id).toLowerCase();
         }
-        // присваиваем В КОНЦЕ и только после того, как цикл гарантированно не упадёт,
-        // иначе ALL_IDS остаётся null и кэш пересобирается каждый кадр → лаги
+
         SEARCH_KEYS = keys;
         ALL_IDS = ids;
     }
@@ -114,7 +101,6 @@ public class BlockListSetting extends Setting<List<String>> {
         return ALL_IDS;
     }
 
-    /** Поиск по подстроке (полный каталог строится лениво и только при поиске). */
     public static List<String> search(String query) {
         if (ALL_IDS == null) buildCache();
         String q = query == null ? "" : query.trim().toLowerCase();
@@ -126,12 +112,10 @@ public class BlockListSetting extends Setting<List<String>> {
         return out;
     }
 
-    /** Локализованное имя блока (мемо per-id, без построения полного каталога). */
     public static String displayName(String id) {
         return DISPLAY.computeIfAbsent(id, BlockListSetting::computeDisplayName);
     }
 
-    /** Цвет-образец блока (мемо per-id, без построения полного каталога). */
     public static int swatchColor(String id) {
         return SWATCH.computeIfAbsent(id, BlockListSetting::computeSwatch);
     }

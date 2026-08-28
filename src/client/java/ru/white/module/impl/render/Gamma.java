@@ -1,6 +1,5 @@
 package ru.white.module.impl.render;
 
-
 import ru.white.manager.event_impl.EventUpdate;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.module.api.Category;
@@ -14,8 +13,6 @@ import net.minecraft.entity.effect.StatusEffects;
         category = Category.RENDER
 )
 public class Gamma extends Module {
-
-
     @Override
     public void onEnable() {
         super.onEnable();

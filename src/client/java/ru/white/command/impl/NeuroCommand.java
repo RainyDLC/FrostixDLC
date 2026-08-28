@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class NeuroCommand extends Command {
-
     private static final List<String> SUBCOMMANDS = List.of("create", "select", "train", "stop", "list", "delete", "info");
 
     public NeuroCommand() {

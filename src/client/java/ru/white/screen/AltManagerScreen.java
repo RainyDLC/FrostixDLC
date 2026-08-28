@@ -11,7 +11,6 @@ import org.lwjgl.glfw.GLFW;
 
 import ru.white.alt.Account;
 import ru.white.alt.AltManager;
-import ru.white.theme.ThemeColor;
 import ru.white.utils.animation.Animation;
 import ru.white.utils.animation.Easings;
 import ru.white.utils.annotation.IMinecraft;
@@ -31,7 +30,6 @@ import java.util.Date;
 import java.util.List;
 
 public class AltManagerScreen extends Screen implements IMinecraft {
-
     private final Screen parent;
     private final Animation alpha = new Animation();
     private float scaleFix = 1F;
@@ -40,7 +38,6 @@ public class AltManagerScreen extends Screen implements IMinecraft {
     private String inputText = "";
     private boolean inputFocused = false;
     private float scroll = 0, scrollTarget = 0;
-
 
     private boolean settingsOpen = false;
     private String randomBase = "";
@@ -74,7 +71,6 @@ public class AltManagerScreen extends Screen implements IMinecraft {
 
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm");
 
-
     private float panelX, panelY, panelW, panelH;
     private float inputX, inputY, inputW, inputH;
     private float addX, addY, addW, addH;
@@ -94,7 +90,7 @@ public class AltManagerScreen extends Screen implements IMinecraft {
     }
 
     @Override
-    
+
     protected void init() {
         alpha.set(0);
         alpha.run(1, 0.5F, Easings.BACK_OUT);
@@ -121,13 +117,9 @@ public class AltManagerScreen extends Screen implements IMinecraft {
 
         float a = alpha.get();
 
-
-
-
-        float parallaxStrength = 0.07F; // Сила смещения
+        float parallaxStrength = 0.07F;
         float offsetX = (screenWidth / 2F - (float) mouseX) * parallaxStrength;
         float offsetY = (screenHeight / 2F - (float) mouseY) * parallaxStrength;
-
 
         float bgScale = 1.1F;
         float bgW = screenWidth * bgScale;
@@ -136,9 +128,6 @@ public class AltManagerScreen extends Screen implements IMinecraft {
         float bgY = (screenHeight - bgH) / 2F + offsetY;
 
         RenderUtil.Images.texture(Identifier.of("client","textures/frame/mainmenu.png"), bgX, bgY, bgW, bgH, ColorUtil.getColor(255, a));
-
-
-
 
         ScreenBlur.capture(2);
 
@@ -157,13 +146,11 @@ public class AltManagerScreen extends Screen implements IMinecraft {
         float btnH = 20;
         float gap = 5;
 
-
         addY = genY = panelY + panelH - pad - btnH;
         addH = genH = btnH;
         addW = genW = (panelW - pad * 2 - gap) / 2F;
         addX = panelX + pad;
         genX = addX + addW + gap;
-
 
         inputH = 20;
         gearW = gearH = inputH;
@@ -173,22 +160,17 @@ public class AltManagerScreen extends Screen implements IMinecraft {
         gearX = inputX + inputW + 6;
         gearY = inputY;
 
-
         listX = panelX + pad;
         listY = panelY + pad;
         listW = panelW - pad * 2;
         listH = inputY - gap - listY;
         renderSidePanel(a, font);
 
-
         RenderUtil.Blur.blur(panelX, panelY, panelW, panelH, a, 5, ColorUtil.getColor(20, a * 0.4F));
-        //   RenderUtil.Render2D.outline(panelX, panelY, panelW, panelH, 0.75F, ColorUtil.getColor(255, a * 0.1F), 6);
 
         Fonts.sf_regular.drawCentered("Чтобы выйти, нажмите ESC или кликните по пустому месту.",screenWidth / 2,
                 panelY + panelH + 5,9
                 ,ColorUtil.getColor(255,a * 0.06F));
-
-
 
         rowRects.clear(); delRects.clear(); favRects.clear(); rowRefs.clear();
 
@@ -198,7 +180,6 @@ public class AltManagerScreen extends Screen implements IMinecraft {
         float maxScroll = Math.max(0, contentH - listH);
         scrollTarget = MathUtil.clamp(scrollTarget, 0, maxScroll);
         scroll += (scrollTarget - scroll) * 0.4F;
-
 
         rowAnims.keySet().retainAll(all);
 
@@ -218,7 +199,6 @@ public class AltManagerScreen extends Screen implements IMinecraft {
             if (!an.hasOff) { an.curOff = off; an.hasOff = true; }
             else an.curOff += (off - an.curOff) * 0.35F;
             float ry = listY - scroll + an.curOff;
-
 
             if (RenderUtil.Images.isUrlLoaded(acc.headUrl())) an.headFade.run(1, 0.3, Easings.QUAD_OUT, true);
 
@@ -254,9 +234,6 @@ public class AltManagerScreen extends Screen implements IMinecraft {
 
                 int rowBg = ColorUtil.getColor(255, ra * (0.015F + 0.05F * hp + 0.03F * acp));
                 RenderUtil.Render2D.rect(rx, ry, rw, ROW_H, rowBg, 4 );
-           //   if (acp > 0.001F)
-           //       RenderUtil.Render2D.outline(rx, ry, rw, ROW_H, 0.75F,
-           //               ColorUtil.replAlpha(new Color(0x8E8ED6).getRGB(), ra * 0.7F * acp), 7);
 
                 float asz = 12, axx = rx + 5, ay = ry + (ROW_H - asz) / 2F;
                 RenderUtil.Render2D.rect(axx, ay, asz, asz, ColorUtil.getColor(255, ra * 0.06F), 3);
@@ -278,7 +255,6 @@ public class AltManagerScreen extends Screen implements IMinecraft {
 
                 Fonts.icon.drawCentered("o",fx + dw / 2F, fy + dh / 2F - 2.7F,6,starCol);
 
-
                 RenderUtil.Render2D.rect(dx, dy, dw, dh, ColorUtil.getColor(255, ra * (0.015F + 0.025F * dp)), 3);
                 Fonts.icon.drawCentered("W", dx + dw / 2F + 0.15F, dy + 4.6F, 7, ColorUtil.overCol(ColorUtil.getColor(255, 255, 255, ra * 0.5F),ColorUtil.getColor(255, 125, 125, ra * 0.9F),dp));
 
@@ -289,7 +265,6 @@ public class AltManagerScreen extends Screen implements IMinecraft {
                     rowRefs.add(acc);
                 }
             }
-
 
             if (leaving && ap <= 0.01F) {
                 if (finished == null) finished = new java.util.ArrayList<>();
@@ -310,29 +285,21 @@ public class AltManagerScreen extends Screen implements IMinecraft {
         }
         Scissor.disable();
 
-
         inputAnim.run(inputFocused ? 1 : 0, 0.2, Easings.QUAD_OUT, true);
         inputAnim.update();
         float fp = MathUtil.clamp(inputAnim.get(), 0F, 1F);
 
         RenderUtil.Render2D.rect(inputX, inputY, inputW, inputH, ColorUtil.getColor(255, a * (0.015F + 0.03F * fp)), 4);
-      //  RenderUtil.Render2D.outline(inputX, inputY, inputW, inputH, 0.5F,
-      //          ColorUtil.replAlpha(ColorUtil.interpolateColor(ColorUtil.getColor(255, 255, 255, 1F), ColorUtil.getClientColor(1), fp),
-      //                  a * (0.01F + 0.1F * fp)), 4);
+
         boolean blink = inputFocused && (System.currentTimeMillis() / 450L) % 2L == 0L;
         String shown = inputText.isEmpty() && !inputFocused ? "Введите ник" : inputText + (blink ? "_" : "");
         font.draw(shown, inputX + 10, inputY + 5.4F, 7,
                 inputText.isEmpty() && !inputFocused ? ColorUtil.getColor(140,a) :ColorUtil.getColor(185,a));
 
-
-
         gearAnim.run(MathUtil.isHovered(mouseX(), mouseY(), gearX, gearY, gearW, gearH) || settingsOpen ? 1 : 0, 0.18, Easings.QUAD_OUT, true);
         gearAnim.update();
         float gp = MathUtil.clamp(gearAnim.get(), 0F, 1F);
         RenderUtil.Render2D.rect(gearX, gearY, gearW, gearH, ColorUtil.getColor(255, a * (0.015F + 0.04F * gp)), 4);
-     //   RenderUtil.Render2D.outline(gearX, gearY, gearW, gearH, 0.5F,
-     //           ColorUtil.replAlpha(ColorUtil.getColor(255, 255, 255, 1F), a * (0.015F + 0.12F * gp)), 4);
-
 
         Fonts.icon.draw("l",gearX + 6.25F, gearY + 6.3F, 8,ColorUtil.getColor(255,a * (0.35F + 0.3F * gp)));
 
@@ -341,7 +308,6 @@ public class AltManagerScreen extends Screen implements IMinecraft {
         addAnim.update(); genAnim.update();
         drawButton(addX, addY, addW, addH, ru.white.lang.Lang.pick("Добавить аккаунт", "Добавить аккаунт"), a, MathUtil.clamp(addAnim.get(), 0F, 1F), false);
         drawButton(genX, genY, genW, genH, ru.white.lang.Lang.pick("Случайный аккаунт", "Случайный аккаунт"), a, MathUtil.clamp(genAnim.get(), 0F, 1F), false);
-
 
         Render2D.endOverlay();
         if (context != null) context.getMatrices().popMatrix();
@@ -353,15 +319,12 @@ public class AltManagerScreen extends Screen implements IMinecraft {
                 : ColorUtil.getColor(255, a * (0.015F + 0.03F * hp));
         RenderUtil.Render2D.rect(x, y, w, h, bg, 4);
         int border = ColorUtil.getColor(255, 255, 255, 1F);
-       // RenderUtil.Render2D.outline(x, y, w, h, 0.5F, ColorUtil.replAlpha(border, a * (0.015F + 0.1F * hp)), 4);
+
         Fonts.sf_regular.drawCentered(label, x + w / 2F, y + h / 2F - 4.75F, 7
                 , ColorUtil.getColor(175,a));
     }
 
-
-
     private void renderSidePanel(float a, Font font) {
-
         settingsAnim.run(settingsOpen ? 1 : 0, 0.25F, Easings.SINE_OUT);
         float sp = settingsAnim.get();
 
@@ -378,7 +341,6 @@ public class AltManagerScreen extends Screen implements IMinecraft {
         float pad = 12;
         font.draw(ru.white.lang.Lang.pick("Настройки рандома", "Random settings"), sideX + pad, sideY + 9, 8, ColorUtil.getColor(185, sa));
         font.draw(ru.white.lang.Lang.pick("Начальный ник", "Initial nickname"), sideX + pad, sideY + 26, 6.5F, ColorUtil.getColor(185, sa));
-
 
         baseX = sideX + pad   ; baseY = sideY + 37; baseW = sideW - pad * 2; baseH = 20;
         baseAnim.run(baseFocused ? 1 : 0, 0.2, Easings.QUAD_OUT, true);
@@ -406,12 +368,10 @@ public class AltManagerScreen extends Screen implements IMinecraft {
 
         boolean inSide = settingsOpen && MathUtil.isHovered(mx, my, sideX, sideY, sideW, sideH);
 
-
         if (!MathUtil.isHovered(mx, my, panelX, panelY, panelW, panelH) && !inSide) {
             mc.setScreen(parent);
             return true;
         }
-
 
         if (inSide) {
             if (MathUtil.isHovered(mx, my, baseX, baseY, baseW, baseH)) {
@@ -445,7 +405,6 @@ public class AltManagerScreen extends Screen implements IMinecraft {
             inputFocused = true; baseFocused = false;
             return true;
         }
-
 
         for (int i = 0; i < favRects.size(); i++) {
             float[] r = favRects.get(i);

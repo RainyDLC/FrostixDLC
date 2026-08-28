@@ -12,22 +12,13 @@ import ru.white.friend.FriendManager;
 import ru.white.module.api.Module;
 import ru.white.utils.math.ChatUtils;
 
-/**
- * Белый список API, доступный Lua-скриптам.
- *
- * Жёсткое правило: наружу отдаются ТОЛЬКО примитивы (число/строка/логическое).
- * Ни один метод не возвращает живой объект Minecraft — это основа защиты
- * клиентских классов от извлечения через скрипты.
- */
 public final class LuaApi {
-
     private LuaApi() {
     }
 
     static LuaTable build() {
         LuaTable api = new LuaTable();
 
-        // ── чат ──
         api.set("chat", new OneArgFunction() {
             @Override
             public LuaValue call(LuaValue msg) {
@@ -36,7 +27,6 @@ public final class LuaApi {
             }
         });
 
-        // ── игрок: только числа/строки ──
         api.set("player_name", safe(() -> mc().player != null ? mc().player.getName().getString() : ""));
         api.set("player_x", safeNum(() -> mc().player != null ? mc().player.getX() : 0));
         api.set("player_y", safeNum(() -> mc().player != null ? mc().player.getY() : 0));
@@ -48,12 +38,10 @@ public final class LuaApi {
         api.set("player_fall_distance", safeNum(() -> mc().player != null ? mc().player.fallDistance : 0));
         api.set("player_on_ground", safe(() -> mc().player != null && mc().player.isOnGround()));
 
-        // ── мир ──
         api.set("world_time", safeNum(() -> mc().world != null ? mc().world.getTime() : 0));
         api.set("world_raining", safe(() -> mc().world != null && mc().world.isRaining()));
         api.set("world_thundering", safe(() -> mc().world != null && mc().world.isThundering()));
 
-        // ── ввод / утилиты ──
         api.set("key_down", new OneArgFunction() {
             @Override
             public LuaValue call(LuaValue code) {
@@ -71,7 +59,6 @@ public final class LuaApi {
             }
         });
 
-        // ── другие модули ──
         api.set("module_enabled", new OneArgFunction() {
             @Override
             public LuaValue call(LuaValue name) {
@@ -92,7 +79,6 @@ public final class LuaApi {
             }
         });
 
-        // ── друзья ──
         api.set("is_friend", new OneArgFunction() {
             @Override
             public LuaValue call(LuaValue name) {
@@ -108,7 +94,6 @@ public final class LuaApi {
         return MinecraftClient.getInstance();
     }
 
-    /** Обёртка: любое исключение внутри доступа к игроку/миру → false. */
     private static ZeroArgFunction safe(java.util.function.Supplier<Object> supplier) {
         return new ZeroArgFunction() {
             @Override

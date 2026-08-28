@@ -19,7 +19,6 @@ import ru.white.utils.other.Instance;
         category = Category.MOVEMENT
 )
 public class Sprint extends Module {
-
     public static Sprint get() {
         return Instance.get(Sprint.class);
     }

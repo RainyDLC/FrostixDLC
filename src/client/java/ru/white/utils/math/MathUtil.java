@@ -1,6 +1,5 @@
 package ru.white.utils.math;
 
-
 import ru.white.utils.annotation.IMinecraft;
 import lombok.experimental.UtilityClass;
 import net.minecraft.util.math.MathHelper;
@@ -26,7 +25,6 @@ public class MathUtil implements IMinecraft {
     private static float[] lastSmoothTarget;
     private static long lastSmoothTime = 0L;
 
-
     public static float invertScaleValue(float value, float minInput, float maxInput, float minOutput, float maxOutput) {
         if (maxInput - minInput == 0) {
             throw new IllegalArgumentException("\u0414\u0438\u0430\u043F\u0430\u0437\u043E\u043D \u0432\u0445\u043E\u0434\u043D\u044B\u0445 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0439 \u043D\u0435 \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u0440\u0430\u0432\u0435\u043D \u043D\u0443\u043B\u044E.");
@@ -37,12 +35,10 @@ public class MathUtil implements IMinecraft {
         return Math.max(minOutput, Math.min(maxOutput, scaledValue));
     }
     public static float smoothRandom(float min, float max, float smoothness) {
-
         if (lastSmoothRandom == null) {
             lastSmoothRandom = new float[]{(min + max) / 2F};
             lastSmoothTarget = new float[]{randomValue(min, max)};
         }
-
 
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastSmoothTime > 250 + Math.random() * 300) {
@@ -90,7 +86,6 @@ public class MathUtil implements IMinecraft {
         return TRIG_TABLE[index];
     }
 
-
     public static float random1(float min, float max) {
         return (float) (Math.random() * (max - min) + min);
     }
@@ -110,7 +105,7 @@ public class MathUtil implements IMinecraft {
 
     public static float randomGaussian(double min, double max) {
         double mean = (min + max) * 0.5;
-        double deviation = (max - min) / 6.0; // ~99.7% значений будут в диапазоне
+        double deviation = (max - min) / 6.0;
 
         double value = mean + RANDOM.nextGaussian() * deviation;
 
@@ -143,10 +138,6 @@ public class MathUtil implements IMinecraft {
         return Math.max(min, Math.min(max, value));
     }
     public float randomLerp(float min, float max) {
-        // Раньше здесь создавался new SecureRandom() на КАЖДЫЙ вызов (а вызывается
-        // он по несколько раз за тик из RotationProcess/AttackAura). Конструктор
-        // SecureRandom дорог: поиск провайдера + сбор энтропии ОС.
-        // Тот же генератор, то же распределение — просто один экземпляр.
         return Interpolator.lerp(max, min, SECURE_RANDOM.nextFloat());
     }    public static double getRandomNumberBetween(double min, double max) {
         return Math.random() * (max - min) + min;
@@ -212,10 +203,8 @@ public class MathUtil implements IMinecraft {
     public static boolean isInRegion(int mouseX, int mouseY, float x, float y, float width, float height) {
         return mouseX >= x && mouseY >= y && mouseX <= x + width && mouseY <= y + height;
     }    public boolean isHovered(float mouseX, float mouseY, float x, float y, float width, float height) {
-
         return mouseX > x && mouseX < x + width && mouseY > y && mouseY < y + height;
     }
-
 
     public static float step(float value, float step) {
         return Math.round(value / step) * step;
@@ -248,4 +237,3 @@ public class MathUtil implements IMinecraft {
         }
     }
 }
-

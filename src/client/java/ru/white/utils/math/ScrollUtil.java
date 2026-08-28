@@ -1,25 +1,21 @@
 package ru.white.utils.math;
 
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.util.Window;
 import org.lwjgl.glfw.GLFW;
-import org.lwjgl.opengl.GL11;
 
 import java.awt.*;
 
 public class ScrollUtil {
-
     private final MinecraftClient mc = MinecraftClient.getInstance();
 
     private float target, scroll, max;
     private float speed = 8F;
     private boolean enabled;
 
-    private double wheel; // теперь сами храним wheel
+    private double wheel;
 
     public ScrollUtil() {
         setEnabled(true);
-
 
         GLFW.glfwSetScrollCallback(mc.getWindow().getHandle(), (window, xOffset, yOffset) -> {
             wheel += yOffset;
@@ -63,8 +59,6 @@ public class ScrollUtil {
 
         float scrollX = x;
         float scrollY = y + (height * percentage) - (barHeight * percentage);
-
-
     }
 
     public void reset() {
@@ -76,7 +70,6 @@ public class ScrollUtil {
         this.max = -max + height;
     }
 
-    // utils
     public float lerp(float a, float b, double f) {
         return (float) (a + f * (b - a));
     }
@@ -85,7 +78,6 @@ public class ScrollUtil {
         return Math.max(min, Math.min(max, val));
     }
 
-    // getters/setters
     public float getScroll() {
         return scroll;
     }

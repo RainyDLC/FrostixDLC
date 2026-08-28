@@ -45,7 +45,6 @@ public class EntityMixin implements IMinecraft {
         cir.setReturnValue(base + extra);
     }
 
-
     @Inject(method = "isGlowing", at = @At("RETURN"), cancellable = true)
     private void espMarkGlowing(CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) return;
@@ -70,11 +69,9 @@ public class EntityMixin implements IMinecraft {
     private void onPushAwayFrom(Entity entity, CallbackInfo ci) {
         Entity self = (Entity) (Object) this;
 
-
         if (!(self instanceof ClientPlayerEntity)) {
             return;
         }
-
 
         NoPush noPush = NoPush.get();
         if (noPush == null || !noPush.isEnabled()) {

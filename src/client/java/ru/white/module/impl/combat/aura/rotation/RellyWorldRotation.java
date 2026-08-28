@@ -13,18 +13,7 @@ import ru.white.utils.aura.RayTraceUtil;
 import ru.white.utils.aura.UBoxPoints;
 import ru.white.utils.math.MathUtil;
 
-/**
- * RellyWorld: гибрид под Grim + Matrix, быстрая и умная версия.
- * - пропорциональный контроллер: скорость растёт с ошибкой наведения —
- *   большая ошибка гасится резкой доводкой, малая — микрошагами (Grim-safe);
- * - предсказание движения: точка прицела ведёт цель по её скорости,
- *   упреждение зависит от дистанции;
- * - точка прицела блуждает по хитбоксу (против «идеального центра» Matrix),
- *   репик замирает перед ударом, чтобы не сорвать трейс;
- * - после удара короткая «усадка» с микро-отворотом, как коррекция руки.
- */
 public class RellyWorldRotation implements RotationAura {
-
     private static final float SPEED_SMOOTH = 0.35F;
 
     private float currentSpeedYaw = 40F;
@@ -60,7 +49,6 @@ public class RellyWorldRotation implements RotationAura {
 
         Box box = target.getBoundingBox();
 
-        // ── сглаженная скорость цели (блоков/сек) ──
         if (!hasLastPos) {
             lastTX = target.getX();
             lastTY = target.getY();
@@ -96,7 +84,6 @@ public class RellyWorldRotation implements RotationAura {
         }
         boolean lostTooLong = !onTarget && ms - lastOnTarget > 400L;
 
-        // ── точка прицела: лучшая точка + блуждание + упреждение ──
         float speed2D = (float) Math.hypot(velX, velZ);
         if (ms >= nextRepick) {
             boolean moving = speed2D > 1.5F;
@@ -127,7 +114,6 @@ public class RellyWorldRotation implements RotationAura {
         float pitch = (float) MathHelper.clamp(
                 -Math.toDegrees(Math.atan2(aim.y, Math.hypot(aim.x, aim.z))), -90F, 90F);
 
-        // ── пропорциональный контроллер скорости ──
         float errYaw = Math.abs(MathHelper.wrapDegrees(yaw - mc.player.getYaw()));
         float errPitch = Math.abs(pitch - mc.player.getPitch());
         float err = (float) Math.hypot(errYaw, errPitch);

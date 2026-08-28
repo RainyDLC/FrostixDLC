@@ -2,21 +2,12 @@ package ru.white.manager.neuro;
 
 import java.util.Random;
 
-/**
- * Маленькая полносвязная нейросеть (MLP) 2-8-2 с обучением через backprop.
- * Учится по парам (ошибка наведения -> скорость поворота человека), чтобы
- * потом выдавать человекоподобную скорость доводки по текущей ошибке.
- *
- * Вход:  [|yawErr|/180, |pitchErr|/90]
- * Выход: [yawSpeedNorm, pitchSpeedNorm] в 0..1 (масштабируется снаружи)
- */
 public class NeuroNet {
-
     public final int in, hid, out;
-    public final double[][] w1; // [hid][in]
-    public final double[] b1;   // [hid]
-    public final double[][] w2; // [out][hid]
-    public final double[] b2;   // [out]
+    public final double[][] w1;
+    public final double[] b1;
+    public final double[][] w2;
+    public final double[] b2;
 
     private static final Random RND = new Random();
 
@@ -59,7 +50,6 @@ public class NeuroNet {
         return o;
     }
 
-    /** Один шаг SGD по одному образцу, возвращает квадрат ошибки. */
     private double train1(double[] x, double[] y, double lr) {
         double[] h = new double[hid];
         for (int j = 0; j < hid; j++) {
@@ -99,7 +89,6 @@ public class NeuroNet {
         return err;
     }
 
-    /** Прогоняет epochs эпох по выборке, возвращает среднюю ошибку последней эпохи. */
     public double train(double[][] X, double[][] Y, int epochs, double lr) {
         double last = 0;
         int n = X.length;

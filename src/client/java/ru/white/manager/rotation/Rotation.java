@@ -1,6 +1,5 @@
 package ru.white.manager.rotation;
 
-
 import ru.white.utils.annotation.IMinecraft;
 import lombok.Getter;
 import lombok.Setter;
@@ -9,7 +8,6 @@ import net.minecraft.util.math.MathHelper;
 import org.joml.Vector2f;
 
 public class Rotation implements IMinecraft {
-
     @Getter
     @Setter
     public float yaw, pitch;
@@ -22,7 +20,6 @@ public class Rotation implements IMinecraft {
         yaw = yawN;
         pitch = pitchN;
     }
-
 
     public float getDelta(Rotation target) {
         float yawDelta = MathHelper.wrapDegrees(target.yaw - this.yaw);
@@ -40,7 +37,6 @@ public class Rotation implements IMinecraft {
         return new Vector2f(cameraYaw(), cameraPitch());
     }
 
-
     public static float cameraYaw() {
         return MathHelper.wrapDegrees(mc.gameRenderer.getCamera().getYaw() + (mc.options.getPerspective().isFrontView() ? 180 : 0));
     }
@@ -48,6 +44,4 @@ public class Rotation implements IMinecraft {
     public static float cameraPitch() {
         return (mc.options.getPerspective().isFrontView() ? -1 : 1) * mc.gameRenderer.getCamera().getPitch();
     }
-
-
 }

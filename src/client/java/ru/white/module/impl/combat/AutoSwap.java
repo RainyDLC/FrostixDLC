@@ -22,15 +22,12 @@ import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
 import org.lwjgl.glfw.GLFW;
 
-
 @ModuleInfo(
         name = "Auto Swap",
         category = Category.COMBAT,
         desc = "Свап предметов по клавише."
 )
 public class AutoSwap extends Module {
-
-
     private final ModeSetting mode = new ModeSetting(this, "Режим", "Двойной", "Тройной");
 
     private final ModeSetting firstItemSetting  = new ModeSetting(this, "Первый предмет",
@@ -40,12 +37,10 @@ public class AutoSwap extends Module {
             "Шар 2", "Золотое яблоко 2", "Щит 2", "Тотем 2")
             .setVisible(() -> mode.is("Двойной"));
 
-
     private final BindSetting    bind          = new BindSetting(this,    "Клавиша свапа",       -1);
     private final BooleanSetting swaprender    = new BooleanSetting(this, "Уведомления о свапе", true);
     private final BooleanSetting onlyEnchanted = new BooleanSetting(this, "Только Зач. Тотем",   false)
             .setVisible(() -> mode.is("Двойной"));
-
 
     private final BooleanSetting tripleAnimations = new BooleanSetting(this, "Анимации тройного", true)
             .setVisible(() -> mode.is("РўСЂРѕР№РЅРѕР№"));
@@ -58,10 +53,8 @@ public class AutoSwap extends Module {
     private int     bypassSlot    = -1;
     private String  bypassItemName = "";
 
-
     ItemStack[] tripleSlotItems = new ItemStack[]{null, null, null};
 
-    
     private boolean isBindHeld() {
         int k = bind.get();
         if (k == -1) return false;
@@ -139,7 +132,6 @@ public class AutoSwap extends Module {
             return;
         }
 
-
         if (mode.getValue().equals("Двойной")) {
             if (this.swap && this.hand) {
                 if (this.firstItemSetting.getValue().equals("Шар")) {
@@ -168,7 +160,6 @@ public class AutoSwap extends Module {
         }
     }
 
-
     @EventHandler
     public void input(EventKey event) {
         if (mc.currentScreen != null || bind.get() == -1) return;
@@ -177,11 +168,9 @@ public class AutoSwap extends Module {
         if (mode.getValue().equals("Двойной")) {
             this.swap = true;
         } else if (mode.getValue().equals("Тройной")) {
-
             mc.execute(() -> mc.setScreen(new TripleWheelScreen(AutoSwap.this)));
         }
     }
-
 
     void executeTripleSwap(int slotIndex) {
         if (mc.player == null) return;
@@ -222,7 +211,6 @@ public class AutoSwap extends Module {
         return -1;
     }
 
-
     private void swap(Item item, String itemName, boolean onlyEnchanted) {
         int slot = item == Items.TOTEM_OF_UNDYING
                 ? findTotemSlot(onlyEnchanted)
@@ -258,16 +246,15 @@ public class AutoSwap extends Module {
     }
 
     @Override
-    
-    public void onDisable() {
 
+    public void onDisable() {
         if (mc.currentScreen instanceof TripleWheelScreen
          || mc.currentScreen instanceof TriplePickerScreen) {
             mc.execute(() -> mc.setScreen(null));
         }
         super.onDisable();
     }
-    
+
     private void setKey(boolean state) {
         KeyBinding[] movementKeys = {
                 mc.options.forwardKey,

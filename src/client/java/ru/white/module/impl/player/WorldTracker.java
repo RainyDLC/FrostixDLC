@@ -21,17 +21,12 @@ import ru.white.utils.render.font.Fonts;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * То же, что Use Tracker, но не по одной цели, а по всем игрокам в мире.
- * Кулдауны рисуются строкой над ником — вызывается из {@link ru.white.module.impl.render.NameTag}.
- */
 @ModuleInfo(
         name = "Use World Tracker",
         desc = "Кулдауны хилок всех игроков в мире прямо над ником",
         category = Category.PLAYER
 )
 public class WorldTracker extends Module {
-
     private static final float FONT_SIZE = 6;
     private static final float PADDING = 3.5F;
     private static final float GAP = 4;
@@ -80,10 +75,6 @@ public class WorldTracker extends Module {
         UseCooldowns.debug = debug.getValue();
     }
 
-    /**
-     * Рисует кулдауны игрока строкой над его ником.
-     * @param topY верхняя граница ника
-     */
     public void render(DrawContext context, PlayerEntity player, float centerX, float topY) {
         if (!isEnabled()) return;
 
@@ -121,7 +112,6 @@ public class WorldTracker extends Module {
             RenderUtil.Render2D.rect(bgX, bgY, w, ROW_H, ColorUtil.multAlpha(ColorUtil.getColor(0), 0.4F), 4);
         }
 
-        // как в renderTag: фон отправляем на экран до текста, иначе он ляжет поверх букв
         Client.get().render2D().flushAll();
 
         float cx = bgX + PADDING;

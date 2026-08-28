@@ -21,7 +21,6 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
-
 import static net.minecraft.util.Hand.MAIN_HAND;
 
 @ModuleInfo(
@@ -30,7 +29,6 @@ import static net.minecraft.util.Hand.MAIN_HAND;
         category = Category.COMBAT
 )
 public class TriggerBot extends Module {
-
     public SliderSetting attackRange  = new SliderSetting(this, "Радиус атаки",       3.0F, 2.5F, 5.0F, 0.1F);
     public SliderSetting preRange     = new SliderSetting(this, "Радиус обнаружения", 1.0F, 0.0F, 3.0F, 0.1F);
 
@@ -45,11 +43,10 @@ public class TriggerBot extends Module {
     public BooleanSetting hitOfBlock  = new BooleanSetting(this, "Бить через блоки",  false);
     public BooleanSetting nohitead    = new BooleanSetting(this, "Не бить при еде",   false);
 
-
     public static LivingEntity targets = null;
 
     @EventHandler
-    
+
     public void onUpdate(EventUpdate eventUpdate) {
         if (mc.player == null || mc.world == null) return;
 
@@ -79,7 +76,6 @@ public class TriggerBot extends Module {
         boolean canAttack = TriggerUAttack.shouldAttack(target, true, true, true, 0L, ranges);
 
         if (canAttack) {
-
             final Runnable[] shieldBreak = TriggerUAttack.hitShieldBreakTaskForUse(target, true),
                     shieldPressBypass = TriggerUAttack.resetShieldSilentTaskForUse(true),
                     skipSilentSprint = TriggerUAttack.skipSilentSprintingTaskForUse((typeSprint.is("Packet") || typeSprint.is("Silent")));
@@ -98,16 +94,13 @@ public class TriggerBot extends Module {
         }
     }
 
-
     private LivingEntity resolveTarget() {
         if (!hitOfBlock.getValue()) {
-
             HitResult hitResult = mc.crosshairTarget;
             if (!(hitResult instanceof EntityHitResult ehr)) return null;
             Entity e = ehr.getEntity();
             return e instanceof LivingEntity living ? living : null;
         }
-
 
         Vec3d eyePos  = mc.player.getEyePos();
         Vec3d lookVec = mc.player.getRotationVec(1.0F).normalize();

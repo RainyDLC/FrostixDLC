@@ -3,14 +3,7 @@ package ru.white.lang;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Словарь переводов рус→англ, зашитый прямо в код.
- *
- * Никаких ресурсов и файлов — поэтому ничего не может "не загрузиться" и не лагает.
- * Чтобы добавить перевод: допиши строку m.put("русский", "english");
- */
 final class Translations {
-
     private Translations() {}
 
     static Map<String, String> build() {
@@ -442,7 +435,6 @@ final class Translations {
         m.put("Клавиша", "Key");
         m.put("Во время ПВП блокирует выход с сервера и команды выхода (/hub /limbo /an /anarchy)", "Blocks leaving the server and exit commands during PvP (/hub /limbo /an /anarchy)");
 
-        // описания модулей, добавленные позже
         m.put("Убирает сторонние хуки и инжекты", "Removes third-party hooks and injections");
         m.put("Мелкие настройки отображения мира", "Minor world rendering tweaks");
         m.put("Полная яркость (фуллбрайт)", "Full brightness (Fullbright)");

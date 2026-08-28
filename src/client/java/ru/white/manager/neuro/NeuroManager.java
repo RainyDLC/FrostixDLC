@@ -26,7 +26,6 @@ import java.util.Map;
 import java.util.UUID;
 
 public class NeuroManager implements IMinecraft {
-
     private static NeuroManager instance;
 
     public static NeuroManager get() {
@@ -51,25 +50,18 @@ public class NeuroManager implements IMinecraft {
     private float lastHitX = 0.5F, lastHitY = 0.5F, lastHitZ = 0.5F;
     private long trainStart;
 
-    // Покадровое накопление между тиками: длина пути, пиковый рывок, число кадров.
-    // Ловит суб-тиковый джитер мыши, который на 20 Гц тиках теряется.
     private float frameLastYaw, frameLastPitch;
     private boolean frameInit;
     private float framePath;
     private float framePeak;
     private int frameCount;
 
-    // Плавность/пик предыдущего тика (идут во вход сети) и EMA-сглаженные скорости
     private float prevSmoothness = 1F, prevPeak = 0F;
     private float emaYawSpeed, emaPitchSpeed;
 
-    // Сырая текстура руки: дёрганая составляющая движения (отклонение от плавного хода)
-    // пишется на каждом тике независимо от хитбокса — фулл запись того, как ведётся мышь
     private final List<float[]> recStrokes = new ArrayList<>();
     private float emaSignedYaw, emaSignedPitch;
 
-    // Траектории: полная последовательность "ситуация -> движение мыши" с контекстом ударов.
-    // Отсюда плейбек копирует подлёт к хитбоксу и отвод камеры после удара один-в-один
     private final List<float[]> recTraj = new ArrayList<>();
     private int attackTicksAgo = 999;
     private boolean trajGapPending;
@@ -288,8 +280,6 @@ public class NeuroManager implements IMinecraft {
     public void onTick(EventTick e) {
         if (!recording || mc.player == null || mc.world == null || dummy == null || dummyCenter == null) return;
 
-        // экран открыт или окно не в фокусе — мышь не управляет камерой,
-        // такие тики в датасет не пишем, только сбрасываем состояние
         if (mc.currentScreen != null || !mc.isWindowFocused()) {
             lastYaw = Rotation.cameraYaw();
             lastPitch = Rotation.cameraPitch();
@@ -339,13 +329,9 @@ public class NeuroManager implements IMinecraft {
         float pitchShake = curPitch - pointPitch;
         float distance = (float) mc.player.getEyePos().distanceTo(hitPoint);
 
-        // EMA-сглаживание скоростей: сеть учит "крейсерскую" скорость руки,
-        // а не шумную дельту одного тика
         emaYawSpeed += (Math.abs(appliedYaw) - emaYawSpeed) * 0.45F;
         emaPitchSpeed += (Math.abs(appliedPitch) - emaPitchSpeed) * 0.45F;
 
-        // фулл-запись почерка мыши: дёрганая составляющая = движение минус его плавный тренд.
-        // Пишется всегда, независимо от того, куда смотрит прицел относительно хитбокса
         float strokeJitterYaw = appliedYaw - emaSignedYaw;
         float strokeJitterPitch = appliedPitch - emaSignedPitch;
         emaSignedYaw += (appliedYaw - emaSignedYaw) * 0.35F;
@@ -356,8 +342,6 @@ public class NeuroManager implements IMinecraft {
                 (float) Math.hypot(emaSignedYaw, emaSignedPitch)
         });
 
-        // траектория: ошибка до цели В НАЧАЛЕ тика -> что мышь сделала за этот тик,
-        // плюс сколько тиков прошло с удара (так запоминается и подлёт, и отвод после удара)
         attackTicksAgo = Math.min(attackTicksAgo + 1, 999);
         if (trajGapPending) {
             recTraj.add(new float[]{0F, 0F, 0F, 0F, -1F});
@@ -371,11 +355,9 @@ public class NeuroManager implements IMinecraft {
                 Math.min(attackTicksAgo, 60)
         });
 
-        // плавность: отношение чистого смещения к длине покадрового пути за тик.
-        // 1 = мышь шла ровной дугой, ближе к 0 = дёргалась туда-сюда (джитер)
         float displacement = (float) Math.hypot(appliedYaw, appliedPitch);
         float smoothness = framePath < 0.02F ? 1F : MathHelper.clamp(displacement / framePath, 0F, 1F);
-        // пиковый рывок: самый резкий покадровый скачок, приведённый к скорости за тик
+
         float peak = frameCount <= 0 ? 0F
                 : MathHelper.clamp(framePeak * frameCount / NeuroModel.MAX_PEAK_SPEED, 0F, 1F);
         framePath = 0F;
@@ -481,13 +463,11 @@ public class NeuroManager implements IMinecraft {
         return current.predictDetailed(features);
     }
 
-    /** Полная копия движения: записанный сдвиг камеры под текущую ситуацию, null если записи нет. */
     public float[] nextMove(float yawErr, float pitchErr, float sinceAttack) {
         if (current == null) return null;
         return current.nextMove(yawErr, pitchErr, sinceAttack);
     }
 
-    /** Следующий кусочек записанного почерка руки {jitterYaw, jitterPitch} под текущую скорость. */
     public float[] nextJitter(float speed) {
         if (current == null) return new float[]{0F, 0F};
         return current.nextJitter(speed);

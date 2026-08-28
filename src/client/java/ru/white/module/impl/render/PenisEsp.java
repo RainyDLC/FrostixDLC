@@ -23,19 +23,12 @@ import ru.white.module.api.settings.impl.ColorSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.annotation.IMinecraft;
 
-/**
- * Penis ESP (порт из Aurora): каркасные яички, ствол и головка на игроках,
- * рисуются линиями и видны сквозь стены — как в оригинале.
- *
- * Регулируются длина, толщина, размер яичек, градация сетки и цвета.
- */
 @ModuleInfo(
         name = "PenisESP",
         desc = "Каркасный орган на игроках с настройкой размеров",
         category = Category.RENDER
 )
 public class PenisEsp extends Module implements IMinecraft {
-
     public BooleanSetting onlyOwn = new BooleanSetting(this, "Только свой", false);
     public SliderSetting penisLength = new SliderSetting(this, "Длина", 1.5F, 0.1F, 3F, 0.1F);
     public SliderSetting penisThickness = new SliderSetting(this, "Толщина", 0.07F, 0.01F, 0.3F, 0.01F);
@@ -43,8 +36,6 @@ public class PenisEsp extends Module implements IMinecraft {
     public SliderSetting gradation = new SliderSetting(this, "Градация", 30F, 10F, 100F, 1F);
     public ColorSetting penisColor = new ColorSetting(this, "Цвет", 0xFFFFFFFF);
     public ColorSetting headColor = new ColorSetting(this, "Цвет головки", 0xFFFFFFFF);
-
-    // ── рендер ──────────────────────────────────────────────────────────
 
     private final BufferAllocator allocator = new BufferAllocator(1 << 18);
 
@@ -88,8 +79,6 @@ public class PenisEsp extends Module implements IMinecraft {
         immediate.draw();
     }
 
-    // ── геометрия ───────────────────────────────────────────────────────
-
     private void draw(VertexConsumer vc, Matrix4f matrix, AbstractClientPlayerEntity player,
                       float td, Vec3d cameraPos) {
         double len = penisLength.getValue();
@@ -105,7 +94,6 @@ public class PenisEsp extends Module implements IMinecraft {
         double baseX = feet.x - cameraPos.x;
         double baseZ = feet.z - cameraPos.z;
 
-        // яички по бокам чуть ниже базы
         double sideOff = balls * 0.9D;
         double leftX = baseX + Math.sin(yawRad - Math.PI / 2) * sideOff;
         double leftY = baseY - balls * 0.1D;
@@ -114,7 +102,6 @@ public class PenisEsp extends Module implements IMinecraft {
         double rightY = baseY - balls * 0.1D;
         double rightZ = baseZ + Math.cos(yawRad + Math.PI / 2) * sideOff;
 
-        // ствол начинается впереди базы и тянется вперёд на длину
         double offset = MathHelper.clamp(0.1D + balls * 0.5D, 0.1D, 0.25D);
         double startX = baseX + sinYaw * offset;
         double startY = baseY + balls * 0.15D;
@@ -138,7 +125,6 @@ public class PenisEsp extends Module implements IMinecraft {
         return new int[]{(color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF, (color >>> 24) & 0xFF};
     }
 
-    /** Каркасная сфера: меридианы из полюса в полюс — алгоритм оригинала. */
     private void drawSphere(VertexConsumer vc, Matrix4f matrix,
                             double cx, double cy, double cz, double radius,
                             int grad, int[] col) {
@@ -159,7 +145,6 @@ public class PenisEsp extends Module implements IMinecraft {
         }
     }
 
-    /** Каркасный цилиндр: вертикальные рёбра + кольца на торцах — алгоритм оригинала. */
     private void drawCylinder(VertexConsumer vc, Matrix4f matrix,
                               double sx, double sy, double sz,
                               double ex, double ey, double ez,

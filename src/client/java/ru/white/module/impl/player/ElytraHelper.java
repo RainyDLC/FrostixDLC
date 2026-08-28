@@ -29,7 +29,6 @@ import net.minecraft.util.Hand;
 
 @ModuleInfo(name = "Elytra Helper", desc = "Помощник элитры: авто-свап и полёт", category = Category.PLAYER)
 public class ElytraHelper extends Module {
-
     public final BindSetting swapChestKey = new BindSetting(this, "Свап");
     public final BindSetting use = new BindSetting(this, "Исп. фейерверк");
     public final BooleanSetting autoFly = new BooleanSetting(this, "AutoFly", true);
@@ -91,10 +90,8 @@ public class ElytraHelper extends Module {
         }
     }
 
-
     @EventHandler
     private void onUpdate(EventUpdate e) {
-
         ItemStack currentChestStack = mc.player.getEquippedStack(EquipmentSlot.CHEST);
         Item currentItem = currentChestStack.getItem();
         if (currentItem == Items.ELYTRA && prevChestItem != Items.ELYTRA) {
@@ -166,7 +163,6 @@ public class ElytraHelper extends Module {
 
         switch (currentState) {
             case PREPARE -> {
-
                 if (timer.hasTimePassed(50)) {
                     timer.reset();
                     currentState = UseState.SWAP;

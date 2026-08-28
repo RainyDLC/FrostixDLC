@@ -27,14 +27,11 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 
-
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
-
 public class SimulatedPlayer implements IMinecraft {
-
     public final PlayerEntity player;
     public final SimulatedPlayerInput input;
     public Vec3d pos;
@@ -176,11 +173,9 @@ public class SimulatedPlayer implements IMinecraft {
         );
     }
 
-
     public Vec3d pos() {
         return player.getEntityPos();
     }
-
 
     public void tick() {
         simulatedTicks++;
@@ -788,12 +783,11 @@ public class SimulatedPlayer implements IMinecraft {
         return player.getEntityWorld().getBlockState(pos);
     }
 
-    // Вложенный класс для имитации ввода игрока
     public static class SimulatedPlayerInput extends Input {
         public boolean forceSafeWalk = false;
         public float movementForward;
         public float movementSideways;
-        public PlayerInput playerInput; // Предполагается, что класс PlayerInput хранит booleans: forward, backward, left, right, jump, sneak.
+        public PlayerInput playerInput;
         public static final double MAX_WALKING_SPEED = 0.121;
 
         public SimulatedPlayerInput(PlayerInput input) {
@@ -828,9 +822,6 @@ public class SimulatedPlayer implements IMinecraft {
             return new SimulatedPlayerInput(input);
         }
 
-        /**
-         * Определяет ввод для серверного игрока по его позиции и скорости.
-         */
         public static SimulatedPlayerInput guessInput(PlayerEntity entity) {
             Vec3d velocity = entity.getEntityPos().subtract(new Vec3d(entity.lastX, entity.lastY, entity.lastZ));
             double horizontalVelocity = velocity.horizontalLengthSquared();

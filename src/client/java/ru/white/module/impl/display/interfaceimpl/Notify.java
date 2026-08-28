@@ -13,7 +13,6 @@ import net.minecraft.util.math.MathHelper;
 import org.joml.Matrix3x2fStack;
 import ru.white.Client;
 import ru.white.manager.event_impl.EventDisplay;
-import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.settings.impl.BooleanSetting;
 import ru.white.module.api.settings.impl.DragSetting;
@@ -21,7 +20,6 @@ import ru.white.module.impl.display.InterFace;
 import ru.white.theme.ThemeColor;
 import ru.white.utils.animation.Animation;
 import ru.white.utils.animation.Easings;
-import ru.white.utils.annotation.IMinecraft;
 import ru.white.utils.colors.ColorFormatting;
 import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.notification.NotificationManager;
@@ -32,14 +30,12 @@ import ru.white.utils.render.font.Fonts;
 import java.util.*;
 
 public class Notify implements element {
-
     private final Animation notifyGhostAnim = new Animation();
     private final Set<String> notifiedEffectExpiry = new HashSet<>();
     private final Map<String, Boolean> prevModuleStates = new HashMap<>();
     private boolean moduleStatesInitialized = false;
     private final Set<EquipmentSlot> armorNotified = new HashSet<>();
 
-    // --- Переменные для логики масштабирования ---
     private static float S = 1.0F;
 
     private static float FONT_GHOST = 5.5F * S;
@@ -53,7 +49,6 @@ public class Notify implements element {
     private static float GHOST_W = 80F * S;
     private static float GHOST_H = 14F * S;
 
-    // Базовые отступы ширины (высчитаны из оригинального кода: 4+13+4+3=24 и 4+13+4+3+4-16=12)
     private static float STACK_BASE_W = 24F * S;
     private static float ITEM_BASE_W = 12F * S;
 
@@ -128,7 +123,6 @@ public class Notify implements element {
     }
 
     public void onRender(DragSetting drag, InterFace interFace, EventDisplay eventDisplay) {
-        // Обновляем значения скейла каждый кадр
         S = InterFace.getInstance().sizeHud.getValue();
         FONT_GHOST = 5.5F * S;
         FONT_MAIN = 6.5F * S;

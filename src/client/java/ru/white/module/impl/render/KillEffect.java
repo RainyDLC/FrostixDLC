@@ -47,7 +47,6 @@ import java.util.List;
         category = Category.RENDER
 )
 public class KillEffect extends Module implements ModulePreview {
-
     public ButtonSetting previewButton = PreviewSettings.button(this);
 
     public ModeSetting typeColor = new ModeSetting(this, "Color mode", "Theme", "Custom");
@@ -89,8 +88,6 @@ public class KillEffect extends Module implements ModulePreview {
     public void onWorldLoad(WorldLoadEvent e) {
         clearState();
     }
-
-    // ───────────────────────────── предпоказ ─────────────────────────────
 
     @Override
     public PreviewSettings previewSettings() {

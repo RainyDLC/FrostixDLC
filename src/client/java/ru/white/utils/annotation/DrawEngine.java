@@ -6,7 +6,6 @@ import org.joml.Matrix4f;
 import org.joml.Vector4i;
 
 public interface DrawEngine {
-
     void quad(Matrix4f matrix4f, BufferBuilder buffer, float x, float y, float width, float height);
 
     void quad(Matrix4f matrix4f, BufferBuilder buffer, float x, float y, float width, float height, int color);
@@ -14,4 +13,3 @@ public interface DrawEngine {
 
     void quad(Matrix4f matrix4f, float x, float y, float width, float height, int color);
 }
-

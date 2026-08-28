@@ -7,15 +7,12 @@ import ru.white.utils.animation.Animation;
 import ru.white.utils.animation.satoshi.EaseInOutQuad;
 import ru.white.utils.annotation.IMinecraft;
 
-
 import ru.white.utils.other.SoundUtil;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import lombok.Data;
 import org.apache.commons.lang3.NotImplementedException;
 
-
 import java.util.List;
-
 
 @Data
 public abstract class Module implements IMinecraft {
@@ -52,10 +49,6 @@ public abstract class Module implements IMinecraft {
         this(false);
     }
 
-    /**
-     * @param dynamic true — модуль без аннотации {@link ModuleInfo}
-     *                (динамические Lua-модули): имя/категорию задаёт менеджер.
-     */
     protected Module(boolean dynamic) {
         Class<? extends Module> clazz = this.getClass();
         ModuleInfo moduleInfo = clazz.getAnnotation(ModuleInfo.class);
@@ -77,7 +70,6 @@ public abstract class Module implements IMinecraft {
             this.hidden = moduleInfo.hidden();
             this.key = moduleInfo.key();
         } else {
-            // значения для динамических модулей — перезаписываются после инициализации
             this.allowDisable = true;
         }
         setup();
@@ -86,7 +78,6 @@ public abstract class Module implements IMinecraft {
     public void toggle() {
         setEnabled(!enabled);
     }
-
 
     public void setEnabled(final boolean enabled) {
         setEnabled(enabled, true);
@@ -129,8 +120,6 @@ public abstract class Module implements IMinecraft {
                 SoundUtil.playSound_wav(type, InterFace.getInstance().volume.getValue());
             }
         }
-
-
     }
 
     private void eventEnable() {

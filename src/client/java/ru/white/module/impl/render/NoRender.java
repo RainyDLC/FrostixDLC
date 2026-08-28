@@ -12,7 +12,6 @@ import ru.white.utils.other.Instance;
         category = Category.RENDER
 )
 public class NoRender extends Module {
-
     public static NoRender getInstance() {
         return Instance.get(NoRender.class);
     }
@@ -25,8 +24,4 @@ public class NoRender extends Module {
     public BooleanSetting noCameraClip = new BooleanSetting(this,"Камера сквозь блоки",false);
     public BooleanSetting ignoreTotemPop = new BooleanSetting(this,"Убирать тотем на экране",true);
     public BooleanSetting removeCamreZalupa = new BooleanSetting(this,"Убирать дерганее камеры",true);
-
-
-
-
 }

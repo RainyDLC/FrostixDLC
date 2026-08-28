@@ -24,8 +24,6 @@ import java.util.*;
 import static net.minecraft.client.gui.hud.InGameHud.getEffectTexture;
 
 public class Potions implements IMinecraft {
-
-    /** Общий масштаб плашки: один множитель на шрифты, иконки и все отступы. */
     private static float S = 1.0F;
 
     private static float H = 12F * S;
@@ -42,13 +40,11 @@ public class Potions implements IMinecraft {
     private static float ROW_START_Y = 4F * S;
     private static float SCROLL_OFFSET_Y = 4F * S;
 
-
     private ru.white.utils.animation.satoshi.Animation animation1 = new EaseInOutQuad(300,1);
     private ru.white.utils.animation.satoshi.Animation animation2 = new EaseInOutQuad(300,1);
 
     private final Map<String, EffectData> displayedEffects = new LinkedHashMap<>();
 
-    // кэши: отсортированный список пересобирается раз в 50 мс, toRemove переиспользуется
     private final List<EffectData> sortedEffects = new ArrayList<>();
     private final List<String> toRemove = new ArrayList<>();
     private long lastSortMs;
@@ -75,8 +71,6 @@ public class Potions implements IMinecraft {
             boolean isNegative = effect.getEffectType().value().getCategory() == StatusEffectCategory.HARMFUL;
             EffectData data = displayedEffects.computeIfAbsent(name, k -> new EffectData(name, getDurationString(effect), amplifier, isNegative, effect.getDuration(), effect));
 
-            // строка времени меняется раз в секунду — пересобираем только при смене секунды,
-            // а не String.format на каждом кадре
             int secs = effect.isInfinite() ? Integer.MIN_VALUE : effect.getDuration() / 20;
             if (secs != data.lastSeconds) {
                 String duration = getDurationString(effect);
@@ -113,14 +107,12 @@ public class Potions implements IMinecraft {
 
         float alpha2 = animation2.getOutput();
 
-        // Пустое состояние: мини-плашка с глифом, чтобы элемент находился в редакторе HUD
         RenderUtil.Render2D.hudPlate(x, y, MIN_W, H, alpha2, RADIUS, InterFace.getInstance().alphaHUD.getValue());
         Fonts.rainydlc_2.drawCentered("P", x + MIN_W / 2F, y + (H - 5F * S) / 2F, 5F * S,
                 ColorUtil.replAlpha(ColorUtil.client(), alpha2 * 0.85F));
 
         Font font = Fonts.sf_regular;
 
-        // сортировка раз в 50 мс в переиспользуемый список вместо стрима каждый кадр
         long nowMs = System.currentTimeMillis();
         if (nowMs - lastSortMs >= 50L) {
             lastSortMs = nowMs;
@@ -157,27 +149,23 @@ public class Potions implements IMinecraft {
             h += ROW_HEIGHT * a;
         }
 
-        // Отрисовка фона списка
         RenderUtil.Render2D.hudPlate(x, y, w, h, alpha, RADIUS, InterFace.getInstance().alphaHUD.getValue());
 
         float offsetY = y + ROW_START_Y;
         float offsetY2 = 0;
 
         for (EffectData data : sortedEffects) {
-
             float a = data.animation.get();
             if (a <= 0.01f && !data.active) continue;
 
             int lvl = data.effectInstance.getAmplifier() + 1;
 
-            // вредные эффекты подсвечиваем красным
             boolean bad = data.negative;
 
             int nameColor = bad ? ColorUtil.getColor(235, 70, 70, alpha * a) : ColorUtil.getColor(240, alpha * a);
             int lvlColor  = bad ? ColorUtil.getColor(170, 55, 55, alpha * a) : ColorUtil.getColor(150, alpha * a);
             int timeColor = bad ? ColorUtil.getColor(200, 60, 60, alpha * a) : ColorUtil.getColor(185, alpha * a);
 
-            // кэш строки с уровнем: конкатенация только при смене уровня/типа эффекта
             if (data.coloredLabelLvl != lvl || data.coloredLabelBad != bad) {
                 data.coloredLabel = data.name + (lvl > 1 ? " " + ColorFormatting.getColor(lvlColor) + lvl : "");
                 data.coloredLabelLvl = lvl;
@@ -187,13 +175,10 @@ public class Potions implements IMinecraft {
 
             float textY = offsetY + (ROW_HEIGHT - ROW_TEXT) / 2F;
 
-            // иконка эффекта слева
             drawEffectIcon(eventDisplay, data, x + PAD_X, offsetY + (ROW_HEIGHT - ICON) / 2F, alpha * a);
 
-            // название с уровнем
             font.draw(effectname, x + PAD_X + ICON + ICON_GAP, textY, ROW_TEXT, nameColor);
 
-            // время прижато к правому краю
             String key = data.duration;
             float timeWidth = font.getWidth(key, ROW_TEXT);
             drawDuration(font, data, x + w - PAD_X - timeWidth, textY, ROW_TEXT, timeColor);
@@ -208,17 +193,12 @@ public class Potions implements IMinecraft {
                 ColorUtil.overCol((int) offsetY2, (int) H, alpha2));
     }
 
-    /**
-     * Рисует время посимвольно: изменившийся символ уезжает вверх, новый приезжает снизу.
-     * Символы сопоставляются с конца строки, чтобы «1:09» → «1:10» двигало только младшие разряды.
-     */
     private void drawDuration(Font font, EffectData data, float x, float y, float size, int color) {
         float t = data.digitAnim.get();
 
         String now = data.duration;
         String was = data.prevDuration == null ? now : data.prevDuration;
 
-        // таймер не анимируется — рисуем целиком, без посимвольных substring каждый кадр
         if (t >= 1F) {
             font.draw(now, x, y, size, color);
             return;
@@ -244,7 +224,6 @@ public class Potions implements IMinecraft {
         }
     }
 
-    /** Строка без цветовых кодов — для замера ширины (коды каждый кадр засоряют кэш ширин). */
     private String label(EffectData data) {
         int lvl = data.effectInstance.getAmplifier() + 1;
         if (data.plainLabelLvl != lvl) {
@@ -262,7 +241,6 @@ public class Potions implements IMinecraft {
         matrices.pushMatrix();
         matrices.translate(x, y);
 
-        // ICON / 12F работает корректно, так как исходный размер текстуры эффекта всегда 12х12
         matrices.scale(ICON / 12F, ICON / 12F);
 
         eventDisplay.getDrawContext().drawGuiTexture(RenderPipelines.GUI_TEXTURED, effectTex,
@@ -289,7 +267,6 @@ public class Potions implements IMinecraft {
         int lvl;
         StatusEffectInstance effectInstance;
 
-        // кэши для оптимизации: секунда последнего пересчёта строки времени + подписи с уровнем
         int lastSeconds = Integer.MIN_VALUE;
         String plainLabel;
         int plainLabelLvl = -1;

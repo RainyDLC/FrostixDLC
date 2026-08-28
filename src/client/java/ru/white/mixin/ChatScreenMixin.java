@@ -22,14 +22,12 @@ import java.util.List;
 
 @Mixin(ChatScreen.class)
 public class ChatScreenMixin {
-
     @Shadow
     protected TextFieldWidget chatField;
 
     @Unique private List<String> rainydlc$suggestions = Collections.emptyList();
     @Unique private int rainydlc$selected = 0;
 
-    // геометрия попапа (для кликов) — заполняется в render
     @Unique private int rainydlc$boxX, rainydlc$boxY, rainydlc$boxW, rainydlc$boxCount;
     @Unique private static final int RAINYDLC_LINE_H = 12;
 
@@ -113,7 +111,6 @@ public class ChatScreenMixin {
 
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
     private void rainydlc$mouseClicked(Click click, boolean doubled, CallbackInfoReturnable<Boolean> cir) {
-
         int button = click.button();
 
         double mouseX = click.x();

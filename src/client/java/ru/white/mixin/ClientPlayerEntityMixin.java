@@ -28,7 +28,6 @@ import static ru.white.utils.annotation.IMinecraft.mc;
 
 @Mixin(ClientPlayerEntity.class)
 public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity  {
-
     @Inject(method = "tick", at = @At("HEAD"))
     private void onTickHead(CallbackInfo ci) {
         new EventUpdate().hook();
@@ -53,21 +52,15 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
         return vec2f.multiply(multiplier);
     }
 
-
-
     @ModifyVariable(
             method = "sendSprintingPacket()V",
             at = @At(value = "STORE", ordinal = 0),
             ordinal = 0
     )
     private boolean modifySprintingFlag(boolean flag) {
-
         ActionEvent actionEvent = new ActionEvent(flag);
         actionEvent.hook();
 
-        // Единственное место, откуда сервер узнаёт про спринт. Удар аура отправляет
-        // на HEAD тика игрока, то есть раньше этой точки, поэтому крит сервер считает
-        // по значению, ушедшему в предыдущем тике — его и запоминаем.
         UAttack.setSprintingOnServer(actionEvent.isSprintState());
 
         return actionEvent.isSprintState();
@@ -123,6 +116,4 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
         this.autoJump((float) (this.getX() - d), (float) (this.getZ() - e));
         ci.cancel();
     }
-
-
 }

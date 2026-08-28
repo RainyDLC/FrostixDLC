@@ -1,10 +1,8 @@
 package ru.white.rpc;
 
-
 import ru.white.rpc.callbacks.*;
 import com.sun.jna.Structure;
 import ru.white.rpc.callbacks.*;
-
 
 import java.util.Arrays;
 import java.util.List;

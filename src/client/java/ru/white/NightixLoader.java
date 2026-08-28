@@ -19,15 +19,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.zip.Inflater;
 
-/**
- * Загрузчик зашифрованного ядра клиента.
- * Внедряет расшифрованные классы напрямую в KnotClassLoader и обеспечивает
- * непрерывную защиту от дампа памяти и отладочных инструментов.
- */
 public final class NightixLoader {
-
     private static final String CORE_RES = "/assets/nightix/core.bin";
-    private static final int MAGIC = 0x4E495843; // NIXC
+    private static final int MAGIC = 0x4E495843;
     private static volatile boolean loaded = false;
 
     private NightixLoader() {
@@ -42,14 +36,12 @@ public final class NightixLoader {
         if (!encryptedBuild()) return;
 
         try {
-            // Запрещаем динамическое подключение агентов через Attach API
             System.setProperty("jdk.attach.allowAttachSelf", "false");
 
             if (isCompromised()) {
                 corruptMemory();
             }
 
-            // Запускаем фоновый сторожевой поток (Watchdog) для детекта инжекторов и дамперов
             startWatchdog();
 
             byte[] raw = readResource(CORE_RES);
@@ -80,7 +72,6 @@ public final class NightixLoader {
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
             byte[] decompressedPayload = decompress(cipher.doFinal(cipherText));
 
-            // Затираем массивы с ключом и шифротекстом
             Arrays.fill(keyBytes, (byte) 0);
             Arrays.fill(cipherText, (byte) 0);
 
@@ -123,9 +114,6 @@ public final class NightixLoader {
         main.getMethod("init", Client.class).invoke(null, client);
     }
 
-    /**
-     * Сторожевой поток, отслеживающий подключение JavaAgent, JDWP и дамперов классов на лету.
-     */
     private static void startWatchdog() {
         Thread watchdog = new Thread(() -> {
             while (true) {
@@ -176,7 +164,6 @@ public final class NightixLoader {
                 }
             }
 
-            // Проверка активных потоков на наличие известных дамперов
             ThreadGroup rootGroup = Thread.currentThread().getThreadGroup();
             while (rootGroup.getParent() != null) {
                 rootGroup = rootGroup.getParent();

@@ -12,17 +12,7 @@ import net.minecraft.util.Identifier;
 
 import java.nio.ByteBuffer;
 
-/**
- * Треугольные грани с произвольными вершинами — то, чего не умеют rect/texture:
- * там квад с поворотом вокруг центра, а осколкам нужны свои три точки, иначе они
- * не стыкуются друг с другом.
- *
- * Один элемент uniform-массива — две грани (6 вершин), как и рассчитывает
- * {@link UniformArrayPipeline}. Вершины приходят уже в пикселях фиксированного
- * 2x-GUI: всю трансформацию (поворот, сжатие, перспектива) делает CPU.
- */
 public class ShardPipeline extends UniformArrayPipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/shard");
     private static final Identifier SHADER = Identifier.of("client", "core/shard");
 
@@ -40,7 +30,6 @@ public class ShardPipeline extends UniformArrayPipeline {
                     .build()
     );
 
-    // Должно совпадать с shard.vsh: vec4 screen + vec4 shards[128 * 4]
     private static final int MAX_SHARDS = 128;
     private static final int SHARD_SIZE = 4 * 16;
     private static final int UNIFORM_RING = 8;
@@ -51,16 +40,9 @@ public class ShardPipeline extends UniformArrayPipeline {
 
     @Override
     public int batchLayer() {
-        return 2; // как текстуры: над заливками и обводками, под текстом
+        return 2;
     }
 
-    /**
-     * Рисует две грани одним элементом.
-     *
-     * @param verts 12 float — по (x, y) на вершину; вершины 0..2 первая грань,
-     *              3..5 вторая. Вторую грань можно вырождить, повторив одну
-     *              точку трижды — нулевая площадь ничего не даёт.
-     */
     public void drawFaces(float[] verts, int color) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client == null || client.getFramebuffer() == null) return;

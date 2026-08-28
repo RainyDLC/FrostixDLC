@@ -19,15 +19,9 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/**
- * .spec — клиентское вселение в сущность. Камера уезжает к цели, как в гм 3,
- * но сервер об этом не знает: своё тело остаётся на месте.
- */
 public class SpecCommand extends Command implements IMinecraft {
-
     private static final List<String> ACTIONS = List.of("off", "next", "prev", "info");
 
-    /** Радиус проверки прогрузки вокруг цели, в чанках. */
     private static final int CHECK_RADIUS = 2;
 
     private boolean lastTerrainOk = true;
@@ -38,7 +32,7 @@ public class SpecCommand extends Command implements IMinecraft {
     }
 
     @Override
-    
+
     public void execute(String[] args) {
         if (mc.player == null || mc.world == null) return;
 
@@ -89,7 +83,6 @@ public class SpecCommand extends Command implements IMinecraft {
         }
         if (!Spectator.isActive()) return;
 
-        // терра вокруг цели может уехать, если она сама вышла за твой радиус прогрузки
         boolean ok = Spectator.isTerrainLoaded(Spectator.getTarget());
         if (ok != lastTerrainOk) {
             ChatUtils.addChatMessage(ok
@@ -120,7 +113,6 @@ public class SpecCommand extends Command implements IMinecraft {
                 .collect(Collectors.toList());
     }
 
-    
     private void attach(Entity entity) {
         if (entity == mc.player) {
             ChatUtils.addChatMessage("§7В себя вселяться незачем");
@@ -141,8 +133,6 @@ public class SpecCommand extends Command implements IMinecraft {
         }
     }
 
-    /** Строка вида «§a9/25» — сколько чанков вокруг цели реально есть у клиента. */
-    
     private String terrainStatus(Entity entity) {
         int total = Spectator.chunksInSquare(CHECK_RADIUS);
         int loaded = Spectator.loadedChunksAround(entity, CHECK_RADIUS);
@@ -150,7 +140,6 @@ public class SpecCommand extends Command implements IMinecraft {
         return color + loaded + "§7/§f" + total + " §7чанков";
     }
 
-    
     private void info() {
         Entity entity = Spectator.getTarget();
         if (entity == null) {
@@ -166,7 +155,6 @@ public class SpecCommand extends Command implements IMinecraft {
                 + " §8| §7прорисовка: §f" + (int) mc.worldRenderer.getViewDistance());
     }
 
-    
     private void stop() {
         Entity old = Spectator.getTarget();
         Spectator.stop();
@@ -174,8 +162,6 @@ public class SpecCommand extends Command implements IMinecraft {
                 + (old != null ? " от §f" + old.getName().getString() : ""));
     }
 
-    /** Поиск по нику игрока (точное совпадение, затем по началу), либо по id сущности. */
-    
     private Entity find(String query) {
         String lower = query.toLowerCase(Locale.ROOT);
 
@@ -201,8 +187,6 @@ public class SpecCommand extends Command implements IMinecraft {
         return null;
     }
 
-    /** Переключение на следующего/предыдущего игрока по удалённости от себя. */
-    
     private void cycle(int direction) {
         List<Entity> candidates = new ArrayList<>(mc.world.getPlayers().stream()
                 .filter(p -> p != mc.player)

@@ -26,16 +26,9 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
-/**
- * Ореольный ESP: силуэт сущностей размывается dual-Kawase пирамидой,
- * затем комбинируется поверх сцены аддитивно — внешний ореол, заливка
- * и яркая кромка.
- */
 public class ShaderEspOutlinePipeline {
-
-    /** Максимум уровней пирамиды; сколько реально используется — задаёт радиус свечения. */
     private static final int MAX_MIPS = 5;
-    private static final int UBO_SIZE = 112; // 7 × vec4
+    private static final int UBO_SIZE = 112;
 
     private static final Identifier VSH = Identifier.of("client", "core/shader_esp_glow");
 
@@ -89,7 +82,6 @@ public class ShaderEspOutlinePipeline {
     private static final Vector3f MODEL_OFFSET = new Vector3f(0, 0, 0);
     private static final Matrix4f TEXTURE_MATRIX = new Matrix4f();
 
-    /** Все параметры внешнего вида — заполняются модулем каждый кадр. */
     public static final class Params {
         public int color = 0xFF00FFFF;
         public int friendColor = 0xFF55FF55;
@@ -98,7 +90,7 @@ public class ShaderEspOutlinePipeline {
         public float saturation = 1.0f;
 
         public boolean glowEnabled = true;
-        public float glowRadius = 0.5f;   // 0..1
+        public float glowRadius = 0.5f;
         public float glowStrength = 1.4f;
         public float glowFalloff = 1.2f;
 
@@ -108,7 +100,7 @@ public class ShaderEspOutlinePipeline {
 
         public boolean outlineEnabled = true;
         public int outlineWidth = 2;
-        public int outlineMode = 0;       // 0 снаружи, 1 внутри, 2 обе
+        public int outlineMode = 0;
         public float outlineStrength = 1.5f;
         public float outlineWhite = 0.5f;
 
@@ -219,31 +211,26 @@ public class ShaderEspOutlinePipeline {
         putRgb(p.friendColor);
         espData.putFloat(p.friendEnabled ? 1f : 0f);
 
-        // params1: texelX, texelY, outlineWidth, outlineMode
         espData.putFloat(1f / width);
         espData.putFloat(1f / height);
         espData.putFloat(Math.max(0, Math.min(5, p.outlineWidth)));
         espData.putFloat(p.outlineMode);
 
-        // params2: glowStrength, glowFalloff, fillOpacity, innerGlow
         espData.putFloat(Math.max(0f, p.glowStrength));
         espData.putFloat(Math.max(0.05f, p.glowFalloff));
         espData.putFloat(Math.max(0f, p.fillOpacity));
         espData.putFloat(Math.max(0f, p.innerGlow));
 
-        // params3: outlineStrength, outlineWhite, glowEnabled, fillEnabled
         espData.putFloat(Math.max(0f, p.outlineStrength));
         espData.putFloat(clamp(p.outlineWhite, 0f, 1f));
         espData.putFloat(p.glowEnabled ? 1f : 0f);
         espData.putFloat(p.fillEnabled ? 1f : 0f);
 
-        // params4: shimmerT, shimmerEnabled, shimmerWidth, shimmerBrightness
         espData.putFloat(phase(p.shimmerPeriodSec));
         espData.putFloat(p.shimmerEnabled ? 1f : 0f);
         espData.putFloat(Math.max(0.005f, p.shimmerWidth));
         espData.putFloat(Math.max(0f, p.shimmerBrightness));
 
-        // params5: pulseAmount, pulseT, saturation, outlineEnabled
         espData.putFloat(p.pulseEnabled ? clamp(p.pulseAmount, 0f, 1f) : 0f);
         espData.putFloat(phase(1f / Math.max(0.05f, p.pulseSpeed)));
         espData.putFloat(Math.max(0f, p.saturation));
@@ -263,7 +250,6 @@ public class ShaderEspOutlinePipeline {
         return v < min ? min : Math.min(v, max);
     }
 
-    /** Позиция в цикле длиной periodSec, 0..1. */
     private static float phase(float periodSec) {
         long periodMs = Math.max(1L, (long) (periodSec * 1000f));
         return (System.currentTimeMillis() % periodMs) / (float) periodMs;
@@ -273,7 +259,6 @@ public class ShaderEspOutlinePipeline {
         ensureInitialized();
         ensureMips(width, height);
 
-        // радиус свечения: сколько уровней пирамиды проходим и насколько широко разводим на подъёме
         float radius = clamp(p.glowRadius, 0f, 1f);
         int levels = Math.max(1, Math.min(MAX_MIPS, 1 + Math.round(radius * (MAX_MIPS - 1))));
         float upOffset = 0.5f + radius * 3.5f;
@@ -281,7 +266,6 @@ public class ShaderEspOutlinePipeline {
         CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
         GpuSampler linearSampler = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
 
-        // -- Downsample: маска → mip[0] → ... → mip[levels-1] --
         GpuTextureView currentInput = maskView;
         int inputW = width, inputH = height;
 
@@ -310,7 +294,6 @@ public class ShaderEspOutlinePipeline {
             inputH = mipHeights[i];
         }
 
-        // -- Upsample: mip[levels-1] → ... → mip[0] --
         for (int i = levels - 1; i > 0; i--) {
             writeKawaseUbo(encoder, 0.5f / mipWidths[i], 0.5f / mipHeights[i], upOffset);
 
@@ -331,7 +314,6 @@ public class ShaderEspOutlinePipeline {
             }
         }
 
-        // -- Combine: маска + mip[0] → экран --
         writeEspUbo(encoder, width, height, p);
 
         GpuBufferSlice dt = RenderSystem.getDynamicUniforms()

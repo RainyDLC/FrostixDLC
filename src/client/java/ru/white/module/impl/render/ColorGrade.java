@@ -14,23 +14,17 @@ import ru.white.utils.render.RenderUtil;
 
 import java.awt.*;
 
-
 @ModuleInfo(
         name = "Color Grade",
         desc = "Цветовая гамма мира (руки не затрагивает)",
         category = Category.RENDER
 )
 public class ColorGrade extends Module {
-
-
-
     public ColorSetting tintColor = new ColorSetting(this, "Цвет", new Color(80, 130, 255).getRGB());
 
     public SliderSetting intensity = new SliderSetting(this, "Сила тинта", 0.25f, 0.02f, 0.70f, 0.01f);
 
-
     public SliderSetting brightness = new SliderSetting(this, "Яркость", 0.00f, -0.40f, 0.40f, 0.01f);
-
 
     public BooleanSetting vignetteOn  = new BooleanSetting(this, "Виньетка", false);
     public SliderSetting  vignetteStr = new SliderSetting(this, "Сила виньетки", 0.45f, 0.10f, 0.85f, 0.05f)
@@ -44,14 +38,12 @@ public class ColorGrade extends Module {
             {215, 150, 75 },
     };
 
-
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onRender3D(EventRender3D e) {
         if (mc.player == null || mc.world == null) return;
 
         float w = mc.getWindow().getFramebufferWidth()  / 2.0f;
         float h = mc.getWindow().getFramebufferHeight() / 2.0f;
-
 
         int cr, cg, cb;
 
@@ -60,20 +52,15 @@ public class ColorGrade extends Module {
             cg = (c >> 8)  & 0xFF;
             cb =  c        & 0xFF;
 
-
-
         int tintAlpha = clamp255(intensity.getValue() * 255f);
         RenderUtil.Render2D.rect(0, 0, w, h,
                 ColorUtil.getColor(cr, cg, cb, tintAlpha));
 
-
         float bright = brightness.getValue();
         if (bright < -0.005f) {
-
             RenderUtil.Render2D.rect(0, 0, w, h,
                     ColorUtil.getColor(0, 0, 0, clamp255(-bright * 255f)));
         } else if (bright > 0.005f) {
-
             RenderUtil.Render2D.rect(0, 0, w, h,
                     ColorUtil.getColor(255, 255, 255, clamp255(bright * 255f)));
         }
@@ -91,10 +78,10 @@ public class ColorGrade extends Module {
         float ew = w * 0.52f;
         float eh = h * 0.52f;
 
-        RenderUtil.Render2D.gradientRect(0,      0,      w,  eh, new int[]{dark,  dark,  clear, clear}, 0f);  // top
-        RenderUtil.Render2D.gradientRect(0,      h - eh, w,  eh, new int[]{clear, clear, dark,  dark }, 0f);  // bottom
-        RenderUtil.Render2D.gradientRect(0,      0,      ew, h,  new int[]{dark,  clear, clear, dark }, 0f);  // left
-        RenderUtil.Render2D.gradientRect(w - ew, 0,      ew, h,  new int[]{clear, dark,  dark,  clear}, 0f);  // right
+        RenderUtil.Render2D.gradientRect(0,      0,      w,  eh, new int[]{dark,  dark,  clear, clear}, 0f);
+        RenderUtil.Render2D.gradientRect(0,      h - eh, w,  eh, new int[]{clear, clear, dark,  dark }, 0f);
+        RenderUtil.Render2D.gradientRect(0,      0,      ew, h,  new int[]{dark,  clear, clear, dark }, 0f);
+        RenderUtil.Render2D.gradientRect(w - ew, 0,      ew, h,  new int[]{clear, dark,  dark,  clear}, 0f);
     }
 
     private static int[] presetRgb(String name) {

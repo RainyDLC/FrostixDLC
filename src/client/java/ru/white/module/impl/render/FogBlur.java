@@ -13,7 +13,6 @@ import ru.white.utils.render.FogBlurPipeline;
 
 @ModuleInfo(name = "Fog Blur", category = Category.RENDER, desc = "Размывает мир за порогом дистанции тумана")
 public final class FogBlur extends Module {
-
     private final SliderSetting distance = new SliderSetting(this, "Дистанция", 0.05F, 0.001F, 0.5F, 0.001F);
     private final SliderSetting saturation = new SliderSetting(this, "Насыщенность", 0.5F, 0.05F, 0.95F, 0.05F);
     private final BooleanSetting clientColor = new BooleanSetting(this, "Цвет клиента", false);

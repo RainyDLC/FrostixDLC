@@ -23,18 +23,12 @@ import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.aura.UAttack;
 
-/**
- * Mace Helper: во время падения заранее берёт булаву и бьёт цель в нужный тайминг.
- * Сам не наводится — цель берёт только от AttackAura, без включённой ауры не бьёт.
- * Не бьёт по кулдауну/hurtTime вслепую и ретраит удар до попадания.
- */
 @ModuleInfo(
         name = "Mace Helper",
         desc = "Автоматический удар булавой при падении на цель",
         category = Category.COMBAT
 )
 public class MaceHelper extends Module {
-
     public ModeSetting heightMode = new ModeSetting(this, "Высота", "Умный", "Ручной");
     public SliderSetting height = new SliderSetting(this, "Высота удара", 2.5F, 1.0F, 10.0F, 0.1F)
             .setVisible(() -> heightMode.is("Ручной"));
@@ -44,7 +38,6 @@ public class MaceHelper extends Module {
             .setVisible(() -> maceChoice.is("Бинд"));
     public BooleanSetting returnItem = new BooleanSetting(this, "Возвращать предмет", true);
 
-    /** Минимальная высота падения для умного режима — ниже урона булавы почти нет. */
     private static final float MIN_SMART_FALL = 1.5F;
     private static final double REACH = 3.0D;
 
@@ -53,11 +46,10 @@ public class MaceHelper extends Module {
     private boolean bindHeld;
     private int maceSlotOverride = -1;
 
-    /** Слот хотбара, куда встала булава. */
     private int maceSlot = -1;
-    /** Слот, который был выбран до свапа. */
+
     private int prevHotbar = -1;
-    /** Слот инвентаря (9..35), откуда булаву свапнули в хотбар. */
+
     private int invSwapFrom = -1;
 
     @EventHandler
@@ -69,7 +61,6 @@ public class MaceHelper extends Module {
 
         handleBind();
 
-        // приземление: возврат предмета и сброс
         if (mc.player.isOnGround() || mc.player.fallDistance <= 0F) {
             finishFall();
             return;
@@ -83,8 +74,6 @@ public class MaceHelper extends Module {
 
         boolean wantStrike = shouldStrikeNow(fd);
 
-        // пока готовим удар — глушим атак ауру, чтобы она не била раньше времени
-        // и не сбивала общий кулдаун перед нашим окном
         if (!struck) {
             AttackAura.stoptick = 3;
         }
@@ -112,7 +101,6 @@ public class MaceHelper extends Module {
             return;
         }
 
-        // ── Легитный режим: заранее переключаемся на булаву ──
         float prepFd = heightMode.is("Ручной") ? height.getValue() * 0.5F : MIN_SMART_FALL;
         if (!switched && fd >= prepFd) {
             int slot = resolveMaceSlot();
@@ -132,10 +120,6 @@ public class MaceHelper extends Module {
         }
     }
 
-    /**
-     * Умный: бьём в последний тик перед землёй — fallDistance максимальный,
-     * весь бонус булавы сохраняется. Ручной: строго по слайдеру.
-     */
     private boolean shouldStrikeNow(float fd) {
         if (heightMode.is("Ручной")) {
             return fd >= height.getValue();
@@ -148,7 +132,6 @@ public class MaceHelper extends Module {
         return distToGround <= Math.max(0.55D, fallSpeed * 1.25D);
     }
 
-    /** Удар только когда цель в зоне, взгляд на ней и кулдаун прошёл. Иначе ретрай на следующем тике. */
     private boolean tryStrike(LivingEntity target) {
         if (!withinReach(target)) return false;
         if (!UAttack.anyEntityOnRay(target, 3.2F)) return false;
@@ -191,7 +174,6 @@ public class MaceHelper extends Module {
         super.onDisable();
     }
 
-    /** Приземление: вернуть прежний слот / предмет из инвентаря, обнулить состояние. */
     private void finishFall() {
         if (returnItem.getValue()) {
             if (invSwapFrom != -1 && maceSlot >= 0) {
@@ -238,7 +220,6 @@ public class MaceHelper extends Module {
             }
         }
 
-        // авто: булава в инвентаре — один честный свап в текущий слот хотбара
         int current = mc.player.getInventory().getSelectedSlot();
         for (int i = 9; i < 36; i++) {
             if (isMace(mc.player.getInventory().getStack(i))) {
@@ -266,7 +247,6 @@ public class MaceHelper extends Module {
         return stack.getItem() == Items.MACE;
     }
 
-    /** Цель: только таргет Attack Aura — без включённой ауры хелпер не бьёт. */
     private LivingEntity findTarget() {
         AttackAura aura = AttackAura.get();
         if (aura != null && aura.isEnabled() && AttackAura.target != null) {

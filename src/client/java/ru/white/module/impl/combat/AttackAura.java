@@ -27,7 +27,6 @@ import ru.white.manager.event_impl.EventUpdate;
 import ru.white.manager.event_impl.WorldLoadEvent;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.manager.rotation.Rotation;
-import ru.white.manager.rotation.RotationProcess;
 import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.impl.combat.aura.RotationType;
@@ -68,7 +67,6 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import static net.minecraft.util.Hand.MAIN_HAND;
 
-
 @ModuleInfo(
         name = "Attack Aura",
         desc = "Автоматический наводится и атакует цель",
@@ -76,11 +74,9 @@ import static net.minecraft.util.Hand.MAIN_HAND;
         key = GLFW.GLFW_KEY_R
 )
 public class AttackAura extends Module {
-
     public static AttackAura get() {
         return Instance.get(AttackAura.class);
     }
-
 
     public SliderSetting attackRange = new SliderSetting(this, "Радиус атаки", 3.0F, 2.5F, 6, 0.1F);
     public SliderSetting preRange = new SliderSetting(this, "Радиус обнаружения", 1.0F, 0.0F, 3, 0.1F);
@@ -97,16 +93,13 @@ public class AttackAura extends Module {
 
     public BooleanSetting fovRender = new BooleanSetting(this,"Отображать Fov",false).setVisible(() -> typeRotation.is("Snap") && typeSnap.is("Fov"));
 
-    /** Типы наведения, управляемые настройками конструктора ротации. */
     public boolean isConstructorType() {
         return typeRotation.is("Custom") || typeRotation.is("Matrix")
                 || typeRotation.is("Neuro") || typeRotation.is("Grim");
     }
 
-    /** Стратегия выбора цели. */
     public ModeSetting targetSort = new ModeSetting(this, "Сортировать по", "Умный", "Здоровью", "Дистанции", "Прицелу");
 
-    // ── Конструктор ротации (режимы Custom / Matrix / Neuro / Grim) ──
     public ButtonSetting rotationBuilder = new ButtonSetting(this, "Конструктор ротации", () ->
             mc.setScreen(new RotationBuilderScreen())).setVisible(this::isConstructorType);
 
@@ -176,9 +169,6 @@ public class AttackAura extends Module {
             new BooleanSetting("Используешь еду", false),
             new BooleanSetting("Открыт контейнер", false));
 
-
-
-
     public static LivingEntity target = null;
 
     public float[] getRanges() {
@@ -186,7 +176,6 @@ public class AttackAura extends Module {
     }
 
     public AttackAura() {
-        // при переключении на Matrix / Neuro / Grim подтягиваем пресет из конструктора ротации
         typeRotation.onAction(this::applyConstructorPreset);
     }
 
@@ -199,23 +188,11 @@ public class AttackAura extends Module {
         }
     }
 
-
     @EventHandler
-    
-    public void onEvent(EventUpdate e) {
 
-        // запись истории позиций цели каждый тик (для лаг-компенсации удара)
+    public void onEvent(EventUpdate e) {
         LagCompensation.record(target);
 
-        // переоценка цели: мгновенно при потере валидности, иначе каждые 4 тика.
-        // Раз в 10 тиков (500 мс) аура успевала простоять полбоя с неудобной целью,
-        // а каждые 2 тика при нескольких целях рядом начинала их перебирать —
-        // резкие перескоки прицела сами по себе выглядят подозрительно.
-        //
-        // Исключение — тик, в котором удар по текущей цели уже уходит (ниже в этом же
-        // методе): смена цели здесь уводит прицел, а удар валидируется по углу прошлого
-        // тика, так что набранный заряд сгорал бы впустую. Зацикливания не будет —
-        // после удара заряд сбрасывается, и следующая проверка проходит как обычно.
         boolean recheck = ++retargetClock % 4 == 0 && !attackReadyNow();
         if (target == null || !isValidTarget(target) || recheck) {
             updateTarget();
@@ -225,44 +202,19 @@ public class AttackAura extends Module {
             stoptick--;
         }
 
-        // Спринт против крита: гасим его ЗА ТИК до удара, иначе крита не будет
-        // никогда, пока зажат бег (см. UAttack.isSprintingOnServer).
         updateCritSprint();
 
-        // Удар отправляется здесь — на HEAD тика игрока, то есть ДО пакета
-        // движения этого тика (sendMovementPackets вызывается позже в том же
-        // тике). Это ванильный порядок: doAttack() в MinecraftClient.tick()
-        // тоже идёт раньше tickEntities().
-        //
-        // Бить после пакета движения (на TAIL sendMovementPackets) нельзя:
-        // именно так выглядит «post»-читерство, и Grim ловит это отдельной
-        // проверкой. Пока стоишь на месте, пакеты движения почти не идут и
-        // ловить нечего, а при ходьбе они уходят каждый тик — и флаг летит
-        // на каждый удар.
         if (!checkToAttack() && target != null) {
             attackEntity();
         }
     }
-    /** Ждём крит — значит спринт в момент удара помешает. */
+
     private boolean wantsCrit() {
         return others.getValue("Только криты") || others.getValue("Умные криты");
     }
 
-    /** Мы сами отпустили клавишу бега — её нужно вернуть, когда удар уже не готовится. */
     private boolean sprintKeyForcedOff;
 
-    /**
-     * Снимает спринт за тик до удара, чтобы сервер успел об этом узнать и выдал крит.
-     *
-     * Клавишу тоже отпускаем: canStartSprinting() в 1.21 больше не требует земли,
-     * поэтому при зажатом беге tickMovement() поставит флаг обратно в том же тике —
-     * пакет тогда не уйдёт, и сервер так и будет считать нас спринтующими.
-     * Скорость падает вместе с флагом, так что серверу мы сообщаем ровно то, как
-     * двигаемся, — лишнего расхождения для проверок движения не появляется.
-     *
-     * Режим «Legit» здесь не участвует: он гасит спринт своим способом — обнулением
-     * ввода в setCorrection(), ваниль после этого снимает флаг сама.
-     */
     private void updateCritSprint() {
         boolean hold = target != null && wantsCrit() && !typeSprint.is("Legit")
                 && !AttackUtil.hasMovementRestrictions()
@@ -290,7 +242,6 @@ public class AttackAura extends Module {
     }
 
     private boolean checkToAttack() {
-
         boolean baseCheck = mc.player.isUsingItem() && noattackto.getValue("Используешь еду");
 
         boolean screenCheck = noattackto.getValue("Открыт контейнер") && mc.currentScreen != null  && !(mc.currentScreen instanceof Menu);
@@ -298,7 +249,6 @@ public class AttackAura extends Module {
         return baseCheck ||  screenCheck;
     }
 
-    /** Уйдёт ли удар по текущей цели уже в этом тике — теми же условиями, что attackEntity(). */
     private boolean attackReadyNow() {
         if (target == null || mc.player == null || checkToAttack()) {
             return false;
@@ -316,7 +266,6 @@ public class AttackAura extends Module {
             return;
         }
 
-        // дистанция удара: по наиболее выгодному из живого и отложенного хитбокса
         if (LagCompensation.attackDistance(target) >= LagCompensation.safeReach(attackRange.getValue())) {
             return;
         }
@@ -326,9 +275,7 @@ public class AttackAura extends Module {
 
         boolean canAttack = UAttack.shouldAttack(target, !typeRotation.is("HvH"), true, true, 0L, ranges);
 
-
         if (canAttack) {
-
             final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(target, true),
                     shieldPressBypass = UAttack.resetShieldSilentTaskForUse(true),
                     skipSilentSprint = UAttack.skipSilentSprintingTaskForUse((typeSprint.is("Packet") || typeSprint.is("Silent")));
@@ -341,9 +288,6 @@ public class AttackAura extends Module {
                 shieldPressBypass[1].run();
                 skipSilentSprint[1].run();
             };
-
-
-
 
             UAttack.useEntity(target, preHitSendCodeSingleTick, postHitSendCodeSingleTick, MAIN_HAND);
 
@@ -359,17 +303,13 @@ public class AttackAura extends Module {
                 pitchFlickActive = true;
                 pitchFlickEndTime = System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(50, 70);
             }
-
         }
-
-
     }
 
     public static int stoptick = 0;
 
     @EventHandler
     private void setCorrection(EventMoveInput eventMoveInput) {
-
         if (target != null && mc.player != null && mc.world != null) {
             if (UAttack.resetSprintTick(target, getRanges()) && target != null && !AttackUtil.hasMovementRestrictions() && typeSprint.is("Legit")) {
                 eventMoveInput.setForward(0);
@@ -377,50 +317,36 @@ public class AttackAura extends Module {
             }
         }
         if (target != null && mc.player != null && mc.world != null && typeMove.is("Свободная")) {
-
-
             MoveUtil.fixMovement(eventMoveInput, mc.player.getYaw(), mc.gameRenderer.getCamera().getYaw());
         }
-
 
             if (target != null && mc.player != null && mc.world != null && typeMove.is("Сфокусированная") && ServerUtil.isFunTime()) {
                 if (!mc.player.isSubmergedInWater()) {
                     if (ServerUtil.isCopyTime()) {
-
                         Vec3d vec3d = AuraUtil.getVector2(target);
                         float yaw = (float) Math.toDegrees(Math.atan2(-vec3d.x, vec3d.z));
                         MoveUtil.fixMovement(eventMoveInput, mc.player.getYaw(), yaw);
-
-
                     } else {
                         Vec3d vec = target.getEntityPos().subtract(mc.player.getEyePos()).normalize();
 
                         float yaw = (float) Math.toDegrees(Math.atan2(-vec.x, vec.z));
                         MoveUtil.fixMovement(eventMoveInput, mc.player.getYaw(), yaw);
-
                     }
                 }
             }
             if (target != null && mc.player != null && mc.world != null && typeMove.is("Сфокусированная") && !ServerUtil.isFunTime()) {
-
                 if (ServerUtil.isCopyTime()) {
-
                     Vec3d vec3d = AuraUtil.getVector2(target);
                     float yaw = (float) Math.toDegrees(Math.atan2(-vec3d.x, vec3d.z));
                     MoveUtil.fixMovement(eventMoveInput, mc.player.getYaw(), yaw);
-
-
                 } else {
                     Vec3d vec = target.getEntityPos().subtract(mc.player.getEyePos()).normalize();
 
                     float yaw = (float) Math.toDegrees(Math.atan2(-vec.x, vec.z));
                     MoveUtil.fixMovement(eventMoveInput, mc.player.getYaw(), yaw);
-
                 }
-
         }
     }
-
 
 public static long lastLookUpTime = 0;
 public static long nextLookUpDelay = ThreadLocalRandom.current().nextLong(90000, 180000);
@@ -428,7 +354,6 @@ public static boolean isLookingUp = false;
 public static long lookUpStartTime = 0;
 public static int lookUpDuration = 0;
     public static long lastAttackTime = 0L;
-
 
     public float tick = 0;
     public static float lastYaw;
@@ -443,24 +368,12 @@ public static int lookUpDuration = 0;
     private int pitchFlickThreshold = ThreadLocalRandom.current().nextInt(14,19);
     public boolean pitchFlickActive = false;
     public long pitchFlickEndTime = 0;
-    /** Счётчик тиков для периодической переоценки цели. */
+
     private int retargetClock = 0;
 
     public TimerUtil timeSped1 = new TimerUtil();
     public TimerUtil timeSped2 = new TimerUtil();
 
-
-    /**
-     * Наведение — в конце тика клиента (TAIL MinecraftClient.tick), уже после того,
-     * как пакет движения этого тика ушёл. Выставленный здесь угол уедет на сервер
-     * в следующем тике, и там же им будет посчитана физика движения.
-     *
-     * Наводиться перед пакетом движения (на HEAD sendMovementPackets) нельзя:
-     * смещение за тик считается раньше, в travel(), старым углом, а в пакет попадёт
-     * новый — Grim восстанавливает скорость из угла в пакете и видит расхождение.
-     * Стоя на месте flag не летит (forward/strafe нулевые, угол на предсказание не
-     * влияет), а при ходьбе флагает каждый тик.
-     */
     @EventHandler
     public void onRotate(EventTick e) {
         doRotation();
@@ -472,12 +385,7 @@ public static int lookUpDuration = 0;
         }
         float[] ranges = getRanges();
         ranges = new float[]{ranges[0], ranges[1], ranges[0] + ranges[1]};
-        // Предсказание «удар вот-вот» для ротаций — БЕЗ крит-гейта (fallCheck = false).
-        // С fallCheck здесь предсказание повторяло условие крита, и в режиме «Только
-        // криты» ротация узнавала о готовом ударе лишь тогда, когда крит уже разрешён.
-        // А наведение применяется в конце тика, то есть удар этого тика считался по
-        // старому углу: рейкаст в attackEntity() его отбрасывал, и удар пропадал.
-        // Ротация должна быть на цели ЗАРАНЕЕ — к моменту, когда окно крита откроется.
+
         boolean canAttack = UAttack.shouldAttack(target, false, true, false, -350, ranges);
 
         for (RotationType type : RotationType.values()) {
@@ -487,17 +395,12 @@ public static int lookUpDuration = 0;
             }
         }
         if (typeRotation.is("FunTime")) {
-
             Vec3d vec3d = UBoxPoints.getBestVector3dOnEntityBox(target.getBoundingBox(), false).add(0.2F * Math.sin(System.currentTimeMillis() / 250D), (target.getHeight() / 6)  * Math.cos(System.currentTimeMillis() / 850D), 0).subtract(mc.player.getEyePos());
-
-
-
 
             long currentTime = System.currentTimeMillis();
 
             if (!isLookingUp &&
                     currentTime - lastLookUpTime >= nextLookUpDelay) {
-
                 isLookingUp = true;
                 lookUpStartTime = currentTime;
                 lookUpDuration = ThreadLocalRandom.current().nextInt(300, 400);
@@ -514,14 +417,11 @@ public static int lookUpDuration = 0;
                 fastspeed =  true;
             }
 
-
-
             float yaw = (float) Math.toDegrees(Math.atan2(-vec3d.x, vec3d.z));
             float pitch = (float) MathHelper.clamp(-Math.toDegrees(Math.atan2(vec3d.y, Math.hypot(vec3d.x, vec3d.z))), -90, 90);
 
             float speedYAW =  MathUtil.randomLerp(44,66);
             float speedPit = !fastspeed ?  MathUtil.randomLerp(120,170) : MathUtil.randomLerp(4,7   );
-
 
             if(canAttack && fastspeed) {
                 tick= MathUtil.random(0,2);
@@ -540,7 +440,6 @@ public static int lookUpDuration = 0;
                 lastPitch = pitch;
             }
 
-
             float yawJitter = waveA *  MathUtil.randomLerp(6, 15) ;
             float pitchJitter = waveB *  MathUtil.randomLerp(6,12) ;
 
@@ -548,21 +447,14 @@ public static int lookUpDuration = 0;
 
             RotationProcess.update(new Rotation(lastYaw + yawJitter,finalPitch + pitchJitter), speedYAW,
                     speedPit, MathUtil.randomInt(35,45), MathUtil.randomInt(19,45), MathUtil.randomInt(0,3), 15, false);
-
-
         }
-        
-        
     }
-
-
 
     @EventHandler
     private void onResetOnWorld(WorldLoadEvent event) {
         if(mc.player != null && mc.gameRenderer.getCamera() != null && mc.world != null) {
             lastPitch = mc.gameRenderer.getCamera().getPitch();
             lastYaw = mc.gameRenderer.getCamera().getYaw();
-
         }
         target = null;
         targetPoint = null;
@@ -571,12 +463,10 @@ public static int lookUpDuration = 0;
         pitchFlickActive = false;
         resetCubeState();
         LagCompensation.reset();
-
     }
 
-
     @Override
-    
+
     public void onDisable() {
         super.onDisable();
         if(mc.player != null && mc.gameRenderer.getCamera() != null && mc.world != null) {
@@ -590,11 +480,7 @@ public static int lookUpDuration = 0;
         pitchFlickActive = false;
         releaseCritSprint();
         resetCubeState();
-
     }
-
-
-
 
     private void updateTarget() {
         if (FakePlayer.fakePlayer != null
@@ -625,33 +511,24 @@ public static int lookUpDuration = 0;
                 case "Дистанции" -> score = dist + angle * 2.5;
                 case "Прицелу" -> score = angle;
                 default -> {
-                    // Умный: угол, приоритет радиуса удара, добивание низкого ХП,
-                    // дожим цели в комбо и реакция на замах врага
                     score = angle * 0.55;
 
                     double over = Math.max(0, dist - atkRange);
                     score += over * 0.06;
-                    // Вне радиуса удара — штраф заведомо больше суммы остальных слагаемых:
-                    // цель, которую реально можно ударить, всегда важнее недосягаемой.
-                    // Со штрафом 0.8 дальняя цель прямо перед собой (angle≈0) обыгрывала
-                    // достижимую цель сбоку (angle*0.55 до 1.73), и аура молча стояла.
+
                     if (over > 0) score += 5.0;
 
-                    score += living.getHealth() * 0.06;      // слабых добиваем первыми
+                    score += living.getHealth() * 0.06;
 
-                    if (living.hurtTime > 5) score -= 0.20;  // цель уже летает в комбо — не отпускать
+                    if (living.hurtTime > 5) score -= 0.20;
 
-                    // враг замахнулся рядом с нами — он атакует прямо сейчас
                     if (dist <= atkRange * 1.4 && living.handSwingTicks >= 0 && living.handSwingTicks < 8)
                         score -= 0.30;
 
-                    // «липкость» текущей цели: раньше вычиталось у всех кандидатов,
-                    // то есть не влияло на ранжирование вообще
                     if (living == target) score -= 0.35;
                 }
             }
 
-            // лёгкая анти-флип защита для простых режимов
             if (!smart && living == target) score -= 0.10;
 
             if (score < bestScore) {
@@ -661,7 +538,6 @@ public static int lookUpDuration = 0;
         }
         target = bestTarget;
     }
-
 
     private float auraDist() {
         return attackRange.getValue() + preRange.getValue();
@@ -679,7 +555,6 @@ public static int lookUpDuration = 0;
         return Math.hypot(yawDelta, pitchDelta);
     }
 
-
     private boolean isValidTarget(LivingEntity entity) {
         return isValidTarget(entity, auraDist());
     }
@@ -690,8 +565,6 @@ public static int lookUpDuration = 0;
         if (mc.player.distanceTo(entity) > maxDist) return false;
 
         if (!others.getValue("Бить через блоки")) {
-            // мягкая проверка: ванильный canSee (глаза→глаза) считал невидимой
-            // цель за забором или полублоком, и аура её просто не брала
             if (!LagCompensation.isVisibleLoose(entity)) return false;
         }
 
@@ -724,25 +597,17 @@ public static int lookUpDuration = 0;
             return false;
         }
 
-
         return !entity.isInvulnerable() && entity.isAlive() && !(entity instanceof ArmorStandEntity);
     }
 
     @EventHandler
     public void onDisplay(VisualRotEvent e) {
-
-
     }
 
     @EventHandler
     public void onDisplay(EventDisplay e) {
-
         if ((mc.player != null && mc.world != null && target != null)) {
-
-
-
             if (!(typeRotation.is("Snap") && typeSnap.is("Fov") &&  fovRender.getValue() ) || mc.player == null || mc.world == null) return;
-
 
             float targetScale = 2F;
             float currentScale = (float) mc.getWindow().getScaleFactor();
@@ -768,15 +633,11 @@ public static int lookUpDuration = 0;
             boolean hasTarget = target != null;
             int baseAlpha = 255;
 
-
             int color = ColorUtil.overCol(ColorUtil.multAlpha(ColorUtil.getColor(255), 255), redColor, hurtPC);
-
 
             RenderUtil.Render2D.outline(x, y, diameter, diameter, 1, ColorUtil.replAlpha(color, 0.1F), pixelRadius);
         }
     }
-
-    // ─────────────────────────── таргет-есп «Куб» ───────────────────────────
 
     private static final RenderPipeline CUBE_PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
@@ -1217,7 +1078,6 @@ public static int lookUpDuration = 0;
         }
     }
 
-    /** Осколки живут после смерти цели, поэтому рисуются отдельно от самого куба. */
     public void renderTargetCubeFragments(EventRender3D event, VertexConsumerProvider.Immediate immediate) {
         if (cubeFragments.isEmpty()) return;
 

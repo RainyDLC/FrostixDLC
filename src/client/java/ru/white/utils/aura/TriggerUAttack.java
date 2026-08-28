@@ -1,6 +1,5 @@
 package ru.white.utils.aura;
 
-
 import ru.white.module.impl.combat.TriggerBot;
 import ru.white.utils.annotation.IMinecraft;
 import ru.white.utils.math.ServerUtil;
@@ -22,13 +21,11 @@ import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.MathHelper;
 
 import java.util.concurrent.ThreadLocalRandom;
 
 @UtilityClass
 public class TriggerUAttack implements IMinecraft {
-
     private static final MinecraftClient mc = MinecraftClient.getInstance();
     public static long hitCounterCPSBypass;
 
@@ -59,7 +56,6 @@ public class TriggerUAttack implements IMinecraft {
         return -1;
     }
 
-
     public static Runnable[] hitShieldBreakTaskForUse(LivingEntity livingIn, boolean enabled) {
         final Runnable[] pre$post = new Runnable[] { () -> {
         }, () -> {
@@ -69,7 +65,6 @@ public class TriggerUAttack implements IMinecraft {
             return pre$post;
 
         if (livingIn instanceof PlayerEntity player) {
-
             if (!player.isBlocking())
                 return pre$post;
 
@@ -78,19 +73,16 @@ public class TriggerUAttack implements IMinecraft {
             final Item mainItem = main.isEmpty() ? null : main.getItem();
             final Item offItem = off.isEmpty() ? null : off.getItem();
 
-
             if (mainItem == Items.SHIELD || offItem == Items.SHIELD) {
                 final int axeSlot = getAxeSlot();
                 final int handSlot = mc.player.getInventory().getSelectedSlot();
 
                 if (axeSlot != -1 && axeSlot != handSlot) {
-
                     pre$post[0] = () -> {
                         if (mc.getNetworkHandler() != null) {
                             mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(axeSlot));
                         }
                     };
-
 
                     pre$post[1] = () -> {
                         if (mc.getNetworkHandler() != null) {
@@ -103,7 +95,6 @@ public class TriggerUAttack implements IMinecraft {
 
         return pre$post;
     }
-
 
     public static Runnable[] resetShieldSilentTaskForUse(boolean enabled) {
         final Runnable[] pre$post = new Runnable[] { () -> {
@@ -136,27 +127,16 @@ public class TriggerUAttack implements IMinecraft {
 
         if (mc.player.isSprinting() && !mc.player.isOnGround()  && !AttackUtil.hasMovementRestrictions()) {
             pre$post[0] = () -> {
-
-
                 if(triggerBot().typeSprint.is("Silent")) {
                     mc.options.sprintKey.setPressed(false);
-
                 } else {
                     mc.options.sprintKey.setPressed(false);
                     mc.player.setSprinting(false);
-
-
                 }
-
-
-
             };
             pre$post[1] = () -> {
-
-
                 mc.options.sprintKey.setPressed(true);
                 mc.player.setSprinting(true);
-
             };
         }
         return pre$post;
@@ -186,8 +166,6 @@ public class TriggerUAttack implements IMinecraft {
         if (preHit != null)
             preHit.run();
         if (livingIn != null && mc.interactionManager != null && mc.player != null) {
-
-
             mc.interactionManager.attackEntity(mc.player, livingIn);
 
             if (hand != null)
@@ -198,7 +176,6 @@ public class TriggerUAttack implements IMinecraft {
                 hitCounterCPSBypassReset();
 
                 cooldownTimer.reset();
-
         }
         if (postHit != null)
             postHit.run();
@@ -214,7 +191,6 @@ public class TriggerUAttack implements IMinecraft {
 
         double attackSpeed = mc.player.getAttributeValue(EntityAttributes.ATTACK_SPEED);
 
-
         long msCooldown;
 
         float maxDeviation = .2F;
@@ -223,8 +199,6 @@ public class TriggerUAttack implements IMinecraft {
         if (attackSpeed == 4.D || attackSpeed == 4.4000000059604645 || attackSpeed == 4.800000011920929)
             msCooldown = 450L;
         msCooldown = Math.max(msCooldown, 450L);
-
-
 
         if(ServerUtil.isCopyTime()) {
             msCooldown = ThreadLocalRandom.current().nextBoolean() ? 550 : 500;
@@ -254,28 +228,22 @@ public class TriggerUAttack implements IMinecraft {
     }
 
     public static boolean anyEntityOnRay(LivingEntity livingIn, double range) {
-        // рейкаст по отложенному хитбоксу — как валидирует античит
         if (livingIn != null) {
             return LagCompensation.rayHitsDelayed(livingIn, (float) range);
         }
         return false;
     }
 
-
     public static boolean shouldAttack(LivingEntity livingTarget, boolean rayCast, boolean distanceCheck,
                                        boolean fallCheck, long cooldownMSOffset, float[] ranges) {
         if (distanceCheck && livingTarget != null && !AuraUtil.validDistance(livingTarget, ranges[0], true))
             return false;
 
-        // cooldown
         if (!TriggerUAttack.msCooldownReached(cooldownMSOffset))
             return false;
 
-        // best moment
         boolean validNext = TriggerUAttack.isBestMomentToHit(fallCheck);
 
-
-        // ray cast rule
         if (validNext && rayCast && !anyEntityOnRay(livingTarget, ranges[0]))
             validNext = false;
 
@@ -318,7 +286,6 @@ public class TriggerUAttack implements IMinecraft {
         missDetected = false;
         counterTo0PostMissHits = 0;
     }
-
 
     public static void antiMissesHittingUpdate(LivingEntity targetIn, boolean cpsBypass, boolean rayCastCheck,
                                                boolean enabled) {

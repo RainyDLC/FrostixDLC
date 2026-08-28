@@ -11,7 +11,6 @@ import ru.white.module.api.settings.impl.*;
 import ru.white.module.api.settings.impl.*;
 import ru.white.module.impl.utils.UnHook;
 
-
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -23,8 +22,6 @@ public class ConfigManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private int tickTimer = 0;
 
-    // Called before modules are initialized — only creates folder and subscribes
-    
     public void setup() {
         try {
             Files.createDirectories(CONFIG_DIR);
@@ -34,15 +31,12 @@ public class ConfigManager {
         Client.eventHandler().subscribe(this);
     }
 
-    // Called after modules are initialized — loads the saved config
-    
     public void init() {
         load(AUTO_CONFIG);
     }
 
     @EventHandler
     public void onWorldLoad(WorldLoadEvent event) {
-
     }
 
     @EventHandler
@@ -56,7 +50,7 @@ public class ConfigManager {
     public void autoSave() {
         if (!UnHook.unhooked) save(AUTO_CONFIG);
     }
-    
+
     public void save(String name) {
         JsonObject root = new JsonObject();
         JsonObject modules = new JsonObject();
@@ -83,7 +77,7 @@ public class ConfigManager {
             e.printStackTrace();
         }
     }
-    
+
     public boolean load(String name) {
         Path file = CONFIG_DIR.resolve(name + ".json");
         if (!Files.exists(file)) return false;
@@ -132,7 +126,7 @@ public class ConfigManager {
         }
         return configs;
     }
-    
+
     private void serializeSetting(JsonObject obj, Setting<?> setting) {
         if (setting instanceof DragSetting drag) {
             JsonObject vec = new JsonObject();
@@ -161,13 +155,26 @@ public class ConfigManager {
             obj.add(setting.getName(), arr);
             return;
         }
+        if (setting instanceof AnarchySetting an) {
+            JsonObject anObj = new JsonObject();
+            anObj.addProperty("active", an.getActive());
+            JsonArray presets = new JsonArray();
+            for (List<Integer> preset : an.presets()) {
+                JsonArray arr = new JsonArray();
+                for (Integer value : preset) arr.add(value);
+                presets.add(arr);
+            }
+            anObj.add("presets", presets);
+            obj.add(setting.getName(), anObj);
+            return;
+        }
         Object value = setting.getValue();
         if (value instanceof Boolean b)      obj.addProperty(setting.getName(), b);
         else if (value instanceof Float f)   obj.addProperty(setting.getName(), f);
         else if (value instanceof String s)  obj.addProperty(setting.getName(), s);
         else if (value instanceof Integer i) obj.addProperty(setting.getName(), i);
     }
-    
+
     private void deserializeSetting(JsonObject obj, Setting<?> setting) {
         if (!obj.has(setting.getName())) return;
         JsonElement el = obj.get(setting.getName());
@@ -192,6 +199,25 @@ public class ConfigManager {
             List<String> rows = new ArrayList<>();
             for (JsonElement e : el.getAsJsonArray()) rows.add(e.getAsString());
             grid.fromRows(rows);
+        } else if (setting instanceof AnarchySetting an && el.isJsonObject()) {
+            JsonObject anObj = el.getAsJsonObject();
+            for (int i = 0; i < AnarchySetting.PRESETS; i++) an.preset(i).clear();
+            if (anObj.has("presets") && anObj.get("presets").isJsonArray()) {
+                JsonArray presets = anObj.getAsJsonArray("presets");
+                for (int i = 0; i < presets.size() && i < AnarchySetting.PRESETS; i++) {
+                    JsonElement raw = presets.get(i);
+                    if (!raw.isJsonArray()) continue;
+                    List<Integer> target = an.preset(i);
+                    for (JsonElement e : raw.getAsJsonArray()) {
+                        try {
+                            int value = e.getAsInt();
+                            if (value >= 0 && value <= 999 && !target.contains(value)
+                                    && target.size() < AnarchySetting.MAX_PER_PRESET) target.add(value);
+                        } catch (Exception ignored) {}
+                    }
+                }
+            }
+            if (anObj.has("active")) an.setActive(anObj.get("active").getAsInt());
         } else if (setting instanceof BooleanSetting bs)      bs.set(el.getAsBoolean());
         else if (setting instanceof BooleanSettingHud bs)      bs.set(el.getAsBoolean());
         else if (setting instanceof SliderSetting ss)  ss.set(el.getAsFloat());

@@ -1,12 +1,10 @@
 package ru.white.utils.other;
 
-
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 public class TimerUtil {
-
     private long startTime;
 
     @Getter
@@ -31,7 +29,6 @@ public class TimerUtil {
     public boolean finished(final double delay) {
         return System.currentTimeMillis() - delay >= startTime;
     }
-
 
     public boolean every(final double delay) {
         boolean finished = this.finished(delay);
@@ -63,7 +60,6 @@ public class TimerUtil {
         return lastMS < System.currentTimeMillis();
     }
 
-
     public boolean hasTimeElapsed(long time, boolean reset) {
         if (System.currentTimeMillis() - lastMS > time) {
             if (reset) reset();
@@ -92,7 +88,6 @@ public class TimerUtil {
     public void setLastMC() {
         lastMS = System.currentTimeMillis();
     }
-
 
     public boolean finished(long delay) {
         return System.currentTimeMillis() - this.lastMS >= delay;
@@ -154,5 +149,4 @@ public class TimerUtil {
             return hasDelayElapsed;
         }
     }
-
 }

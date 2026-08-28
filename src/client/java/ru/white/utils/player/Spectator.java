@@ -6,13 +6,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.chunk.ChunkStatus;
 
-/**
- * Клиентское «вселение» в сущность — камера переезжает к цели, как в спектейторе,
- * но на сервер ничего не уходит: своё тело остаётся на месте и продолжает
- * слушаться управления.
- */
 public final class Spectator {
-
     private static Entity target;
 
     private Spectator() {
@@ -34,15 +28,12 @@ public final class Spectator {
         target = entity;
         mc.setCameraEntity(entity);
 
-        // камера «телепортировалась» — просим перестроить граф секций от новой точки,
-        // иначе прогруженная терра вокруг цели проявляется только через несколько кадров
         if (mc.worldRenderer != null) {
             mc.worldRenderer.scheduleTerrainUpdate();
         }
         return true;
     }
 
-    /** Есть ли у клиента чанк, в котором стоит цель. */
     public static boolean isTerrainLoaded(Entity entity) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (entity == null || mc.world == null) return false;
@@ -50,7 +41,6 @@ public final class Spectator {
         return mc.world.getChunkManager().getChunk(pos.x, pos.z, ChunkStatus.FULL, false) != null;
     }
 
-    /** Сколько чанков в квадрате (2*radius+1)² вокруг цели реально пришло с сервера. */
     public static int loadedChunksAround(Entity entity, int radius) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (entity == null || mc.world == null) return 0;
@@ -78,16 +68,10 @@ public final class Spectator {
         if (mc.player != null) mc.setCameraEntity(mc.player);
     }
 
-    /** Сбрасывает состояние без обращения к камере — для смены мира/дисконнекта. */
     public static void reset() {
         target = null;
     }
 
-    /**
-     * Проверка живучести цели, вызывается каждый тик.
-     *
-     * @return true, если пришлось отцепиться
-     */
     public static boolean validate() {
         if (target == null) return false;
 
@@ -100,7 +84,6 @@ public final class Spectator {
             return true;
         }
 
-        // если камеру перехватил кто-то ещё — возвращаем на цель
         if (mc.getCameraEntity() != target) {
             mc.setCameraEntity(target);
         }

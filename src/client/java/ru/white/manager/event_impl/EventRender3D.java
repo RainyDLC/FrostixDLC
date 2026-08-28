@@ -1,6 +1,5 @@
 package ru.white.manager.event_impl;
 
-
 import ru.white.manager.events.Event;
 import net.minecraft.client.util.math.MatrixStack;
 
@@ -19,9 +18,7 @@ public class EventRender3D extends Event {
         return matrixStack;
     }
 
-
     public float getTickDelta() {
         return tickDelta;
     }
 }
-

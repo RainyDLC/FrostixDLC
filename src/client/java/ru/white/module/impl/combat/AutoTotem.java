@@ -24,9 +24,7 @@ import net.minecraft.item.ShieldItem;
 import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
 import net.minecraft.screen.slot.SlotActionType;
 
-
 import java.util.stream.IntStream;
-
 
 @ModuleInfo(
         name = "Auto Totem",
@@ -34,7 +32,6 @@ import java.util.stream.IntStream;
         category = Category.COMBAT
 )
 public class AutoTotem extends Module {
-
     private final BooleanSetting elytraHealthCheck = new BooleanSetting(this, "Здоровье с элитрами", true);
     private final BooleanSetting tntCheck = new BooleanSetting(this, "Динамит", true);
     private final BooleanSetting fallCheck = new BooleanSetting(this, "Падение", false);
@@ -45,8 +42,6 @@ public class AutoTotem extends Module {
     private final SliderSetting crystalDistance = new SliderSetting(this,"Дистанция до крист", 4.0F, 1.0F, 10.0F, 1.0F).setVisible(() -> crystalCheck.getValue());
     private final SliderSetting tntDistance = new SliderSetting(this,"Дистанция до тнт", 30.0F, 3.0F, 50.0F, 1.0F).setVisible(() -> tntCheck.getValue());
     private final BooleanSetting noBall = new BooleanSetting(this,"Не свапать если шар", false);
-
-
 
     private int oldSlot = -1;
     private ItemStack oldOffhandItem = ItemStack.EMPTY;
@@ -70,12 +65,9 @@ public class AutoTotem extends Module {
                 .filter((s) -> s.getItem() == Items.TOTEM_OF_UNDYING && !s.hasGlint())
                 .count();
 
-
-
-
         if(!checkToAttack()) swap();
     }
-    
+
     private boolean checkToAttack() {
         return (mc.player.isUsingItem() && notSwapifEat.getValue()
                 && ( !(mc.player.getActiveItem().getItem() instanceof ShieldItem)));
@@ -87,7 +79,6 @@ public class AutoTotem extends Module {
 
         if (this.canSwap()) {
             if (slot >= 0 && !totemInHand) {
-
                 if (!lockHeld) {
                     setKey(false);
                     AttackAura.stoptick = 3;
@@ -125,7 +116,6 @@ public class AutoTotem extends Module {
             }
         } else if (oldSlot != -1 && !oldOffhandItem.isEmpty()) {
             if (mc.player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING) && !this.canSwap()) {
-
                 if (!lockHeld) {
                     setKey(false);
                     AttackAura.stoptick = 3;
@@ -200,7 +190,6 @@ public class AutoTotem extends Module {
         return false;
     }
 
-
     private boolean canSwap() {
         boolean flag1 = this.elytraCheck();
         boolean flag2 = this.checkCrystal();
@@ -270,10 +259,6 @@ public class AutoTotem extends Module {
     }
 
     private void setKey(boolean state) {
-
-
-
-
         KeyBinding[] movementKeys = {
                 mc.options.forwardKey,
                 mc.options.backKey,
@@ -289,6 +274,4 @@ public class AutoTotem extends Module {
             keyBinding.setPressed(pressed);
         }
     }
-
-
 }

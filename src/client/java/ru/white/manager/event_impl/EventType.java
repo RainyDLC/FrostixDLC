@@ -1,7 +1,6 @@
 package ru.white.manager.event_impl;
 
 public class EventType {
-
     public static final byte
             START = -1,
             PRE = 0,
@@ -9,5 +8,4 @@ public class EventType {
             POST = 2,
             SEND = 3,
             RECIEVE = 4;
-
 }

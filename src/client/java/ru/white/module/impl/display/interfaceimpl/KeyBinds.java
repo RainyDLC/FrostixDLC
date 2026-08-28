@@ -5,9 +5,7 @@ import ru.white.Client;
 import ru.white.module.api.Module;
 import ru.white.module.api.settings.impl.DragSetting;
 import ru.white.module.impl.display.InterFace;
-import ru.white.theme.ThemeColor;
 import ru.white.utils.animation.Animation;
-import ru.white.utils.animation.Easings;
 import ru.white.utils.animation.satoshi.Direction;
 import ru.white.utils.animation.satoshi.EaseInOutQuad;
 import ru.white.utils.colors.ColorUtil;
@@ -21,18 +19,10 @@ import java.util.Comparator;
 import java.util.List;
 
 public class KeyBinds implements element {
-
-    /**
-     * Кэш отфильтрованного/отсортированного списка модулей: пересобирается максимум
-     * раз в 50 мс (раз в тик), а не каждый кадр — сортировка ~80 модулей в стриме
-     * на каждом кадре давала заметный CPU-оверхед и мусор.
-     */
     private final List<Module> cachedModules = new ArrayList<>();
     private long lastRebuildMs;
 
-    /** Общий масштаб плашки: один множитель на шрифты, иконки и все отступы. */
     private static  float S = 1.0F;
-
 
     private static float H = 16F * S;
     private static float MIN_W = 50F * S;
@@ -47,19 +37,16 @@ public class KeyBinds implements element {
     private static float TITLE_TEXT_X = 12.5F * S;
     private static float TITLE_TEXT_Y = 3.4F * S;
 
-
     private static float ROW_HEIGHT = 14F * S;
-    private static float ROW_BASE_W = 27F * S; // 22 + 5 из оригинального кода
+    private static float ROW_BASE_W = 27F * S;
     private static float ROW_PADDING_X = 5F * S;
     private static float ROW_START_Y = 5F * S;
     private static float ROW_ANIM_OFFSET = 15F * S;
-
 
     private static float ICON_PADDING = 4F * S;
     private static float ICON_OFFSET_Y = 0.9F * S;
     private static float SEP_PADDING_X = 4F * S;
     private static float SEP_OFFSET_Y = 3.2F * S;
-
 
     private Animation openAnimation = new Animation();
 
@@ -80,7 +67,7 @@ public class KeyBinds implements element {
         TITLE_TEXT_X = 12.5F * S;
         TITLE_TEXT_Y = 3.4F * S;
         ROW_HEIGHT = 14F * S;
-        ROW_BASE_W = 27F * S; //
+        ROW_BASE_W = 27F * S;
         ROW_PADDING_X = 5F * S;
         ROW_START_Y = 5F * S;
         ROW_ANIM_OFFSET = 15F * S;
@@ -124,7 +111,6 @@ public class KeyBinds implements element {
 
         float alpha2 = animation2.getOutput();
 
-        // Отрисовка состояния пустого списка (чат)
         RenderUtil.Render2D.hudPlate(x, y, MIN_W, H, alpha2, RADIUS, InterFace.getInstance().alphaHUD.getValue());
 
         Font font = Fonts.sf_regular;
@@ -136,7 +122,6 @@ public class KeyBinds implements element {
         float h = 4 * S;
         float w = 0;
 
-        // Высчитываем ширину и высоту плашки
         for (Module m : modules) {
             m.animation.setDirection(m.isEnabled() ? Direction.FORWARDS : Direction.BACKWARDS);
             float mAnim = m.getAnimation().getOutput();
@@ -151,22 +136,18 @@ public class KeyBinds implements element {
             h += ROW_HEIGHT * mAnim;
         }
 
-        // Отрисовка фона списка
         RenderUtil.Render2D.hudPlate(x, y, w, h, alpha, RADIUS, InterFace.getInstance().alphaHUD.getValue());
 
         float offsetY = y + ROW_START_Y;
         float offsetY2 = 0;
 
-        // Отрисовка элементов списка
         for (Module m : modules) {
-
             float mAnim = m.getAnimation().getOutput();
             if (mAnim <= 0) continue;
 
             float addX = 0;
             String name = m.getCategory().getIcon();
 
-            // Имя модуля
             font.draw(m.getBigName(), x + ROW_PADDING_X - addX, offsetY, ROW_TEXT, ColorUtil.getColor(240, alpha * mAnim));
 
             String key = Keyboard.keyName(m.getKey());
@@ -174,13 +155,10 @@ public class KeyBinds implements element {
             float keyWidth = font.getWidth(key, ROW_TEXT);
             float iconWidth = cat.getWidth(name, ROW_TEXT);
 
-            // Кнопка бинда
             font.draw(key, x + addX - ROW_PADDING_X + w - keyWidth - iconWidth - ICON_PADDING, offsetY, ROW_TEXT, ColorUtil.getColor(200, alpha * mAnim));
 
-            // Иконка категории
             cat.draw(name, x + addX - ROW_PADDING_X + w - iconWidth, offsetY + ICON_OFFSET_Y, ROW_TEXT, ColorUtil.replAlpha(ColorUtil.client(), alpha * mAnim));
 
-            // Линия сепаратора
             if (modules.getFirst() != m) {
                 RenderUtil.Render2D.rect(x + SEP_PADDING_X + addX, offsetY - SEP_OFFSET_Y, w - (SEP_PADDING_X * 2) - addX, 0.5F,
                         ColorUtil.getColor(255, 0.05F * alpha * mAnim), 1);

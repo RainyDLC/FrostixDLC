@@ -1,7 +1,5 @@
 package ru.white.utils.render.font;
 
-
-import net.minecraft.client.util.math.MatrixStack;
 import ru.white.Client;
 import ru.white.utils.colors.ColorFormatting;
 import ru.white.utils.colors.ColorUtil;
@@ -12,10 +10,6 @@ public class Font {
     public Font(String name) {
         this.name = name;
     }
-
-    // ВАЖНО: никаких flushAll перед текстом — порядок слоёв гарантирует DrawBatcher
-    // (текст всегда поверх заливок/обводок/текстур своего цикла). Раньше каждый
-    // вызов draw* сбрасывал ВСЕ батчи и создавал отдельный RenderPass на строку.
 
     public void draw(String text, float x, float y, float size, int color) {
         Client.get().render2D().getFontRenderer().drawText(name, text, x, y, size, color);
@@ -74,7 +68,6 @@ public class Font {
         draw(sb.toString(), x, y, size, -1);
     }
 
-
     public void drawGRS(CharSequence text, double x, double y, int c1, int c2, float size) {
         if (text == null) return;
         final int len = text.length();
@@ -82,15 +75,12 @@ public class Font {
 
         float xOff = 0f;
 
-        // Предотвращаем деление на ноль и лишние вычисления
         final boolean single = (len == 1);
         final float invDen = single ? 0f : 1f / (len - 1);
 
-        // Извлекаем компоненты один раз
         final int a1 = (c1 >>> 24) & 0xFF, r1 = (c1 >>> 16) & 0xFF, g1 = (c1 >>> 8) & 0xFF, b1 = c1 & 0xFF;
         final int a2 = (c2 >>> 24) & 0xFF, r2 = (c2 >>> 16) & 0xFF, g2 = (c2 >>> 8) & 0xFF, b2 = c2 & 0xFF;
 
-        // Маленький буфер вместо String.valueOf для каждого символа
         final StringBuilder sb = new StringBuilder(1);
         sb.append('\0');
 
@@ -98,7 +88,6 @@ public class Font {
             final char ch = text.charAt(i);
             final float t = single ? 0f : (i * invDen);
 
-            // Линейная интерполяция компонент (целочисленно, без Math*)
             final int a = a1 + Math.round((a2 - a1) * t);
             final int r = r1 + Math.round((r2 - r1) * t);
             final int g = g1 + Math.round((g2 - g1) * t);
@@ -119,11 +108,9 @@ public class Font {
         Client.get().render2D().getFontRenderer().drawTextFading(name, text, x, y, size, maxWidth, color);
     }
 
-    /** Затухание слева; при переполнении показывает конец строки (зеркало {@link #drawFadingText}). */
     public void drawFadingTextReverse(String text, float x, float y, float maxWidth, int color, float size) {
         Client.get().render2D().getFontRenderer().drawTextFadingReverse(name, text, x, y, size, maxWidth, color);
     }
-
 
     public void drawWrappedText(String text, float x, float y, float maxWidth, int color,float size) {
         String[] words = text.split(" ");
@@ -131,27 +118,23 @@ public class Font {
         float currentY = y;
 
         for (String word : words) {
-            // Проверяем ширину текущей строки с новым словом
             String potentialLine = currentLine.length() == 0 ? word : currentLine + " " + word;
             float lineWidth = getWidth(potentialLine,size);
 
             if (lineWidth > maxWidth) {
-                // Если не влезает, рисуем накопленную строку и переходим на новую
                 draw( currentLine.toString(), x, currentY,size, color);
                 currentLine = new StringBuilder(word);
-                currentY += this.getHeight(size) ; // getHeight() возвращает высоту шрифта + отступ
+                currentY += this.getHeight(size) ;
             } else {
                 currentLine = new StringBuilder(potentialLine);
             }
         }
 
-        // Рисуем последний остаток текста
         if (currentLine.length() > 0) {
             draw( currentLine.toString(), x, currentY,size, color);
         }
     }
 
-    /** Высота, которую займёт текст при отрисовке через {@link #drawWrappedText} с теми же параметрами. */
     public float getWrappedHeight(String text, float maxWidth, float size) {
         if (text == null || text.isEmpty()) return 0F;
         String[] words = text.split(" ");
@@ -171,7 +154,6 @@ public class Font {
         return lines * getHeight(size);
     }
 
-    /** Выравнивание по правому краю; левый край затухает при наезде на {@code fadeStartX}. */
     public void drawRightAlignFadeLeft(String text, float rightX, float y, float fadeStartX, int color, float size) {
         Client.get().render2D().getFontRenderer().drawTextRightAlignFadeLeft(name, text, rightX, y, size, fadeStartX, color);
     }

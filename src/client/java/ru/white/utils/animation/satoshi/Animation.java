@@ -1,8 +1,6 @@
 package ru.white.utils.animation.satoshi;
 
-
 public abstract class Animation {
-
     public Counter timerUtil = new Counter();
     protected int duration;
     protected double endPoint;
@@ -86,6 +84,4 @@ public abstract class Animation {
     }
 
     protected abstract double getEquation(double x);
-
 }
-

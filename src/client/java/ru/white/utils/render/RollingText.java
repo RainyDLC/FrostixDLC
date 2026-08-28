@@ -5,12 +5,7 @@ import ru.white.utils.animation.Easings;
 import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.render.font.Font;
 
-/**
- * Строка с прокруткой: изменившийся символ уезжает вверх, новый приезжает снизу.
- * Одна инстанция — одна строка (таймер, счётчик и т.п.).
- */
 public class RollingText {
-
     private final float slide;
 
     private String value = "";
@@ -26,7 +21,6 @@ public class RollingText {
         this.slide = slide;
     }
 
-    /** Меняет значение и запускает прокрутку, если оно отличается от текущего. */
     public void set(String next) {
         if (next == null || next.equals(value)) return;
 
@@ -50,8 +44,6 @@ public class RollingText {
 
         float t = animation.get();
 
-        // строка не анимируется — рисуем целиком, без посимвольных substring каждый кадр
-        // (при t >= 1 старые символы всё равно не выводятся)
         if (t >= 1F) {
             font.draw(value, x, y, size, color);
             return;
@@ -62,7 +54,6 @@ public class RollingText {
         for (int i = 0; i < value.length(); i++) {
             String ch = value.substring(i, i + 1);
 
-            // символы сопоставляются с конца строки, чтобы «1:09» → «1:10» двигало только младшие разряды
             int j = prev.length() - (value.length() - i);
             String old = j >= 0 && j < prev.length() ? prev.substring(j, j + 1) : null;
 

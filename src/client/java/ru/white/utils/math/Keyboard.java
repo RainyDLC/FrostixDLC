@@ -10,7 +10,6 @@ import java.util.Map;
 @Getter
 @AllArgsConstructor
 public enum Keyboard {
-
     KEY_SPACE("SPACE", GLFW.GLFW_KEY_SPACE),
     KEY_APOSTROPHE("APOSTROPHE", GLFW.GLFW_KEY_APOSTROPHE),
     KEY_COMMA("COMMA", GLFW.GLFW_KEY_COMMA),
@@ -147,7 +146,6 @@ public enum Keyboard {
     MOUSE_RIGHT("MOUSERIGHT", GLFW.GLFW_MOUSE_BUTTON_RIGHT),
     MOUSE_MIDDLE("MOUSEMIDDLE", GLFW.GLFW_MOUSE_BUTTON_MIDDLE),
 
-
     KEY_NONE("NONE", GLFW.GLFW_KEY_UNKNOWN);
 
     private final String name;
@@ -182,11 +180,7 @@ public enum Keyboard {
         return KEY_CODE_MAP.getOrDefault(keyCode, Keyboard.KEY_NONE);
     }
 
-
-
     public boolean isKey(int keyCode) {
         return keyCode == getKey();
     }
-
-
 }

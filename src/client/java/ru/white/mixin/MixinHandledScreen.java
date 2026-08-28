@@ -1,6 +1,5 @@
 package ru.white.mixin;
 
-
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.screen.Screen;
@@ -38,7 +37,6 @@ import java.util.Map;
 
 @Mixin(HandledScreen.class)
 public abstract class MixinHandledScreen<T extends ScreenHandler> extends Screen {
-
     @Shadow
     @Final
     protected T handler;
@@ -56,7 +54,6 @@ public abstract class MixinHandledScreen<T extends ScreenHandler> extends Screen
         super(title);
     }
 
-    /** Кнопка-сундук над инвентарём открывает менеджер пресетов. */
     @Inject(method = "init", at = @At("TAIL"))
     private void initPresetButton(CallbackInfo ci) {
         if (!((Object) this instanceof InventoryScreen) || client == null) return;
@@ -141,7 +138,6 @@ public abstract class MixinHandledScreen<T extends ScreenHandler> extends Screen
         return mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
     }
 
-
     @Inject(method = "render", at = @At("HEAD"))
     private void onRender(CallbackInfo ci) {
         ItemScroller itemScroller = ItemScroller.getInstance();
@@ -164,12 +160,10 @@ public abstract class MixinHandledScreen<T extends ScreenHandler> extends Screen
         return InputUtil.isKeyPressed(MinecraftClient.getInstance().getWindow(), 340) || InputUtil.isKeyPressed(MinecraftClient.getInstance().getWindow(), 344);
     }
 
-
     @Unique
     private boolean hasControlDown() {
         return InputUtil.isKeyPressed(MinecraftClient.getInstance().getWindow(), 341) || InputUtil.isKeyPressed(MinecraftClient.getInstance().getWindow(), 345);
     }
-
 
         @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
     private void onKeyPressed(KeyInput input, CallbackInfoReturnable<Boolean> cir) {

@@ -1,11 +1,9 @@
 package ru.white.module.api.settings.impl;
 
-
 import ru.white.module.api.Module;
 import ru.white.module.api.settings.Setting;
 import ru.white.utils.animation.satoshi.Animation;
 import ru.white.utils.animation.satoshi.EaseInOutQuad;
-
 
 import java.util.function.Supplier;
 

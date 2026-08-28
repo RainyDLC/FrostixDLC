@@ -5,19 +5,15 @@ import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import ru.white.Client;
 import ru.white.manager.event_impl.EventDisplay;
-import ru.white.manager.event_impl.MousePressEvent;
 import ru.white.module.api.settings.impl.DragSetting;
 import ru.white.module.impl.combat.AttackAura;
 import ru.white.module.impl.display.InterFace;
 import ru.white.module.impl.utils.NameProtect;
-import ru.white.theme.ThemeColor;
 import ru.white.utils.animation.Animation;
 import ru.white.utils.animation.Easings;
 import ru.white.utils.animation.satoshi.Direction;
 import ru.white.utils.animation.satoshi.EaseInOutQuad;
-import ru.white.utils.colors.ColorFormatting;
 import ru.white.utils.colors.ColorUtil;
-import ru.white.utils.math.ServerUtil;
 import ru.white.utils.render.ItemRender;
 import ru.white.utils.render.RenderUtil;
 import ru.white.utils.render.font.Fonts;
@@ -45,17 +41,13 @@ import java.util.List;
 import static net.minecraft.client.gui.hud.InGameHud.getEffectTexture;
 
 public class TargetHud implements element {
-
-    /** Общий масштаб плашки */
     private static float S = 1.0F;
 
-    /** Размер предмета в координатах HUD и отступы */
     private static float ITEM_SIZE = 8F * S;
     private static float ARMOR_PAD = 2.5F * S;
     private static float ARMOR_X = 10F * S;
     private static float ARMOR_Y = 12F * S;
 
-    /** Базовые размеры и отступы */
     private static float W_BASE = 114F * S;
     private static float H_BASE = 34F * S;
     private static float RADIUS = 6F * S;
@@ -99,7 +91,6 @@ public class TargetHud implements element {
     }
 
     public void onRender(DragSetting drag, InterFace interFace, EventDisplay eventDisplay) {
-        // Обновляем масштаб перед рендером
         S = InterFace.getInstance().sizeHud.getValue();
         ITEM_SIZE = 8F * S;
         ARMOR_PAD = 2.5F * S;
@@ -171,18 +162,15 @@ public class TargetHud implements element {
 
         float hudOpacity = InterFace.getInstance().alphaHUD.getValue();
 
-        // Единая панель: лицо и информация в одной подложке
         float px = x + addALL;
 
         RenderUtil.Render2D.hudPlate(px, y, w, h, alpha, rad, hudOpacity);
 
-        // Тонкая вертикальная линия между лицом и блоком информации
         RenderUtil.Render2D.rect(px + HEAD_CONTAINER_W, y + HEAD_OFFSET_Y,
                 0.5F * S, h - HEAD_OFFSET_Y * 2, ColorUtil.getColor(255, 0.07F * alpha), 0.25F);
 
         drawFace(target, eventDisplay.getPartialTicks(), px + HEAD_OFFSET_X, y + HEAD_OFFSET_Y, alpha);
 
-        // ── компоновка: имя → иконки эффектов → кольцо ХП с числом ──
         float contentX = px + CONTENT_OFFSET_X + BAR_OFFSET_X;
         float ringR = 8.5F * S;
         float ringCx = px + w - ringR - 6F * S;
@@ -207,7 +195,6 @@ public class TargetHud implements element {
                 ringCx - 4F * S - contentX,
                 ColorUtil.getColor(255, alpha), NAME_SIZE);
 
-        // кольцо прогресса ХП с целым числом внутри
         RenderUtil.Render2D.roundedCircleProgress(eventDisplay.getDrawContext(),
                 ringCx, ringCy, ringR, 2.1F * S, hpFrac,
                 ColorUtil.replAlpha(ColorUtil.getColor(255, 0.10F), alpha),
@@ -215,7 +202,6 @@ public class TargetHud implements element {
         Fonts.sf_medium.drawCentered(String.format("%.0f", animHpText.get()),
                 ringCx, ringCy - 3.0F * S, 5.2F * S, ColorUtil.getColor(255, alpha));
 
-        // ── предметы цели: обе руки + броня — под ником ──
         List<ItemStack> wornItems = new ArrayList<>();
         wornItems.add(target.getEquippedStack(EquipmentSlot.MAINHAND));
         wornItems.add(target.getEquippedStack(EquipmentSlot.OFFHAND));
@@ -242,7 +228,6 @@ public class TargetHud implements element {
             wi++;
         }
 
-        // иконки активных эффектов цели — ряд ниже
         float iconY = y + 22.0F * S;
         float iconSize = 8F * S;
         float maxIconX = ringCx - ringR - 3F * S;

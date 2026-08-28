@@ -36,7 +36,6 @@ import net.minecraft.entity.projectile.ProjectileEntity;
 import net.minecraft.entity.projectile.TridentEntity;
 import net.minecraft.entity.projectile.thrown.EnderPearlEntity;
 import net.minecraft.item.BowItem;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.util.Identifier;
@@ -60,7 +59,6 @@ import java.util.Map;
         category = Category.RENDER
 )
 public class Trajectories extends Module {
-
     private static final int MAX_STEPS = 200;
 
     public final MultiBooleanSetting items = new MultiBooleanSetting(this, "Предметы",
@@ -77,7 +75,7 @@ public class Trajectories extends Module {
     public final BooleanSetting showTime = new BooleanSetting(this, "Время до падения", true);
     public final SliderSetting lineWidth = new SliderSetting(this, "Толщина линии", 2f, 1f, 5f, 0.5f)
             .setVisible(() -> showLine.getValue());
- 
+
     public final SliderSetting indicatorSize = new SliderSetting(this, "Размер метки", 0.5f, 0.1f, 2f, 0.1f);
 
     private static final int HELD_KEY = 0;
@@ -116,8 +114,6 @@ public class Trajectories extends Module {
 
         VertexConsumerProvider.Immediate immediate = VertexConsumerProvider.immediate(allocator);
 
-        // immediate с одним аллокатором держит активным один слой — рисуем проходами,
-        // геометрия ленты считается один раз на состояние
         if (showLine.getValue()) {
             List<RibbonData> ribbons = new ArrayList<>(renderStates.size());
             for (SmoothedState state : renderStates) {
@@ -449,7 +445,6 @@ public class Trajectories extends Module {
         return out;
     }
 
-    /** Геометрия ленты: точки относительно камеры, боковые нормали, альфа и полуширина. */
     private static final class RibbonData {
         Vec3d[] rel;
         Vec3d[] side;
@@ -461,7 +456,6 @@ public class Trajectories extends Module {
     private RibbonData buildRibbon(SmoothedState state, Vec3d cam) {
         List<Vec3d> points = state.points;
 
-        // точки вплотную к камере режутся ближней плоскостью и дают артефакты у старта
         int start = 0;
         while (points.size() - start > 2 && points.get(start).squaredDistanceTo(cam) < 0.16) start++;
 
@@ -480,15 +474,12 @@ public class Trajectories extends Module {
         data.alpha = new float[n];
         data.halfW = new float[n];
 
-        // толщина постоянна в пикселях экрана: ширина в мире растёт с дистанцией
         double tanHalfFov = Math.tan(Math.toRadians(mc.options.getFov().getValue().floatValue()) / 2.0);
         double pxToWorld = 2.0 * tanHalfFov / Math.max(1, mc.getWindow().getFramebufferHeight());
         float widthPx = lineWidth.getValue();
 
         for (int i = 0; i < n; i++) data.rel[i] = points.get(start + i).subtract(cam);
 
-        // фейд-ин по дистанции вдоль линии (в блоках), а не в долях длины —
-        // иначе на длинных траекториях прозрачный кусок у руки растягивается
         double dist = 0;
         Vec3d prevSide = new Vec3d(0, 1, 0);
         for (int i = 0; i < n; i++) {
@@ -506,8 +497,6 @@ public class Trajectories extends Module {
         return data;
     }
 
-    // солидная лента постоянной экранной толщины: плотный центр (70% ширины)
-    // + узкая растушёванная кромка вместо антиалиасинга
     private static void emitRibbon(VertexConsumer buf, Matrix4f m, RibbonData d) {
         int n = d.rel.length;
         for (int i = 0; i < n - 1; i++) {
@@ -515,7 +504,6 @@ public class Trajectories extends Module {
             int a2 = (int) (d.alpha[i + 1] * 255);
             if (a1 <= 0 && a2 <= 0) continue;
 
-            // градиент к концу — линия чуть светлеет у точки попадания
             float t1 = i / (float) (n - 1);
             float t2 = (i + 1) / (float) (n - 1);
             int r1 = lighten(d.cr, t1), g1 = lighten(d.cg, t1), b1 = lighten(d.cb, t1);
@@ -525,17 +513,16 @@ public class Trajectories extends Module {
             Vec3d o1 = d.side[i].multiply(d.halfW[i]), o2 = d.side[i + 1].multiply(d.halfW[i + 1]);
             Vec3d i1 = o1.multiply(0.7), i2 = o2.multiply(0.7);
 
-            // плотный центр
             vtx(buf, m, c1.subtract(i1), r1, g1, b1, a1);
             vtx(buf, m, c2.subtract(i2), r2, g2, b2, a2);
             vtx(buf, m, c2.add(i2), r2, g2, b2, a2);
             vtx(buf, m, c1.add(i1), r1, g1, b1, a1);
-            // кромка A
+
             vtx(buf, m, c1.add(i1), r1, g1, b1, a1);
             vtx(buf, m, c2.add(i2), r2, g2, b2, a2);
             vtx(buf, m, c2.add(o2), r2, g2, b2, 0);
             vtx(buf, m, c1.add(o1), r1, g1, b1, 0);
-            // кромка B
+
             vtx(buf, m, c1.subtract(i1), r1, g1, b1, a1);
             vtx(buf, m, c2.subtract(i2), r2, g2, b2, a2);
             vtx(buf, m, c2.subtract(o2), r2, g2, b2, 0);
@@ -543,7 +530,6 @@ public class Trajectories extends Module {
         }
     }
 
-    // мягкий аддитивный ореол вокруг линии (опционально)
     private static void emitGlowRibbon(VertexConsumer buf, Matrix4f m, RibbonData d) {
         int n = d.rel.length;
         for (int i = 0; i < n - 1; i++) {

@@ -33,7 +33,6 @@ import java.util.concurrent.ThreadLocalRandom;
         category = Category.MOVEMENT
 )
 public class Fly extends Module {
-
     public ModeSetting type = new ModeSetting(this, "Режим", "FunTime", "Vanilla");
 
     public BooleanSetting autoJump = new BooleanSetting(this, "Автопрыжок", true)
@@ -71,10 +70,6 @@ public class Fly extends Module {
         super.onDisable();
     }
 
-    /**
-     * Сервер сделал ресинк позиции — не спорим с античитом. Сбрасываем башню
-     * и выдерживаем паузу: долгая работа важнее упрямства.
-     */
     @EventHandler
     public void onPacket(EventPacket e) {
         if (!type.is("FunTime") || e.isSend()) return;
@@ -99,14 +94,6 @@ public class Fly extends Module {
         }
     }
 
-    /**
-     * Непрерывный подъём на табличках под Polar (FunTime):
-     * - редактор закрывается сам, отскок в тик приземления, установка в полёте;
-     * - интеракция валидируется как на сервере: реальный рейкаст из камеры
-     *   должен попадать в тот же блок и грань, ошибка ротации <= 8 градусов;
-     * - табличка в оффхуке — установка без переключения слотов;
-     * - после ресинка пауза 1.5с и старт заново с текущей позиции.
-     */
     private void handleSignFly(MotionEvent e) {
         if (mc.player.hasVehicle()
                 || mc.player.getAbilities().flying
@@ -121,14 +108,11 @@ public class Fly extends Module {
 
         if (System.currentTimeMillis() < polarPauseUntil) return;
 
-        // Shift — плавное снижение, ничего не делаем
         if (mc.player.input.playerInput.sneak()) return;
         if (mc.player.isUsingItem()) return;
 
-        // клиентская коллизия: держим игрока на верхней грани последней таблички
         simulateSignCollision();
 
-        // мгновенный отскок: прыгаем в тот же тик приземления
         if (autoJump.getValue() && mc.player.isOnGround() && jumpTimer.finished(jitter(70, 30))) {
             mc.player.jump();
             mc.player.fallDistance = 0;
@@ -141,7 +125,6 @@ public class Fly extends Module {
         BlockHitResult hit = findAnchorHit(target);
         if (hit == null) return;
 
-        // доводим взгляд каждый тик
         lookAt(hit.getPos());
 
         if (!placeTimer.finished(jitter(placeDelay.getValue(), 40))) return;
@@ -156,7 +139,6 @@ public class Fly extends Module {
     private void placeSign(BlockHitResult hit) {
         ItemStack off = mc.player.getOffHandStack();
         if (!off.isEmpty() && off.getItem() instanceof SignItem) {
-            // оффхенд: никаких переключений слотов — чистая интеракция
             mc.interactionManager.interactBlock(mc.player, Hand.OFF_HAND, jitterHit(hit));
             mc.player.swingHand(Hand.OFF_HAND);
             return;
@@ -172,10 +154,6 @@ public class Fly extends Module {
         mc.player.getInventory().setSelectedSlot(oldSlot);
     }
 
-    /**
-     * Симуляция твёрдой таблички: при падении на последнюю поставленную ячейку
-     * ставим игрока на её верхнюю грань и объявляем землю.
-     */
     private void simulateSignCollision() {
         if (lastPlacedCell == null || mc.player.isOnGround()) return;
         if (mc.player.getVelocity().y > 0) return;
@@ -193,11 +171,6 @@ public class Fly extends Module {
         mc.player.fallDistance = 0;
     }
 
-    /**
-     * Polar валидирует интеракцию рейкастом из отправленной ротации.
-     * Повторяем ту же проверку локально: камера должна попадать ровно
-     * в тот же блок и ту же грань.
-     */
     private boolean raycastMatches(BlockHitResult hit) {
         HitResult cam = mc.player.raycast(4.5F, 1.0F, false);
         if (!(cam instanceof BlockHitResult bhr)) return false;
@@ -205,7 +178,6 @@ public class Fly extends Module {
                 && bhr.getSide() == hit.getSide();
     }
 
-    /** Ошибка ротации <= 8 градусов — интеракция выглядит прицельно. */
     private boolean rotationCloseEnough(BlockHitResult hit) {
         Vec3d delta = hit.getPos().subtract(mc.player.getEyePos());
         double horiz = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
@@ -218,7 +190,6 @@ public class Fly extends Module {
         return Math.hypot(yawDiff, pitchDiff) <= 8.0F;
     }
 
-    /** Лёгкий джиттер точки клика внутри грани — против паттернов установки. */
     private BlockHitResult jitterHit(BlockHitResult hit) {
         Vec3d p = hit.getPos();
         Vec3d jittered = p.add(
@@ -228,10 +199,6 @@ public class Fly extends Module {
         return new BlockHitResult(jittered, hit.getSide(), hit.getBlockPos(), hit.isInsideBlock());
     }
 
-    /**
-     * Ячейка чуть ниже ног: во время прыжка это последняя освобождённая клетка —
-     * именно туда кладём табличку, чтобы приземлиться сверху и прыгнуть снова.
-     */
     private BlockPos getTargetCell() {
         Vec3d pos = mc.player.getEntityPos();
         BlockPos cell = BlockPos.ofFloored(pos.x, pos.y - 0.4, pos.z);
@@ -242,11 +209,6 @@ public class Fly extends Module {
         return cell;
     }
 
-    /**
-     * Ищем соседний блок, кликом по грани которого табличка встанет в target.
-     * Приоритет: блок снизу (грань вверх) -> боковые -> верх.
-     * Предыдущая табличка снизу — валидный якорь (на Funtime знаки твёрдые).
-     */
     private BlockHitResult findAnchorHit(BlockPos target) {
         boolean sideFirst = ThreadLocalRandom.current().nextInt(100) < 30;
 
@@ -280,7 +242,6 @@ public class Fly extends Module {
         float yaw = (float) (MathHelper.atan2(delta.z, delta.x) * 180.0 / Math.PI) - 90.0F;
         float pitch = (float) (-(MathHelper.atan2(delta.y, horiz) * 180.0 / Math.PI));
 
-        // быстрый, но не мгновенный доворот — Polar ловит телепорт-повороты
         RotationProcess.update(new Rotation(yaw, pitch), 170, 170, 0, 50);
     }
 

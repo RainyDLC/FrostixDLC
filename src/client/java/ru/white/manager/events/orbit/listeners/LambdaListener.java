@@ -14,7 +14,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 public class LambdaListener implements IListener {
-
     public interface Factory {
         MethodHandles.Lookup create(Method lookupInMethod, Class<?> klass) throws ReflectiveOperationException;
     }

@@ -69,8 +69,6 @@ public class JumpCircle extends Module implements ModulePreview {
         circles.add(new Circle(mc.player.getEntityPos().add(0, 0.05, 0)));
     }
 
-    // ───────────────────────────── предпоказ ─────────────────────────────
-
     @Override
     public PreviewSettings previewSettings() {
         return previewSettings;
@@ -86,13 +84,11 @@ public class JumpCircle extends Module implements ModulePreview {
         circles.clear();
     }
 
-
     @EventHandler
     public void onRender(EventRender3D e) {
         if (circles.isEmpty()) {
             return;
         }
-
 
         circles.removeIf(c -> System.currentTimeMillis() - c.time > 2500);
 
@@ -151,7 +147,6 @@ public class JumpCircle extends Module implements ModulePreview {
         }
 
         immediate.draw();
-
     }
 
     public static final Function<Identifier, RenderLayer> ROMB_ESP =
@@ -200,8 +195,6 @@ public class JumpCircle extends Module implements ModulePreview {
 
     private void drawTexturedQuad(VertexConsumer buffer, Matrix4f matrix, Matrix3f normalMatrix, float x, float y,
                                   float width, float height,  int[] ints, int alpha) {
-
-
         Vector3f normal = new Vector3f(0, 0, 1);
         normalMatrix.transform(normal);
         normal.normalize();
@@ -218,7 +211,6 @@ public class JumpCircle extends Module implements ModulePreview {
     }
 
     private class Circle {
-
         private final Vec3d vector3d;
 
         private final long time;
@@ -232,6 +224,5 @@ public class JumpCircle extends Module implements ModulePreview {
             animation.run(1, 0.5F, Easings.SINE_OUT);
             animation2.run(1, 0.5F, Easings.SINE_OUT);
         }
-
     }
 }

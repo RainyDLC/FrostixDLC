@@ -14,13 +14,11 @@ import ru.white.module.api.settings.impl.BooleanSetting;
         desc = "Скрывает ваш никнейм"
 )
 public class NameProtect extends Module {
-
     public BooleanSetting friends = new BooleanSetting(this,"Скрывать друзей",true);
     public BooleanSetting anarhy = new BooleanSetting(this,"Анархию",false);
 
     @EventHandler
     public void onEvent(TextFactoryEvent e) {
-
         if(anarhy.getValue())
         e.replaceRegex("(?ui)Анархия-(?:(?:1\\d{3})|(?:[1-9]\\d{0,2})|2000)", "rainydlc.fun");
 
@@ -28,11 +26,8 @@ public class NameProtect extends Module {
 
         e.replaceRegex("funtime", "Успешный проект");
 
-
         e.replaceRegex("FunTime.su", "Успешный проект");
         e.replaceRegex("Анархия", "HvH");
-
-
 
         if (friends.getValue()) {
             replaceFriendNames(e);
@@ -40,7 +35,8 @@ public class NameProtect extends Module {
     }
 
     private void replaceFriendNames(TextFactoryEvent e) {
-        Client.get().friendManager().getFriends().forEach(friend -> e.replaceText(friend, "Friend"));
+        for (String friend : Client.get().friendManager().getFriends()) {
+            e.replaceText(friend, "Friend");
+        }
     }
-
 }

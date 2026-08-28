@@ -22,11 +22,9 @@ public class KeyboardMixin {
     private void onKey(long window, int action, KeyInput input, CallbackInfo ci) {
         Screen screen = client.currentScreen;
 
-
         int key = input.key();
 
         if (key == -1 || key == 0) return;
-
 
         if (key >= 0 && key <= 7) return;
 
@@ -36,4 +34,3 @@ public class KeyboardMixin {
         }
     }
 }
-

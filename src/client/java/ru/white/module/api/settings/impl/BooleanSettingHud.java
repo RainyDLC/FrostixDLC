@@ -1,6 +1,5 @@
 package ru.white.module.api.settings.impl;
 
-
 import ru.white.module.api.Module;
 import ru.white.module.api.settings.Setting;
 
@@ -8,7 +7,6 @@ import java.util.function.Supplier;
 
 public class BooleanSettingHud extends Setting<Boolean> {
     private Boolean cachedValue;
-
 
     public BooleanSettingHud(String name, Boolean value) {
         super(name, value);

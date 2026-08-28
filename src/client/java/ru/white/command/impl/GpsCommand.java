@@ -3,7 +3,6 @@ package ru.white.command.impl;
 import ru.white.Client;
 import ru.white.command.Command;
 import ru.white.manager.event_impl.EventDisplay;
-import ru.white.manager.event_impl.WorldLoadEvent;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.utils.annotation.IMinecraft;
 import ru.white.utils.colors.ColorUtil;
@@ -13,28 +12,20 @@ import net.minecraft.client.option.Perspective;
 import net.minecraft.util.Identifier;
 import org.joml.Vector2f;
 
-
 import java.util.List;
 
 public class GpsCommand extends Command implements IMinecraft {
-
-    // ── Arrow texture (same as Arrows module) ────────────────────────────────
     private static final Identifier ARROW_TEX = Identifier.of("client", "textures/arrow.png");
 
-    // ── Visual constants ─────────────────────────────────────────────────────
-    private static final float SIZE   = 20F;   // arrow size in px (same as Arrows)
-    private static final float RADIUS = 30F;   // distance from crosshair to arrow TOP
+    private static final float SIZE   = 20F;
+    private static final float RADIUS = 30F;
 
-    // ── State ─────────────────────────────────────────────────────────────────
-    /** null = GPS off */
     private Vector2f target = null;
 
     public GpsCommand() {
         super("gps", ".gps <set|off> <x> <z>", "Стрелка на экране ведущая к координатам");
         Client.eventHandler().subscribe(this);
     }
-
-    // ── Command ───────────────────────────────────────────────────────────────
 
     @Override
     public void execute(String[] args) {
@@ -70,10 +61,6 @@ public class GpsCommand extends Command implements IMinecraft {
                 .toList();
     }
 
-    // ── Events ────────────────────────────────────────────────────────────────
-
-    // GPS сохраняется при смене мира (ртп/варп)
-
     @EventHandler(priority = -500)
     public void onDisplay(EventDisplay e) {
         if (mc.player == null || mc.world == null) return;
@@ -85,7 +72,6 @@ public class GpsCommand extends Command implements IMinecraft {
         double dz = (target.y + 0.5) - mc.player.getZ();
         int dst = (int) Math.sqrt(dx * dx + dz * dz);
 
-
         float targetScale = 2F;
         float currentScale = (float) mc.getWindow().getScaleFactor();
         float scaleFix = targetScale / currentScale;
@@ -95,24 +81,18 @@ public class GpsCommand extends Command implements IMinecraft {
         float middleW =screenWidth / 2f;
         float middleH =screenHeight / 2f - 90;
 
-        // ── angle ─────────────────────────────────────────────────────────────
-        // same formula as Arrows.getAngle()
         float angleToTarget = (float) -(Math.atan2(dx, dz) * (180.0 / Math.PI));
         float realYaw       = angleToTarget - mc.gameRenderer.getCamera().getYaw();
         float rad           = (float) Math.toRadians(realYaw);
 
-        // ── orbit position (identical to Arrows orbit formula) ────────────────
-        // posY is the top edge of the arrow when realYaw = 0 (no rotation)
         float posY   = middleH - RADIUS;
-        // offset = distance from the arrow CENTER to screen center, signed negative (arrow above center)
-        float offset = posY + SIZE / 2f - middleH;   // = -RADIUS + SIZE/2  (negative)
+
+        float offset = posY + SIZE / 2f - middleH;
         float cx     = middleW - offset * (float) Math.sin(rad);
         float cy     = middleH + offset * (float) Math.cos(rad);
 
-        // ── color ─────────────────────────────────────────────────────────────
         int color = ColorUtil.fade(1);
 
-        // ── draw rotating arrow ───────────────────────────────────────────────
         Client.get().render2D().getTexturePipeline().drawGlowTexture(
                 ARROW_TEX,
                 cx - SIZE / 2f, cy - SIZE / 2f, SIZE, SIZE,
@@ -123,8 +103,6 @@ public class GpsCommand extends Command implements IMinecraft {
                 realYaw
         );
 
-        // ── distance label ────────────────────────────────────────────────────
-        // placed below the arrow center (same layout as RainyDLC GPS)
         Fonts.sf_regular.drawCentered(
                 dst + "м",
                 cx,
@@ -133,8 +111,6 @@ public class GpsCommand extends Command implements IMinecraft {
                 ColorUtil.getColor(255, 0.85f)
         );
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void showHelp() {
         ChatUtils.addChatMessage("§7.gps §fset §7<x> <z> §8| §7.gps §foff");

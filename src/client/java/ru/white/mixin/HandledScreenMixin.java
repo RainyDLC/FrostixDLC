@@ -22,7 +22,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(HandledScreen.class)
 public abstract class HandledScreenMixin {
-
     @Shadow
     @Final
     protected ScreenHandler handler;
@@ -87,7 +86,6 @@ public abstract class HandledScreenMixin {
         else if (slot == ahSlot3) mod.renderSlot(context, slot, 3);
     }
 
-    /** Подсветка слотов активного пресета: зелёный — на месте, жёлтый — не тот слот, красный — нет предмета. */
     @Inject(
             method = "drawSlot(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/screen/slot/Slot;II)V",
             at = @At("TAIL")

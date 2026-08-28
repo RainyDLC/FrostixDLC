@@ -12,12 +12,7 @@ import net.minecraft.util.Identifier;
 
 import java.nio.ByteBuffer;
 
-/**
- * Заливки (в т.ч. glow): элементы копятся чанками по MAX_RECTS и уходят
- * в общий пасс DrawBatcher. См. {@link UniformArrayPipeline}.
- */
 public class RectPipeline extends UniformArrayPipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/rect");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/rect");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/rect");
@@ -36,7 +31,6 @@ public class RectPipeline extends UniformArrayPipeline {
                     .build()
     );
 
-    // Должно совпадать с rect.vsh: vec4 screen + vec4 rects[64 * 14]
     private static final int MAX_RECTS = 64;
     private static final int RECT_SIZE = 14 * 16;
     private static final int UNIFORM_RING = 32;
@@ -49,7 +43,7 @@ public class RectPipeline extends UniformArrayPipeline {
 
     @Override
     public int batchLayer() {
-        return 0; // заливки — над блюром, под обводками
+        return 0;
     }
 
     public void drawRect(float x, float y, float width, float height,

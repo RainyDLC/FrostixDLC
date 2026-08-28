@@ -1,6 +1,5 @@
 package ru.white.screen;
 
-import net.minecraft.client.sound.Sound;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 
@@ -11,6 +10,7 @@ import ru.white.module.impl.display.ClickGui;
 import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.settings.Setting;
+import ru.white.module.api.settings.impl.AnarchySetting;
 import ru.white.module.api.settings.impl.BindSetting;
 import ru.white.module.api.settings.impl.BooleanSetting;
 import ru.white.module.api.settings.impl.ButtonSetting;
@@ -29,7 +29,6 @@ import ru.white.utils.animation.Easings;
 import ru.white.utils.animation.satoshi.Direction;
 import ru.white.utils.animation.satoshi.EaseInOutQuad;
 import ru.white.utils.annotation.IMinecraft;
-import ru.white.utils.colors.ColorFormatting;
 import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.math.Keyboard;
 import ru.white.utils.math.MathUtil;
@@ -47,11 +46,8 @@ import ru.white.utils.render.font.Fonts;
 
 import java.io.InputStream;
 import java.util.HashMap;
-import java.util.Iterator;
 
 public class Menu extends Screen implements IMinecraft {
-
-    /** Общий масштаб меню: множитель для шрифтов, иконок и всех размеров. */
     public static float S = 1.0F;
 
     public Menu() {
@@ -62,21 +58,20 @@ public class Menu extends Screen implements IMinecraft {
 
     public Animation glomalAnim = new Animation();
 
-    /** Сборка/распад меню из треугольных осколков. */
     private final MenuShards shards = new MenuShards();
-    /** Осколки стартуют в первом кадре — там уже известен прямоугольник панели. */
+
     private boolean pendingAssemble = false;
-    /** Панель начинает проявляться, только когда осколки почти долетели. */
+
     private boolean panelAnimStarted = true;
     private float panelX, panelY, panelW, panelH, panelScreenW, panelScreenH;
     private boolean panelKnown = false;
-    /** Клавишу открытия ждём отпущенной, иначе она же сразу закроет меню. */
+
     private boolean toggleArmed = false;
-    /** Пауза между «закрыть» и распадом: меню успевает замереть на месте. */
+
     private static final long SHATTER_HOLD_MS = 240;
     private long exitHoldStart;
     private boolean dissolveStarted = true;
-    /** Панель захвачена в конце кадра — в следующем запускаем распад. */
+
     private boolean pendingDissolveSwap = false;
 
     private final HandsEditor handsEditor = HandsEditor.getInstance();
@@ -90,9 +85,6 @@ public class Menu extends Screen implements IMinecraft {
     public static ru.white.manager.Theme preSelectedTheme;
     public static ru.white.manager.Theme[] themes;
 
-    // ── попап выбора тем: открывается кликом по иконке клиента в шапке.
-    //    Тем много, поэтому они показываются сеткой свотчей; последняя ячейка —
-    //    «Палитра»: свой цвет через HSB-бары прямо под сеткой ──
     private static final float POP_PAD = 6F;
     private static final float POP_HEAD_H = 11F;
     private static final int POP_COLS = 5;
@@ -102,11 +94,11 @@ public class Menu extends Screen implements IMinecraft {
     private boolean themePopupOpen = false;
     private final ru.white.utils.animation.satoshi.Animation animThemePopup = new EaseInOutQuad(250, 1, Direction.BACKWARDS);
     private final ru.white.utils.animation.satoshi.Animation animThemePal = new EaseInOutQuad(250, 1, Direction.BACKWARDS);
-    /** Геометрия иконки и попапа из последнего кадра — для обработки кликов. */
+
     private float[] logoIconRect = null;
     private float[] themePopupRect = null;
     private float[] themePalRect = null;
-    /** Какой HSB-бар палитры тащим мышью: 0 - оттенок, 1 - насыщенность, 2 - яркость. */
+
     private int draggingPalBar = -1;
 
     public static ru.white.utils.animation.satoshi.Animation animation14 = new EaseInOutQuad(300, 1);
@@ -132,13 +124,10 @@ public class Menu extends Screen implements IMinecraft {
     private SliderSetting draggingSlider = null;
     private BindSetting activeBind = null;
 
-    /** Модуль, которому сейчас назначают клавишу прямо из списка. */
     private Module bindingModule = null;
 
-    /** Кнопка «Добавить модуль» внизу списка (геометрия из последнего кадра). */
     private float[] addModuleRect = null;
 
-    /** Кнопка удаления Lua-модуля в панели настроек + состояние подтверждения. */
     private float[] deleteRect = null;
     private Module deleteArmModule = null;
     private long deleteArmUntil = 0L;
@@ -146,11 +135,13 @@ public class Menu extends Screen implements IMinecraft {
     private StringSetting activeString = null;
     private String stringBuffer = "";
 
+    private AnarchySetting activeAnarchy = null;
+
     private ColorSetting draggingColor = null;
-    private int draggingColorBar = 0; // 0 - hue, 1 - saturation, 2 - brightness
+    private int draggingColorBar = 0;
 
     public static boolean searchActive = false;
-    /** Запрос живёт между открытиями меню. */
+
     private static String searchQuery = "";
     private long searchTypeTime = System.currentTimeMillis();
 
@@ -166,7 +157,58 @@ public class Menu extends Screen implements IMinecraft {
         return chipAnims.computeIfAbsent(key, k -> new EaseInOutQuad(300, 1));
     }
 
-    // ——— фоновые эффекты ———
+    private static final class AChip {
+        static final int ENTRY = 0, INPUT = 1, CURRENT = 2;
+        final String label;
+        final int kind;
+        final int value;
+
+        AChip(String label, int kind, int value) {
+            this.label = label;
+            this.kind = kind;
+            this.value = value;
+        }
+    }
+
+    private java.util.List<AChip> anarchyChips(AnarchySetting s) {
+        java.util.List<AChip> chips = new java.util.ArrayList<>();
+        for (Integer anarchy : s.list()) chips.add(new AChip(String.valueOf(anarchy), AChip.ENTRY, anarchy));
+
+        boolean space = s.size() < AnarchySetting.MAX_PER_PRESET;
+        if (space) {
+            boolean editing = activeAnarchy == s;
+            String label = editing
+                    ? (s.input.isEmpty() ? "_" : s.input + ((System.currentTimeMillis() / 400) % 2 == 0 ? "_" : ""))
+                    : "+";
+            chips.add(new AChip(label, AChip.INPUT, -1));
+
+            int current = ru.white.utils.math.ServerUtil.anarchy;
+            if (current >= 0 && !s.list().contains(current)) {
+                chips.add(new AChip("+" + current, AChip.CURRENT, current));
+            }
+        }
+        return chips;
+    }
+
+    private float anarchyChipsHeight(AnarchySetting s, float width) {
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        for (AChip chip : anarchyChips(s)) labels.add(chip.label);
+        return chipsHeight(labels, width);
+    }
+
+    private float anarchyHeight(AnarchySetting s, float width) {
+        return 28 * S + anarchyChipsHeight(s, width - 12 * S) + 4 * S;
+    }
+
+    private float presetRowWidth() {
+        Font font = Fonts.sf_regular;
+        float px = 0;
+        for (int i = 0; i < AnarchySetting.PRESETS; i++) {
+            px += font.getWidth("П" + (i + 1), 6 * S) + 8 * S + 3 * S;
+        }
+        return px;
+    }
+
     private final GrayscalePipeline grayscalePipeline = new GrayscalePipeline();
     private final ClickGuiDotsPipeline dotsPipeline = new ClickGuiDotsPipeline();
     private final ScanLinesPipeline scanLinesPipeline = new ScanLinesPipeline();
@@ -201,7 +243,6 @@ public class Menu extends Screen implements IMinecraft {
     private final java.util.List<GuiParticle> particles = new java.util.ArrayList<>();
     private long lastParticle;
     private long particleDelay = 90;
-
 
     private void spawnParticle(int screenWidth, int screenHeight) {
         if (System.currentTimeMillis() - lastParticle < particleDelay) return;
@@ -291,8 +332,6 @@ public class Menu extends Screen implements IMinecraft {
         return chipsHeight(s, multiNames(s), width);
     }
 
-    // Нормализованный запрос кэшируется: query() зовётся для каждого модуля
-    // каждый кадр, а searchQuery меняется только при вводе с клавиатуры
     private static String cachedQuerySource;
     private static String cachedQuery = "";
 
@@ -307,8 +346,6 @@ public class Menu extends Screen implements IMinecraft {
 
     private boolean searching() { return !query().isEmpty(); }
 
-    // Поля модуля в нижнем регистре — имя/описание/категория неизменны после
-    // конструктора, поэтому приводим их один раз, а не 4 раза на модуль за кадр
     private static final java.util.Map<Module, String[]> searchFields = new java.util.IdentityHashMap<>();
 
     private static String[] searchFields(Module f) {
@@ -368,7 +405,6 @@ public class Menu extends Screen implements IMinecraft {
         GuiSounds.open();
         GuiMusicPlayer.start(0.15F);
         if (shatter()) {
-            // панель проявится под осколками, когда они почти соберутся
             shards.reset();
             pendingAssemble = true;
             panelAnimStarted = false;
@@ -428,12 +464,6 @@ public class Menu extends Screen implements IMinecraft {
         return gui == null ? -1 : gui.getKey();
     }
 
-    /**
-     * Клавиша открытия (по умолчанию правый шифт) закрывает меню только после того,
-     * как её отпустили: то самое нажатие, что открыло экран, доходит и до
-     * {@link #keyPressed}, а удержание клавиши даёт GLFW-повторы — иначе меню
-     * закрывалось бы в тот же кадр, в котором открылось.
-     */
     private void armToggleKey() {
         if (toggleArmed) return;
         int key = toggleKey();
@@ -462,13 +492,12 @@ public class Menu extends Screen implements IMinecraft {
             return;
         }
 
-        // фон гаснет/размывается уже пока осколки летят — сама панель проявится позже
         float bgAnim = (shatter() && shards.isAssembling())
                 ? Math.max(globalAnim, smoothstep(0F, 0.55F, shards.progress()))
                 : globalAnim;
 
         if (effect("Серый фон")) grayscalePipeline.draw(bgAnim);
-        ScreenBlur.capture(2); // чуть сильнее размываем фон меню
+        ScreenBlur.capture(2);
         if (effect("Размывать фон")) {
             RenderUtil.Blur.blur(0, 0, screenWidth, screenHeight, bgAnim, 0, ColorUtil.getColor(0, 0));
         }
@@ -496,7 +525,6 @@ public class Menu extends Screen implements IMinecraft {
         if (effect("Свечение")) {
             int glowCol = ColorUtil.client();
 
-            // мягкая светлая шапка сверху экрана
             Draw.gradientRect(0, 0, screenWidth, Math.max(1F, screenHeight * 0.24F),
                     new int[]{
                             ColorUtil.replAlpha(glowCol, 0.16F * bgAnim),
@@ -505,7 +533,6 @@ public class Menu extends Screen implements IMinecraft {
                             ColorUtil.getColor(0, 0)
                     }, 0);
 
-            // медленно дышащие кольца у верхней кромки
             float ringCx = screenWidth * 0.5F;
             float ringCy = -screenHeight * 0.05F;
             long ringMs = System.currentTimeMillis();
@@ -545,7 +572,7 @@ public class Menu extends Screen implements IMinecraft {
         float w = 440 * S;
         float h = 316 * S;
         float x = screenWidth / 2F - w / 2;
-        // при сборке из осколков панель никуда не съезжает — она «остаётся на месте»
+
         float slide = shatter() ? 0F : (exit ? 60 * S - 60 * S * globalAnim : -60 * S + 60 * S * globalAnim);
         float y = screenHeight / 2F - h / 2 + slide;
 
@@ -565,10 +592,7 @@ public class Menu extends Screen implements IMinecraft {
             panelAnimStarted = true;
             glomalAnim.run(1, 0.2F, Easings.SINE_OUT);
         }
-        // меню постояло на месте — начинаем смену панели мозаикой.
-        // Сам захват делаем в конце ЭТОГО кадра (после endOverlay), потому что
-        // батчер сбрасывает панель на экран только там, а фреймбуфер каждый
-        // кадр очищается — «прошлого кадра» в момент обработки уже нет
+
         if (exit && !dissolveStarted && System.currentTimeMillis() - exitHoldStart >= SHATTER_HOLD_MS) {
             dissolveStarted = true;
             pendingDissolveSwap = true;
@@ -581,12 +605,10 @@ public class Menu extends Screen implements IMinecraft {
 
         ScreenBlur.capture();
 
-        // ── каркас ──
         RenderUtil.Render2D.glow(x, y, w, h - 0.5F * S, ColorUtil.getColor(0, 0.15F * globalAnim), 8 * S, 15, 1);
         RenderUtil.Blur.blur(x, y, w, h, globalAnim, 8 * S, ColorUtil.multAlpha(ColorUtil.multDark(ColorUtil.background(), 0.6F), globalAnim));
         RenderUtil.Images.texture(Identifier.of("client","textures/frame/rectgui.png"), x, y, w, h, ColorUtil.multAlpha(ColorUtil.client(), globalAnim));
 
-        // ── строка 1: лого · клик по иконке открывает попап тем ──
         float rowY = y + 6 * S;
 
         float icX = x + 10.5F * S;
@@ -647,7 +669,6 @@ public class Menu extends Screen implements IMinecraft {
 
         RenderUtil.Render2D.rect(caretX, yps + 6.5F * S, 0.6F * S, 6.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * caret), 0.3F * S);
 
-        // ── ряд 2: вкладки категорий по центру ──
         float tabY = y + 50 * S;
         float tabsTotal = -4 * S;
         for (Category category : Category.values())
@@ -764,7 +785,6 @@ public class Menu extends Screen implements IMinecraft {
             }
         }
 
-        // ── кнопка «Добавить модуль» внизу списка ──
         addModuleRect = null;
         if (!searching()) {
             float abW = 142 * S;
@@ -845,7 +865,6 @@ public class Menu extends Screen implements IMinecraft {
 
             if (fa > 0) {
                 for (Setting setting : f.getSettings()) {
-
                     if (setting instanceof SliderSetting s) {
                         float vis = visAnim(f, s);
                         if (vis > 0.01F) {
@@ -1080,6 +1099,82 @@ public class Menu extends Screen implements IMinecraft {
                         }
                     }
 
+                    if (setting instanceof AnarchySetting s) {
+                        float vis = visAnim(f, s);
+                        if (vis > 0.01F) {
+                            float sa = fa * vis;
+                            float hAn = anarchyHeight(s, wST);
+                            boolean onScreen = yST + hAn >= setTop && yST <= setBottom;
+                            boolean hovS = onScreen && MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, xST, yST, wST, hAn);
+                            s.getAnimation1().setDirection(hovS ? Direction.FORWARDS : Direction.BACKWARDS);
+                            float hover = s.getAnimation1().getOutput();
+
+                            if (onScreen) {
+                                RenderUtil.Render2D.glow(xST, yST, wST, hAn, ColorUtil.getColor(0, 0.06F * globalAnim * sa), 5 * S, 7, 1);
+                                RenderUtil.Render2D.rect(xST, yST, wST, hAn, ColorUtil.getColor(40, 0.15F * globalAnim * sa), 5 * S);
+                                RenderUtil.Render2D.outline(xST, yST, wST, hAn, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * sa * hover), 5 * S);
+
+                                String counter = s.size() + " / " + AnarchySetting.MAX_PER_PRESET;
+                                draw.drawFadingText(s.getName(), xST + 6 * S, yST + 4.5F * S, wST - draw.getWidth(counter, 6 * S) - 16 * S, ColorUtil.getColor(255, (globalAnim * sa) * (0.5F + 0.5F * hover)), 6.5F * S);
+                                draw.draw(counter, xST + wST - 6 * S - draw.getWidth(counter, 6 * S), yST + 4.75F * S, 6 * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * sa * (0.6F + 0.4F * hover)));
+
+                                float px = 0;
+                                for (int i = 0; i < AnarchySetting.PRESETS; i++) {
+                                    String lbl = "П" + (i + 1);
+                                    float tw = draw.getWidth(lbl, 6 * S) + 8 * S;
+                                    float cx = xST + 6 * S + px;
+                                    float cyy = yST + 15 * S;
+                                    ru.white.utils.animation.satoshi.Animation chip = chipAnim(f.getName() + ":" + s.getName() + ":preset:" + i);
+                                    chip.setDirection(i == s.getActive() ? Direction.FORWARDS : Direction.BACKWARDS);
+                                    float sel = chip.getOutput();
+
+                                    RenderUtil.Render2D.rect(cx, cyy, tw, 10 * S, ColorUtil.overCol(ColorUtil.getColor(0, 0.25F * globalAnim * sa), ColorUtil.replAlpha(ColorUtil.client(), globalAnim * sa * (0.5F + 0.5F * hover)), sel), 3 * S);
+                                    regular.drawCentered(lbl, cx + tw / 2, cyy + 1.5F * S, 6 * S, ColorUtil.getColor(255, globalAnim * sa * (0.35F + 0.65F * sel) * (0.7F + 0.3F * hover)));
+                                    px += tw + 3 * S;
+                                }
+
+                                String hint = s.isEmpty() ? "ЛКМ + — добавить" : "первая — дом";
+                                float hintW = draw.getWidth(hint, 5.5F * S);
+                                if (presetRowWidth() + hintW + 14 * S < wST) {
+                                    regular.draw(hint, xST + wST - 6 * S - hintW, yST + 17 * S, 5.5F * S, ColorUtil.getColor(255, globalAnim * sa * 0.3F * (0.5F + 0.5F * hover)));
+                                }
+
+                                float chipMaxW = wST - 12 * S;
+                                float ax = 0, ay = 0;
+                                int entryIndex = 0;
+                                for (AChip c : anarchyChips(s)) {
+                                    float tw = draw.getWidth(c.label, 6 * S) + 8 * S;
+                                    if (ax + tw > chipMaxW && ax > 0) { ax = 0; ay += 12 * S; }
+                                    float cx = xST + 6 * S + ax;
+                                    float cyy = yST + 28 * S + ay;
+
+                                    float sel;
+                                    if (c.kind == AChip.ENTRY) {
+                                        ru.white.utils.animation.satoshi.Animation chip = chipAnim(f.getName() + ":" + s.getName() + ":entry:" + c.value);
+                                        chip.setDirection(entryIndex == 0 ? Direction.FORWARDS : Direction.BACKWARDS);
+                                        sel = chip.getOutput();
+                                        entryIndex++;
+                                    } else if (c.kind == AChip.INPUT) {
+                                        ru.white.utils.animation.satoshi.Animation chip = chipAnim(f.getName() + ":" + s.getName() + ":input");
+                                        chip.setDirection(activeAnarchy == s ? Direction.FORWARDS : Direction.BACKWARDS);
+                                        sel = chip.getOutput();
+                                    } else {
+                                        sel = 0;
+                                    }
+
+                                    RenderUtil.Render2D.rect(cx, cyy, tw, 10 * S, ColorUtil.overCol(ColorUtil.getColor(0, 0.25F * globalAnim * sa), ColorUtil.replAlpha(ColorUtil.client(), globalAnim * sa * (0.5F + 0.5F * hover)), sel), 3 * S);
+                                    if (c.kind != AChip.ENTRY) {
+                                        RenderUtil.Render2D.outline(cx, cyy, tw, 10 * S, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * sa * (0.25F + 0.55F * Math.max(sel, hover))), 3 * S);
+                                    }
+                                    float textSel = c.kind == AChip.ENTRY ? Math.max(sel, 0.55F) : Math.max(sel, 0.35F);
+                                    regular.drawCentered(c.label, cx + tw / 2, cyy + 1.5F * S, 6 * S, ColorUtil.getColor(255, globalAnim * sa * (0.35F + 0.65F * textSel) * (0.7F + 0.3F * hover)));
+                                    ax += tw + 3 * S;
+                                }
+                            }
+                            yST += (hAn + 5 * S) * fa * vis;
+                        }
+                    }
+
                     if (setting instanceof ColorSetting s) {
                         float vis = visAnim(f, s);
                         if (vis > 0.01F) {
@@ -1164,7 +1259,6 @@ public class Menu extends Screen implements IMinecraft {
             }
         }
 
-        // ── кнопка удаления для Lua-модулей ──
         deleteRect = null;
         if (select instanceof ru.white.script.LuaModule) {
             float sa = select.animation3.getOutput();
@@ -1195,14 +1289,12 @@ public class Menu extends Screen implements IMinecraft {
         if (settingScrollTarget > settingMaxScroll) settingScrollTarget = settingMaxScroll;
 
         Scissor.disable();
-        // попап тем рисуем поверх всего и вне ножниц — он перекрывает контент панели
+
         renderThemePopup(draw, x + 8 * S, y + 26 * S, globalAnim);
         shards.render();
         Render2D.endOverlay();
         if (context != null) context.getMatrices().popMatrix();
 
-        // панель этого кадра уже сброшена батчером на экран — фиксируем её
-        // в текстуру и только теперь запускаем распад (задержка в 1 кадр)
         if (pendingDissolveSwap) {
             pendingDissolveSwap = false;
             if (panelKnown) {
@@ -1215,8 +1307,6 @@ public class Menu extends Screen implements IMinecraft {
 
     public void openHandsEditor() { beforeEditorOpen(); handsEditor.open(); GuiSounds.editor(); }
 
-    // ── попап выбора тем ────────────────────────────────────────────────
-
     private void renderThemePopup(Font font, float px, float py, float globalAnim) {
         animThemePopup.setDirection(themePopupOpen ? Direction.FORWARDS : Direction.BACKWARDS);
         float open = animThemePopup.getOutput();
@@ -1226,7 +1316,6 @@ public class Menu extends Screen implements IMinecraft {
             return;
         }
 
-        // +1 ячейка — «Палитра»
         boolean palSel = selectedTheme == Theme.CUSTOM;
         animThemePal.setDirection(palSel ? Direction.FORWARDS : Direction.BACKWARDS);
         float palOpen = animThemePal.getOutput();
@@ -1248,11 +1337,10 @@ public class Menu extends Screen implements IMinecraft {
         RenderUtil.Render2D.outline(pX, pY, popW, popH, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), 0.35F * globalAnim * open), 8 * S);
         RenderUtil.Images.texture(Identifier.of("client", "textures/frame/rectgui.png"), pX, pY, popW, popH, ColorUtil.multAlpha(ColorUtil.client(), globalAnim * open));
 
-        // в шапке — имя темы под курсором, иначе просто «Темы»
         String headLabel = "Темы";
 
         float gridTop = pY + pad + headH + 3 * S;
-        int total = themes.length + 1; // + «Палитра»
+        int total = themes.length + 1;
         for (int i = 0; i < total; i++) {
             boolean customCell = i == themes.length;
             Theme t = customCell ? Theme.CUSTOM : themes[i];
@@ -1285,7 +1373,6 @@ public class Menu extends Screen implements IMinecraft {
                         ColorUtil.replAlpha(accent, 0.35F * globalAnim * open * act), size, 6, 1);
 
             if (customCell) {
-                // радужный свотч палитры
                 int segsC = 10;
                 float segC = size / segsC;
                 for (int sIdx = 0; sIdx < segsC; sIdx++) {
@@ -1327,7 +1414,6 @@ public class Menu extends Screen implements IMinecraft {
 
         themePopupRect = new float[]{pX, pY, popW, popH};
 
-        // ── палитра: HSB-бары под сеткой, видны когда выбрана тема «Палитра» ──
         themePalRect = null;
         if (palOpen > 0.01F) {
             float palW = popW - pad * 2;
@@ -1375,7 +1461,6 @@ public class Menu extends Screen implements IMinecraft {
                         ColorUtil.replAlpha(kc, globalAnim * palOpen), 6 * S);
             }
 
-            // перетаскивание бара — цвет меняется на лету во всей теме
             if (draggingPalBar >= 0 && draggingPalBar < 3) {
                 float t = MathHelper.clamp(((float) lastMouseX - palX) / palW, 0F, 1F);
                 float[] nh = {hsb[0], hsb[1], hsb[2]};
@@ -1395,18 +1480,12 @@ public class Menu extends Screen implements IMinecraft {
     @Override public void removed() { OverlayEditors.closeAll(); super.removed(); }
     private void closeCheck() { if (exit && dissolveStarted && glomalAnim.isFinished()) { close(); GuiMusicPlayer.stop(); exit = false; } }
 
-    /**
-     * Догоняющий распад: экран уже закрыт (управление вернулось игроку), а осколки
-     * ещё разлетаются — их дорисовывает HUD. Пока меню открыто, они рисуются в
-     * {@link #renderOverlay}, поэтому здесь такой кадр пропускаем.
-     */
     public void renderShardsAfterClose() {
         if (mc.currentScreen == this) return;
         if (!shards.isDissolving()) return;
         shards.render();
     }
 
-    /** Запуск закрытия: панель замирает на месте, потом рассыпается на осколки. */
     private void startExit() {
         if (exit) return;
         exit = true;
@@ -1415,7 +1494,6 @@ public class Menu extends Screen implements IMinecraft {
         pendingAssemble = false;
         panelAnimStarted = true;
         if (shatter() && panelKnown) {
-            // панель пока не трогаем — распад стартует по таймеру в renderOverlay
             exitHoldStart = System.currentTimeMillis();
             dissolveStarted = false;
         } else {
@@ -1433,7 +1511,6 @@ public class Menu extends Screen implements IMinecraft {
         OverlayEditor editor = OverlayEditors.active();
         if (editor != null) { return editor.mouseClicked(mouseX, mouseY, click.button()); }
 
-        // меню уже закрывается (замерло перед распадом) — клики игнорируем
         if (exit) return true;
 
         if (bindingModule != null) { bindingModule = null; GuiSounds.bindReset(); return true; }
@@ -1465,7 +1542,6 @@ public class Menu extends Screen implements IMinecraft {
 
         searchActive = false;
 
-        // ── клик по иконке клиента открывает/закрывает попап тем ──
         if (logoIconRect != null && click.button() == 0
                 && MathUtil.isHovered(mouseX, mouseY,
                         logoIconRect[0] - 3 * S, logoIconRect[1] - 3 * S,
@@ -1475,11 +1551,9 @@ public class Menu extends Screen implements IMinecraft {
             return true;
         }
 
-        // ── попап тем (сетка свотчей): выбор темы, клик мимо — закрыть ──
         if (themePopupOpen) {
             if (themePopupRect != null
                     && MathUtil.isHovered(mouseX, mouseY, themePopupRect[0], themePopupRect[1], themePopupRect[2], themePopupRect[3])) {
-                // клик по HSB-бару палитры — начинаем перетаскивание
                 if (themePalRect != null
                         && MathUtil.isHovered(mouseX, mouseY, themePalRect[0] - 3 * S, themePalRect[1] - 3 * S,
                                 themePalRect[2] + 6 * S, themePalRect[3] + 6 * S)) {
@@ -1500,7 +1574,7 @@ public class Menu extends Screen implements IMinecraft {
                 int rowIdx = (int) (relY / (POP_CELL_H * S));
                 if (colIdx >= 0 && colIdx < POP_COLS && rowIdx >= 0) {
                     int idx = rowIdx * POP_COLS + colIdx;
-                    if (idx <= themes.length) { // последняя ячейка — «Палитра»
+                    if (idx <= themes.length) {
                         Theme chosen = idx == themes.length ? Theme.CUSTOM : themes[idx];
                         if (chosen != selectedTheme) {
                             animation14.reset(); preSelectedTheme = selectedTheme; selectedTheme = chosen;
@@ -1562,7 +1636,6 @@ public class Menu extends Screen implements IMinecraft {
             }
         }
 
-        // ── «Добавить модуль» → редактор Lua-скрипта ──
         if (!searchActive && addModuleRect != null && click.button() == 0
                 && MathUtil.isHovered(mouseX, mouseY, addModuleRect[0], addModuleRect[1], addModuleRect[2], addModuleRect[3])) {
             GuiSounds.button();
@@ -1660,6 +1733,52 @@ public class Menu extends Screen implements IMinecraft {
                         yST += 21 * S * vis;
                     }
                 }
+                if (setting instanceof AnarchySetting s) {
+                    float vis = visAnim(select, s);
+                    if (vis > 0.01F) {
+                        float hAn = anarchyHeight(s, wST);
+                        if (s.getVisible().get() && (click.button() == 0 || click.button() == 1)) {
+                            float px = 0;
+                            for (int i = 0; i < AnarchySetting.PRESETS; i++) {
+                                String lbl = "П" + (i + 1);
+                                float tw = draw.getWidth(lbl, 6 * S) + 8 * S;
+                                if (MathUtil.isHovered(mouseX, mouseY, xST + 6 * S + px, yST + 15 * S, tw, 10 * S)) {
+                                    if (click.button() == 0) {
+                                        if (s.getActive() != i) GuiSounds.chip(i, AnarchySetting.PRESETS);
+                                        s.setActive(i);
+                                        activeAnarchy = null;
+                                    } else {
+                                        s.preset(i).clear();
+                                        GuiSounds.editCancel();
+                                    }
+                                }
+                                px += tw + 3 * S;
+                            }
+
+                            float chipMaxW = wST - 12 * S;
+                            float ax = 0, ay = 0;
+                            for (AChip c : anarchyChips(s)) {
+                                float tw = draw.getWidth(c.label, 6 * S) + 8 * S;
+                                if (ax + tw > chipMaxW && ax > 0) { ax = 0; ay += 12 * S; }
+                                if (MathUtil.isHovered(mouseX, mouseY, xST + 6 * S + ax, yST + 28 * S + ay, tw, 10 * S)) {
+                                    if (c.kind == AChip.INPUT) {
+                                        if (click.button() == 0) { activeAnarchy = s; s.input = ""; GuiSounds.editStart(); }
+                                    } else if (c.kind == AChip.CURRENT) {
+                                        if (click.button() == 0 && s.add(c.value)) GuiSounds.chipMulti(true);
+                                    } else if (click.button() == 0) {
+                                        s.remove(c.value);
+                                        GuiSounds.chipMulti(false);
+                                    } else {
+                                        s.moveToFront(c.value);
+                                        GuiSounds.chip(0, AnarchySetting.PRESETS);
+                                    }
+                                }
+                                ax += tw + 3 * S;
+                            }
+                        }
+                        yST += (hAn + 5 * S) * vis;
+                    }
+                }
                 if (setting instanceof ColorSetting s) {
                     float vis = visAnim(select, s);
                     if (vis > 0.01F) {
@@ -1679,7 +1798,7 @@ public class Menu extends Screen implements IMinecraft {
                 }
             }
         }
-        // ── удаление Lua-модуля: два клика для подтверждения ──
+
         if (deleteRect != null && select instanceof ru.white.script.LuaModule luaDelete
                 && click.button() == 0
                 && MathUtil.isHovered(mouseX, mouseY, deleteRect[0], deleteRect[1], deleteRect[2], deleteRect[3])) {
@@ -1718,7 +1837,7 @@ public class Menu extends Screen implements IMinecraft {
         if (editor != null) { return editor.mouseReleased(click.button()); }
         if (draggingSlider != null || draggingColor != null) GuiSounds.sliderRelease();
         draggingSlider = null; draggingColor = null;
-        // закончили тащить бар палитры — сохраняем кастомный цвет в конфиг
+
         if (draggingPalBar != -1) {
             draggingPalBar = -1;
             Client.get().guiManager().setGuiTheme(selectedTheme);
@@ -1751,6 +1870,18 @@ public class Menu extends Screen implements IMinecraft {
             return true;
         }
 
+        if (activeAnarchy != null) {
+            if (key == 257 || key == 335) {
+                if (activeAnarchy.commitInput()) GuiSounds.editCommit(); else GuiSounds.editCancel();
+                activeAnarchy = null;
+            } else if (key == 256) { activeAnarchy.input = ""; activeAnarchy = null; GuiSounds.editCancel(); }
+            else if (key == 259 && !activeAnarchy.input.isEmpty()) {
+                activeAnarchy.input = activeAnarchy.input.substring(0, activeAnarchy.input.length() - 1);
+                GuiSounds.erase();
+            }
+            return true;
+        }
+
         if (activeString != null) {
             if (key == 257 || key == 335) { activeString.set(stringBuffer); activeString = null; GuiSounds.editCommit(); }
             else if (key == 256) { activeString = null; GuiSounds.editCancel(); }
@@ -1758,7 +1889,6 @@ public class Menu extends Screen implements IMinecraft {
             return true;
         }
 
-        // бинд Click Gui (по умолчанию правый шифт) закрывает меню — открытие/закрытие одной клавишей
         int toggle = toggleKey();
         if (toggle != -1 && key == toggle) {
             if (toggleArmed) startExit();
@@ -1772,6 +1902,13 @@ public class Menu extends Screen implements IMinecraft {
     public boolean charTyped(CharInput input) {
         if (searchActive) {
             if (input.isValidChar() && searchQuery.length() < SEARCH_LIMIT) { searchQuery += input.asString(); searchChanged(); GuiSounds.type(); }
+            return true;
+        }
+        if (activeAnarchy != null) {
+            if (input.isValidChar()) {
+                String str = input.asString();
+                if (str.matches("[0-9]+") && activeAnarchy.input.length() < 3) { activeAnarchy.input += str; GuiSounds.type(); }
+            }
             return true;
         }
         if (activeString != null) {

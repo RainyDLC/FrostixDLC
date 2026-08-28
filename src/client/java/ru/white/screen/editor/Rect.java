@@ -2,9 +2,7 @@ package ru.white.screen.editor;
 
 import ru.white.utils.math.MathUtil;
 
-/** Прямоугольник в координатах оверлея (фиксированный GUI scale 2, как в Menu). */
 public record Rect(float x, float y, float width, float height) {
-
     public static final Rect EMPTY = new Rect(0F, 0F, 0F, 0F);
 
     public boolean contains(float mouseX, float mouseY) {

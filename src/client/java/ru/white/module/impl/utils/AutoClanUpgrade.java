@@ -1,6 +1,5 @@
 package ru.white.module.impl.utils;
 
-
 import ru.white.manager.event_impl.EventUpdate;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.manager.rotation.Rotation;
@@ -24,14 +23,12 @@ import net.minecraft.util.math.Direction;
         category = Category.OTHER
 )
 public class AutoClanUpgrade extends Module {
-
     private final TimerUtil timer = new TimerUtil();
 
     private boolean slowBreak = false;
 
     @EventHandler
     public void onUpdate(EventUpdate event) {
-
         int slot = InvUtil.getItemInHotBar(Items.TORCH);
 
         if (mc.world.getRegistryKey().getValue().getPath().equals("lobby")) {
@@ -53,7 +50,6 @@ public class AutoClanUpgrade extends Module {
 
         if (!mc.world.getBlockState(pos).isSolidBlock(mc.world, pos)) return;
 
-
         if (mc.player.age % 1 == 0) {
             float yaw = 25;
             float pitch = 87.5f ;
@@ -61,15 +57,11 @@ public class AutoClanUpgrade extends Module {
             RotationProcess.update(new Rotation(yaw, pitch), 255, 255, 0, 100);
         }
 
-
         int delay = 5;
         if (!timer.hasReached(delay)) return;
         timer.reset();
 
-
-
         if (mc.world.getBlockState(torchPos).isAir()) {
-
             mc.interactionManager.interactBlock(
                     mc.player,
                     Hand.MAIN_HAND,
@@ -80,15 +72,11 @@ public class AutoClanUpgrade extends Module {
                             false
                     )
             );
-
         }
 
         if (mc.world.getBlockState(torchPos).getBlock() == Blocks.TORCH) {
             mc.interactionManager.attackBlock(torchPos, Direction.WEST);
             mc.player.swingHand(Hand.MAIN_HAND);
-
         }
-
-
     }
 }

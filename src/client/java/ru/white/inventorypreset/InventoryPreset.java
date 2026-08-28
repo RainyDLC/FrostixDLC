@@ -79,7 +79,6 @@ public final class InventoryPreset {
                     signature, encodePotion(potionContents));
         }
 
-        /** Компонент зелья целиком — без него превью показывает пустую бутылку без цвета и названия. */
         private static String encodePotion(PotionContentsComponent contents) {
             if (contents == null) return "";
             return PotionContentsComponent.CODEC.encodeStart(JsonOps.INSTANCE, contents)
@@ -149,11 +148,9 @@ public final class InventoryPreset {
 
             if (stack.isEmpty()) return stack;
 
-            // цвет и ванильное имя зелья берутся из компонента, поэтому его надо вернуть
             PotionContentsComponent contents = decodePotion(potionData);
             if (contents != null) stack.set(DataComponentTypes.POTION_CONTENTS, contents);
 
-            // кастомное имя (серверные предметы) компонентами не сохраняется — ставим сохранённое
             if (!displayName.isBlank() && !displayName.equals(stack.getName().getString())) {
                 stack.set(DataComponentTypes.CUSTOM_NAME, Text.literal(displayName));
             }

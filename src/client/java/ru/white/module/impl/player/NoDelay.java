@@ -1,6 +1,5 @@
 package ru.white.module.impl.player;
 
-
 import ru.white.manager.event_impl.EventUpdate;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.module.api.Category;
@@ -17,7 +16,6 @@ import net.minecraft.registry.Registries;
         desc = "Убирает задержки"
 )
 public class NoDelay extends Module {
-
     public static NoDelay get() {
         return Instance.get(NoDelay.class);
     }
@@ -43,12 +41,10 @@ public class NoDelay extends Module {
             f.setInt(mc, 0);
         } catch (Exception e) {
             try {
-                // Try intermediary name if mapped
                 java.lang.reflect.Field f = net.minecraft.client.MinecraftClient.class.getDeclaredField("field_1752");
                 f.setAccessible(true);
                 f.setInt(mc, 0);
             } catch (Exception ex) {
-                // Ignore
             }
         }
     }

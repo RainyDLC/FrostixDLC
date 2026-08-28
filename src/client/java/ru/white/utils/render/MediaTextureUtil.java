@@ -11,7 +11,6 @@ import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 
 public final class MediaTextureUtil {
-
     public static final Identifier ARTWORK_ID = Identifier.of("client", "media/artwork");
 
     private static byte[] lastArtwork = new byte[0];

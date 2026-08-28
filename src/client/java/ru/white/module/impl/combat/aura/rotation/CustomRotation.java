@@ -12,12 +12,7 @@ import ru.white.module.impl.combat.aura.RotationAura;
 import ru.white.utils.aura.AuraUtil;
 import ru.white.utils.math.MathUtil;
 
-/**
- * Ротация режима Custom: все параметры берутся из конструктора ротации
- * AttackAura — скорости наведения/удара, рандом и осцилляция по обеим осям.
- */
 public class CustomRotation implements RotationAura {
-
     @Override
     public void onRotation(AttackAura aura, LivingEntity target, float[] ranges, boolean canAttack) {
         Vec3d vec3d = AuraUtil.getVector3(target);
@@ -38,7 +33,6 @@ public class CustomRotation implements RotationAura {
         }
 
         if (attacking) {
-            // резкий импульс в момент удара: скорость удара задаёт амплитуду рывка
             float hitScaleY = aura.cHitYaw.getValue() / 200F;
             float hitScaleP = aura.cHitPitch.getValue() / 200F;
             float waveA = (float) Math.cos(ms / 30D);
@@ -46,11 +40,9 @@ public class CustomRotation implements RotationAura {
             yaw += waveA * MathUtil.randomLerp(4F, 8F) * hitScaleY;
             pitch += waveB * MathUtil.randomLerp(4F, 8F) * hitScaleP;
 
-            // случайный разброс
             yaw += MathUtil.randomLerp(-aura.cRandomYaw.getValue(), aura.cRandomYaw.getValue());
             pitch += MathUtil.randomLerp(-aura.cRandomPitch.getValue(), aura.cRandomPitch.getValue());
 
-            // плавная осцилляция вокруг цели
             yaw += (float) Math.sin(ms / 280D) * aura.cOscX.getValue() * 6F;
             pitch += (float) Math.cos(ms / 340D) * aura.cOscY.getValue() * 4F;
         } else {

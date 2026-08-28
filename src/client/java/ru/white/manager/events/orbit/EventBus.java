@@ -12,9 +12,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
-/**
- * Norbit's reimplementation of Orbit's {@link IEventBus}.
- */
 public class EventBus implements IEventBus {
     private record LambdaFactoryInfo(String packagePrefix,
                                      LambdaListener.Factory factory) {
@@ -54,44 +51,27 @@ public class EventBus implements IEventBus {
         return listeners != null && !listeners.isEmpty();
     }
 
-    /**
-     * @return whether the {@link IListener} is currently subscribed to the event bus.
-     * @since 1.2.0
-     */
     public boolean isSubscribed(IListener listener) {
         List<IListener> listeners = listenerMap.get(listener.getTarget());
         return listeners != null && ListOperations.contains(listeners, listener);
     }
 
-    /**
-     * @return whether the {@link Object} currently has its listeners subscribed to the event bus.
-     * @since 1.2.0
-     */
     public boolean isSubscribed(Object object) {
         return listenerCache.containsKey(object);
     }
 
-    /**
-     * @return whether the {@link Class} currently has all of its immediate (ignoring static listeners inherited from
-     * superclasses) static listeners subscribed to the event bus.
-     * @since 1.2.0
-     */
     public boolean isSubscribed(Class<?> staticListener) {
         List<IListener> listeners = staticListenerCache.get(staticListener);
         for (IListener listener : listeners) {
             if (listener instanceof LambdaListener lambdaListener) {
                 if (lambdaListener.owner != staticListener)
-                    break; // getListeners(List<IListener>, Class<?>, Object, boolean) implicitly orders based on inheritance
+                    break;
                 if (!this.isSubscribed(listener)) return true;
             }
         }
         return true;
     }
 
-    /**
-     * @return whether the {@link Class} or any of its superclasses have *any* of its static listeners subscribed to the event bus.
-     * @since 1.2.0
-     */
     public boolean areAnySubscribed(Class<?> staticListener) {
         List<IListener> listeners = staticListenerCache.get(staticListener);
         if (listeners == null) return false;
@@ -101,10 +81,6 @@ public class EventBus implements IEventBus {
         return false;
     }
 
-    /**
-     * @return whether the {@link Class} or any of its superclasses have *all* of its static listeners subscribed to the event bus.
-     * @since 1.2.0
-     */
     public boolean areAllSubscribed(Class<?> staticListener) {
         List<IListener> listeners = staticListenerCache.get(staticListener);
         if (listeners == null) return false;
@@ -222,7 +198,7 @@ public class EventBus implements IEventBus {
             for (var method : klass.getDeclaredMethods()) {
                 if (isValid(method, staticOnly)) {
                     if (LambdaListener.requireLambdaFactoryRegistration() && factory == null)
-                        factory = getLambdaFactory(klass); // Lazy-loaded
+                        factory = getLambdaFactory(klass);
                     listeners.add(new LambdaListener(factory, klass, object, method));
                 }
             }

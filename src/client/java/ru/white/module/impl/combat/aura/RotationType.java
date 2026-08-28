@@ -7,7 +7,6 @@ import ru.white.module.impl.combat.aura.rotation.*;
 @Getter
 @RequiredArgsConstructor
 public enum RotationType {
-
     FUNTIME("FunTime_Legacy", new FunTimeRotation()),
     SPOOKYTIME("SpookyTime", new SpookyTimeRotation()),
     MATRIX("Default", new MatrixRotation()),
@@ -22,8 +21,6 @@ public enum RotationType {
     GRIM("Grim", new ConstructorRotation(ConstructorRotation.Profile.GRIM)),
     RELLYWORLD("RellyWorld", new RellyWorldRotation());
 
-
     private final String name;
     private final RotationAura rotation;
-
 }

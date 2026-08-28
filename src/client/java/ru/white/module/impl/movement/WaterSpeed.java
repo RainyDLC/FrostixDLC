@@ -15,7 +15,6 @@ import ru.white.utils.player.MoveUtil;
         category = Category.MOVEMENT
 )
 public class WaterSpeed extends Module {
-
     public ModeSetting type = new ModeSetting(this, "Режим", "Vanilla");
     public SliderSetting speed = new SliderSetting(this, "Скорость", 1.0F, 0.1F, 3.0F, 0.05F);
 

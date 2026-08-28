@@ -17,7 +17,6 @@ import net.minecraft.util.Arm;
         category = Category.RENDER
 )
 public class Hands extends Module {
-
     public static Hands get() {
         return Instance.get(Hands.class);
     }
@@ -26,14 +25,12 @@ public class Hands extends Module {
     private boolean restoreSwingAnimation;
     private boolean restoreGlassHands;
 
-
     public ButtonSetting openEditor = new ButtonSetting(this, "Редактор рук", () -> {
         if (mc.currentScreen instanceof Menu menu) {
             menu.openHandsEditor();
         }
     });
 
-    // ===== правая рука =====
     public DelimiterSetting rightTitle = new DelimiterSetting(this, "Правая рука");
     public SliderSetting rx = new SliderSetting(this, "Правая X", 0.0F, -2.0F, 2.0F, 0.05F);
     public SliderSetting ry = new SliderSetting(this, "Правая Y", 0.0F, -2.0F, 2.0F, 0.05F);
@@ -41,7 +38,6 @@ public class Hands extends Module {
     public SliderSetting rScale = new SliderSetting(this, "Правая размер", 1.0F, 0.1F, 3.0F, 0.05F);
     public ButtonSetting resetRightButton = new ButtonSetting(this, "Сбросить правую", this::resetRight);
 
-    // ===== левая рука =====
     public DelimiterSetting leftTitle = new DelimiterSetting(this, "Левая рука");
     public SliderSetting lx = new SliderSetting(this, "Левая X", 0.0F, -2.0F, 2.0F, 0.05F);
     public SliderSetting ly = new SliderSetting(this, "Левая Y", 0.0F, -2.0F, 2.0F, 0.05F);
@@ -49,15 +45,8 @@ public class Hands extends Module {
     public SliderSetting lScale = new SliderSetting(this, "Левая размер", 1.0F, 0.1F, 3.0F, 0.05F);
     public ButtonSetting resetLeftButton = new ButtonSetting(this, "Сбросить левую", this::resetLeft);
 
-    // ===== общий сброс =====
     public ButtonSetting resetAllButton = new ButtonSetting(this, "Сбросить всё", this::resetAll);
 
-
-
-    /**
-     * Анимация свинга и стеклянные руки перетирают ту же матрицу, поэтому на время работы
-     * модуля они выключаются, а при возврате включаются обратно — но только если были включены.
-     */
     @Override
     protected void onEnable() {
         SwingAnimation swingAnimation = SwingAnimation.get();
@@ -86,10 +75,6 @@ public class Hands extends Module {
         }
     }
 
-    /**
-     * Позиция ставится до ванильных поворотов конкретной ветки рендера — так X/Y остаются
-     * в экранных координатах и курсор в редакторе не едет в обратную сторону.
-     */
     public void applyHandTranslation(MatrixStack matrices, Arm arm) {
         if (!shouldApplyTransforms()) return;
         float x = arm == Arm.RIGHT ? rx.getValue() : lx.getValue();
@@ -98,26 +83,17 @@ public class Hands extends Module {
         matrices.translate(x, y, z);
     }
 
-    /**
-     * Размер применяется прямо на геометрии модели, чтобы не умножать сдвиги свинга
-     * и не менять траекторию анимации.
-     */
     public void applyHandScale(MatrixStack matrices, Arm arm) {
         if (!shouldApplyTransforms()) return;
         float s = arm == Arm.RIGHT ? rScale.getValue() : lScale.getValue();
         matrices.scale(s, s, s);
     }
 
-    /**
-     * У ванильной пустой руки база на ~0.08 ниже и дальше в сторону, чем у якоря предмета —
-     * это выравнивает их между собой.
-     */
     public void applyEmptyHandAlignment(MatrixStack matrices, Arm arm) {
         if (!shouldApplyTransforms()) return;
         matrices.translate(arm == Arm.RIGHT ? -0.08F : 0.08F, 0.08F, 0F);
     }
 
-    /** Трансформы нужны и когда модуль выключен, но открыт редактор рук. */
     public boolean shouldApplyTransforms() {
         return isEnabled() || editorActive;
     }

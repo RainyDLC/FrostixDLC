@@ -42,7 +42,6 @@ import java.util.Random;
         category = Category.RENDER
 )
 public class JumpCube extends Module implements ModulePreview {
-
     public ButtonSetting previewButton = PreviewSettings.button(this);
 
     public ModeSetting typeColor = new ModeSetting(this, "Режим цвета", "Тема", "Свой");
@@ -51,11 +50,9 @@ public class JumpCube extends Module implements ModulePreview {
     public SliderSetting count = new SliderSetting(this, "Кубиков", 3, 1, 10, 1);
     public SliderSetting size  = new SliderSetting(this, "Размер",  0.18F, 0.05F, 0.40F, 0.01F);
 
-    // кубики живут вокруг самого игрока и прыгают без остановки — настраивать нечего
     private final PreviewSettings previewSettings = PreviewSettings.none(this);
 
-    // ── константы из DashCubes ────────────────────────────────────────────────
-    private static final int    RES_PX         = 16;       // сетка 1/16 блока
+    private static final int    RES_PX         = 16;
     private static final long   LIFETIME_MS    = 2000L;
     private static final double SPAWN_MIN_DST  = 0.6;
     private static final double SPAWN_MAX_DST  = 2.6;
@@ -79,8 +76,6 @@ public class JumpCube extends Module implements ModulePreview {
         for (Cube c : cubes) c.tryStartJump();
     }
 
-    // ───────────────────────────── предпоказ ─────────────────────────────
-
     @Override
     public PreviewSettings previewSettings() {
         return previewSettings;
@@ -90,7 +85,6 @@ public class JumpCube extends Module implements ModulePreview {
     public void previewSpawn(PreviewContext ctx) {
     }
 
-    /** Кубики спавнятся сами, а прыжок перезапускаем сразу после предыдущего — чтобы не замирали. */
     @Override
     public void previewTick(PreviewContext ctx) {
         for (Cube c : cubes) c.tryStartJump();
@@ -107,7 +101,6 @@ public class JumpCube extends Module implements ModulePreview {
 
         Vec3d playerPos = mc.player.getEntityPos();
 
-        // спавним count новых кубиков в тик — точно как DashCubes
         List<BlockPos> candidates = getPlaceableAround(playerPos, SPAWN_MIN_DST, SPAWN_MAX_DST, 3);
         int toSpawn = count.getValue().intValue();
         for (int i = 0; i < toSpawn && !candidates.isEmpty(); i++) {
@@ -134,7 +127,6 @@ public class JumpCube extends Module implements ModulePreview {
         int cg = (base >>  8) & 0xFF;
         int cb =  base        & 0xFF;
 
-        // предвычисляем матрицы всех видимых кубиков
         visible.clear();
         for (Cube c : cubes) {
             if (c.isDead()) continue;
@@ -145,11 +137,9 @@ public class JumpCube extends Module implements ModulePreview {
             double wy = c.spawnPos.y + c.getJumpYOffset(pt) - cam.y;
             double wz = c.spawnPos.z - cam.z;
 
-            // куб: поворот при прыжке + масштаб по alpha (вырастает/исчезает)
             pose.push();
             pose.translate(wx, wy, wz);
             if (c.jumpTicksMax > 0) {
-                // субтик-интерполяция: lerp между предыдущим и текущим значением jumpTicks
                 float tLerped = MathHelper.lerp(pt, (float) c.prevJumpTicks, (float) c.jumpTicks);
                 float phase   = 1.0f - tLerped / (float) c.jumpTicksMax;
                 pose.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(c.jumpYaw));
@@ -159,7 +149,6 @@ public class JumpCube extends Module implements ModulePreview {
             c.cubeMatrix.set(pose.peek().getPositionMatrix());
             pose.pop();
 
-            // billboard для glow
             pose.push();
             pose.translate(wx, wy, wz);
             pose.multiply(mc.gameRenderer.getCamera().getRotation());
@@ -175,13 +164,11 @@ public class JumpCube extends Module implements ModulePreview {
 
         VertexConsumerProvider.Immediate immediate = VertexConsumerProvider.immediate(allocator);
 
-
         VertexConsumer buf = immediate.getBuffer(FILL_LAYER);
         for (Cube c : visible) {
             int fa = (int) (c.cachedAlpha * 0.2f * 255);
             if (fa > 0) drawCubeFill(buf, c.cubeMatrix, s, cr, cg, cb, fa);
         }
-
 
         buf = immediate.getBuffer(LINE_LAYER);
         for (Cube c : visible) {
@@ -197,8 +184,6 @@ public class JumpCube extends Module implements ModulePreview {
 
         immediate.draw();
     }
-
-    // ── спавн ────────────────────────────────────────────────────────────────
 
     private List<BlockPos> getPlaceableAround(Vec3d center, double minDst, double maxDst, int offsetDown) {
         List<BlockPos> result = new ArrayList<>();
@@ -222,7 +207,6 @@ public class JumpCube extends Module implements ModulePreview {
         return mc.world.getOtherEntities(null, new Box(pos)).isEmpty();
     }
 
-    // выбираем случайную точку внутри блока и прищёлкиваем к сетке 1/RES_PX
     private Vec3d findSpawnPoint(BlockPos pos, Vec3d playerPos) {
         double resOff = 1.0 / RES_PX;
         double half   = resOff / 2.0;
@@ -242,8 +226,6 @@ public class JumpCube extends Module implements ModulePreview {
         }
         return null;
     }
-
-    // ── рендер-хелперы ───────────────────────────────────────────────────────
 
     private static void drawCubeFill(VertexConsumer b, Matrix4f m, float s,
                                      int r, int g, int bl, int a) {
@@ -295,21 +277,17 @@ public class JumpCube extends Module implements ModulePreview {
         buf.vertex(m,-s, s,0).color(r,g,b,alpha).texture(0,0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0,0,1);
     }
 
-    // ── Cube ─────────────────────────────────────────────────────────────────
-
     private class Cube {
         final Vec3d  spawnPos;
         final long   spawnTime = System.currentTimeMillis();
         float        cachedAlpha;
 
-        // jump-анимация (порт из DashCubes)
         int    jumpTicks     = 0;
         int    prevJumpTicks = 0;
         int    jumpTicksMax  = 0;
         int    jumpYaw       = 0;
         double jumpHeight    = 0;
 
-        // out-of-range fade
         boolean outOfRange      = false;
         long    outOfRangeStart = 0L;
 
@@ -329,8 +307,8 @@ public class JumpCube extends Module implements ModulePreview {
 
         void tryStartJump() {
             if (jumpTicks <= 0) {
-                jumpTicksMax = jumpTicks = (int) (14.0f * (0.5f + 0.5f * random.nextFloat())); // 7-14 тиков
-                jumpHeight   = (2 + random.nextInt(11)) / 16.0;      // 2-12 пикселей в блоках
+                jumpTicksMax = jumpTicks = (int) (14.0f * (0.5f + 0.5f * random.nextFloat()));
+                jumpHeight   = (2 + random.nextInt(11)) / 16.0;
                 jumpYaw      = JUMP_YAWS[random.nextInt(JUMP_YAWS.length)];
             }
         }
@@ -344,7 +322,6 @@ public class JumpCube extends Module implements ModulePreview {
             return MathHelper.clamp(1f - (float)(System.currentTimeMillis() - outOfRangeStart) / RANGE_FADE_MS, 0f, 1f);
         }
 
-        // fade-in первые 10% жизни, fade-out последние 20%
         float getAlpha() {
             float t = getTimePc();
             float a = t < 0.1f ? t / 0.1f
@@ -353,7 +330,6 @@ public class JumpCube extends Module implements ModulePreview {
             return MathHelper.clamp(a, 0f, 1f) * getRangeFade();
         }
 
-        // треугольная волна: куб взлетает в середине анимации и возвращается
         double getJumpYOffset(float pt) {
             if (jumpTicksMax <= 0) return 0.0;
             float t = MathHelper.lerp(pt, (float) prevJumpTicks, (float) jumpTicks) / (float) jumpTicksMax;
@@ -365,8 +341,6 @@ public class JumpCube extends Module implements ModulePreview {
             return getTimePc() >= 1f || (outOfRange && getRangeFade() <= 0.01f);
         }
     }
-
-    // ── render pipelines ─────────────────────────────────────────────────────
 
     private static final Identifier GLOW_TEX_BIG   = Identifier.of("client", "textures/visuals/particles_1.png");
     private static final Identifier GLOW_TEX_SMALL  = Identifier.of("client", "textures/visuals/particles_2.png");

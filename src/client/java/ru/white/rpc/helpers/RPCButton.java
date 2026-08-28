@@ -1,6 +1,5 @@
 package ru.white.rpc.helpers;
 
-
 import java.io.Serializable;
 
 public class RPCButton implements Serializable {

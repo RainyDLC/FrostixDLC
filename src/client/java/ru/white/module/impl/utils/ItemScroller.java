@@ -13,12 +13,9 @@ import ru.white.utils.other.Instance;
         category = Category.OTHER
 )
 public class ItemScroller extends Module {
-
     public static ItemScroller getInstance() {
         return Instance.get(ItemScroller.class);
     }
 
     public SliderSetting delay = new SliderSetting(this,"Задержка",50,0,100,1);
-
-
 }

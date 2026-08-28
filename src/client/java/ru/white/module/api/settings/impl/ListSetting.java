@@ -2,7 +2,6 @@ package ru.white.module.api.settings.impl;
 
 import ru.white.module.api.Module;
 
-
 import ru.white.module.api.settings.Setting;
 
 import java.util.List;

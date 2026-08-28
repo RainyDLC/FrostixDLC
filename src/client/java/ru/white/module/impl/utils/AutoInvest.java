@@ -15,10 +15,7 @@ import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.module.api.settings.impl.StringSetting;
 import ru.white.utils.math.ChatUtils;
-import ru.white.utils.math.ServerUtil;
 import ru.white.utils.notification.NotificationManager;
-
-import java.util.Collection;
 
 @ModuleInfo(
         name = "Auto Invest",
@@ -26,7 +23,6 @@ import java.util.Collection;
         category = Category.OTHER
 )
 public class AutoInvest extends Module {
-
     public final ModeSetting mode = new ModeSetting(this, "Режим", "Бинд", "Авто");
     public final BindSetting investKey = new BindSetting(this, "Клавиша инвеста", -1)
             .setVisible(() -> mode.is("Бинд"));
@@ -36,7 +32,6 @@ public class AutoInvest extends Module {
             .setVisible(() -> mode.is("Авто"));
     public final SliderSetting autoPercent = new SliderSetting(this, "% от баланса (Авто)", 50.0f, 1.0f, 100.0f, 1.0f)
             .setVisible(() -> mode.is("Авто"));
-
 
     private int cooldownTicks = 0;
 

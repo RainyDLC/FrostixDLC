@@ -1,6 +1,5 @@
 package ru.white.module.api.settings.impl;
 
-
 import ru.white.module.api.Module;
 import ru.white.module.api.settings.Setting;
 import ru.white.utils.animation.satoshi.EaseInOutQuad;
@@ -9,13 +8,10 @@ import java.util.List;
 import java.util.function.Supplier;
 
 public class ModeSettingHud extends Setting<String> {
-
     public List<String> values;
     private String cachedValue;
 
-
     public ru.white.utils.animation.satoshi.Animation animation = new EaseInOutQuad(300,1);
-
 
     public boolean opened;
 

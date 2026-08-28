@@ -30,7 +30,6 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-import ru.white.Client;
 import ru.white.manager.event_impl.AttackEvent;
 import ru.white.manager.event_impl.EventDisplay;
 import ru.white.manager.event_impl.EventKey;
@@ -239,14 +238,12 @@ public class ReportHelper extends Module {
         float height = 55;
 
         RenderUtil.Blur.blur(x, y, width, height, 1, 5, ColorUtil.getRectColor(1F));
-        //RenderUtil.Render2D.outline(x, y, width, height, 0.5F, ColorUtil.multAlpha(reportColor.getValue(), 0.8F), 5);
+
         Fonts.sf_medium.draw(title, x + 6, y + 5, 6.5F, reportColor.getValue());
         Fonts.sf_medium.draw(target, x + 6, y + 18, 5.5F, ColorUtil.WHITE);
         Fonts.sf_medium.draw(queue + " | " + marked, x + 6, y + 29, 5.5F, ColorUtil.WHITE);
         Fonts.sf_medium.draw(wait, x + 6, y + 40, 5.5F, ColorUtil.WHITE);
     }
-
-    // ── 3D-кристалл над зарепорченными игроками ──────────────────────────────
 
     private static final RenderPipeline CRYSTAL_PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
@@ -297,7 +294,6 @@ public class ReportHelper extends Module {
 
             Vec3d pos = player.getLerpedPos(tickDelta);
 
-            // у каждого игрока своя фаза, чтобы кристаллы не крутились синхронно
             long phase = (player.getName().getString().hashCode() & 0xFFFF) * 7L;
 
             float spin = ((time + phase) % 4000L) / 4000F * (float) (Math.PI * 2);
@@ -319,14 +315,13 @@ public class ReportHelper extends Module {
     private void drawCrystal(VertexConsumer vc, Matrix4f mat, Vec3d cam,
                              double cx, double cy, double cz, float spin,
                              int cr, int cg, int cb) {
-        float r = 0.18F;  // радиус "экватора"
-        float h = 0.30F;  // половина высоты
+        float r = 0.18F;
+        float h = 0.30F;
 
         float x = (float) (cx - cam.x);
         float y = (float) (cy - cam.y);
         float z = (float) (cz - cam.z);
 
-        // 4 точки экватора, повёрнутые на spin
         float[][] eq = new float[4][2];
         for (int i = 0; i < 4; i++) {
             float a = spin + i * ((float) Math.PI / 2F);
@@ -336,17 +331,16 @@ public class ReportHelper extends Module {
 
         for (int i = 0; i < 4; i++) {
             int j = (i + 1) % 4;
-            // соседние грани разной яркости — так виден объём при вращении
+
             float shadeTop = i % 2 == 0 ? 1.0F : 0.78F;
             float shadeBot = i % 2 == 0 ? 0.68F : 0.52F;
 
-            // верхняя грань
             tri(vc, mat,
                     x, y + h, z,
                     eq[i][0], y, eq[i][1],
                     eq[j][0], y, eq[j][1],
                     (int) (cr * shadeTop), (int) (cg * shadeTop), (int) (cb * shadeTop), 210);
-            // нижняя грань
+
             tri(vc, mat,
                     x, y - h, z,
                     eq[j][0], y, eq[j][1],
@@ -500,7 +494,6 @@ public class ReportHelper extends Module {
 
             String signature = pageSignature(handler, containerSlots);
             if (signature.equals(autoListLastPageSignature)) {
-                // страница ещё не обновилась после клика "вперёд" — ждём, но не вечно
                 if (now - autoListPageClickedAt > AUTO_LIST_PAGE_TIMEOUT_MS) {
                     closeAutoList(handler);
                 }

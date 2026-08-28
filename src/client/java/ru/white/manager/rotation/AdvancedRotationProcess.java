@@ -10,7 +10,6 @@ import java.util.Random;
 import static net.minecraft.util.math.MathHelper.wrapDegrees;
 
 public class AdvancedRotationProcess extends Component {
-
     public static RotationTask currentTask = RotationTask.IDLE;
     public static int  currentPriority;
     public static int  currentTimeout;
@@ -22,19 +21,15 @@ public class AdvancedRotationProcess extends Component {
     public static float currentYawReturnSpeed;
     public static float currentPitchReturnSpeed;
 
-    // тряска при прицеливании — прямое значение (волна, рандом — на усмотрение вызывающего)
     public static float shakeYaw;
     public static float shakePitch;
-    // тряска при возврате — случайный шум с амплитудой, затухает за shakeDuration тиков
+
     public static float resetShakeAmplitudeYaw;
     public static float resetShakeAmplitudePitch;
     public static int   shakeDuration;
     private static int  resetShakeTicks;
 
     private static final Random RNG = new Random();
-
-
-    // ───────────────────────────────────────────────────────────────────────────
 
     public static boolean isRotating() {
         return !currentTask.equals(RotationTask.IDLE);
@@ -60,7 +55,6 @@ public class AdvancedRotationProcess extends Component {
 
         float sYaw = 0f, sPitch = 0f;
         if (shakeDuration > 0 && resetShakeTicks <= shakeDuration) {
-            // свежий рандом каждый тик, амплитуда затухает линейно
             float fade = 1f - (float) resetShakeTicks / shakeDuration;
             sYaw   = (RNG.nextFloat() * 2f - 1f) * resetShakeAmplitudeYaw   * fade;
             sPitch = (RNG.nextFloat() * 2f - 1f) * resetShakeAmplitudePitch * fade;
@@ -72,8 +66,6 @@ public class AdvancedRotationProcess extends Component {
             stopRotation();
         }
     }
-
-    // ── Public API ─────────────────────────────────────────────────────────────
 
     public static void update(AdvancedRotationConfig cfg) {
         if (currentPriority > cfg.priority) return;
@@ -96,11 +88,9 @@ public class AdvancedRotationProcess extends Component {
         currentTask             = RotationTask.AIM;
         targetRotation          = cfg.target;
 
-        // при прицеливании — полная тряска без затухания
         updateRotation(cfg.target, cfg.yawSpeed, cfg.pitchSpeed, cfg.shakeYaw, cfg.shakePitch);
     }
 
-    /** Простой вариант без тряски, как в оригинале */
     public static void update(Rotation target, float turnSpeed, float returnSpeed, int timeout, int priority) {
         update(new AdvancedRotationConfig(target)
                 .speed(turnSpeed, returnSpeed)
@@ -108,7 +98,6 @@ public class AdvancedRotationProcess extends Component {
                 .priority(priority));
     }
 
-    /** Полный вариант, совместимый с оригинальной сигнатурой */
     public static void update(Rotation target, float yawSpeed, float pitchSpeed,
                               float yawReturnSpeed, float pitchReturnSpeed,
                               int timeout, int priority, boolean clientRotation) {
@@ -125,8 +114,6 @@ public class AdvancedRotationProcess extends Component {
         currentPriority = 0;
         FreeLookUtil.setActive(false);
     }
-
-    // ── Core ───────────────────────────────────────────────────────────────────
 
     static boolean updateRotation(Rotation targetRot, float yawSpeed, float pitchSpeed,
                                    float sYaw, float sPitch) {
@@ -158,11 +145,7 @@ public class AdvancedRotationProcess extends Component {
         FreeLookUtil.setActive(false);
     }
 
-    // ── Task ───────────────────────────────────────────────────────────────────
-
     public enum RotationTask { AIM, RESET, IDLE }
-
-    // ── Config builder ─────────────────────────────────────────────────────────
 
     public static class AdvancedRotationConfig {
         public Rotation target;
@@ -170,10 +153,10 @@ public class AdvancedRotationProcess extends Component {
         public float pitchSpeed       = 180f;
         public float yawReturnSpeed   = 180f;
         public float pitchReturnSpeed = 180f;
-        // прицеливание: прямое значение (передаёшь сам — волна, константа и т.д.)
+
         public float shakeYaw                = 0f;
         public float shakePitch              = 0f;
-        // возврат: амплитуда случайного шума, затухает за shakeDuration тиков
+
         public float resetShakeAmplitudeYaw  = 0f;
         public float resetShakeAmplitudePitch= 0f;
         public int   shakeDuration           = 0;
@@ -185,7 +168,6 @@ public class AdvancedRotationProcess extends Component {
             this.target = target;
         }
 
-        /** Одна скорость для прицеливания и возврата */
         public AdvancedRotationConfig speed(float turnSpeed, float returnSpeed) {
             this.yawSpeed         = turnSpeed;
             this.pitchSpeed       = turnSpeed;
@@ -194,7 +176,6 @@ public class AdvancedRotationProcess extends Component {
             return this;
         }
 
-        /** Раздельные скорости по осям */
         public AdvancedRotationConfig speed(float yawSpeed, float pitchSpeed,
                                              float yawReturnSpeed, float pitchReturnSpeed) {
             this.yawSpeed         = yawSpeed;
@@ -204,20 +185,12 @@ public class AdvancedRotationProcess extends Component {
             return this;
         }
 
-        /**
-         * Тряска при прицеливании — прямое значение каждый тик.
-         * Передаёшь сам (волна, рандом, константа — что угодно).
-         */
         public AdvancedRotationConfig shake(float yaw, float pitch) {
             this.shakeYaw   = yaw;
             this.shakePitch = pitch;
             return this;
         }
 
-        /**
-         * Тряска при возврате к камере — случайный шум с амплитудой,
-         * затухает линейно за durationTicks тиков.
-         */
         public AdvancedRotationConfig resetShake(float amplitudeYaw, float amplitudePitch, int durationTicks) {
             this.resetShakeAmplitudeYaw   = amplitudeYaw;
             this.resetShakeAmplitudePitch = amplitudePitch;

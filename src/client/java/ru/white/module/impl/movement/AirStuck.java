@@ -23,7 +23,6 @@ import ru.white.utils.other.Instance;
         desc = "Заморозка персонажа в воздухе"
 )
 public class AirStuck extends Module {
-
     public static AirStuck getInstance() {
         return Instance.get(AirStuck.class);
     }

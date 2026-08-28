@@ -26,12 +26,10 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @ModuleInfo(name = "Block ESP", category = Category.RENDER, desc = "Подсвечивает блоки в радиусе")
 public class BlockEsp extends Module {
-
     public SliderSetting radius = new SliderSetting(this, "Радиус", 30, 5, 60, 5);
 
     private static BlockEsp instance;
@@ -160,37 +158,31 @@ public class BlockEsp extends Module {
                                         float x0, float y0, float z0,
                                         float x1, float y1, float z1,
                                         int cB, int cT) {
-        // Bottom face
         b.vertex(m, x0, y0, z0).color(cB);
         b.vertex(m, x1, y0, z0).color(cB);
         b.vertex(m, x1, y0, z1).color(cB);
         b.vertex(m, x0, y0, z1).color(cB);
 
-        // Top face
         b.vertex(m, x0, y1, z0).color(cT);
         b.vertex(m, x0, y1, z1).color(cT);
         b.vertex(m, x1, y1, z1).color(cT);
         b.vertex(m, x1, y1, z0).color(cT);
 
-        // Front face (maxZ)
         b.vertex(m, x0, y0, z1).color(cB);
         b.vertex(m, x1, y0, z1).color(cB);
         b.vertex(m, x1, y1, z1).color(cT);
         b.vertex(m, x0, y1, z1).color(cT);
 
-        // Back face (minZ)
         b.vertex(m, x1, y0, z0).color(cB);
         b.vertex(m, x0, y0, z0).color(cB);
         b.vertex(m, x0, y1, z0).color(cT);
         b.vertex(m, x1, y1, z0).color(cT);
 
-        // Left face (minX)
         b.vertex(m, x0, y0, z0).color(cB);
         b.vertex(m, x0, y0, z1).color(cB);
         b.vertex(m, x0, y1, z1).color(cT);
         b.vertex(m, x0, y1, z0).color(cT);
 
-        // Right face (maxX)
         b.vertex(m, x1, y0, z1).color(cB);
         b.vertex(m, x1, y0, z0).color(cB);
         b.vertex(m, x1, y1, z0).color(cT);

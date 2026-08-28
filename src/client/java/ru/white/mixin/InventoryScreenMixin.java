@@ -17,7 +17,6 @@ import ru.white.module.impl.player.LockSlot;
 
 @Mixin(InventoryScreen.class)
 public class InventoryScreenMixin {
-
     @Unique private static final int BTN_W = 52;
     @Unique private static final int BTN_H = 12;
     @Unique private static final int BTN_OFFSET_X = 3;

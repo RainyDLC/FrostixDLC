@@ -23,20 +23,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 
-/**
- * Общий детект «съеденного» по всем игрокам в мире: съеденное определяется по завершённой
- * анимации использования, кулдауны лежат по UUID.
- * Use Tracker (по цели) и Use World Tracker (по всем) читают отсюда — логика в одном месте.
- */
 public final class UseCooldowns implements IMinecraft {
-
-    /**
-     * Запас по тикам к длительности анимации предмета: флаг использования прилетает с задержкой
-     * в пару тиков, поэтому «съел» никогда не совпадает с полной длительностью ровно.
-     */
     private static final int USE_TOLERANCE = 8;
 
-    /** Показывать в уведомлениях каждое замеченное использование — включается настройкой модуля. */
     public static boolean debug;
 
     public enum Item {
@@ -80,15 +69,12 @@ public final class UseCooldowns implements IMinecraft {
 
     private static final UseCooldowns INSTANCE = new UseCooldowns();
 
-    /** UUID -> предмет -> время окончания кулдауна. */
     private static final Map<UUID, Map<Item, Long>> COOLDOWNS = new HashMap<>();
 
-    /** Состояние поедания по каждому игроку в радиусе. */
     private static final Map<UUID, Use> USING = new HashMap<>();
 
     private static final List<BiConsumer<PlayerEntity, Item>> LISTENERS = new ArrayList<>();
 
-    /** Последний обработанный тик: оба модуля дергают tick() одним и тем же событием. */
     private static EventUpdate lastTick;
 
     private UseCooldowns() {
@@ -100,15 +86,10 @@ public final class UseCooldowns implements IMinecraft {
         int ticks;
     }
 
-    /** Уведомление о новом кулдауне — фильтровать по своим настройкам должен слушатель. */
     public static void listen(BiConsumer<PlayerEntity, Item> listener) {
         LISTENERS.add(listener);
     }
 
-    /**
-     * Дергается из EventUpdate включённых модулей — пока ни один не включён, детект не крутится.
-     * Событие одно на тик, поэтому второй вызов за тот же тик отбрасывается.
-     */
     public static void tick(EventUpdate event) {
         if (event == lastTick) return;
         lastTick = event;
@@ -139,8 +120,6 @@ public final class UseCooldowns implements IMinecraft {
             if (now) use.ticks++;
 
             if (!now && use.active) {
-                // порог берём у самого предмета: у водорослей анимация короче, чем у ешки,
-                // а на кастомных серверных предметах она вообще любая
                 int max = use.stack.isEmpty() ? 0 : use.stack.getMaxUseTime(player);
 
                 if (debug && max > 0) {
@@ -158,13 +137,11 @@ public final class UseCooldowns implements IMinecraft {
             use.active = now;
         }
 
-        // игроки, вышедшие из радиуса, больше не нужны — кулдауны при этом остаются в кэше
         USING.keySet().retainAll(seen);
 
         cleanup();
     }
 
-    /** Определяет по стаку, что именно доели. */
     private static void consumed(PlayerEntity player, ItemStack stack) {
         if (stack.isOf(Items.ENCHANTED_GOLDEN_APPLE)) {
             trigger(player, Item.NOTCH);
@@ -188,7 +165,6 @@ public final class UseCooldowns implements IMinecraft {
         }
     }
 
-    /** Ставит кулдаун вручную — например тошнотку, которая прилетела в нас. */
     public static void trigger(PlayerEntity player, Item item) {
         COOLDOWNS.computeIfAbsent(player.getUuid(), u -> new EnumMap<>(Item.class))
                 .put(item, System.currentTimeMillis() + item.seconds * 1000L);
@@ -196,7 +172,6 @@ public final class UseCooldowns implements IMinecraft {
         for (BiConsumer<PlayerEntity, Item> listener : LISTENERS) listener.accept(player, item);
     }
 
-    /** Остаток кулдауна в секундах, 0 — если кд нет. */
     public static int remaining(UUID uuid, Item item) {
         if (uuid == null) return 0;
 
@@ -209,14 +184,12 @@ public final class UseCooldowns implements IMinecraft {
         return (int) Math.max(0, Math.ceil((end - System.currentTimeMillis()) / 1000.0));
     }
 
-    /** Активные кулдауны игрока в порядке enum. */
     public static Map<Item, Long> of(UUID uuid) {
         Map<Item, Long> map = uuid == null ? null : COOLDOWNS.get(uuid);
 
         return map == null ? Map.of() : map;
     }
 
-    /** Сколько игроков сейчас в кэше кулдаунов. */
     public static int players() {
         return COOLDOWNS.size();
     }

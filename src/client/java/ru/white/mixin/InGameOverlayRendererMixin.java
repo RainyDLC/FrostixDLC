@@ -1,6 +1,5 @@
 package ru.white.mixin;
 
-
 import ru.white.module.impl.render.NoRender;
 import net.minecraft.client.gui.hud.InGameOverlayRenderer;
 import net.minecraft.client.render.VertexConsumerProvider;

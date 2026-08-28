@@ -6,12 +6,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Именованная нейро-модель: сеть + метаданные. Сохраняется в
- * C:/rainydlc/client1_21_11/neuro/&lt;name&gt;.neuro
- */
 public class NeuroModel {
-
     public static final Path DIR = Path.of("C:/rainydlc/client1_21_11/neuro");
     private static final Path CURRENT_FILE = DIR.resolve("current.txt");
 
@@ -38,16 +33,11 @@ public class NeuroModel {
     private final List<double[]> memoryY = new ArrayList<>();
     private int replayIndex = -1;
 
-    // "Штрихи" — сырая текстура руки: {jitterYaw, jitterPitch, скорость в этот момент}.
-    // Пишутся подряд, реплеятся последовательно — сохраняется ритм, а не отдельные точки.
     public static final int STROKE_SIZE = 3;
     private static final int MAX_STROKES = 50_000;
     private final List<float[]> strokes = new ArrayList<>();
     private int strokeIndex = -1;
 
-    // Траектории — полная копия движения: {yawErr, pitchErr, dYaw, dPitch, тиков с удара}.
-    // Состояние (где цель относительно прицела, давно ли был удар) -> что сделала мышь.
-    // Строка с sinceAttack = -1 означает разрыв записи (реплей через него не проходит).
     public static final int TRAJ_SIZE = 5;
     private static final int MAX_TRAJ = 60_000;
     private final List<float[]> traj = new ArrayList<>();
@@ -58,7 +48,6 @@ public class NeuroModel {
         this.net = new NeuroNet(INPUTS, HIDDEN, OUTPUTS);
     }
 
-    /** Предсказывает [yawSpeed, pitchSpeed] по ошибке наведения (в градусах). */
     public float[] predict(float yawErr, float pitchErr) {
         Prediction prediction = predictDetailed(yawErr, pitchErr);
         return new float[]{prediction.yawSpeed, prediction.pitchSpeed};
@@ -215,11 +204,6 @@ public class NeuroModel {
         return strokes.size();
     }
 
-    /**
-     * Следующий кусочек записанной текстуры руки {jitterYaw, jitterPitch} под текущую скорость.
-     * Держит указатель и идёт по записи последовательно, пока скорость контекста совпадает —
-     * так воспроизводится настоящий ритм дёрганий, а не случайный шум.
-     */
     public float[] nextJitter(float speed) {
         if (strokes.isEmpty()) return new float[]{0F, 0F};
 
@@ -267,13 +251,6 @@ public class NeuroModel {
         return traj.size();
     }
 
-    /**
-     * Полная копия движения: следующий записанный сдвиг камеры {dYaw, dPitch}
-     * под текущую ситуацию (ошибка до цели + давно ли был удар).
-     * Идёт по записи последовательно, пока ситуация совпадает — воспроизводится
-     * весь жест целиком: подлёт к хитбоксу, отвод после удара, доводка.
-     * null = подходящей записи нет, звать фолбэк.
-     */
     public float[] nextMove(float yawErr, float pitchErr, float sinceAttack) {
         if (traj.isEmpty()) return null;
 
@@ -310,7 +287,6 @@ public class NeuroModel {
         return scaledMove(traj.get(best), yawErr, pitchErr);
     }
 
-    /** Масштабирует записанный сдвиг под текущую ошибку, чтобы жест сходился к цели. */
     private static float[] scaledMove(float[] s, float yawErr, float pitchErr) {
         float recErr = (float) Math.hypot(s[0], s[1]);
         float curErr = (float) Math.hypot(yawErr, pitchErr);
@@ -370,9 +346,9 @@ public class NeuroModel {
         public final float pitchLead;
         public final float yawAccel;
         public final float pitchAccel;
-        // плавность движения внутри тика: 1 = чистая дуга, 0 = дёрганое туда-сюда
+
         public final float smoothness;
-        // пиковый рывок мыши внутри тика, 0..1 от MAX_PEAK_SPEED
+
         public final float peak;
         public final boolean remembered;
 

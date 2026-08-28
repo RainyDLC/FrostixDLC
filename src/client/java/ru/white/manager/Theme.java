@@ -86,7 +86,6 @@ public enum Theme {
                     ,ColorUtil.getColor(24,24,27),
                     new Color(0xB4E9FF).getRGB()),
 
-    // ── красные ──
     CRIMSON("Crimson",
             new Color(0xDC2626).getRGB()
             ,   new Color(0x99260707, true).getRGB()
@@ -123,7 +122,6 @@ public enum Theme {
                     ,ColorUtil.getColor(24,24,27),
                     new Color(0xFDB4C8).getRGB()),
 
-    // ── оранжевые / жёлтые ──
     TANGERINE("Tangerine",
             new Color(0xF28500).getRGB()
             ,   new Color(0x99220F00, true).getRGB()
@@ -160,7 +158,6 @@ public enum Theme {
                     ,ColorUtil.getColor(24,24,27),
                     new Color(0xFEE97F).getRGB()),
 
-    // ── зелёные ──
     MOSS("Moss",
             new Color(0x6B8E23).getRGB()
             ,   new Color(0x990D1204, true).getRGB()
@@ -211,7 +208,6 @@ public enum Theme {
                     ,ColorUtil.getColor(24,24,27),
                     new Color(0x8AFF6E).getRGB()),
 
-    // ── голубые / синие ──
     AQUA("Aqua",
             new Color(0x22D3EE).getRGB()
             ,   new Color(0x9904171A, true).getRGB()
@@ -262,7 +258,6 @@ public enum Theme {
                     ,ColorUtil.getColor(24,24,27),
                     new Color(0xB6C3FF).getRGB()),
 
-    // ── фиолетовые / розовые ──
     LAVENDER("Lavender",
             new Color(0xC4B5FD).getRGB()
             ,   new Color(0x99171519, true).getRGB()
@@ -299,7 +294,6 @@ public enum Theme {
                     ,ColorUtil.getColor(24,24,27),
                     new Color(0xFF85D7).getRGB()),
 
-    // ── тёплые коричневые ──
     COPPER("Copper",
             new Color(0xB87333).getRGB()
             ,   new Color(0x99120B05, true).getRGB()
@@ -322,7 +316,6 @@ public enum Theme {
                     ,ColorUtil.getColor(24,24,27),
                     new Color(0xC09A80).getRGB()),
 
-    // ── нейтральные ──
     SLATE("Slate",
             new Color(0x94A3B8).getRGB()
             ,   new Color(0x99111316, true).getRGB()
@@ -352,7 +345,6 @@ public enum Theme {
                     ,ColorUtil.getColor(24,24,27),
                     new Color(0x9BA3AE).getRGB()),
 
-    // ── кастомная тема «Палитра»: цвет задаётся пользователем в попапе тем ──
     CUSTOM("Палитра",
             new Color(0x88AAFF).getRGB()
             ,   new Color(0x99101624, true).getRGB()
@@ -380,7 +372,6 @@ public enum Theme {
         }
     };
 
-    /** Акцент кастомной темы «Палитра» — меняется на лету, сохраняется в конфиге. */
     public static int customAccent = 0xFF88AAFF;
     private final String name;
     private final int client;

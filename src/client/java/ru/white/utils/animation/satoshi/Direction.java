@@ -9,5 +9,4 @@ public enum Direction {
             return Direction.BACKWARDS;
         } else return Direction.FORWARDS;
     }
-
 }

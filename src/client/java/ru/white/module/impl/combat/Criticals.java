@@ -14,7 +14,6 @@ import ru.white.utils.other.Instance;
         category = Category.COMBAT
 )
 public class Criticals extends Module {
-
     public static Criticals getInstance() {
         return Instance.get(Criticals.class);
     }
@@ -27,7 +26,6 @@ public class Criticals extends Module {
                 && mc.player.getAttackCooldownProgress(2.0F) >= 1.0F
                 && mc.player.isOnGround()
                 && AttackAura.target != null) {
-
             mc.player.setVelocity(
                     mc.player.getVelocity().x,
                     0.04,

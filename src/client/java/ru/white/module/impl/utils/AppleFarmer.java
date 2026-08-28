@@ -1,6 +1,5 @@
 package ru.white.module.impl.utils;
 
-
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -29,8 +28,7 @@ import java.util.List;
 
 @ModuleInfo(name = "Apple Farmer", category = Category.OTHER)
 public class AppleFarmer extends Module {
-
-    public final SliderSetting range = new SliderSetting(this,"Дистанция", 
+    public final SliderSetting range = new SliderSetting(this,"Дистанция",
             4.5f, 3f, 4.5f, 0.1f);
 
     private enum FarmState {
@@ -301,7 +299,6 @@ public class AppleFarmer extends Module {
             mc.interactionManager.updateBlockBreakingProgress(currentBlock, hit.getSide());
         }
         mc.player.swingHand(Hand.MAIN_HAND);
-
     }
 
     private void interactBlock(BlockPos pos) {
@@ -499,7 +496,6 @@ public class AppleFarmer extends Module {
             boolean isTargetItem = stackInHotbar.getItem() == Items.BONE_MEAL || stackInHotbar.getItem() == Items.OAK_SAPLING;
 
             if (isTargetItem && stackInHotbar.getCount() < 64) {
-
                 int bestSlot = -1;
                 int bestCount = stackInHotbar.getCount();
 
@@ -527,5 +523,4 @@ public class AppleFarmer extends Module {
             }
         }
     }
-
 }

@@ -28,12 +28,7 @@ import java.awt.*;
 import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
-/**
- * Фуллскрин-пасс сканирующей волны: реконструирует мировые координаты из
- * depth-буфера и аддитивно подмешивает кольцо к цветовому аттачменту.
- */
 public final class ScanWorldCompositePipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/scanworld_composite");
     private static final Identifier SHADER_ID = Identifier.of("client", "core/scanworld_composite");
 
@@ -62,9 +57,7 @@ public final class ScanWorldCompositePipeline {
     private static final Matrix4f TEXTURE_MATRIX = new Matrix4f();
 
     private static final int BUFFER_SIZE = 256;
-    // Кольцо uniform-буферов: несколько сканов за кадр нельзя рисовать через один
-    // буфер — GPU исполняет draw позже записи, и волны получили бы чужие данные
-    // (та же причина, что и у BlurPipeline.UNIFORM_RING)
+
     private static final int UNIFORM_RING = 16;
 
     private GpuBuffer[] uniformBuffers;

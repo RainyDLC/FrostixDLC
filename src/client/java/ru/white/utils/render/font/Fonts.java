@@ -4,10 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class Fonts {
-
     private static final Map<String, String> FONT_REGISTRY = new LinkedHashMap<>();
-
-
 
     public static final Font sf_bold = register("sf_bold", "sf_bold");
     public static final Font sf_medium = register("sf_medium", "sf_medium");
@@ -17,8 +14,6 @@ public class Fonts {
     public static final Font category = register("category", "category");
     public static final Font gui = register("icongui", "icongui");
     public static final Font rainydlc_2 = register("rainydlc_2", "rainydlc_2");
-
-
 
     private static Font register(String name, String path) {
         FONT_REGISTRY.put(name, path);

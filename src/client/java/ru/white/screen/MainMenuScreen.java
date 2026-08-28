@@ -25,30 +25,23 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
-/**
- * Главное меню RainyDLC в глубокой дождевой синей палитре:
- * тёмное небо, холодное свечение и полупрозрачные синие панели.
- */
 public class MainMenuScreen extends Screen implements IMinecraft {
-
-    // ── дождевая синяя палитра ─────────────────────────────────────────
-    private static final int ICE_R = 65, ICE_G = 145, ICE_B = 205;     // синий акцент
-    private static final int AQUA_R = 74, AQUA_G = 157, AQUA_B = 209;  // холодный синий
-    private static final int TXT_R = 218, TXT_G = 235, TXT_B = 250;    // светлый текст
+    private static final int ICE_R = 65, ICE_G = 145, ICE_B = 205;
+    private static final int AQUA_R = 74, AQUA_G = 157, AQUA_B = 209;
+    private static final int TXT_R = 218, TXT_G = 235, TXT_B = 250;
 
     private static final Identifier MENU_BG = Identifier.of("client", "textures/frame/mainmenu.png");
-    /** Фирменный логотип (R с листом) — иконка окна, худ-ватермарка и главное меню. */
+
     private static final Identifier ICON_LOGO = Identifier.of("client", "textures/icon.png");
     private static final Identifier GLOW_TEX = Identifier.of("client", "textures/particles/glow.png");
-    /** Текстура молний — та же, что в LightningRenderer (Отображение таргета). */
-    private static final Identifier BOLT_TEX = Identifier.of("client", "textures/visuals/particles_2.png");
-    /** Стрелка раскрытия информационной панели (при повороте 0° смотрит вверх). */
-    private static final Identifier ARROW_TEX = Identifier.of("client", "textures/arrow.png");
 
+    private static final Identifier BOLT_TEX = Identifier.of("client", "textures/visuals/particles_2.png");
+
+    private static final Identifier ARROW_TEX = Identifier.of("client", "textures/arrow.png");
 
     public MainMenuScreen() {
         super(Text.literal("MainMenuScreen"));
-        infoAnim.set(1); // панель по умолчанию раскрыта
+        infoAnim.set(1);
     }
 
     public Animation alpha = new Animation();
@@ -68,11 +61,9 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     private boolean exitSlideDragging = false;
     private float exitSlideProgress = 0F;
 
-    // язык: маленькая кнопка-переключатель РУС/АНГ в углу экрана
     private float langBtnX, langBtnY, langBtnW, langBtnH;
     private final Animation langHover = new Animation();
 
-    // информационная панель (низ слева): раскрытие/свёртывание по клику на заголовок
     private boolean infoExpanded = true;
     private final Animation infoAnim = new Animation();
     private float infoBtnX, infoBtnY, infoBtnW, infoBtnH;
@@ -83,7 +74,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         alpha.set(0);
         alpha.run(1, 0.5F, Easings.BACK_OUT);
 
-        // применяем сохранённый активный аккаунт при первом показе меню
         ru.white.alt.AltManager.get().bootstrap();
 
         buildButtons();
@@ -162,7 +152,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         float alphaVal = this.alpha.get();
         float time = (System.currentTimeMillis() % 100000L) / 1000F;
 
-        float parallaxStrength = 0.07F; // Сила смещения
+        float parallaxStrength = 0.07F;
         float offsetX = (screenWidth / 2F - (float) lastMouseX) * parallaxStrength;
         float offsetY = (screenHeight / 2F - (float) lastMouseY) * parallaxStrength;
 
@@ -174,19 +164,15 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
         RenderUtil.Images.texture(MENU_BG, bgX, bgY, bgW, bgH, ColorUtil.getColor(255, 255, 255, alphaVal));
 
-        // фон остаётся резким: вместо блюра только лёгкая тёмная вуаль под UI
         Draw.rect(0, 0, screenWidth, screenHeight,
                 ColorUtil.getColor(5, 12, 30, alphaVal * 0.35F));
         ScreenBlur.capture(4);
 
-        // дождливая атмосфера: градиент и мягкое холодное свечение
         drawRainyBackground(screenWidth, screenHeight, alphaVal, time);
 
-        // дождь по «стеклу» главного меню: наклонные струи, брызги об нижний край
         renderMenuRain(screenWidth, screenHeight, alphaVal,
                 Math.max(0.8f, currentScale / 2f));
 
-        // ЛОГОТИП — текстовый знак клиента заменён на фирменный R-логотип
         float logoSize = 19F;
         RenderUtil.Images.texture(ICON_LOGO, screenWidth / 2F - logoSize / 2F,
                 screenHeight * 0.32F + 26F - 30F * alphaVal, logoSize, logoSize,
@@ -198,7 +184,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         for (MenuButton b : buttons) b.update(lastMouseX, lastMouseY);
         drawMenuButtons(screenWidth, screenHeight, alphaVal);
 
-        // вспомогательный UI дождевой темы
         drawInfoPanel(screenWidth, screenHeight, alphaVal, time);
         drawSignature(screenWidth, screenHeight, alphaVal, time);
         drawLanguageButton(screenWidth, alphaVal);
@@ -206,8 +191,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         Render2D.endOverlay();
         if (context != null) context.getMatrices().popMatrix();
     }
-
-    // ── дождь по «стеклу» меню: реалистичные капли на блюре ──
 
     private static final class GlassDrop {
         float x, y, r;
@@ -227,15 +210,12 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     private final java.util.List<GlassDrop> glassDrops = new ArrayList<>();
     private long lastRainFrame;
 
-    /** Дождь по «стеклу»: реалистичные капли на блюре. */
     private void renderMenuRain(float w, float h, float anim, float S) {
         if (anim <= 0.01F) return;
         long now = System.currentTimeMillis();
         long dt = Math.min(60L, Math.max(1L, now - lastRainFrame));
         lastRainFrame = now;
 
-
-        // ── капли на стекле: тёмные капли с бликом, как на настоящем окне ──
         int targetDrops = Math.min(230, Math.max(90, (int) (w / 6)));
         while (glassDrops.size() < targetDrops)
             glassDrops.add(spawnGlassDrop(w, h));
@@ -244,7 +224,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         while (dit.hasNext()) {
             GlassDrop d = dit.next();
 
-            // мелкие капли живут своей жизнью и «испаряются» в другом месте
             if (!d.sliding && now - d.born > d.lifeMs) {
                 dit.remove();
                 continue;
@@ -261,7 +240,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
                 d.vy += 0.00035 * dt;
                 d.y += d.vy * dt;
 
-                // мокрый след — тёмная дорожка за каплей
                 float trailH = d.y - d.slideStartY;
                 if (trailH > 2F) {
                     Draw.gradientRect(d.x - d.r * S * 0.7f, d.slideStartY,
@@ -278,7 +256,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
                     continue;
                 }
             } else {
-                // капля медленно наливается
                 if (d.r < 3.4F) d.r += 0.00035 * dt;
             }
 
@@ -291,40 +268,35 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     private GlassDrop spawnGlassDrop(float w, float h) {
         float t = (float) Math.random();
         float r;
-        if (t < 0.72f) r = 0.7f + (float) Math.random() * 0.8f;        // микроскопические
-        else if (t < 0.95f) r = 1.5f + (float) Math.random() * 1.1f;   // средние
-        else r = 2.7f + (float) Math.random() * 1.5f;                  // крупные
+        if (t < 0.72f) r = 0.7f + (float) Math.random() * 0.8f;
+        else if (t < 0.95f) r = 1.5f + (float) Math.random() * 1.1f;
+        else r = 2.7f + (float) Math.random() * 1.5f;
         return new GlassDrop((float) (Math.random() * w), (float) (Math.random() * h), r);
     }
 
-    /** Реалистичная капля на стекле: тёмное тело, ядро, рефракция снизу, блик. */
     private void drawGlassDrop(GlassDrop d, float anim, float S) {
         float dr = d.r * S;
         float stretch = d.sliding ? Math.min(1.7f, 1f + (float) d.vy * 6f) : 1f;
         float bh = dr * stretch;
 
-        // тело капли — полупрозрачное тёмное стекло
         RenderUtil.Render2D.rect(d.x - dr, d.y - bh, dr * 2, bh * 2,
                 ColorUtil.replAlpha(ColorUtil.getColor(12, 26, 48), (int) (anim * 125)),
                 Math.min(dr, bh));
 
-        // ядро темнее, смещено чуть вниз-вправо
         RenderUtil.Render2D.rect(d.x - dr * 0.42f, d.y - bh * 0.25f, dr * 1.02f, bh * 1.05f,
                 ColorUtil.replAlpha(ColorUtil.getColor(6, 14, 30), (int) (anim * 95)),
                 dr * 0.5f);
 
-        // рефракция: свет собирается у нижней кромки
         RenderUtil.Render2D.rect(d.x - dr * 0.66f, d.y + bh * 0.32f, dr * 1.32f, bh * 0.36f,
                 ColorUtil.replAlpha(ColorUtil.getColor(150, 195, 240), (int) (anim * 75)),
                 dr * 0.34f);
 
         if (dr > 1.1f) {
-            // блик сверху-слева
             RenderUtil.Render2D.rect(d.x - dr * 0.62f, d.y - bh * 0.76f,
                     dr * 0.5f, bh * 0.32f,
                     ColorUtil.replAlpha(ColorUtil.getColor(238, 249, 255), (int) (anim * 185)),
                     dr * 0.17f);
-            // микро-точка блика рядом
+
             RenderUtil.Render2D.rect(d.x + dr * 0.05f, d.y - bh * 0.42f,
                     dr * 0.15f, bh * 0.12f,
                     ColorUtil.replAlpha(ColorUtil.getColor(255), (int) (anim * 155)),
@@ -332,45 +304,36 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         }
     }
 
-    // ── дождевой фон ────────────────────────────────────────────────────
-
     private void drawRainyBackground(int sw, int sh, float a, float time) {
         float cx = sw / 2F;
         float cy = sh * 0.30F;
 
-        // очень мягкое «дышащее» гало за логотипом — едва заметная холодная
-        // дымка: без пересвеченного белого ядра, медленная пульсация (вдох/выдох)
         float breathe = 0.70F + 0.30F * (float) Math.sin(time * 0.7F);
         RenderUtil.Images.texture(GLOW_TEX, cx - 200, cy - 155, 400, 310,
                 ColorUtil.getColor(40, 105, 185, a * 0.12F * breathe));
         RenderUtil.Images.texture(GLOW_TEX, cx - 110, cy - 85, 220, 170,
                 ColorUtil.getColor(55, 130, 210, a * 0.10F * breathe));
 
-        // виньетка: края мягко темнеют
         int edge = ColorUtil.getColor(3, 8, 20, a * 0.8F);
         int edgeT = ColorUtil.getColor(3, 8, 20, 0F);
         Draw.gradientRect(0, 0, sw, 64, new int[]{edge, edge, edgeT, edgeT}, 0);
         Draw.gradientRect(0, sh - 80, sw, 80, new int[]{edgeT, edgeT, edge, edge}, 0);
     }
 
-    // ── информационная панель (низ слева): клик по заголовку — раскрыть/свернуть ──
-
     private void drawInfoPanel(int sw, int sh, float a, float time) {
         float w = 160;
-        float headerH = 20F;                 // заголовок виден всегда
-        float bodyH = 28F;                   // три строки информации
+        float headerH = 20F;
+        float bodyH = 28F;
         float x = 12;
 
         infoAnim.update();
-        float open = infoAnim.get();         // 0 — свёрнуто, 1 — развёрнуто
+        float open = infoAnim.get();
         float h = headerH + bodyH * open;
-        float y = sh - h - 12;               // низ панели закреплён, раскрывается вверх
+        float y = sh - h - 12;
 
-        // кликабельная зона — заголовок
         infoBtnX = x; infoBtnY = y; infoBtnW = w; infoBtnH = headerH;
         boolean hov = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, x, y, w, headerH);
 
-        // панель: глубокая синяя заливка + тёмный контур
         RenderUtil.Blur.blur(x, y, w, h, 1, 9, ColorUtil.getColor(6, 16, 38, a * 0.60F));
         Draw.rect(x, y, w, h, ColorUtil.getColor(14, 40, 74, a * 0.40F), 9);
         Draw.outline(x, y, w, h, 0.8F, ColorUtil.getColor(6, 24, 46, a * 0.90F), 9);
@@ -379,13 +342,11 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         float blink = 0.45F + 0.55F * (float) Math.abs(Math.sin(time * 2.4F));
         int teal = ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * 0.95F);
 
-        // заголовок + мигающий индикатор рядом с текстом
         String title = "INFORMATION";
         Fonts.sf_regular.draw(title, x + 10, y + 7, 5.5F, teal);
         Draw.rect(x + 10 + Fonts.sf_regular.getWidth(title, 5.5F) + 4, y + 7.5F, 4.5F, 4.5F,
                 ColorUtil.getColor(80, 255, 230, a * blink), 2.2F);
 
-        // стрелка раскрытия: свёрнуто — смотрит вниз, развёрнуто — вверх (плавный поворот)
         float arrowSize = 7F;
         int arrowCol = ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, a * (0.45F + (hov ? 0.55F : 0F)));
         Client.get().render2D().getTexturePipeline().drawGlowTexture(
@@ -395,25 +356,21 @@ public class MainMenuScreen extends Screen implements IMinecraft {
                 new float[]{0F, 0F, 0F, 0F}, 0F, 180F * (1F - open));
 
         if (open > 0.01F) {
-            float ca = a * open;             // контент проявляется вместе с раскрытием
+            float ca = a * open;
             int dim = ColorUtil.getColor(150, 200, 210, ca * 0.55F);
 
-            // разделитель под заголовком
             Draw.rect(x + 10, y + 16.5F, w - 20, 0.5F, ColorUtil.getColor(AQUA_R, AQUA_G, AQUA_B, ca * 0.25F));
 
-            // строка 1: текущий ник игрока
             String nick = mc.getSession() != null ? mc.getSession().getUsername() : "-";
             Fonts.sf_regular.draw("USER " + nick, x + 10, y + 20, 5,
                     ColorUtil.getColor(190, 235, 250, ca * 0.85F));
 
-            // строка 2: FPS + версия
             if (h >= 35F) {
                 Fonts.sf_regular.draw("FPS " + mc.getCurrentFps(), x + 10, y + 28, 5, dim);
                 String ver = "VER 1.21.11";
                 Fonts.sf_regular.draw(ver, x + w - 10 - Fonts.sf_regular.getWidth(ver, 5), y + 28, 5, dim);
             }
 
-            // строка 3: время + статус
             if (h >= 43F) {
                 String t = new SimpleDateFormat("HH:mm").format(new Date());
                 Fonts.sf_regular.draw("TIME " + t, x + 10, y + 36, 5, dim);
@@ -424,8 +381,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         }
     }
 
-    // ── подпись клиента (низ справа) ───────────────────────────────────
-
     private void drawSignature(int sw, int sh, float a, float time) {
         String text = "RainyDLC";
         float tw = Fonts.sf_regular.getWidth(text, 6);
@@ -434,8 +389,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
         Fonts.sf_regular.draw(text, x, y, 6, ColorUtil.getColor(170, 210, 242, a * 0.78F));
     }
-
-    // ── кнопки ──────────────────────────────────────────────────────────
 
     private void drawMenuButtons(int screenWidth, int screenHeight, float alphaVal) {
         updateExitSlideProgress();
@@ -454,23 +407,20 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         float exitWidth = totalCardsWidth;
         float exitHeight = 24;
 
-        // --- ВЫЧИСЛЕНИЕ ВЫСОТЫ БЛОКА ДЛЯ ОТЦЕНТРОВКИ ---
         float totalBlockHeight = cardHeight + gap + smallHeight + gap + exitHeight;
 
         float startX = screenWidth / 2F - totalCardsWidth / 2F;
-        // блок слегка смещён вниз относительно центра — воздух под заголовком
+
         float startY = screenHeight / 2F - totalBlockHeight / 2F + 14F;
         float appearY = (1F - alphaVal) * 34F;
 
         float currentY = startY + appearY;
 
-        // 1 Ряд: Основные кнопки
         multiplayerButton.drawHero(startX, currentY, cardWidth, cardHeight, alphaVal, 0);
         singleplayerButton.drawHero(startX + cardWidth + gap, currentY, cardWidth, cardHeight, alphaVal, 1);
 
         currentY += cardHeight + gap;
 
-        // 2 Ряд: Мелкие кнопки
         float smallX = startX;
         settingsButton.drawCompact(smallX, currentY, smallWidth, smallHeight, alphaVal, "l");
         smallX += smallWidth + smallGap;
@@ -482,7 +432,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
         currentY += smallHeight + gap;
 
-        // 3 Ряд: Кнопка выхода
         float exitX = screenWidth / 2F - exitWidth / 2F;
         exitButton.drawExit(exitX, currentY, exitWidth, exitHeight, alphaVal, exitSlideProgress, exitSlideDragging);
     }
@@ -655,31 +604,20 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             return lastW;
         }
 
-        /**
-         * Дождевая панель: усиленный блюр + ровная синяя заливка (без
-         * градиента) + тёмный контур + слабое постоянное свечение.
-         * При наведении контур гаснет и вдоль границы бегут электрические
-         * молнии (как «Отображение таргета» с режимом «Молнии»).
-         */
         private void drawFrostPanel(float x, float y, float width, float height, float globalAlpha, float hp, int accent) {
             float radius = 9F;
 
-            // полупрозрачность "как у name tag": фон и блюр сильно прозрачнее,
-            // сквозь панели просвечивает дождливый фон
             RenderUtil.Blur.blur(x, y, width, height, 1, radius + 3F,
                     ColorUtil.getColor(8, 20, 46, globalAlpha * (0.16F + hp * 0.08F)));
 
-            // ровный дождевой синий без вертикального градиента — тонкая вуаль
             int fill = ColorUtil.getColor(20, 48, 88, globalAlpha * (0.07F + hp * 0.06F));
             Draw.rect(x, y, width, height, fill, radius);
 
-            // тёмная обводка, гаснет при наведении — её сменяют молнии
             if (hp < 0.98F) {
                 int edge = ColorUtil.getColor(10, 26, 52, globalAlpha * (1F - hp * 0.85F));
                 Draw.outline(x, y, width, height, 0.8F, edge, radius);
             }
 
-            // слабое приятное свечение — всегда, чуть сильнее при наведении
             Draw.glow(x, y, width, height,
                     ColorUtil.replAlpha(accent, (int) (globalAlpha * 255 * (0.10F + hp * 0.12F))),
                     radius, 4F, 0.35F + hp * 0.35F);
@@ -689,12 +627,9 @@ public class MainMenuScreen extends Screen implements IMinecraft {
                         ColorUtil.replAlpha(accent, (int) (globalAlpha * 255 * (hp * 0.40F))),
                         radius, 5F, hp * 0.6F);
 
-                // молнии по контуру при наведении
                 drawBolts(x, y, width, height, globalAlpha, hp);
             }
         }
-
-        // ── электрические молнии при наведении (стиль LightningRenderer) ──
 
         private static final int MAX_BOLTS = 14;
         private static final long BOLT_INTERVAL_MS = 42L;
@@ -704,7 +639,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         private long lastBoltSpawn = 0L;
 
         private static final class Bolt2D {
-            final float[] pts; // x0,y0,x1,y1,...
+            final float[] pts;
             final long spawnTime;
             final long lifetimeMs;
 
@@ -732,14 +667,12 @@ public class MainMenuScreen extends Screen implements IMinecraft {
                 float alpha = globalAlpha * hp * fade * flicker;
                 if (alpha <= 0.03F) continue;
 
-                // свечение-блобы у вершин (как glow-фаза 3D-молний)
                 for (int i = 0; i < bolt.pts.length; i += 2) {
                     float s = 3.5F;
                     drawRotTexture(BOLT_TEX, bolt.pts[i] - s / 2F, bolt.pts[i + 1] - s / 2F, s, s, 0F,
                             ColorUtil.getColor(150, 225, 255, alpha * 0.55F));
                 }
 
-                // светящиеся сегменты разряда
                 for (int i = 0; i < bolt.pts.length - 2; i += 2) {
                     float ax = bolt.pts[i], ay = bolt.pts[i + 1];
                     float bx = bolt.pts[i + 2], by = bolt.pts[i + 3];
@@ -755,7 +688,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             }
         }
 
-        /** Добавляет в 2D-оверлей повернутую светящуюся текстуру (аддитивный блендинг). */
         private static void drawRotTexture(Identifier tex, float x, float y, float w, float h,
                                            float rotationDeg, int color) {
             Client.get().render2D().getTexturePipeline().drawGlowTexture(
@@ -768,7 +700,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             List<Float> pts = new ArrayList<>(32);
 
             if (BOLT_RAND.nextInt(4) == 0) {
-                // шип наружу от контура (как спайки вокруг таргета)
                 float t = BOLT_RAND.nextFloat();
                 float[] p = perimeterPoint(x, y, w, h, t);
                 float[] n = perimeterNormal(x, y, w, h, t);
@@ -778,7 +709,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
                 pts.add(p[1]);
                 buildPath(pts, p, end, 3, len * 0.4F);
             } else {
-                // дуга, ползущая вдоль контура кнопки
                 float per = 2F * (w + h);
                 float t0 = BOLT_RAND.nextFloat() * per;
                 float arc = 16F + BOLT_RAND.nextFloat() * 46F;
@@ -802,7 +732,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             return new Bolt2D(flat, System.currentTimeMillis(), 130 + BOLT_RAND.nextInt(140));
         }
 
-        /** Рекурсивное смещение середины (тот же алгоритм, что в LightningRenderer). */
         private void buildPath(List<Float> out, float[] a, float[] b, int depth, float maxOffset) {
             if (depth <= 0) {
                 out.add(b[0]);
@@ -824,7 +753,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             buildPath(out, mid, b, depth - 1, maxOffset * 0.5F);
         }
 
-        /** Точка на периметре прямоугольника, t — путь от левого верхнего угла по часовой. */
         private float[] perimeterPoint(float x, float y, float w, float h, float t) {
             float per = 2F * (w + h);
             t = ((t % per) + per) % per;
@@ -837,7 +765,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             return new float[]{x, y + h - t};
         }
 
-        /** Наружная нормаль периметра в точке с тем же параметром t. */
         private float[] perimeterNormal(float x, float y, float w, float h, float t) {
             float per = 2F * (w + h);
             t = ((t % per) + per) % per;
@@ -884,7 +811,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
             float progress = Math.max(0F, Math.min(1F, slideProgress));
 
-            // заполнение дорожки при сдвиге — ровная синяя волна
             if (progress > 0.01F) {
                 Draw.rect(x + 2, y + 2, (width - 4) * progress, height - 4,
                         ColorUtil.getColor(70, 190, 240, globalAlpha * (0.10F + progress * 0.16F)), 7);
@@ -893,7 +819,6 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             float knobSize = height - 8F;
             float knobX = x + 5F + (width - knobSize - 10F) * progress;
 
-            // синий ползунок: ровная дождевая заливка
             Draw.rect(knobX, y + 4F, knobSize, knobSize,
                     ColorUtil.getColor(150, 220, 250, globalAlpha * (0.25F + progress * 0.45F)), 4);
             Draw.outline(knobX, y + 4F, knobSize, knobSize, 0.7F,

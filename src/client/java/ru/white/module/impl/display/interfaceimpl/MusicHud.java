@@ -25,10 +25,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MusicHud implements element {
-
     private static final MediaInfo EMPTY = new MediaInfo("Нет трека", "—", new byte[0], 0, 0, false);
 
-    // --- Переменная для логики масштабирования ---
     private static float S = 1.0F;
 
     private ExecutorService executor;
@@ -133,10 +131,8 @@ public class MusicHud implements element {
 
         dragSetting.active = true;
 
-        // Обновляем множитель масштаба
         S = InterFace.getInstance().sizeHud.getValue();
 
-        // Динамические переменные с учетом скейла
         float WIDTH = 79f * S;
         float HEIGHT = 41f * S;
         float PAD = 4f * S;

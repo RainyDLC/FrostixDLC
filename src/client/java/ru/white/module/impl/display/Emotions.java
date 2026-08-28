@@ -7,7 +7,6 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
-import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 import ru.white.emotions.EmoteManager;
 import ru.white.emotions.EmoteWheelScreen;
@@ -18,21 +17,11 @@ import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
 import ru.white.module.api.settings.impl.BindSetting;
 
-/**
- * Эмоции: колесо выбора открывается по ЛЮБОМУ из трёх независимых путей:
- * 1. Ванильный KeyBinding (виден в настройках управления Minecraft) —
- *    самый надёжный, не зависит от шины событий клиента.
- * 2. Прямое GLFW-опросление BindSetting каждый тик (мимо EventBus).
- * 3. Классический EventKey-обработчик.
- */
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ModuleInfo(name = "Emotions", desc = "Emote wheel (bind in MC controls or here)", category = Category.OTHER)
 public class Emotions extends Module {
-
-    /** Ванильный бинд — настраивается и в управлении Minecraft. */
     public static KeyBinding vanillaKey;
 
-    /** Клиентский бинд — опрашивается напрямую через GLFW. */
     public BindSetting wheelKey = new BindSetting(this, "Wheel key", -1);
 
     private boolean lastBindDown = false;
@@ -52,7 +41,6 @@ public class Emotions extends Module {
     }
 
     private void onTick(MinecraftClient mc) {
-        // путь 1: ванильный KeyBinding
         try {
             boolean vanillaPressed = vanillaKey != null && vanillaKey.wasPressed();
             if (vanillaPressed) {
@@ -68,7 +56,6 @@ public class Emotions extends Module {
             return;
         }
 
-        // путь 2: прямой GLFW-опрос клиентского бинда
         int code = wheelKey.get();
         if (code > 0) {
             long window = mc.getWindow().getHandle();
@@ -84,7 +71,6 @@ public class Emotions extends Module {
         }
     }
 
-    /** Путь 3: классическое событие клавиши. */
     @EventHandler
     public void onKey(EventKey e) {
         int code = wheelKey.get();

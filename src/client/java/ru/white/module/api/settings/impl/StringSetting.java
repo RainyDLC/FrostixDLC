@@ -1,17 +1,13 @@
 package ru.white.module.api.settings.impl;
 
-
 import ru.white.module.api.settings.Setting;
 import lombok.Getter;
 import ru.white.module.api.Module;
-
-
 
 import java.util.function.Supplier;
 
 @Getter
 public class StringSetting extends Setting<String> {
-
     private final boolean onlyNumber;
     private String cachedValue;
 

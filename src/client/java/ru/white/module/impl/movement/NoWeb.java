@@ -13,7 +13,6 @@ import ru.white.utils.aura.AuraUtil;
         category = Category.MOVEMENT
 )
 public class NoWeb extends Module {
-
     @EventHandler
     public void onEvent(EventUpdate e) {
         if (!AuraUtil.nullCheck() && AuraUtil.isPlayerInWeb()) {

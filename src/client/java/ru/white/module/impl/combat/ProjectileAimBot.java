@@ -37,7 +37,6 @@ import java.util.UUID;
         category = Category.COMBAT
 )
 public class ProjectileAimBot extends Module {
-
     public BooleanSetting onlyWhenUsing = new BooleanSetting(this, "Только при зарядке", true);
     public BooleanSetting playersSet = new BooleanSetting(this, "Атаковать игроков", true);
     public BooleanSetting mobsSet = new BooleanSetting(this, "Атаковать мобов", false);
@@ -61,7 +60,6 @@ public class ProjectileAimBot extends Module {
     public void onUpdate(EventUpdate event) {
         if (mc.player == null || mc.world == null) return;
 
-        // Track positions of nearby entities for velocity calculation
         for (Entity entity : mc.world.getEntities()) {
             if (!(entity instanceof LivingEntity)) continue;
             if (entity instanceof ClientPlayerEntity) continue;
@@ -96,20 +94,18 @@ public class ProjectileAimBot extends Module {
         if (speed <= 0f) return;
 
         Vec3d eyePos = mc.player.getEyePos();
-        // Aim at upper body (~60% height from feet)
+
         Vec3d targetFeet = target.getEntityPos();
         Vec3d targetBase = targetFeet.add(0, target.getHeight() * 0.2, 0);
         Vec3d vel = getSmoothedVelocity(target);
 
-        // Iterative convergence: predict where target will be when projectile arrives
         Vec3d predicted = predictPosition(eyePos, targetBase, vel, speed);
 
-        // MC adds player velocity to the projectile when it spawns — compensate for that drift
         predicted = compensatePlayerVelocity(eyePos, predicted, speed);
 
         float newYaw = calcYaw(eyePos, predicted);
         AimResult aim = calcAim(eyePos, predicted, speed);
-        if (aim == null) return; // target unreachable
+        if (aim == null) return;
 
         float currentYaw = mc.player.getYaw();
         float currentPitch = mc.player.getPitch();
@@ -119,12 +115,9 @@ public class ProjectileAimBot extends Module {
 
         Rotation rotation = new Rotation(GCDUtil.applyGCD(currentYaw + yawDelta * smoothH.getValue(), currentYaw),GCDUtil.applyGCD(currentPitch + pitchDelta * smoothV.getValue(), currentPitch));
 
-
         RotationProcess.update(rotation,500,500,0,20);
-
     }
 
-    // Iterative prediction: shoot → measure flight time → move target by velocity → repeat
     private Vec3d predictPosition(Vec3d from, Vec3d targetBase, Vec3d vel, float speed) {
         Vec3d predicted = targetBase;
         float mult = predictMult.getValue();
@@ -132,14 +125,12 @@ public class ProjectileAimBot extends Module {
             AimResult aim = calcAim(from, predicted, speed);
             if (aim == null) break;
             Vec3d next = targetBase.add(vel.multiply(aim.ticks * mult));
-            // stop when converged
+
             if (next.squaredDistanceTo(predicted) < 0.001) break;
             predicted = next;
         }
         return predicted;
     }
-
-    // ── Core aim calculation ──────────────────────────────────────────────────
 
     private static final class AimResult {
         final float pitch;
@@ -147,36 +138,24 @@ public class ProjectileAimBot extends Module {
         AimResult(float pitch, int ticks) { this.pitch = pitch; this.ticks = ticks; }
     }
 
-    /**
-     * Binary-search for the MC pitch angle that makes the projectile hit `to`
-     * from `from` at the given `speed`, simulating real MC arrow physics
-     * (gravity 0.05/tick, drag 0.99/tick).
-     * Returns null if the target is out of range.
-     */
     private AimResult calcAim(Vec3d from, Vec3d to, float speed) {
         double dx = to.x - from.x;
         double dy = to.y - from.y;
         double dz = to.z - from.z;
-        double D = Math.sqrt(dx * dx + dz * dz); // horizontal distance
+        double D = Math.sqrt(dx * dx + dz * dz);
 
-        // Horizontal unit vector (direction to shoot in XZ plane)
         double ux = D > 0.001 ? dx / D : 0.0;
         double uz = D > 0.001 ? dz / D : 1.0;
 
-        // If target is almost directly above/below, special case
         if (D < 0.3) {
             float pitch = dy > 0 ? -89f : 89f;
             return new AimResult(pitch, 5);
         }
 
-        // Binary search: find elevation angle (standard: positive = upward)
-        // such that projectile's Y when it reaches horizontal distance D equals to.y
         double lo = -Math.PI / 2 + 0.01;
         double hi = Math.PI / 2 - 0.01;
 
-        // Sanity check: at maximum useful elevation, can we still reach horizontal distance D?
         if (simYAtDist(from.y, ux, uz, speed, Math.toRadians(75), D) == Double.MIN_VALUE) {
-            // even 75° elevation can't reach D → out of range
             return null;
         }
 
@@ -184,18 +163,16 @@ public class ProjectileAimBot extends Module {
             double mid = (lo + hi) * 0.5;
             double simY = simYAtDist(from.y, ux, uz, speed, mid, D);
             if (simY == Double.MIN_VALUE) {
-                // Shot doesn't reach D at this elevation — need more upward angle
                 lo = mid;
             } else if (simY < to.y) {
-                lo = mid; // too low → aim higher
+                lo = mid;
             } else {
-                hi = mid; // too high → reduce elevation
+                hi = mid;
             }
         }
 
         double elev = (lo + hi) * 0.5;
 
-        // Validate result: simulated Y should be within 0.5 of target
         double finalY = simYAtDist(from.y, ux, uz, speed, elev, D);
         if (finalY == Double.MIN_VALUE || Math.abs(finalY - to.y) > 2.0) return null;
 
@@ -204,15 +181,10 @@ public class ProjectileAimBot extends Module {
         return new AimResult(mcPitch, ticks);
     }
 
-    /**
-     * Simulate projectile with MC physics (gravity + drag).
-     * Returns the Y coordinate of the projectile when its XZ distance from
-     * origin equals targetD. Returns Double.MIN_VALUE if it never reaches targetD.
-     */
     private double simYAtDist(double fromY, double ux, double uz, float speed,
                                double elevRad, double targetD) {
         double cosPitch = Math.cos(elevRad);
-        double sinPitch = Math.sin(elevRad); // positive = upward
+        double sinPitch = Math.sin(elevRad);
 
         double vx = ux * cosPitch * speed;
         double vy = sinPitch * speed;
@@ -226,14 +198,12 @@ public class ProjectileAimBot extends Module {
             double npy = py + vy;
             double npz = pz + vz;
 
-            // MC arrow physics: gravity first, then drag
             vy -= 0.05;
             vx *= 0.99; vy *= 0.99; vz *= 0.99;
 
             double hd = Math.sqrt(npx * npx + npz * npz);
 
             if (hd >= targetD) {
-                // Linearly interpolate Y at exact targetD
                 double frac = prevHD < hd ? (targetD - prevHD) / (hd - prevHD) : 1.0;
                 return py + (npy - py) * frac;
             }
@@ -241,13 +211,11 @@ public class ProjectileAimBot extends Module {
             px = npx; py = npy; pz = npz;
             prevHD = hd;
 
-            // Shot is falling and going away → won't reach
             if (vy < -3.0 && hd < prevHD + 0.01) break;
         }
         return Double.MIN_VALUE;
     }
 
-    /** Returns how many ticks the projectile takes to reach horizontal distance D. */
     private int simFlightTicks(double ux, double uz, float speed, double elevRad, double targetD) {
         double cosPitch = Math.cos(elevRad);
         double sinPitch = Math.sin(elevRad);
@@ -268,51 +236,31 @@ public class ProjectileAimBot extends Module {
         return 40;
     }
 
-    // ── Player velocity compensation ─────────────────────────────────────────
-
-    /**
-     * MC ProjectileEntity.setVelocity() adds shooter.getVelocity() to the arrow's
-     * initial velocity when it spawns. Without compensation, if the player is
-     * running sideways the arrow drifts and misses.
-     *
-     * Fix: subtract the accumulated drift (player vel × drag sum over flight time)
-     * from the aim point so the arrow still ends up at the target.
-     *
-     * Drift per axis = playerVel * sum(0.99^t, t=0..T-1) = playerVel * (1 - 0.99^T) / 0.01
-     */
     private Vec3d compensatePlayerVelocity(Vec3d from, Vec3d to, float speed) {
         AimResult rough = calcAim(from, to, speed);
         if (rough == null) return to;
 
         int T = rough.ticks;
-        // Geometric series: sum of 0.99^t for t = 0 .. T-1
+
         double dragSum = T > 0 ? (1.0 - Math.pow(0.99, T)) / 0.01 : 0.0;
 
         Vec3d pv = mc.player.getVelocity();
         double driftX = pv.x * dragSum;
-        // Vertical: MC only adds player Y velocity when player is NOT on the ground
+
         double driftY = mc.player.isOnGround() ? 0.0 : pv.y * dragSum;
         double driftZ = pv.z * dragSum;
 
-        // Arrow will drift by (driftX, driftY, driftZ) from where we aimed →
-        // aim at (target - drift) so the arrow arrives exactly at target
         return to.subtract(driftX, driftY, driftZ);
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private float calcYaw(Vec3d from, Vec3d to) {
         return (float) Math.toDegrees(Math.atan2(-(to.x - from.x), to.z - from.z));
     }
 
-    /**
-     * Smoothed velocity from last 2 ticks of position history.
-     * Using 2-tick delta reduces single-tick noise.
-     */
     private Vec3d getSmoothedVelocity(LivingEntity entity) {
         Vec3d[] hist = posHistory.get(entity.getUuid());
         if (hist == null) return entity.getVelocity();
-        // hist[0] = newest, hist[2] = 2 ticks ago → average velocity per tick
+
         return hist[0].subtract(hist[2]).multiply(0.5);
     }
 

@@ -14,7 +14,6 @@ import ru.white.utils.other.Instance;
 
 @ModuleInfo(name = "Lock Slot", desc = "Блокирует смену слота хотбара и защищает предметы от выброса", category = Category.PLAYER)
 public class LockSlot extends Module {
-
     public static LockSlot get() {
         return Instance.get(LockSlot.class);
     }

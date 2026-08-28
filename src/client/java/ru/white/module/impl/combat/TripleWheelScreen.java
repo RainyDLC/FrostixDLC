@@ -17,14 +17,13 @@ import org.joml.Matrix3x2fStack;
 import static ru.white.utils.annotation.IMinecraft.mc;
 
 public class TripleWheelScreen extends Screen {
-
     private final AutoSwap module;
 
     public   float  OUTER_R = 100;
     public   float  INNER_R = 60;
     public float  MID_R   = (OUTER_R + INNER_R) / 2f;
     public double GAP     = Math.toRadians(1);
-    public double STEP    = Math.toRadians(0.5); // 1° per slice = smooth
+    public double STEP    = Math.toRadians(0.5);
 
     private static final double[] CENTERS = {
         -Math.PI / 2,
@@ -110,11 +109,10 @@ public class TripleWheelScreen extends Screen {
         return -1;
     }
 
-    // Sector selected purely by angle — works from anywhere on screen
     private int computeHoveredSlot(double mx, double my) {
         double dx = mx - cx();
         double dy = my - cy();
-        if (Math.hypot(dx, dy) < 12 * scaleFix) return -1; // tiny dead zone at exact center
+        if (Math.hypot(dx, dy) < 12 * scaleFix) return -1;
         return sectorForAngle(Math.atan2(dy, dx));
     }
 
@@ -150,7 +148,6 @@ public class TripleWheelScreen extends Screen {
         return value + (target - value) * speed;
     }
 
-    // Draw one arc sector as a strip of rotated thin rects via Matrix3x2fStack
     private void drawSector(DrawContext ctx, float cx, float cy,
                              float innerR, float outerR,
                              double startAngle, double endAngle,

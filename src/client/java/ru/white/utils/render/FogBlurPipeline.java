@@ -25,7 +25,6 @@ import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
 public final class FogBlurPipeline {
-
     private static final int UNIFORM_SIZE = 256;
     private static final float NEAR = 0.05F;
 

@@ -1,6 +1,5 @@
 package ru.white.utils.animation.satoshi;
 public class Counter {
-
     private long lastMS = -1L;
 
     public Counter() {
@@ -34,5 +33,4 @@ public class Counter {
     public void setTime(long time) {
         lastMS = time;
     }
-
 }

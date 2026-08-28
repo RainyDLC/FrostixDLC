@@ -7,12 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-/**
- * Квадратная пиксельная сетка — нарисованный вручную прицел. В конфиг уезжает
- * списком строк из нулей и единиц, по строке на ряд.
- */
 public class PixelGridSetting extends Setting<boolean[][]> {
-
     public final int size;
 
     public PixelGridSetting(Module parent, String name, int size) {
@@ -52,7 +47,6 @@ public class PixelGridSetting extends Setting<boolean[][]> {
         return true;
     }
 
-    /** Классический прицел из четырёх палок — с него начинается рисование. */
     public void reset() {
         clear();
 

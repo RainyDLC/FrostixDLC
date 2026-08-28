@@ -4,8 +4,6 @@ import lombok.Getter;
 
 @Getter
 public class StopWatchShadow {
-
-
     public StopWatchShadow() {
         reset();
     }
@@ -51,6 +49,4 @@ public class StopWatchShadow {
         }
         return elapsed;
     }
-
-
 }

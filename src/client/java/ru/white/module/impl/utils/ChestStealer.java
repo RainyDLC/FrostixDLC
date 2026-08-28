@@ -1,6 +1,5 @@
 package ru.white.module.impl.utils;
 
-
 import ru.white.Client;
 
 import ru.white.manager.event_impl.EventTick;
@@ -37,7 +36,6 @@ import java.util.Set;
 
 @ModuleInfo(name = "Chest Stealer",desc = "Данный модуль был сделан акарачком поэтому может работать через жопу", category = Category.OTHER)
 public class ChestStealer extends Module {
-
     public final ModeSetting mode = new ModeSetting(this, "Режим", "Normal", "Warden", "Danj");
     public final BooleanSetting autoClan = new BooleanSetting(this, "AutoClanStorage", false);
     public final BooleanSetting autoEc = new BooleanSetting(this, "Авто /ec", false);
@@ -117,14 +115,11 @@ public class ChestStealer extends Module {
         if (mc.player == null || mc.world == null)
             return;
 
-        // === ЛОГИКА ПОСТОЯННОГО ОТКРЫТИЯ/ЗАКРЫТИЯ ДЛЯ WARDEN/DUNGEON ===
-        // Когда таймер = 0:00 и сундук пуст или есть таймер - постоянно открывать/закрывать
         if ((mode.is("Warden") || mode.is("Danj")) && !autoOpen.getValue() &&
                 (mc.currentScreen instanceof GenericContainerScreen screen)) {
-
             if (closeTimer.hasTimePassed(500)) {
                 String title = screen.getTitle().getString();
-                // Если таймер 0:00 или сундук пустой
+
                 boolean hasZeroTimer = title.contains("0:00") || title.contains("0.00");
                 boolean isContainerEmpty = isContainerEmpty(screen);
 
@@ -135,7 +130,6 @@ public class ChestStealer extends Module {
                     return;
                 }
 
-                // Если залутали - перестаём ждать
                 if (!isContainerEmpty) {
                     waitingForLoot = false;
                 }

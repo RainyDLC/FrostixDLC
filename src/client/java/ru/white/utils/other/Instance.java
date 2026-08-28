@@ -9,7 +9,6 @@ import java.util.concurrent.ConcurrentMap;
 
 @UtilityClass
 public class Instance {
-
     private final ConcurrentMap<Class<? extends Module>, Module> instanceModules = new ConcurrentHashMap<>();
 
     public <T extends Module> T get(Class<T> clazz) {
@@ -19,5 +18,4 @@ public class Instance {
     public <T extends Module> T get(String module) {
         return Client.get().moduleManager().get(module);
     }
-
 }

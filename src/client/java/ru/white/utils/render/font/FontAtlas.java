@@ -19,18 +19,12 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class FontAtlas {
-
     private static final Logger LOGGER = LoggerFactory.getLogger("client/Font");
 
     private final Identifier jsonId;
     private final Identifier textureId;
     private final Map<Integer, Glyph> glyphs;
 
-    /**
-     * Плоский кэш глифов для codePoint &lt; 0x600 (ASCII, Latin-1, кириллица) —
-     * это все символы, реально встречающиеся в интерфейсе. Остальное берётся из
-     * {@link #glyphs}. Массив — зеркало карты, а не отдельный источник данных.
-     */
     private static final int FAST_GLYPH_LIMIT = 0x600;
     private final Glyph[] fastGlyphs = new Glyph[FAST_GLYPH_LIMIT];
     private float atlasWidth = 512;
@@ -41,8 +35,6 @@ public class FontAtlas {
     private boolean yOriginBottom = false;
     private final AtomicBoolean loaded = new AtomicBoolean(false);
 
-    // Кэш базовой ширины строк (при scale = 1): ширина линейно зависит от размера,
-    // поэтому одного замера хватает на все размеры шрифта. LRU на 2048 строк.
     final Map<String, Float> widthCache = new java.util.LinkedHashMap<>(512, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Float> eldest) {
@@ -85,7 +77,6 @@ public class FontAtlas {
 
             try (InputStream is = resourceOpt.get().getInputStream();
                  InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8)) {
-
                 JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
                 parseJson(root);
                 loaded.set(true);
@@ -206,8 +197,6 @@ public class FontAtlas {
     }
 
     public Glyph getGlyph(int codePoint) {
-        // Плоский массив для латиницы/кириллицы: убирает упаковку int -> Integer
-        // и хэш-поиск на каждый символ каждой строки каждый кадр
         if (codePoint >= 0 && codePoint < FAST_GLYPH_LIMIT) {
             return fastGlyphs[codePoint];
         }

@@ -12,10 +12,7 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class VisualRotEvent extends CancellableEvent {
-
     private float yaw;
     private float pitch;
     private float bodyaw;
-
-
 }

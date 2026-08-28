@@ -23,14 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Атмосферные молнии для World Tweaks: периодические разряды с неба вокруг игрока.
- * Каждый разряд — рваный канал из {@link LightningPath} с ветвлениями, рисуется
- * тремя последовательными слоями: свечение-биллборды, внешняя лента, яркое ядро,
- * плюс расширяющееся кольцо вспышки в точке удара.
- */
 public final class SkyLightningRenderer {
-
     private static final Identifier GLOW_TEX =
             Identifier.of("client", "textures/particles/glow.png");
     private static final long STRIKE_LIFE = 950L;
@@ -81,7 +74,7 @@ public final class SkyLightningRenderer {
         Vec3d impact;
         long born;
         float seed;
-        /** Время «бега» лидера от облака до земли. */
+
         long propagateMs;
         final int[] branchAttach = new int[4];
         int branchCount;
@@ -91,14 +84,12 @@ public final class SkyLightningRenderer {
     private static long nextStrikeAt;
     private static final Random random = new Random();
 
-    // переиспользуемые векторы базиса камеры (без аллокаций в кадре)
     private static final Vector3f CAM_RIGHT = new Vector3f();
     private static final Vector3f CAM_UP = new Vector3f();
 
     private SkyLightningRenderer() {
     }
 
-    /** Вызывается из WorldTweaks на тике: чистит умершие разряды и спавнит новые. */
     public static void update(boolean enabled, float intervalSec, float radius) {
         MinecraftClient mc = MinecraftClient.getInstance();
         long now = System.currentTimeMillis();
@@ -109,17 +100,13 @@ public final class SkyLightningRenderer {
 
         nextStrikeAt = now + (long) (Math.max(0.3f, intervalSec) * 1000f * (0.7f + random.nextFloat() * 0.6f));
         spawn(radius);
-        if (random.nextFloat() < 0.22f) spawn(radius); // иногда сдвоенный разряд
+        if (random.nextFloat() < 0.22f) spawn(radius);
     }
 
     public static void clear() {
         strikes.clear();
     }
 
-    /**
-     * Текущий уровень засветки мира от недавних разрядов (0..1).
-     * Используется дождём (подсветка капель) и WorldTweaks (вспышка тумана).
-     */
     public static float flashLevel() {
         long now = System.currentTimeMillis();
         float f = 0f;
@@ -137,11 +124,9 @@ public final class SkyLightningRenderer {
     private static void spawn(float radius) {
         MinecraftClient mc = MinecraftClient.getInstance();
 
-        // спавним в конусе перед камерой, а не за спиной:
-        // forward для yaw θ — это угол θ+90° в параметризации (cos a, sin a)
         float yaw = mc.gameRenderer.getCamera().getYaw();
         double baseAng = Math.toRadians(yaw) + Math.PI * 0.5;
-        double spread = Math.toRadians(110.0); // ±55° от направления взгляда
+        double spread = Math.toRadians(110.0);
         double ang = baseAng + (random.nextDouble() - 0.5) * spread;
 
         double dist = radius * (0.4f + 0.6f * random.nextFloat());
@@ -153,7 +138,7 @@ public final class SkyLightningRenderer {
         if (groundY == Integer.MIN_VALUE) return;
 
         Vec3d impact = new Vec3d(x, groundY + 1.01, z);
-        double skyH = 55 + random.nextInt(30); // разряд идёт от самых облаков
+        double skyH = 55 + random.nextInt(30);
         Vec3d start = new Vec3d(
                 x + (random.nextDouble() - 0.5) * 10.0,
                 impact.y + skyH,
@@ -170,14 +155,12 @@ public final class SkyLightningRenderer {
         s.propagateMs = 130 + random.nextInt(60);
         s.pts.addAll(LightningPath.generate(start, end, 3, skyH * 0.09, random));
 
-        // канал не должен нырять под землю
         float minY = (float) impact.y - 0.05f;
         for (int i = 0; i < s.pts.size(); i++) {
             Vec3d p = s.pts.get(i);
             if (p.y < minY) s.pts.set(i, new Vec3d(p.x, minY, p.z));
         }
 
-        // ветвления от случайных точек основного канала
         for (int b = 0; b < 3; b++) {
             if (s.pts.size() < 6 || s.branchCount >= 4) break;
             int idx = 2 + random.nextInt(Math.max(1, s.pts.size() - 4));
@@ -195,7 +178,6 @@ public final class SkyLightningRenderer {
         strikes.add(s);
     }
 
-    /** Ищет поверхность земли сверху вниз; не нашли — MIN_VALUE (разряд отменяется). */
     private static int findGround(int bx, int bz, int playerY) {
         MinecraftClient mc = MinecraftClient.getInstance();
         int top = playerY + 40;
@@ -207,7 +189,6 @@ public final class SkyLightningRenderer {
         return Integer.MIN_VALUE;
     }
 
-    /** Рендер активных разрядов. Слои идут строго последовательно. */
     public static void render(EventRender3D e) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (strikes.isEmpty() || mc.player == null || mc.world == null) return;
@@ -221,13 +202,11 @@ public final class SkyLightningRenderer {
         VertexConsumerProvider.Immediate consumers = mc.getBufferBuilders().getEntityVertexConsumers();
         Matrix4f matrix = e.getMatrixStack().peek().getPositionMatrix();
 
-        // ── Pass 1: свечение вдоль канала и вспышка удара ──
         VertexConsumer glowBuf = consumers.getBuffer(GLOW_LAYER);
         for (Strike s : strikes) {
             long age = now - s.born;
             float prog = Math.min(1f, age / (float) Math.max(1L, s.propagateMs));
 
-            // тлеющие угли в точке удара — канал «дышит» ещё пару секунд после разряда
             float tE = (age - s.propagateMs) / (float) EMBER_LIFE;
             if (tE >= 0f && tE < 1f) {
                 float eA = (1f - tE) * (1f - tE) * flicker((long) (now * 0.6f), s.seed);
@@ -240,16 +219,14 @@ public final class SkyLightningRenderer {
             float flicker = flicker(now, s.seed);
             int glowCol = argb(150, 195, 255, (int) (Math.min(1f, env) * flicker * 90));
 
-            // ступенчатый лидер: канал проявляется сверху вниз
             int mainLim = Math.max(2, (int) Math.ceil(prog * (s.pts.size() - 1)) + 1);
 
-            // вспышка в «облаках» у старта канала
             float head = 1f - Math.min(1f, age / 240f);
             if (head > 0.01f) {
                 sprite(glowBuf, matrix, s.pts.get(0), camPos, right, up,
                         7.5f + 3.5f * (1f - head),
                         argb(205, 228, 255, (int) (head * env * 170)));
-                // широкая засветка облачной базы — небо «включается» на мгновение
+
                 sprite(glowBuf, matrix, s.pts.get(0), camPos, right, up,
                         21f + 8f * (1f - head),
                         argb(185, 212, 255, (int) (head * env * 78)));
@@ -271,7 +248,6 @@ public final class SkyLightningRenderer {
                 }
             }
 
-            // удар и вспышка в точке падения — когда лидер дошёл до земли
             if (prog >= 1f) {
                 float flash = flashEnv(age - s.propagateMs);
                 if (flash > 0.01f) {
@@ -294,7 +270,6 @@ public final class SkyLightningRenderer {
 
         consumers.draw(GLOW_LAYER);
 
-        // ── Pass 2: внешняя лента канала ──
         VertexConsumer outerBuf = consumers.getBuffer(OUTER_LAYER);
         for (Strike s : strikes) {
             long age = now - s.born;
@@ -316,7 +291,6 @@ public final class SkyLightningRenderer {
         }
         consumers.draw(OUTER_LAYER);
 
-        // ── Pass 3: яркое ядро + кольцо вспышки на земле ──
         VertexConsumer coreBuf = consumers.getBuffer(CORE_LAYER);
         for (Strike s : strikes) {
             long age = now - s.born;
@@ -336,7 +310,6 @@ public final class SkyLightningRenderer {
                         Math.max(2, (int) Math.ceil(bp * (br.size() - 1)) + 1));
             }
 
-            // кольцо-волна от удара — после прихода лидера на землю
             if (prog >= 1f) {
                 float tR = (age - s.propagateMs) / FLASH_TIME;
                 if (tR >= 0f && tR < 1f) {
@@ -349,10 +322,6 @@ public final class SkyLightningRenderer {
         consumers.draw(CORE_LAYER);
     }
 
-    /**
-     * Реалистичная огибающая: основной разряд + два повторных импульса
-     * по тому же каналу (настоящие молнии бьют 2–3 раза подряд).
-     */
     private static float envelope(long ageMs) {
         if (ageMs < 0 || ageMs >= STRIKE_LIFE) return 0f;
         double e = Math.exp(-ageMs / 260.0)
@@ -379,7 +348,6 @@ public final class SkyLightningRenderer {
         return (Math.max(0, Math.min(255, a)) << 24) | (r << 16) | (g << 8) | b;
     }
 
-    /** Билборд-спрайт свечения в точке pos. */
     private static void sprite(VertexConsumer buf, Matrix4f matrix, Vec3d pos, Vec3d camPos,
                                Vector3f right, Vector3f up, float half, int color) {
         float px = (float) (pos.x - camPos.x);
@@ -398,7 +366,6 @@ public final class SkyLightningRenderer {
         buf.vertex(matrix, px + rx - ux, py + ry - uy, pz - rz - uz).texture(1f, 0f).color(r, g, b, a);
     }
 
-    /** Лента-полилиния, повёрнутая к камере (перпендикуляр = dir × toCam). */
     private static void ribbonPolyline(VertexConsumer buf, Matrix4f matrix,
                                        List<Vec3d> pts, Vec3d camPos, float halfW, int color) {
         ribbonPolyline(buf, matrix, pts, camPos, halfW, color, pts.size());
@@ -430,7 +397,6 @@ public final class SkyLightningRenderer {
         }
     }
 
-    /** Плоское кольцо на земле в точке удара. */
     private static void groundRing(VertexConsumer buf, Matrix4f matrix,
                                    Vec3d impact, float radius, float width, int color) {
         float cx = (float) (impact.x - MinecraftClient.getInstance().gameRenderer.getCamera().getCameraPos().x);

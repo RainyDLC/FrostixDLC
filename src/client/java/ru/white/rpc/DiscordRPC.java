@@ -14,7 +14,6 @@ public interface DiscordRPC extends Library {
                 try {
                     instance = Native.loadLibrary("discord-rpc", DiscordRPC.class);
                 } catch (UnsatisfiedLinkError e) {
-                    // Библиотека Discord RPC недоступна, оставляем instance как null
                     System.err.println("[NightDLC] Discord RPC библиотека недоступна: " + e.getMessage());
                     instance = null;
                 }

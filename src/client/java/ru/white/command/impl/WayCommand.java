@@ -16,7 +16,6 @@ import ru.white.utils.render.RenderUtil;
 import ru.white.utils.render.font.Font;
 import ru.white.utils.render.font.Fonts;
 
-
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -26,13 +25,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 public class WayCommand extends Command implements IMinecraft {
-
     private static final Path FILE = Path.of("C:/rainydlc/client1_21_11/waypoints.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private record Waypoint(String name, Vec3d pos) {}
 
-    /** name_lower -> вейпоинт */
     private final Map<String, Waypoint> waypoints = new ConcurrentHashMap<>();
 
     public WayCommand() {
@@ -41,10 +38,8 @@ public class WayCommand extends Command implements IMinecraft {
         Client.eventHandler().subscribe(this);
     }
 
-    // ── Command ───────────────────────────────────────────────────────────────
-
     @Override
-    
+
     public void execute(String[] args) {
         if (args.length == 0) { showHelp(); return; }
 
@@ -116,7 +111,6 @@ public class WayCommand extends Command implements IMinecraft {
     public List<String> getSuggestions(String subPrefix) {
         String lower = subPrefix.toLowerCase();
 
-        // подсказка имён для .way delete <имя>
         if (lower.startsWith("delete ") || lower.startsWith("del ") || lower.startsWith("remove ")) {
             String sub = lower.substring(0, lower.indexOf(' '));
             String namePart = lower.substring(sub.length() + 1);
@@ -131,8 +125,6 @@ public class WayCommand extends Command implements IMinecraft {
                 .toList();
     }
 
-    // ── Render ────────────────────────────────────────────────────────────────
-
     @EventHandler
     public void onDisplay(EventDisplay e) {
         if (mc.player == null || mc.world == null || waypoints.isEmpty()) return;
@@ -142,8 +134,7 @@ public class WayCommand extends Command implements IMinecraft {
         float fontSize = 8;
 
         Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
-        // дальше этого расстояния точка вылетает за far plane проекции —
-        // проецируем ближнюю точку на том же направлении, чтобы таг не исчезал
+
         float maxRenderDist = Math.max(64, mc.options.getViewDistance().getValue() * 16 - 16);
 
         for (Waypoint w : waypoints.values()) {
@@ -156,7 +147,7 @@ public class WayCommand extends Command implements IMinecraft {
             }
 
             Vec3d screen = Projection.worldSpaceToScreenSpace(renderPos);
-            if (screen.z <= 0 || screen.z >= 1) continue; // за спиной
+            if (screen.z <= 0 || screen.z >= 1) continue;
 
             String text = w.name() + " " + ColorFormatting.getColor(ThemeColor.getDarkTextColor(1)) + (int) dist + "м";
 
@@ -165,13 +156,11 @@ public class WayCommand extends Command implements IMinecraft {
             float x = (float) screen.x - wr / 2F;
             float y = (float) screen.y - h - 6;
 
-            // плашка как у элементов худа
             RenderUtil.Blur.blur(x, y, wr, h, 1, 4, ColorUtil.getRectColor(1));
             RenderUtil.Render2D.outline(x, y, wr, h, 0.5F, ThemeColor.getOutlineColor(1), 4);
 
             font.drawCentered(text, x + wr / 2F, y + 1.8F, fontSize, ThemeColor.getTextColor(1));
 
-            // точка в самом месте вейпоинта (для приближённой позиции не рисуем)
             if (!clamped) {
                 RenderUtil.Render2D.rect((float) screen.x - 1.5F, (float) screen.y - 1.5F, 3, 3,
                         ColorUtil.getClientColor1(1), 1.5F);
@@ -179,9 +168,6 @@ public class WayCommand extends Command implements IMinecraft {
         }
     }
 
-    // ── Persistence ───────────────────────────────────────────────────────────
-
-    
     private void save() {
         JsonArray arr = new JsonArray();
         for (Waypoint w : waypoints.values()) {
@@ -202,7 +188,6 @@ public class WayCommand extends Command implements IMinecraft {
         }
     }
 
-    
     private void load() {
         if (!Files.exists(FILE)) return;
         try (Reader r = new InputStreamReader(new FileInputStream(FILE.toFile()), StandardCharsets.UTF_8)) {
@@ -222,9 +207,6 @@ public class WayCommand extends Command implements IMinecraft {
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    
     private void showHelp() {
         ChatUtils.addChatMessage("§7.way §fadd §7<имя> [x y z] §8| §7.way §fdelete §7<имя> §8| §7.way §fclear §8| §7.way §flist");
     }

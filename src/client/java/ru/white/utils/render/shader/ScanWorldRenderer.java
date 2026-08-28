@@ -14,13 +14,7 @@ import java.awt.*;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * Состояние и запуск сканирующей волны. Копирует depth-аттачмент во
- * вспомогательную текстуру (сэмплить привязанный к пассу depth нельзя)
- * и отдаёт всё в {@link ScanWorldCompositePipeline}.
- */
 public final class ScanWorldRenderer {
-
     private static ScanWorldRenderer instance;
 
     private final MinecraftClient mc = MinecraftClient.getInstance();
@@ -35,7 +29,6 @@ public final class ScanWorldRenderer {
 
     private record Scan(Vec3d center, long startTime) {}
 
-    /** Одновременных волн может быть несколько (интервал + тотемы + киллы). */
     private static final int MAX_SCANS = 12;
     private final List<Scan> scans = new CopyOnWriteArrayList<>();
 
@@ -61,7 +54,7 @@ public final class ScanWorldRenderer {
 
     public void startScan(Vec3d center) {
         if (scans.size() >= MAX_SCANS) {
-            scans.remove(0); // самая старая волна уступает место новой
+            scans.remove(0);
         }
         scans.add(new Scan(center, System.currentTimeMillis()));
     }
@@ -119,7 +112,6 @@ public final class ScanWorldRenderer {
 
         ensureDepthTexture(widthPx, heightPx);
 
-        // depth копируется один раз на кадр — все волны сэмплят одну копию
         CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
         encoder.copyTextureToTexture(
                 fb.getDepthAttachment(),
@@ -144,7 +136,7 @@ public final class ScanWorldRenderer {
                 float t = (progress - fadeStart) / (1.0f - fadeStart);
                 t = Math.max(0.0f, Math.min(t, 1.0f));
                 fade = 1.0f - t;
-                fade = fade * fade; // мягче затухание
+                fade = fade * fade;
             }
 
             pipeline.render(

@@ -39,7 +39,6 @@ import java.util.List;
         category = Category.RENDER
 )
 public class Svetoch extends Module {
-
     public ModeSetting typeColor = new ModeSetting(this, "Режим цвета", "Тема", "Свой");
     public ColorSetting tintColor = new ColorSetting(this, "Цвет", 0xFF00FFFF).setVisible(() -> typeColor.is("Свой"));
 
@@ -53,11 +52,9 @@ public class Svetoch extends Module {
         return tintColor.getValue();
     }
 
-    // тайминги как у мировых партиклов: гаснуть с 1.5с, полное угасание ~3.5с
     private static final long LIFETIME = 1500L;
     private static final double CULL_DIST_SQ = 96 * 96;
 
-    // куб: 8 углов как знаки полуразмера, грани и рёбра — статические таблицы индексов
     private static final float[][] CORNERS = {
             {-1, -1, -1}, {1, -1, -1}, {1, -1, 1}, {-1, -1, 1},
             {-1, 1, -1}, {1, 1, -1}, {1, 1, 1}, {-1, 1, 1}
@@ -93,8 +90,6 @@ public class Svetoch extends Module {
     public void onUpdate(MotionEvent e) {
         if (mc.player == null || mc.world == null) return;
 
-        // спавн как у обычных партиклов "В мире": пачкой каждый тик вокруг игрока,
-        // с привязкой к рельефу и подъёмом из блоков
         int max = count.getValue().intValue();
         int r = 24;
         for (int i = 0; i < 3 && particles.size() < max; i++) {
@@ -134,7 +129,7 @@ public class Svetoch extends Module {
 
         long now = System.currentTimeMillis();
         long nanoNow = System.nanoTime();
-        // физика независима от FPS: всё нормировано к 60 кадрам/с
+
         float ticks = (float) Math.min((nanoNow - lastFrameTime) / 1_000_000_000.0, 0.1) * 60F;
         lastFrameTime = nanoNow;
 
@@ -143,7 +138,6 @@ public class Svetoch extends Module {
         Matrix4f base = matrices.peek().getPositionMatrix();
         Quaternionf camRotation = mc.gameRenderer.getCamera().getRotation();
 
-        // общий поворот на все кубы — одна тригонометрия на кадр вместо одной на куб
         float rotation = (now % 9000L) / 9000F * 360F;
         float rotXRad = (float) Math.toRadians(rotation * 0.5F);
 
@@ -156,9 +150,6 @@ public class Svetoch extends Module {
 
         VertexConsumerProvider.Immediate immediate = VertexConsumerProvider.immediate(allocator);
 
-        // ВАЖНО: immediate с одним аллокатором держит активным только один слой —
-        // при getBuffer() другого слоя предыдущий флушится. Поэтому рендер идёт
-        // проходами по слоям, а матрицы считаются один раз и кэшируются в частице.
         visible.clear();
         Iterator<Particle> it = particles.iterator();
         while (it.hasNext()) {
@@ -174,11 +165,9 @@ public class Svetoch extends Module {
             double dx = p.x - cam.x;
             double dy = p.y - cam.y;
             double dz = p.z - cam.z;
-            // дальние кубы не пишем в буферы вообще
+
             if (dx * dx + dy * dy + dz * dz > CULL_DIST_SQ) continue;
 
-            // матрицы собираются напрямую (JOML), без push/pop стека
-            // и без аллокаций кватернионов RotationAxis на каждый куб
             p.cubeMatrix.set(base)
                     .translate((float) dx, (float) dy, (float) dz)
                     .rotateY((float) Math.toRadians(rotation + p.phase))
@@ -193,7 +182,6 @@ public class Svetoch extends Module {
 
         if (visible.isEmpty()) return;
 
-        // проход 1: грани — один слой, один буфер
         VertexConsumer buf = immediate.getBuffer(FILL_LAYER);
         for (Particle p : visible) {
             int faceAlpha = (int) (p.alphaValue * 0.2F * 255);
@@ -206,7 +194,6 @@ public class Svetoch extends Module {
             }
         }
 
-        // проход 2: оутлайн
         buf = immediate.getBuffer(LINE_LAYER);
         for (Particle p : visible) {
             int edgeAlpha = (int) (p.alphaValue  * 255);
@@ -219,14 +206,10 @@ public class Svetoch extends Module {
             }
         }
 
-
         buf = immediate.getBuffer(GLOW_LAYER_BIG);
         for (Particle p : visible) {
             drawGlow(buf, p.glowMatrix, cr, cg, cb, (int) (80 * p.alphaValue), size * 6);
         }
-
-
-
 
         immediate.draw();
     }
@@ -240,8 +223,6 @@ public class Svetoch extends Module {
     }
 
     private static class Particle {
-        // физика как у Particles: скорость спавна умножается на BASE_VELOCITY,
-        // гравитация и отскок от блоков с теми же коэффициентами
         private static final double BASE_VELOCITY = 0.05;
         private static final double BOUNCINESS = 0.85;
         private static final double GRAVITY = 0.0001;
@@ -273,8 +254,6 @@ public class Svetoch extends Module {
             double nextY = y + mY * ticks;
             double nextZ = z + mZ * ticks;
 
-            // шаг за кадр крошечный: почти всегда все три оси остаются в текущем блоке —
-            // тогда вместо трёх лукапов состояния блока хватает одного
             if (Math.floor(nextX) == Math.floor(x)
                     && Math.floor(nextY) == Math.floor(y)
                     && Math.floor(nextZ) == Math.floor(z)) {
@@ -352,8 +331,6 @@ public class Svetoch extends Module {
             RenderSetup.builder(LINE_PIPELINE).expectedBufferSize(1 << 13).build()
     );
 
-    // свой глоу-пайплайн: в отличие от WorldCubes.ROMB_ESP здесь выключена запись
-    // глубины — иначе прозрачные края биллбордов пишут depth и режут геометрию за собой
     private static final RenderPipeline GLOW_PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.POSITION_TEX_COLOR_SNIPPET)
                     .withLocation(Identifier.of("client", "svetoch_glow"))

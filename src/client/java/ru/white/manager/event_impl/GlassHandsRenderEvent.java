@@ -4,7 +4,6 @@ import ru.white.manager.events.CancellableEvent;
 import net.minecraft.client.util.math.MatrixStack;
 
 public class GlassHandsRenderEvent extends CancellableEvent {
-
     public enum Phase {
         PRE,
         POST

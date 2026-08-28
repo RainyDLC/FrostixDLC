@@ -1,8 +1,6 @@
 package ru.white.screen.editor;
 
-/** Геометрия строк оверлей-редакторов — компактный вариант языка ClickGUI. */
 public final class EditorTheme {
-
     public static final float ROW_H = 13F;
     public static final float SLIDER_H = 20F;
     public static final float ROW_GAP = 3F;

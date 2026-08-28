@@ -8,19 +8,17 @@ import net.minecraft.block.Blocks;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class BlockEspCommand extends Command {
-
     public BlockEspCommand() {
         super("blockesp", ".blockesp <add|remove|list|clear> [блок]", "Управление Block ESP");
     }
 
     @Override
-    
+
     public void execute(String[] args) {
         if (args.length < 1) {
             showHelp();
@@ -73,7 +71,6 @@ public class BlockEspCommand extends Command {
         }
     }
 
-    
     private Block findBlock(String name) {
         String raw = name.toLowerCase();
         Identifier id = Identifier.tryParse(raw.contains(":") ? raw : "minecraft:" + raw);
@@ -88,14 +85,12 @@ public class BlockEspCommand extends Command {
         String[] parts = subPrefix.split(" ", 2);
         String sub = parts[0].toLowerCase();
 
-        // первый аргумент — подкоманда
         if (parts.length <= 1) {
             return List.of("add", "remove", "list", "clear").stream()
                     .filter(s -> s.startsWith(sub))
                     .collect(Collectors.toList());
         }
 
-        // второй аргумент — имя блока (только для add/remove)
         if (sub.equals("add") || sub.equals("remove")) {
             String blockPrefix = parts[1].toLowerCase();
             List<String> out = new ArrayList<>();
@@ -112,7 +107,6 @@ public class BlockEspCommand extends Command {
         return List.of();
     }
 
-    
     private void showHelp() {
         ChatUtils.addChatMessage("§7.blockesp add/remove §f<блок> §8| §7.blockesp list §8| §7.blockesp clear");
     }

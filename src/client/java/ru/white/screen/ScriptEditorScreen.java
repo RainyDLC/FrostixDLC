@@ -23,19 +23,12 @@ import ru.white.utils.render.Scissor;
 import ru.white.utils.render.font.Font;
 import ru.white.utils.render.font.Fonts;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Редактор Lua-модулей: несколько вкладок с независимым кодом, имя модуля,
- * подсветка синтаксиса, вертикальная и горизонтальная прокрутка, проверка
- * компиляции при сохранении. Каждая вкладка сохраняется отдельным .lua-файлом.
- */
 public class ScriptEditorScreen extends Screen implements IMinecraft {
-
     private static final Set<String> KEYWORDS = Set.of(
             "and", "break", "do", "else", "elseif", "end", "false", "for", "function",
             "if", "in", "local", "nil", "not", "or", "repeat", "return", "then",
@@ -43,12 +36,11 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
 
     private static final int LINE_H = 11;
 
-    /** Одна вкладка редактора: код, курсор, скроллы, файл. */
     private static final class Tab {
         String name = "";
         final List<String> lines = new ArrayList<>();
         int row, col;
-        /** Якорь выделения; -1 — выделения нет. */
+
         int anchorRow = -1, anchorCol = -1;
         float scrollY, scrollYTarget;
         float scrollX, scrollXTarget;
@@ -141,8 +133,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         return String.join("\n", tab().lines);
     }
 
-    // ── рендер ──
-
     @Override
     public void render(DrawContext context, int rawX, int rawY, float delta) {
         scaleFix = 2F / mc.getWindow().getScaleFactor();
@@ -171,7 +161,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         RenderUtil.Blur.blur(x, y, w, h, a, 10F, ColorUtil.multAlpha(ColorUtil.multDark(ColorUtil.background(), 0.55F), a));
         RenderUtil.Render2D.outline(x, y, w, h, 0.8F, ColorUtil.replAlpha(accent, a * 90), 10F);
 
-        // ── шапка ──
         f.draw("Редактор Lua", x + 14F, y + 12F, 9F, ColorUtil.getColor(235, a));
         f.draw("Категория: " + category.getName(), x + 14F, y + 27F, 6F, ColorUtil.replAlpha(accent, a * 0.9F));
 
@@ -180,7 +169,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         closeRect = new float[]{cx, y + 8F, cs, cs};
         drawIconButton(f, closeRect, "X", a);
 
-        // ── имя активной вкладки ──
         f.draw("Имя:", x + 14F, y + 33.5F, 6.5F, ColorUtil.getColor(200, a * 0.85F));
         nameX = x + 40F;
         nameY = y + 29F;
@@ -194,7 +182,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         f.draw(shownName.isEmpty() ? "Название модуля" : shownName, nameX + 7F, nameY + 4.5F, 6.5F,
                 shownName.isEmpty() ? ColorUtil.getColor(150, a * 0.5F) : ColorUtil.getColor(230, a));
 
-        // ── вкладки скриптов ──
         float stripY = y + 50F;
         float stripH = 14F;
         tabRects.clear();
@@ -202,7 +189,7 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         tabCloseRects.clear();
 
         float tx = x + 12F;
-        float maxTabX = x + w - 12F - 16F; // справа место под «+»
+        float maxTabX = x + w - 12F - 16F;
         for (int i = 0; i < tabs.size(); i++) {
             Tab t = tabs.get(i);
             String label = t.label();
@@ -222,7 +209,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
             f.draw(label, tx + 6F, stripY + 4F, 6F,
                     ColorUtil.getColor(actTab ? 240 : 185, a * (actTab ? 1F : hovT ? 0.9F : 0.65F)));
 
-            // крестик закрытия вкладки
             float[] cr = new float[]{tx + tw - 10F, stripY + 3.5F, 7F, 7F};
             boolean crHov = MathUtil.isHovered(mouseX, mouseY, cr[0], cr[1], cr[2], cr[3]);
             if (crHov)
@@ -236,7 +222,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
             tx += tw + 3F;
         }
 
-        // кнопка новой вкладки
         float pbW = 13F;
         float pbX = x + w - 12F - pbW;
         addTabRect = new float[]{pbX, stripY, pbW, stripH};
@@ -245,13 +230,11 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
                 ColorUtil.overCol(ColorUtil.getColor(0, 0.2F * a), ColorUtil.replAlpha(accent, a * 0.25F), pHov ? 1F : 0F), 4F);
         f.drawCentered("+", pbX + pbW / 2F, stripY + 3.5F, 7F, ColorUtil.getColor(230, a * (pHov ? 1F : 0.7F)));
 
-        // ── область кода ──
         codeX = x + 12F;
         codeY = y + 68F;
         codeW = w - 24F;
         codeH = h - 68F - 36F;
 
-        // колонка номеров подстраивается под количество строк — слева ничего не срезается
         int digits = Math.max(2, String.valueOf(cur.lines.size()).length());
         gutterW = 12F + f.getWidth("8".repeat(digits), 5.5F);
 
@@ -274,8 +257,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         cur.scrollYTarget = MathUtil.clamp(cur.scrollYTarget, 0F, maxY);
         cur.scrollY += (cur.scrollYTarget - cur.scrollY) * 0.3F;
 
-        // внимание: последний аргумент Scissor.enable — guiScale (как в Menu/RotationBuilder),
-        // координаты редактора живут в пространстве x2
         Scissor.enable(codeX, codeY, codeW, codeH, 2);
 
         int firstRow = Math.max(0, (int) (cur.scrollY / LINE_H) - 1);
@@ -292,7 +273,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
                 RenderUtil.Render2D.rect(codeX + gutterW + 2F, rowY - 0.5F, codeW - gutterW - 4F, LINE_H,
                         ColorUtil.getColor(255, a * 0.03F), 3F);
 
-            // подсветка выделения
             if (hasSel(cur)) {
                 int[] sP = selStart(cur), eP = selEnd(cur);
                 int c0 = -1, c1 = -1;
@@ -341,7 +321,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
             RenderUtil.Render2D.rect(barX2, codeY + codeH - 4F, barW, 2.5F, ColorUtil.getColor(255, a * 0.15F), 1.2F);
         }
 
-        // ── низ: ошибка и кнопки ──
         if (errorText != null && !errorText.isEmpty()) {
             f.draw("! " + errorText, x + 14F, y + h - 22F, 6F, ColorUtil.getColor(255, 110, 110, a * 0.95F));
         }
@@ -361,8 +340,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
     private boolean nameTextFocused() {
         return (System.currentTimeMillis() / 500) % 2 == 0;
     }
-
-    // ── подсветка синтаксиса ──
 
     private void drawHighlighted(Font f, String line, float x, float y, float a) {
         int i = 0, n = line.length();
@@ -420,8 +397,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         return px + f.getWidth(seg, 6.5F);
     }
 
-    // ── правка кода ──
-
     private static String substring(String s, int end) {
         return s.substring(0, Math.min(end, s.length()));
     }
@@ -438,13 +413,10 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         tab().dirty = true;
     }
 
-    // ── выделение ──
-
     private boolean hasSel(Tab t) {
         return t.anchorRow != -1 && (t.anchorRow != t.row || t.anchorCol != t.col);
     }
 
-    /** Лексикографически первая точка выделения: {row, col}. */
     private int[] selStart(Tab t) {
         if (t.anchorRow < t.row || (t.anchorRow == t.row && t.anchorCol <= t.col))
             return new int[]{t.anchorRow, t.anchorCol};
@@ -467,7 +439,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         return sb.toString();
     }
 
-    /** Удаляет выделенный диапазон, курсор — в начало бывшего выделения. */
     private void deleteSelection() {
         Tab t = tab();
         if (!hasSel(t)) return;
@@ -487,7 +458,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         markDirty();
     }
 
-    /** Каретка всегда остаётся в пределах видимой области (по обеим осям). */
     private void ensureCaretVisible() {
         Font f = Fonts.sf_regular;
         Tab t = tab();
@@ -547,8 +517,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         t.col = indent.length();
         markDirty();
     }
-
-    // ── клавиатура ──
 
     @Override
     public boolean charTyped(CharInput input) {
@@ -613,7 +581,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         boolean ctrl = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
                 || InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
 
-        // ── буфер обмена: Ctrl+V вставка, Ctrl+C строка, Ctrl+X вырезать строку ──
         if (ctrl && key == GLFW.GLFW_KEY_V) {
             String clip;
             try {
@@ -662,7 +629,7 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
             }
             return true;
         }
-        // Ctrl+A — выделить весь код
+
         if (ctrl && key == GLFW.GLFW_KEY_A && !nameFocus) {
             t.anchorRow = 0;
             t.anchorCol = 0;
@@ -673,7 +640,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
             return true;
         }
 
-        // Ctrl+Tab / Ctrl+Shift+Tab — переключение вкладок
         if (ctrl && key == GLFW.GLFW_KEY_TAB && !tabs.isEmpty()) {
             int dir = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
                     || InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT) ? -1 : 1;
@@ -764,7 +730,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
             }
         }
 
-        // Shift+движение — расширяет выделение; движение без Shift — схлопывает
         if (shift && !edited) {
             if (!hasSel(t)) {
                 t.anchorRow = oldRow;
@@ -777,8 +742,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         ensureCaretVisible();
         return true;
     }
-
-    // ── мышь ──
 
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
@@ -800,7 +763,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
             return true;
         }
 
-        // вкладки: переключение / закрытие / новая
         for (int i = 0; i < tabCloseRects.size(); i++) {
             float[] cr = tabCloseRects.get(i);
             if (MathUtil.isHovered(mx, my, cr[0], cr[1], cr[2], cr[3])) {
@@ -847,7 +809,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
             }
             newCol = clampInt(newCol, 0, line.length());
 
-            // Shift+клик — расширяет выделение от прежнего курсора
             boolean shiftClick = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
                     || InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
             if (shiftClick) {
@@ -873,7 +834,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         float my = (float) (mouseYRaw / scaleFix);
         Tab t = tab();
 
-        // колесо над полосой вкладок — листает вкладки
         if (!tabRects.isEmpty()) {
             float sy0 = tabRects.get(0)[1];
             float sxL = tabRects.get(0)[0];
@@ -888,7 +848,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
             boolean shift = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
                     || InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
             if (shift) {
-                // горизонтальная прокрутка длинных строк
                 float viewW = codeW - gutterW - 12F;
                 float maxLineW = 40F;
                 for (String ln : t.lines) maxLineW = Math.max(maxLineW, f_width(ln));
@@ -905,8 +864,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
     private float f_width(String s) {
         return Fonts.sf_regular.getWidth(s, 6.5F);
     }
-
-    // ── вкладки ──
 
     private void switchTo(int index) {
         active = clampInt(index, 0, tabs.size() - 1);
@@ -932,8 +889,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
         }
         active = clampInt(active > index ? active - 1 : active, 0, tabs.size() - 1);
     }
-
-    // ── сохранение ──
 
     private void save() {
         Tab t = tab();
@@ -966,8 +921,6 @@ public class ScriptEditorScreen extends Screen implements IMinecraft {
     private void backToMenu() {
         if (mc.currentScreen == this) mc.setScreen(parent);
     }
-
-    // ── кнопки ──
 
     private void drawButton(Font f, float[] r, String text, boolean primary, float a, int accent) {
         boolean hov = MathUtil.isHovered(mouseX, mouseY, r[0], r[1], r[2], r[3]);

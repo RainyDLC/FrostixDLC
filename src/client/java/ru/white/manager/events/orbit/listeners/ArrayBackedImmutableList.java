@@ -144,9 +144,6 @@ public class ArrayBackedImmutableList<T> implements List<T> {
         throw new UnsupportedOperationException();
     }
 
-    /**
-     * Taken from {@link java.util.concurrent.CopyOnWriteArrayList}
-     */
     private static final class ArrayBackedIterator<T> implements ListIterator<T> {
         private final T[] array;
         private int cursor;

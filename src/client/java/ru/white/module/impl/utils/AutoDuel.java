@@ -28,7 +28,6 @@ import java.util.regex.Pattern;
         category = Category.OTHER
 )
 public class AutoDuel extends Module {
-
     private static final Pattern pattern = Pattern.compile("^\\w{3,16}$");
 
     public final ModeSetting mode = new ModeSetting(this, "Режим",

@@ -21,12 +21,7 @@ import ru.white.utils.render.font.Fonts;
 import static ru.white.screen.editor.EditorTheme.PANEL_W;
 import static ru.white.screen.editor.EditorTheme.ROW_H;
 
-/**
- * Редактор своего прицела: пиксельный холст с зеркалами по осям. Живёт только пока в панели
- * выбран тип кастома «Свой рисунок» — при переключении закрывается сам.
- */
 public final class CrosshairEditor implements OverlayEditor, IMinecraft {
-
     private static final CrosshairEditor INSTANCE = new CrosshairEditor();
 
     private final EditorWidgets widgets = new EditorWidgets();
@@ -43,7 +38,6 @@ public final class CrosshairEditor implements OverlayEditor, IMinecraft {
     private boolean mirrorX = true;
     private boolean mirrorY = true;
 
-    /** 1 — рисуем, 0 — стираем, -1 — курсор не зажат. */
     private int paintMode = -1;
 
     private float canvasX;
@@ -98,14 +92,12 @@ public final class CrosshairEditor implements OverlayEditor, IMinecraft {
         panel.closePickers();
     }
 
-    // ───────────────────────────── рендер ─────────────────────────────
-
     @Override
     public void render(float width, float height, float mouseX, float mouseY, float parentAlpha) {
         if (!active) return;
 
         CrossHair module = CrossHair.getInstance();
-        // тип кастома переключили прямо в панели — рисовать больше нечего
+
         if (module == null || !module.isDrawing()) {
             saveAndExit();
             return;
@@ -195,7 +187,6 @@ public final class CrosshairEditor implements OverlayEditor, IMinecraft {
             }
         }
 
-        // подсветка клетки под курсором вместе с её зеркальными близнецами
         int hx = cellAt(widgets.mouseX(), canvasX);
         int hy = cellAt(widgets.mouseY(), canvasY);
         if (grid.inBounds(hx, hy)) {
@@ -209,8 +200,6 @@ public final class CrosshairEditor implements OverlayEditor, IMinecraft {
         RenderUtil.Render2D.outline(canvasX, canvasY, canvasSize, canvasSize, 0.5F,
                 ColorUtil.replAlpha(ColorUtil.client(), alpha * 0.35F), 4);
     }
-
-    // ───────────────────────────── ввод ─────────────────────────────
 
     private int cellAt(float mouse, float origin) {
         if (cell <= 0F) return -1;
@@ -308,7 +297,6 @@ public final class CrosshairEditor implements OverlayEditor, IMinecraft {
             return;
         }
 
-        // кнопки и панель обрабатывает mouseClicked — сюда приходит только рисование
         if (overCanvas(mouseX, mouseY)) {
             paintMode = button == GLFW.GLFW_MOUSE_BUTTON_RIGHT ? 0 : 1;
             paint(mouseX, mouseY);

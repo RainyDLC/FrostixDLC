@@ -20,16 +20,7 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-/**
- * Рисует блюр-ректы поверх захваченного кадра (ScreenBlur).
- *
- * В зоне батчинга (HUD) вызовы копятся и уходят одним RenderPass:
- * uniform-данные каждого ректа пишутся в свой буфер из кольца, а в пассе
- * между draw'ами меняется только биндинг BlurData. Вне зоны батчинга
- * (экраны) каждый вызов рисуется немедленно, как раньше.
- */
 public class BlurPipeline implements DrawBatcher.Batched {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/blur");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/blur");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/blur");
@@ -52,9 +43,7 @@ public class BlurPipeline implements DrawBatcher.Batched {
     );
 
     private static final int BUFFER_SIZE = 128;
-    // Кольцо uniform-буферов: один общий буфер нельзя перезаписывать несколько
-    // раз за кадр — GPU исполняет draw позже записи, и панели рисуются с чужими
-    // данными (случайно «пропадают»). Аналогично KawaseBlurPipeline (буфер на проход).
+
     private static final int UNIFORM_RING = 64;
 
     private GpuBuffer[] uniformBuffers;
@@ -63,8 +52,6 @@ public class BlurPipeline implements DrawBatcher.Batched {
     private ByteBuffer dataBuffer;
     private boolean initialized = false;
 
-    // Накопленные блюр-ректы текущего батча: uniform-данные уже загружены,
-    // осталось только забиндить и нарисовать
     private final ArrayList<GpuBuffer> pendingDraws = new ArrayList<>();
 
     private int getFixedScaledWidth() {
@@ -129,7 +116,6 @@ public class BlurPipeline implements DrawBatcher.Batched {
     private void drawBlur(float x, float y, float width, float height,
                           float radius, float[] radii, int color,
                           float distortion, float waveSize, float edgeLight, float shine) {
-        // Отмечаем ДО проверки isReady — иначе захват никогда не включится
         ScreenBlur.markUsed();
         if (!ScreenBlur.isReady()) return;
 
@@ -156,12 +142,11 @@ public class BlurPipeline implements DrawBatcher.Batched {
 
         if (DrawBatcher.isEnabled()) {
             DrawBatcher.register(this);
-            // Кольцо буферов не резиновое — при переполнении сбрасываем досрочно
+
             if (pendingDraws.size() >= UNIFORM_RING) {
                 DrawBatcher.drawImmediate(this);
             }
         } else {
-            // Немедленный режим: сначала выпускаем накопленные батчи (порядок отрисовки)
             DrawBatcher.flushPending();
             DrawBatcher.drawImmediate(this);
         }
@@ -169,12 +154,11 @@ public class BlurPipeline implements DrawBatcher.Batched {
 
     @Override
     public int batchLayer() {
-        return -1; // блюр-подложки — под заливками, обводками и текстом
+        return -1;
     }
 
     @Override
     public void uploadBatch(CommandEncoder encoder) {
-        // uniform-данные уже загружены в момент вызова drawBlur
     }
 
     @Override

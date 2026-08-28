@@ -24,7 +24,6 @@ public class FontGenerator {
 
     @SuppressWarnings("SameParameterValue")
     private static void generate(String fontFolderPath, Path outputPath, String fontPath) {
-
         File fontFolder = new File(fontFolderPath + fontPath);
         File[] fontFiles = fontFolder.listFiles((dir, name) -> name.toLowerCase().endsWith(".ttf"));
         if (fontFiles != null && fontFiles.length > 0) {

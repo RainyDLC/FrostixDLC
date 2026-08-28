@@ -37,17 +37,10 @@ import static ru.white.screen.editor.EditorTheme.SLIDER_H;
 import static ru.white.screen.editor.EditorTheme.TEXT;
 import static ru.white.screen.editor.EditorTheme.VALUE_TEXT;
 
-/**
- * Плавающая панель настроек модуля для оверлей-редакторов: тумблер модуля плюс все его
- * видимые сеттинги строками того же вида, что и в ClickGUI. Панель сама держит своё
- * состояние перетаскивания, поэтому редактору достаточно раздать ей события мыши.
- */
 public final class SettingsPanel {
-
     private Module module;
     private String title = "";
 
-    /** Позиция задаётся при первой раскладке, дальше ей управляет перетаскивание. */
     private float x;
     private float y;
     private boolean placed;
@@ -62,7 +55,6 @@ public final class SettingsPanel {
     private float scrollTarget;
     private float maxScroll;
 
-    /** Сколько места снизу экрана занято кнопками редактора. */
     private float bottomInset = 82F;
     private boolean showEnableRow = true;
 
@@ -99,7 +91,6 @@ public final class SettingsPanel {
         closePickers();
     }
 
-    /** Сброс запомненной позиции — панель снова встанет в место по умолчанию. */
     public void unplace() {
         placed = false;
     }
@@ -121,12 +112,8 @@ public final class SettingsPanel {
         draggingColor = null;
     }
 
-    // ───────────────────────────── раскладка ─────────────────────────────
-
-    /** Панель = тумблер модуля + все его видимые сеттинги, высоты строк как в меню. */
     public void layout(Module module, String title, float defaultX, float defaultY,
                        float screenW, float screenH, EditorWidgets widgets) {
-        // скролл догоняет цель — колесо не дёргает список рывками
         scroll += (scrollTarget - scroll) * 0.2F;
 
         rows.clear();
@@ -146,7 +133,6 @@ public final class SettingsPanel {
             placed = true;
         }
 
-        // после смены разрешения перетащенная панель могла оказаться за краем
         x = MathUtil.clamp(x, 4F, Math.max(4F, screenW - PANEL_W - 4F));
         y = MathUtil.clamp(y, 4F, Math.max(4F, screenH - HEADER_H - 30F));
 
@@ -169,7 +155,6 @@ public final class SettingsPanel {
         }
 
         for (Setting<?> setting : module.getSettings()) {
-            // рисуем только то, для чего есть строка — иначе в панели повиснет пустой промежуток
             boolean supported = setting instanceof BooleanSetting
                     || setting instanceof SliderSetting
                     || setting instanceof ModeSetting
@@ -178,7 +163,6 @@ public final class SettingsPanel {
                     || setting instanceof DelimiterSetting;
             if (!supported) continue;
 
-            // строка не пропадает мгновенно: пока анимация не догорела, она занимает часть места
             Animation appear = widgets.anim(module.getName() + ":" + setting.getName() + ":vis");
             appear.setDirection(setting.getVisible().get() ? Direction.FORWARDS : Direction.BACKWARDS);
 
@@ -254,8 +238,6 @@ public final class SettingsPanel {
         return py + CHIP_H;
     }
 
-    // ───────────────────────────── отрисовка ─────────────────────────────
-
     public void draw(EditorWidgets widgets, float alpha) {
         if (module == null || bounds.width() <= 0F) return;
 
@@ -270,7 +252,6 @@ public final class SettingsPanel {
         RenderUtil.Render2D.outline(b.x(), b.y(), b.width(), b.height(), 0.5F,
                 ColorUtil.replAlpha(ColorUtil.client(), alpha * 0.35F), 8);
 
-        // шапка панели живёт на таком же фоне, что и строки настроек, и служит ручкой для переноса
         Rect header = headerBounds;
 
         widgets.drawRowBackground(header, widgets.rowHover(module.getName() + ":header", header), alpha);
@@ -282,7 +263,6 @@ public final class SettingsPanel {
 
         Scissor.enable(b.x(), b.y() + 5 + HEADER_H + 3, b.width(), b.height() - (5 + HEADER_H + 3) - 5, 2);
 
-        // имя модуля уже в шапке панели — в строке тумблера дублировать его незачем
         if (showEnableRow) {
             widgets.drawToggleRow(enableBounds, Lang.tr("Вкл/Выкл"), module.isEnabled(),
                     module.getName() + ":enabled", alpha);
@@ -300,7 +280,6 @@ public final class SettingsPanel {
         Setting<?> setting = row.setting;
         Rect b = row.bounds;
 
-        // строка проявляется вместе со своей анимацией видимости
         float alpha = parentAlpha * row.vis;
         if (alpha <= 0.01F) return;
 
@@ -477,8 +456,6 @@ public final class SettingsPanel {
         }
     }
 
-    // ───────────────────────────── ввод ─────────────────────────────
-
     public boolean handleClick(float mouseX, float mouseY, int button) {
         if (module == null || !bounds.contains(mouseX, mouseY)) return false;
 
@@ -553,7 +530,6 @@ public final class SettingsPanel {
         return true;
     }
 
-    /** Возвращает true, если движение курсора было поглощено перетаскиванием внутри панели. */
     public boolean rawMouseMoved(float mouseX, float mouseY) {
         if (draggingSelf) {
             x = mouseX - dragOffsetX;

@@ -21,4 +21,3 @@ public abstract class ClientWorldPropertiesMixin {
         return WorldTweaks.get().isEnabled() && WorldTweaks.get().times.getValue() ?  (long) (WorldTweaks.get().time.getValue() * 1000L) : this.timeOfDay;
     }
 }
-

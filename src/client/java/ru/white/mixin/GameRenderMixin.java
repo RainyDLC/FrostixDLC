@@ -36,14 +36,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameRenderer.class)
 public abstract class GameRenderMixin {
-
     @Inject(method = "close", at = @At("RETURN"))
     private void onClose(CallbackInfo ci) {
         if (Client.get() != null && Client.get().render2D() != null) {
             Client.get().render2D().close();
         }
     }
-
 
     @Shadow
     @Final
@@ -76,7 +74,6 @@ public abstract class GameRenderMixin {
 
         DrawContext context = new DrawContext(client, guiState, mouseX, mouseY);
 
-
         if (client.currentScreen instanceof Menu menu) {
             menu.renderOverlay(context, tickCounter);
         }
@@ -85,13 +82,8 @@ public abstract class GameRenderMixin {
             InventoryPresetOverlay.render(context, mouseX, mouseY);
         }
 
-
-
-
-
         guiRenderer.render(fogRenderer.getFogBuffer(FogRenderer.FogType.NONE));
     }
-
 
     @ModifyExpressionValue(method = "renderWorld", at = @At(value = "INVOKE", target = "Ljava/lang/Math;max(FF)F", ordinal = 0))
     private float onNauseaDistortion(float original) {
@@ -102,7 +94,6 @@ public abstract class GameRenderMixin {
         return original;
     }
 
-    // убирает анимацию тотема (и прочих floating-предметов) на весь экран
     @Inject(method = "showFloatingItem", at = @At("HEAD"), cancellable = true)
     private void onShowFloatingItem(net.minecraft.item.ItemStack stack, CallbackInfo ci) {
         NoRender noRender = NoRender.getInstance();
@@ -116,7 +107,7 @@ public abstract class GameRenderMixin {
         if (screen instanceof Menu) return true;
 
         if (screen instanceof ChatScreen) return true;
-        // инвентарь — ради панели пресетов поверх ванильного GUI
+
         return screen instanceof InventoryScreen;
     }
 
@@ -146,7 +137,6 @@ public abstract class GameRenderMixin {
     @Final
     private Camera camera;
 
-    /** В режиме .spec рука от первого лица не рисуется — как в гм 3. */
     @Inject(method = "renderHand", at = @At("HEAD"), cancellable = true)
     private void spectator$hideHand(CallbackInfo ci) {
         if (Spectator.isActive()) {
@@ -154,7 +144,6 @@ public abstract class GameRenderMixin {
         }
     }
 
-    /** Кадр с руками для редактора: снимок берётся сразу после их отрисовки. */
     @Inject(
             method = "renderWorld",
             at = @At(
@@ -170,10 +159,6 @@ public abstract class GameRenderMixin {
             return;
         }
 
-        // HeldItemRenderer uses an OrderedRenderCommandQueue. Its TAIL runs
-        // before the queued hand/item geometry reaches the framebuffer, so a
-        // capture there produces an empty mask. This injection is immediately
-        // after Immediate.draw(), when the first-person item is really present.
         GlassHands glassHands = GlassHands.getInstance();
         if (glassHands != null && glassHands.isEnabled()) {
             GlassHandsRenderer renderer = GlassHandsRenderer.getInstance();
@@ -188,10 +173,7 @@ public abstract class GameRenderMixin {
     public void hookWorldRender(RenderTickCounter tickCounter, CallbackInfo ci, @Local(ordinal = 0) Matrix4f projection, @Local(ordinal = 1) Matrix4f view, @Local(ordinal = 0) float tickDelta, @Local MatrixStack matrixStack) {
         if (client.world == null || client.player == null) return;
 
-
-
         MatrixStack worldSpaceStack = new MatrixStack();
-
 
         worldSpaceStack.multiply(RotationAxis.POSITIVE_X.rotationDegrees(camera.getPitch()));
         worldSpaceStack.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(camera.getYaw() + 180.0F));
@@ -199,8 +181,5 @@ public abstract class GameRenderMixin {
         RenderUtil.Render3D.lastProjMat.set(client.gameRenderer.getBasicProjectionMatrix(getFov(camera, tickDelta, true)));
         RenderUtil.Render3D.lastModMat.set(RenderSystem.getModelViewMatrix());
         RenderUtil.Render3D.lastWorldSpaceMatrix.set(worldSpaceStack.peek().getPositionMatrix());
-
-
-
     }
 }

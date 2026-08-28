@@ -33,7 +33,6 @@ import java.util.Set;
         category = Category.OTHER
 )
 public class AutoPotion extends Module {
-
     public final MultiBooleanSetting potions = new MultiBooleanSetting(this, "Зелья",
             new BooleanSetting("Сила", true),
             new BooleanSetting("Скорость", true),

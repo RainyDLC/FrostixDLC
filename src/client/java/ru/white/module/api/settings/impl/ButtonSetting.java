@@ -6,14 +6,9 @@ import ru.white.utils.animation.Animation;
 
 import java.util.function.Supplier;
 
-/**
- * Сеттинг-кнопка: при клике выполняет действие. В отличие от BooleanSetting
- * не хранит вкл/выкл состояние — это просто триггер (например, сброс настроек).
- */
 public class ButtonSetting extends Setting<Boolean> {
-
     private final Runnable action;
-    // вспышка при нажатии (для подсветки в GUI)
+
     public final Animation pressAnim = new Animation();
 
     public ButtonSetting(Module parent, String name, Runnable action) {

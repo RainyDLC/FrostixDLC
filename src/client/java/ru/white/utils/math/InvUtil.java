@@ -1,6 +1,5 @@
 package ru.white.utils.math;
 
-
 import ru.white.utils.annotation.IMinecraft;
 import lombok.experimental.UtilityClass;
 import net.minecraft.client.option.KeyBinding;
@@ -16,7 +15,6 @@ import java.util.stream.IntStream;
 
 @UtilityClass
 public class InvUtil implements IMinecraft {
-
     public int getItemInHotBar(Item item) {
         return IntStream.range(0, 9).filter(i -> mc.player.getInventory().getStack(i).getItem().equals(item)).findFirst().orElse(-1);
     }
@@ -34,7 +32,6 @@ public class InvUtil implements IMinecraft {
     public void addTaskWithLock(Runnable task, long delayMs) {
         if (mc.player == null) return;
 
-
         setMovementKeys(false);
 
         new Thread(() -> {
@@ -49,11 +46,9 @@ public class InvUtil implements IMinecraft {
 
                 Thread.sleep(delayMs);
 
-
                 mc.execute(() -> {
                     setMovementKeys(true);
                 });
-
             } catch (InterruptedException e) {
                 e.printStackTrace();
 
@@ -97,7 +92,6 @@ public class InvUtil implements IMinecraft {
 
         int currentSlot = mc.player.getInventory().getSelectedSlot();
 
-        // если предмет уже в хотбаре
         if (index < 9) {
             if (index != currentSlot) {
                 mc.player.networkHandler.sendPacket(
@@ -117,7 +111,6 @@ public class InvUtil implements IMinecraft {
             return;
         }
 
-        // если предмет в инвентаре
         int swapSlot = currentSlot;
 
         mc.interactionManager.clickSlot(
@@ -149,13 +142,9 @@ public class InvUtil implements IMinecraft {
         );
     }
 
-
     public int find(Item item) {
         int slot = -1;
 
-
-
-        // Инвентарь + хотбар (0–35)
         for (int i = 0; i < 36; ++i) {
             ItemStack stack = mc.player.getInventory().getStack(i);
             if (!stack.isEmpty() && stack.getItem() == item) {
@@ -164,7 +153,6 @@ public class InvUtil implements IMinecraft {
             }
         }
 
-        // Хотбар → контейнерные слоты
         if (slot < 9 && slot != -1) {
             slot += 36;
         }
@@ -179,9 +167,6 @@ public class InvUtil implements IMinecraft {
     public int find(Item item, boolean ignoreEnchanted, boolean onlyEnchanted) {
         int slot = -1;
 
-
-
-        // Только зачарованные
         if (onlyEnchanted) {
             for (int i = 0; i < 36; ++i) {
                 ItemStack stack = mc.player.getInventory().getStack(i);
@@ -191,7 +176,6 @@ public class InvUtil implements IMinecraft {
                 }
             }
         } else {
-            // Сначала незачарованные
             for (int i = 0; i < 36; ++i) {
                 ItemStack stack = mc.player.getInventory().getStack(i);
                 if (!stack.isEmpty() && stack.getItem() == item && !stack.hasEnchantments()) {
@@ -200,7 +184,6 @@ public class InvUtil implements IMinecraft {
                 }
             }
 
-            // Если не нашли — любые
             if (slot == -1 && !ignoreEnchanted) {
                 for (int i = 0; i < 36; ++i) {
                     ItemStack stack = mc.player.getInventory().getStack(i);
@@ -218,6 +201,4 @@ public class InvUtil implements IMinecraft {
 
         return slot;
     }
-
 }
-

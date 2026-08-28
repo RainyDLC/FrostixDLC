@@ -28,9 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Менеджер пресетов инвентаря, оформленный языком ClickGUI: блюр-панель, строки с ховером, чипсы. */
 public final class InventoryPresetScreen extends Screen implements ru.white.utils.annotation.IMinecraft {
-
     private static final float PANEL_W = 400F;
     private static final float PANEL_H = 250F;
     private static final float LEFT_W = 160F;
@@ -116,7 +114,6 @@ public final class InventoryPresetScreen extends Screen implements ru.white.util
 
         Font font = Fonts.sf_regular;
 
-        // разделитель колонок
         RenderUtil.Render2D.rect(panelX + LEFT_W, panelY + 8, 0.5F, PANEL_H - 16,
                 ColorUtil.getColor(255, 0.05F * alpha), 1);
 
@@ -287,7 +284,6 @@ public final class InventoryPresetScreen extends Screen implements ru.white.util
             if (drawCell(context, stack, gridX + col * CELL, gridY + 3 * CELL + 15, alpha)) hovered = stack;
         }
 
-        // тултип рисуется ванильно, поэтому и координаты ему нужны ванильные
         if (!hovered.isEmpty()) {
             Render2D.endOverlay();
             context.drawItemTooltip(textRenderer, hovered, rawMouseX, rawMouseY);
@@ -295,7 +291,6 @@ public final class InventoryPresetScreen extends Screen implements ru.white.util
         }
     }
 
-    /** @return true, если курсор над ячейкой */
     private boolean drawCell(DrawContext context, ItemStack stack, float x, float y, float alpha) {
         boolean hovered = inside(mouseX, mouseY, x, y, 17, 17);
 

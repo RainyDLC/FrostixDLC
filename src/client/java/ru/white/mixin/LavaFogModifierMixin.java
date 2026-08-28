@@ -13,7 +13,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LavaFogModifier.class)
 public class LavaFogModifierMixin {
-
     @Inject(method = "applyStartEndModifier", at = @At("HEAD"), cancellable = true)
     private void onApplyStartEnd(FogData fogData, Camera camera, ClientWorld world, float viewDistance, RenderTickCounter tickCounter, CallbackInfo ci) {
         NoRender noRender = NoRender.getInstance();

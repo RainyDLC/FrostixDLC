@@ -28,7 +28,6 @@ import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
 public class GrayscalePipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/grayscale");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/grayscale");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/grayscale");
@@ -146,7 +145,6 @@ public class GrayscalePipeline {
                 OptionalInt.empty(),
                 client.getFramebuffer().getDepthAttachmentView(),
                 OptionalDouble.empty())) {
-
             renderPass.setPipeline(PIPELINE);
             renderPass.setVertexBuffer(0, dummyVertexBuffer);
             renderPass.bindTexture("Sampler0", sceneTextureView, sampler);

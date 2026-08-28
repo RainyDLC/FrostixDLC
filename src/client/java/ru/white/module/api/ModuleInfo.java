@@ -16,7 +16,6 @@ public @interface ModuleInfo {
 
     int key() default -1;
 
-
     boolean autoEnabled() default false;
 
     boolean allowDisable() default true;

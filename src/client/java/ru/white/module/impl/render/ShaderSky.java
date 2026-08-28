@@ -16,7 +16,6 @@ import ru.white.utils.render.ShaderSkyRenderer;
 @Getter
 @ModuleInfo(name = "Shader Sky", category = Category.RENDER, desc = "Шейдерное небо")
 public class ShaderSky extends Module {
-
     private static ShaderSky instance;
 
     public ModeSetting mode = new ModeSetting(this, "Режим", "Aurora", "Night", "Snow", "Sky", "Star", "Glow", "Plasma");

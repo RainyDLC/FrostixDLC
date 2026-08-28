@@ -9,7 +9,6 @@ import net.minecraft.util.math.Box;
 import org.joml.Quaternionf;
 import ru.white.manager.event_impl.*;
 import ru.white.manager.event_impl.EventRender3D;
-import ru.white.manager.event_impl.MotionEvent;
 import ru.white.manager.event_impl.WorldLoadEvent;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.module.api.Category;
@@ -19,36 +18,21 @@ import ru.white.module.api.settings.impl.BooleanSetting;
 import ru.white.module.api.settings.impl.ColorSetting;
 import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
-import ru.white.utils.animation.Animation;
-import ru.white.utils.animation.Easings;
 import ru.white.utils.colors.ColorUtil;
-import ru.white.utils.math.MathUtil;
-import ru.white.utils.taskript.StopWatch;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.experimental.Accessors;
-import lombok.experimental.FieldDefaults;
-import lombok.experimental.NonFinal;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.*;
-import net.minecraft.client.util.BufferAllocator;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.Util;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.Function;
 
 @ModuleInfo(
         name = "Fire Flies",
@@ -56,8 +40,6 @@ import java.util.function.Function;
         category = Category.RENDER
 )
 public class FireFlies extends Module {
-
-
     private static final long MAX_PART_ALIVE_TIME = 5500L;
 
     private static final RenderPipeline FLY_PIPELINE = RenderPipelines.register(
@@ -147,7 +129,6 @@ public class FireFlies extends Module {
     private final List<FirePart> fireParts = new ArrayList<>();
 
     public FireFlies() {
-
     }
 
     @Override
@@ -244,7 +225,6 @@ public class FireFlies extends Module {
         Matrix4f matrix = matrices.peek().getPositionMatrix();
         VertexConsumerProvider.Immediate consumers = this.mc.getBufferBuilders().getEntityVertexConsumers();
 
-        // trails (translucent)
         VertexConsumer trailConsumer = consumers.getBuffer(TRAIL_LAYER);
         for (FirePart part : fireParts) {
             if (isBehindCamera(part, cameraPos, forward)) continue;
@@ -252,17 +232,13 @@ public class FireFlies extends Module {
         }
         consumers.draw(TRAIL_LAYER);
 
-
-        // sparks (additive)
         if (lighting.getValue()) {
-
             VertexConsumer glowConsumer = consumers.getBuffer(SPARK_GLOW_LAYER);
             for (FirePart part : fireParts) {
                 if (isBehindCamera(part, cameraPos, forward)) continue;
                 drawSparkGlow(glowConsumer, matrix, part, cameraPos, right, up, pTicks);
             }
             consumers.draw(SPARK_GLOW_LAYER);
-
         }
         VertexConsumer sparkConsumer = consumers.getBuffer(SPARK_LAYER);
         for (FirePart part : fireParts) {
@@ -271,8 +247,6 @@ public class FireFlies extends Module {
         }
         consumers.draw(SPARK_LAYER);
 
-
-        // firefly bodies (additive, textured)
         VertexConsumer flyConsumer = consumers.getBuffer(FLY_LAYER);
         for (FirePart part : fireParts) {
             if (isBehindCamera(part, cameraPos, forward)) continue;
@@ -304,7 +278,6 @@ public class FireFlies extends Module {
                                Vector3f right,
                                Vector3f up,
                                float pTicks) {
-
         if (part.sparkParts.isEmpty()) return;
 
         double dist = mc.player.squaredDistanceTo(part.pos.x, part.pos.y + 1.6, part.pos.z);
@@ -316,7 +289,6 @@ public class FireFlies extends Module {
                         1.0f);
 
         for (SparkPart spark : part.sparkParts) {
-
             float life = (float) spark.timePC();
 
             int color = setAlphaF(
@@ -348,15 +320,14 @@ public class FireFlies extends Module {
         if (alphaPC <= 0.004f) return;
 
         int color = setAlphaF(part.color, alphaOf(part.color) * alphaPC);
-        // blend toward white by brightness, like the original core highlight
+
         float brightness = brightnessOf(color);
         int bodyColor = lerpToWhiteKeepAlpha(color, alphaOf(color) / 255f * brightness * 0.3f);
 
         Vec3d pos = part.getRenderPosVec(pTicks);
-        float half = 0.04f * alphaPC; // original: 5 * alphaPC scaled by 0.1, halved
+        float half = 0.04f * alphaPC;
 
         if (bloomPass) {
-
             bodyColor = setAlphaF(bodyColor, alphaOf(bodyColor) * 0.3f);
             half *= 5.0f;
         }
@@ -401,7 +372,6 @@ public class FireFlies extends Module {
         float ax = (float) (a.x - cameraPos.x), ay = (float) (a.y - cameraPos.y), az = (float) (a.z - cameraPos.z);
         float bx = (float) (b.x - cameraPos.x), by = (float) (b.y - cameraPos.y), bz = (float) (b.z - cameraPos.z);
 
-        // perpendicular in view space: segment dir x direction-to-camera
         float dx = bx - ax, dy = by - ay, dz = bz - az;
         float cx = ay * dz - az * dy;
         float cy = az * dx - ax * dz;
@@ -483,8 +453,6 @@ public class FireFlies extends Module {
         );
     }
 
-    // ---------- color helpers (ported semantics) ----------
-
     private static float alphaOf(int color) {
         return (color >>> 24) & 0xFF;
     }
@@ -525,8 +493,6 @@ public class FireFlies extends Module {
         float v = 2.0f * t - 1.0f;
         return 1.0f - v * v;
     }
-
-    // ---------- particles ----------
 
     private class FirePart {
         final List<TrailPart> trailParts = new ArrayList<>();
@@ -573,7 +539,6 @@ public class FireFlies extends Module {
         }
 
         void updatePart() {
-            // alpha animation: step toward target like the original AnimationUtils(0, 1, 0.02)
             this.alphaAnim += MathHelper.clamp(this.alphaTarget - this.alphaAnim, -0.02f, 0.02f) * 2.0f;
             this.alphaAnim = MathHelper.clamp(this.alphaAnim, 0.0f, 1.0f);
 

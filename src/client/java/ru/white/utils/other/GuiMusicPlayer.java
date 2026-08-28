@@ -6,9 +6,8 @@ import java.io.InputStream;
 import java.util.concurrent.CompletableFuture;
 
 public final class GuiMusicPlayer {
-
     private static final String RESOURCE   = "/assets/client/sound/gui/gui_bg.wav";
-    private static final int    FADE_MS    = 500; // fade-in duration
+    private static final int    FADE_MS    = 500;
     private static final int    FADE_STEPS = 60;
 
     private static volatile Clip  currentClip   = null;
@@ -78,19 +77,17 @@ public final class GuiMusicPlayer {
         if (clip != null && clip.isOpen()) applyVolume(clip, volume);
     }
 
-    // ── internal ──────────────────────────────────────────────────────────────
-
     private static void fadeIn(Clip clip, float target) throws InterruptedException {
         long stepMs = FADE_MS / FADE_STEPS;
         for (int i = 1; i <= FADE_STEPS; i++) {
             if (!clip.isOpen()) break;
-            // ease-out квадратная: быстро поднимается в начале, плавно в конце
+
             float t = (float) i / FADE_STEPS;
             float eased = 1f - (1f - t) * (1f - t);
             applyVolume(clip, eased * target);
             Thread.sleep(stepMs);
         }
-        // гарантируем финальное значение
+
         if (clip.isOpen()) applyVolume(clip, target);
     }
 

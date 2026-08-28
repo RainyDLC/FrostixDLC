@@ -19,17 +19,12 @@ import ru.white.utils.other.UseCooldowns;
 
 import java.util.UUID;
 
-/**
- * Держит кулдауны хилок текущей цели: цель ставится по удару, детект и хранение — в {@link UseCooldowns},
- * так что вернулся к прошлой цели, и её таймеры на месте.
- */
 @ModuleInfo(
         name = "Use Tracker",
         desc = "Кулдауны хилок цели и её баффы",
         category = Category.COMBAT
 )
 public class UseTracker extends Module {
-
     public static UseTracker getInstance() {
         return Instance.get(UseTracker.class);
     }
@@ -94,7 +89,6 @@ public class UseTracker extends Module {
 
         if (mc.player == null || mc.world == null) return;
 
-        // тошнотка прилетела в нас — значит цель только что её кинула
         boolean nausea = mc.player.hasStatusEffect(StatusEffects.NAUSEA);
 
         if (nausea && !wasNausea && hasTarget()) {
@@ -105,7 +99,6 @@ public class UseTracker extends Module {
         wasNausea = nausea;
     }
 
-    /** Кто-то что-то съел — уведомляем, только если это наша цель. */
     private void onUse(PlayerEntity player, UseCooldowns.Item item) {
         if (!isEnabled() || !notifications.getValue()) return;
         if (!player.getUuid().equals(target)) return;
@@ -131,7 +124,6 @@ public class UseTracker extends Module {
         return target == null || mc.world == null ? null : mc.world.getPlayerByUuid(target);
     }
 
-    /** Остаток кулдауна цели в секундах, 0 — если кд нет или предмет отключён в настройках. */
     public int remaining(UseCooldowns.Item item) {
         if (!items.getValue(item.label)) return 0;
 

@@ -1,6 +1,5 @@
 package ru.white.utils.math;
 
-
 import ru.white.manager.event_impl.EventPacket;
 import ru.white.utils.annotation.IMinecraft;
 import ru.white.utils.taskript.StopWatch;
@@ -104,4 +103,3 @@ public class ServerUtil implements IMinecraft {
     public boolean isHolyWorld() {return server.equals("HolyWorld");}
     public boolean isVanilla() {return server.equals("Vanilla");}
 }
-

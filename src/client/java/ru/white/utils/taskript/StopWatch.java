@@ -4,7 +4,6 @@ import lombok.Getter;
 
 @Getter
 public class StopWatch {
-
     private long startTime;
 
     public StopWatch() {

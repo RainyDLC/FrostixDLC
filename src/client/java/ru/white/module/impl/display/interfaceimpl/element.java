@@ -5,7 +5,5 @@ import ru.white.module.impl.display.InterFace;
 import ru.white.utils.annotation.IMinecraft;
 
 public interface element extends IMinecraft {
-
     void onRender(DragSetting dragSetting, InterFace interFace);
-
 }

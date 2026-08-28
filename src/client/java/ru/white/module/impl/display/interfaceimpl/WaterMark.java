@@ -1,6 +1,5 @@
 package ru.white.module.impl.display.interfaceimpl;
 
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.Identifier;
 
 import ru.white.module.api.settings.impl.DragSetting;
@@ -17,8 +16,6 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
 public class WaterMark implements element {
-
-    /** Общий масштаб плашки: один множитель на шрифты, иконки и все отступы. */
     private static float S = 1.0F;
 
     private static float TEXT = 5.5F * S;
@@ -39,13 +36,11 @@ public class WaterMark implements element {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
-    /** Цифры прокручиваются при смене значения — как таймеры в Potions. */
     private final RollingText fpsText = new RollingText(3F);
     private final RollingText pingText = new RollingText(3F);
 
     private static final Identifier LOGO_TEXTURE = Identifier.of("client", "textures/icon.png");
 
-    // кэш значений — строки пересобираются только при изменении
     private int lastFps = Integer.MIN_VALUE;
     private int lastPing = Integer.MIN_VALUE;
 
@@ -96,7 +91,6 @@ public class WaterMark implements element {
         float islandH = 16.5F * S;
         float pillRadius = islandH / 2.0F;
 
-        // 1. Время слева от островка
         String time = LocalTime.now().format(TIME_FORMATTER);
         float timeTextSize = TEXT * 1.05F;
         float timeW = fontBold.getWidth(time, timeTextSize);
@@ -104,7 +98,6 @@ public class WaterMark implements element {
 
         fontBold.draw(time, x, timeY, timeTextSize, ThemeColor.getTextColor());
 
-        // 2. Островок (Pill)
         float islandStartX = x + timeW + 7.5F * S;
         float padX = 6.0F * S;
         float logoSize = 6.5F * S;
@@ -118,32 +111,25 @@ public class WaterMark implements element {
         float innerContentW = logoSize + 4.0F * S + brandW + sepW + fpsW + sepW + pingW;
         float islandW = padX * 2.0F + innerContentW;
 
-        // Рендер капсулы-островка
         RenderUtil.Render2D.hudPlate(islandStartX, y, islandW, islandH, 1, pillRadius, opacity);
 
-        // Внутренние элементы островка
         float curX = islandStartX + padX;
 
-        // Фирменная R иконка клиента (аккуратный размер)
         RenderUtil.Images.texture(LOGO_TEXTURE, curX, y + (islandH - logoSize) / 2.0F, logoSize, logoSize, ColorUtil.getClientColor(1));
         curX += logoSize + 4.0F * S;
 
-        // Название клиента
         float textY = y + (islandH - fontRegular.getHeight(TEXT)) / 2.0F - 0.5F * S;
         fontBold.draw(brand, curX, textY, TEXT, ThemeColor.getTextColor());
         curX += brandW;
 
-        // Разделитель + FPS
         fontRegular.draw(" • ", curX, textY, TEXT, ThemeColor.getSeparatorColor());
         curX += sepW;
         curX += drawValue(fontRegular, fpsText, "fps", curX, textY);
 
-        // Разделитель + Ping
         fontRegular.draw(" • ", curX, textY, TEXT, ThemeColor.getSeparatorColor());
         curX += sepW;
         drawValue(fontRegular, pingText, "ms", curX, textY);
 
-        // 3. Кастомная иконка беззвучного режима справа от островка (iPhone Silent Bell)
         float iconSize = 7.0F * S;
         float iconStartX = islandStartX + islandW + 6.5F * S;
         float iconY = y + (islandH - iconSize) / 2.0F;
@@ -157,7 +143,6 @@ public class WaterMark implements element {
     private void renderClassic(DragSetting dragSetting, float x, float y, float opacity) {
         Font fonts = Fonts.sf_medium;
 
-        // бейдж-логотип
         RenderUtil.Render2D.hudPlate(x, y, H, H, 1, RADIUS, opacity);
 
         float logoS = Math.min(H - 6F * S, LOGO * 1.2F);
@@ -195,10 +180,6 @@ public class WaterMark implements element {
         dragSetting.size.set(18.5F * S + w2, H);
     }
 
-    /**
-     * Число рисуется прокруткой, подпись — обычным текстом: RollingText выводит символы по
-     * одному, и цветовой код внутри строки вылез бы буквами.
-     */
     private float drawValue(Font font, RollingText value, String suffix, float x, float y) {
         value.draw(font, x, y, TEXT, ThemeColor.getTextColor());
         float width = value.width(font, TEXT);
@@ -206,39 +187,29 @@ public class WaterMark implements element {
         return width + font.getWidth(suffix, TEXT);
     }
 
-    /**
-     * Кастомный 2D-векторный рендер иконки беззвучного режима (iPhone Silent Bell):
-     * колокольчик с классическим диагональным перечёркиванием.
-     */
     private void drawSilentBell(float x, float y, float size, int bellColor, int slashColor) {
         float cx = x + size / 2.0F;
 
-        // 1. Верхняя петелька колокольчика (Top loop)
         float loopW = size * 0.22F;
         float loopH = size * 0.14F;
         Draw.rect(cx - loopW / 2.0F, y + size * 0.04F, loopW, loopH, bellColor, loopH / 2.0F);
 
-        // 2. Купол колокольчика (Bell dome)
         float domeW = size * 0.44F;
         float domeH = size * 0.36F;
         Draw.rect(cx - domeW / 2.0F, y + size * 0.16F, domeW, domeH, bellColor, domeW / 2.0F, domeW / 2.0F, 0, 0);
 
-        // 3. Расширяющаяся юбка колокольчика (Bell flare)
         float flareW = size * 0.62F;
         float flareH = size * 0.28F;
         Draw.rect(cx - flareW / 2.0F, y + size * 0.44F, flareW, flareH, bellColor, size * 0.08F);
 
-        // 4. Нижний ободок колокольчика (Bottom rim)
         float rimW = size * 0.76F;
         float rimH = size * 0.12F;
         Draw.rect(cx - rimW / 2.0F, y + size * 0.68F, rimW, rimH, bellColor, rimH / 2.0F);
 
-        // 5. Язычок колокольчика (Clapper)
         float clapperW = size * 0.20F;
         float clapperH = size * 0.14F;
         Draw.rect(cx - clapperW / 2.0F, y + size * 0.78F, clapperW, clapperH, bellColor, 0, 0, clapperW / 2.0F, clapperW / 2.0F);
 
-        // 6. Диагональное перечёркивание беззвучного режима (Diagonal slash)
         float x0 = x + size * 0.08F;
         float y0 = y + size * 0.06F;
         float x1 = x + size * 0.92F;

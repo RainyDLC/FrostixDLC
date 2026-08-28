@@ -5,9 +5,6 @@ import java.util.List;
 public class ListOperations {
     private static final int MIN_BINARY_SEARCH_THRESHOLD = 8;
 
-    /**
-     * {@link List#remove(Object)} with referential equality and short-circuit based on priority
-     */
     public static IListener remove(List<IListener> listeners, IListener listener) {
         int priority = listener.getPriority();
         for (int i = 0; i < listeners.size(); i++) {
@@ -18,9 +15,6 @@ public class ListOperations {
         return null;
     }
 
-    /**
-     * {@link List#contains(Object)} with referential equality and short-circuit based on priority
-     */
     public static boolean contains(List<IListener> listeners, IListener listener) {
         int priority = listener.getPriority();
         for (IListener o : listeners) {
@@ -45,9 +39,6 @@ public class ListOperations {
         return size;
     }
 
-    /**
-     * Binary search insertion based on priority
-     */
     private static int binarySearch(List<IListener> listeners, IListener listener) {
         int low = 0;
         int high = listeners.size() - 1;

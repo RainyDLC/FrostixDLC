@@ -8,14 +8,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import ru.white.module.impl.render.ShaderSky;
 
-/**
- * Пока активен процедурный купол ShaderSky, ванила не должна дорисовывать
- * поверх него свои слои неба (полоса закатного свечения, затемнение) —
- * иначе на уровне горизонта остаётся полоса «обычного» неба.
- */
 @Mixin(SkyRendering.class)
 public class SkyRenderingMixin {
-
     @Inject(method = "renderGlowingSky", at = @At("HEAD"), cancellable = true, require = 0)
     private void rainydlc$cancelGlowingSky(MatrixStack matrices, float sunAngle, int sunriseAndSunsetColor, CallbackInfo ci) {
         if (!rainydlc$domeActive()) return;

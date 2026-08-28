@@ -1,0 +1,1953 @@
+package ru.white.module.impl.utils;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
+import net.minecraft.block.enums.ChestType;
+import net.minecraft.client.gui.screen.DeathScreen;
+import net.minecraft.client.gui.screen.GameMenuScreen;
+import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.NbtComponent;
+import net.minecraft.component.type.PotionContentsComponent;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityPose;
+import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.mob.WardenEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.BannerItem;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.item.SmithingTemplateItem;
+import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
+import net.minecraft.network.packet.s2c.play.GameMessageS2CPacket;
+import net.minecraft.network.packet.s2c.play.PlaySoundFromEntityS2CPacket;
+import net.minecraft.network.packet.s2c.play.PlaySoundS2CPacket;
+import net.minecraft.potion.Potion;
+import net.minecraft.potion.Potions;
+import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.registry.tag.BlockTags;
+import net.minecraft.registry.tag.ItemTags;
+import net.minecraft.screen.slot.Slot;
+import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.sound.SoundEvent;
+import net.minecraft.state.property.Properties;
+import net.minecraft.util.Hand;
+import net.minecraft.util.PlayerInput;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
+import ru.white.Client;
+import ru.white.manager.event_impl.EventPacket;
+import ru.white.manager.event_impl.EventTick;
+import ru.white.manager.event_impl.InputEvent;
+import ru.white.manager.events.orbit.EventHandler;
+import ru.white.manager.rotation.Rotation;
+import ru.white.manager.rotation.RotationProcess;
+import ru.white.module.api.Category;
+import ru.white.module.api.Module;
+import ru.white.module.api.ModuleInfo;
+import ru.white.module.api.settings.impl.AnarchySetting;
+import ru.white.module.api.settings.impl.BooleanSetting;
+import ru.white.module.api.settings.impl.ModeSetting;
+import ru.white.module.api.settings.impl.SliderSetting;
+import ru.white.module.api.settings.impl.StringSetting;
+import ru.white.utils.math.ChatUtils;
+import ru.white.utils.math.MathUtil;
+import ru.white.utils.math.ServerUtil;
+import ru.white.utils.other.Instance;
+import ru.white.utils.other.TelegramBot;
+import ru.white.utils.other.TimerUtil;
+import ru.white.utils.player.MoveUtil;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+@ModuleInfo(name = "Auto Warden", desc = "Автофарм сундуков в Варден зоне. Анархии и пресеты настраиваются в этом меню", category = Category.OTHER)
+public class AutoWarden extends Module {
+    private static final Pattern CLOCK = Pattern.compile("([0-9]{1,2}):([0-9]{2})");
+    private static final Pattern NUMBER = Pattern.compile("[0-9]+");
+    private static final long TTL = 7200000L;
+    private static final String NL = "\n";
+
+    public final AnarchySetting anarchies = new AnarchySetting(this, "Анархии");
+    public final BooleanSetting useSpeed = new BooleanSetting(this, "Использовать скорость", false);
+    public final BooleanSetting report = new BooleanSetting(this, "Репортить обидчиков", false);
+    public final ModeSetting loot = new ModeSetting(this, "Приоритеты лута", "Низкий", "Средний", "Высокий");
+    public final BooleanSetting trash = new BooleanSetting(this, "Выкидывать мусор с пола", true);
+    public final BooleanSetting smart = new BooleanSetting(this, "Умный выбор анархии", true);
+    public final SliderSetting waitLimit = new SliderSetting(this, "Ждать сундук, с", 30, 5, 180, 5).setVisible(smart::getValue);
+    public final BooleanSetting telegram = new BooleanSetting(this, "Телеграм", false);
+    public final StringSetting tgToken = new StringSetting(this, "Токен бота", "").setVisible(telegram::getValue);
+    public final StringSetting tgChat = new StringSetting(this, "ID чата", "", true).setVisible(telegram::getValue);
+    public final BooleanSetting tgNotify = new BooleanSetting(this, "Уведомления", true).setVisible(telegram::getValue);
+    public final SliderSetting tgReport = new SliderSetting(this, "Отчёт, мин", 30, 0, 180, 5).setVisible(telegram::getValue);
+    public final BooleanSetting debug = new BooleanSetting(this, "Отладка", false);
+
+    private enum State {
+        SAVE, TAKE, COLLECTING, ESCAPE
+    }
+
+    private State state = State.SAVE;
+    private int wardenAggroUntil;
+    private boolean died;
+    private Box zone;
+    private BlockPos currentChest;
+    private String reportTarget;
+    private int farmIndex = 1;
+
+    private final Map<BlockPos, Integer> openAttempts = new HashMap<>();
+    private final Map<BlockPos, Integer> wardenSpots = new HashMap<>();
+    private final Map<String, Long> timers = new HashMap<>();
+    private final Map<String, Long> emptied = new HashMap<>();
+    private final Map<String, Integer> lootItems = new LinkedHashMap<>();
+    private final TimerUtil chestSwitch = new TimerUtil();
+
+    private BlockPos recallChest;
+    private int recallAnarchy = -1;
+    private final TimerUtil hopTimer = new TimerUtil();
+
+    private BlockPos walkTarget;
+    private boolean useHeld;
+    private boolean useRequested;
+    private boolean eating;
+    private boolean aiming;
+    private boolean lootCounted;
+    private long period;
+    private int looted;
+    private int stacksTaken;
+    private long startedAt = System.currentTimeMillis();
+
+    private final Map<String, Integer> stored = new LinkedHashMap<>();
+    private final Map<Integer, int[]> anarchyStats = new HashMap<>();
+    private TelegramBot bot;
+    private int storedStacks;
+    private int storedChests;
+    private int deposits;
+    private int tripStacks;
+    private int visitAnarchy = -1;
+    private long lastReport = System.currentTimeMillis();
+
+    {
+        loot.set("Средний");
+        startTelegramWatchdog();
+    }
+
+    public static AutoWarden get() {
+        return Instance.get(AutoWarden.class);
+    }
+
+    @Override
+    public void onEnable() {
+        super.onEnable();
+
+        // порядок из клик гуи не трогаем: подхватываем текущую анархию только когда пресет пустой
+        if (anarchies.isEmpty() && ServerUtil.anarchy >= 0) anarchies.moveToFront(ServerUtil.anarchy);
+
+        farmIndex = 1;
+        state = State.COLLECTING;
+        died = false;
+        lootCounted = false;
+        looted = 0;
+        stacksTaken = 0;
+        startedAt = System.currentTimeMillis();
+        currentChest = null;
+        reportTarget = null;
+        zone = null;
+        walkTarget = null;
+        wardenAggroUntil = 0;
+        clearRecall();
+        hopTimer.reset();
+        wardenSpots.clear();
+        openAttempts.clear();
+        lootItems.clear();
+        loadTimers();
+        loadStorage();
+
+        int best = bestNextAnarchy();
+        if (best >= 0) farmIndex = best;
+
+        WardenHelper helper = WardenHelper.get();
+        if (helper != null && !helper.isEnabled()) helper.setEnabled(true);
+
+        ChatUtils.addChatMessage("§7[AW] §fShift + Пробел §7— быстрое выключение функции");
+
+        syncTelegram();
+        lastReport = System.currentTimeMillis();
+        notifyTg("[AW] включён, анархия склада " + anarchies.home() + ", анархий в списке " + anarchies.size());
+    }
+
+    @Override
+    public void onDisable() {
+        super.onDisable();
+        saveTimers();
+        saveStorage();
+        notifyTg("[AW] выключен. " + statsLine());
+        releaseUse();
+        walkTarget = null;
+        currentChest = null;
+        eating = false;
+        clearRecall();
+    }
+
+    @EventHandler
+    public void onTick(EventTick event) {
+        if (mc.player == null || mc.world == null) return;
+
+        if (mc.currentScreen instanceof DeathScreen && mc.player.deathTime >= 5) mc.player.requestRespawn();
+        if (mc.currentScreen instanceof GameMenuScreen) mc.setScreen(null);
+
+        useRequested = false;
+        aiming = false;
+
+        periodicReport();
+
+        if (debug.getValue() && mc.player.age % 20 == 0) printDebug();
+
+        if (mc.options.sneakKey.isPressed() && mc.options.jumpKey.isPressed()) {
+            walkTarget = null;
+            releaseUse();
+            setEnabled(false);
+            return;
+        }
+
+        for (WardenEntity warden : mc.world.getEntitiesByClass(WardenEntity.class, mc.player.getBoundingBox().expand(256.0), e -> true)) {
+            wardenSpots.put(warden.getBlockPos(), mc.player.age + 100);
+
+            if (warden.getAnger() >= 40 || warden.isInPose(EntityPose.ROARING) || warden.isInPose(EntityPose.EMERGING)) {
+                wardenAggroUntil = mc.player.age + 100;
+            }
+        }
+        wardenSpots.values().removeIf(expire -> mc.player.age > expire);
+
+        if (reportTarget != null) {
+            if (mc.player.age >= 20 && mc.player.age < 30) {
+                mc.player.networkHandler.sendChatMessage("/report " + reportTarget + " чит");
+                reportTarget = null;
+            }
+            return;
+        }
+
+        if (mc.player.age < 5) {
+            wardenAggroUntil = 0;
+            openAttempts.clear();
+            return;
+        }
+
+        if (ServerUtil.anarchy < 0) {
+            if (mc.player.age % 100 == 0 && mc.player.age > 300 && anarchies.home() >= 0) {
+                mc.player.networkHandler.sendChatCommand("an" + anarchies.home());
+            }
+            state = State.SAVE;
+            return;
+        }
+
+        if (mc.player.age % 100 == 0 && inFarmZone() && (zone == null || !inZoneBox(mc.player.getX(), mc.player.getZ()))) updateZone();
+
+        if (mc.player.hasStatusEffect(StatusEffects.GLOWING) && playerNear(32.0)) {
+            flee(false);
+            return;
+        }
+
+        if (trash.getValue()) dropFloorTrash();
+        if (mc.player.age % 20 == 0) updateChestMemory();
+        if (mc.player.age % 6000 == 0 && mc.player.age > 100) saveTimers();
+        if (mc.currentScreen == null) lootCounted = false;
+
+        switch (state) {
+            case SAVE -> save();
+            case TAKE -> take();
+            case COLLECTING -> collect();
+            case ESCAPE -> escape();
+        }
+
+        if (walkTarget != null && !aiming && mc.currentScreen == null) lookAtWalkTarget();
+        if (!useRequested) releaseUse();
+        if (stuck() && mc.player.age % 15 == 0) walkTarget = null;
+    }
+
+    @EventHandler
+    public void onPacket(EventPacket event) {
+        if (mc.player == null || event.isSend()) return;
+
+        if (event.getPacket() instanceof PlaySoundS2CPacket sound) {
+            checkWardenSound(sound.getSound());
+            return;
+        }
+
+        if (event.getPacket() instanceof PlaySoundFromEntityS2CPacket sound) {
+            checkWardenSound(sound.getSound());
+            return;
+        }
+
+        if (!(event.getPacket() instanceof GameMessageS2CPacket message)) return;
+
+        String text = message.content().getString();
+        if (!text.contains("Помянем. Вы погибли")) return;
+
+        died = true;
+
+        if (!report.getValue() || !text.contains("Вас убил")) return;
+
+        StringBuilder effects = new StringBuilder();
+        for (StatusEffectInstance effect : mc.player.getStatusEffects()) {
+            effects.append(effect.getEffectType().value().getName().getString()).append(", ");
+        }
+        ChatUtils.addChatMessage("§7[AW] эффекты при смерти: §f" + (effects.isEmpty() ? "нет" : effects.substring(0, effects.length() - 2)));
+
+        if (!mc.player.hasStatusEffect(StatusEffects.GLOWING) && !chestNear(2.0)) {
+            reportTarget = text.split("Вас убил ")[1].split(",")[0].trim();
+        }
+    }
+
+    private void checkWardenSound(RegistryEntry<SoundEvent> entry) {
+        String path = entry.getKey().map(key -> key.getValue().getPath()).orElse("");
+
+        if (path.contains("warden.roar") || path.contains("warden.angry") || path.contains("warden.sonic")) {
+            wardenAggroUntil = mc.player.age + 100;
+        }
+    }
+
+    @EventHandler
+    public void onInput(InputEvent event) {
+        if (mc.player == null || mc.world == null) return;
+
+        if (!mc.player.isOnGround() && !mc.player.isClimbing()) event.setJumping(false);
+
+        if (walkTarget != null && mc.currentScreen == null) {
+            Vec3d relative = Vec3d.ofCenter(walkTarget).subtract(mc.player.getEntityPos());
+            PlayerInput input = MoveUtil.getDirectionalInputForDegrees(event.getInput(),
+                    MoveUtil.getDegreesRelativeToView(relative, mc.player.getYaw()), 20.0F);
+
+            boolean sprint = input.forward() && !input.backward() && mc.player.getHungerManager().getFoodLevel() > 6 && !eating;
+
+            event.setInput(new PlayerInput(input.forward(), input.backward(), input.left(), input.right(),
+                    input.jump() || needJump(relative), input.sneak(), input.sprint() || sprint));
+        }
+
+        if (stuck() && mc.player.getMainHandStack().isEmpty() && !chestNear(3.0)) {
+            boolean positive = mc.player.age % 10 <= MathUtil.random(3.0, 8.0);
+            event.setDirectional(positive, !positive, positive, !positive);
+        }
+    }
+
+    private boolean needJump(Vec3d relative) {
+        if (!mc.player.isOnGround()) return false;
+
+        double length = relative.horizontalLength();
+        if (relative.y > 0.6 && length < 2.0) return true;
+        if (length < 0.001) return false;
+
+        double step = 0.6 / length;
+        BlockPos ahead = BlockPos.ofFloored(mc.player.getX() + relative.x * step, mc.player.getY() + 0.1, mc.player.getZ() + relative.z * step);
+        if (ahead.equals(mc.player.getBlockPos())) return false;
+
+        return !mc.world.getBlockState(ahead).getCollisionShape(mc.world, ahead).isEmpty()
+                && mc.world.getBlockState(ahead.up()).getCollisionShape(mc.world, ahead.up()).isEmpty()
+                && mc.world.getBlockState(ahead.up(2)).getCollisionShape(mc.world, ahead.up(2)).isEmpty();
+    }
+
+    private void lookAtWalkTarget() {
+        Vec3d relative = Vec3d.ofCenter(walkTarget).subtract(mc.player.getEyePos());
+        if (relative.horizontalLengthSquared() < 0.25) return;
+
+        RotationProcess.update(new Rotation((float) Math.toDegrees(Math.atan2(-relative.x, relative.z)), 20.0F), 25.0F, 25.0F, 2, 1);
+    }
+
+    private void walkTo(BlockPos spot) {
+        if (spot == null) {
+            walkTarget = null;
+            return;
+        }
+        walkTarget = new BlockPos(clampX(spot.getX()), spot.getY(), clampZ(spot.getZ()));
+    }
+
+    private boolean stuck() {
+        if (mc.world.getBlockState(mc.player.getBlockPos()).isIn(BlockTags.CANDLES)
+                || mc.world.getBlockState(mc.player.getBlockPos().down()).isIn(BlockTags.CANDLES)) return true;
+
+        return !wardenAggro() && state == State.COLLECTING && inFarmZone() && mc.currentScreen == null
+                && !isMoving() && !isDrinking() && insideBlock();
+    }
+
+    private boolean insideBlock() {
+        Box box = mc.player.getBoundingBox().expand(0.05, 0.0, 0.05);
+
+        for (BlockPos pos : BlockPos.iterate(BlockPos.ofFloored(box.minX, box.minY, box.minZ), BlockPos.ofFloored(box.maxX, box.maxY, box.maxZ))) {
+            if (!mc.world.getBlockState(pos).isAir()) return true;
+        }
+        return false;
+    }
+
+    private boolean isMoving() {
+        return mc.player.getVelocity().horizontalLengthSquared() > 0.0025;
+    }
+
+    private boolean isDrinking() {
+        return mc.player.isUsingItem() && mc.player.getActiveItem().isOf(Items.POTION);
+    }
+
+    private void save() {
+        int home = anarchies.home();
+
+        if (home < 0) {
+            if (mc.player.age % 60 == 0) {
+                ChatUtils.addChatMessage("§7[AW] §cдобавь анархии в настройках модуля: первая — склад, остальные — ферма");
+            }
+            return;
+        }
+
+        if (ServerUtil.anarchy != home && !ServerUtil.isPvp() && mc.player.age % 5 == 0 && mc.player.age > 5) {
+            mc.player.networkHandler.sendChatCommand("an" + home);
+        }
+
+        if (onHomeAnarchy()) {
+            freeHand();
+            container(hasLootToStore(), true, State.TAKE);
+        }
+    }
+
+    private void take() {
+        if (died && anarchies.size() > 1) {
+            int next = recallIndex();
+            if (next < 1) next = bestNextAnarchy();
+            farmIndex = next >= 1 ? next : (farmIndex + 1 >= anarchies.size() ? 1 : farmIndex + 1);
+            died = false;
+        }
+
+        wardenAggroUntil = 0;
+        openAttempts.clear();
+        visitAnarchy = -1;
+
+        if (debug.getValue() && mc.player.age % 40 == 0) {
+            StringBuilder missing = new StringBuilder();
+            if (invisCount() < 1) missing.append("зелье невидимости, ");
+            if (countItem(Items.GOLDEN_CARROT) < 3) missing.append("золотая морковь, ");
+            if (useSpeed.getValue() && findSlot(this::isSpeedPotion) < 0) missing.append("зелье скорости, ");
+
+            if (!missing.isEmpty()) {
+                ChatUtils.addChatMessage("§7[AW] собираем (возможно не хватает) §f" + missing.substring(0, missing.length() - 2));
+            }
+        }
+
+        if (onHomeAnarchy()) container(needSupplies() || cursorBusy(), false, State.COLLECTING);
+    }
+
+    private void collect() {
+        if (checkEscape()) return;
+
+        eatIfNeeded();
+
+        if (isDrinking()) {
+            walkTarget = null;
+            useRequested = true;
+            return;
+        }
+
+        if (anarchies.size() <= 1) {
+            if (mc.player.age % 60 == 0) {
+                ChatUtils.addChatMessage("§7[AW] §cсписок анархий пустой — добавь их в настройках модуля (минимум 2)");
+            }
+            return;
+        }
+
+        if (farmIndex >= anarchies.size()) farmIndex = 1;
+
+        int target = anarchies.at(farmIndex);
+        if (ServerUtil.anarchy != target) {
+            if (mc.player.age % 10 == 0 && mc.player.age > 10) mc.player.networkHandler.sendChatCommand("an" + target);
+            return;
+        }
+
+        if (mc.player.age > 5) prepare();
+    }
+
+    private void prepare() {
+        StatusEffectInstance invisibility = mc.player.getStatusEffect(StatusEffects.INVISIBILITY);
+        boolean ready = mc.player.hasStatusEffect(StatusEffects.GLOWING) || (invisibility != null && invisibility.getDuration() >= 400);
+
+        if (!ready && invisibility == null && invisCount() < 1 && mc.player.age % 5 == 0 && !ServerUtil.isPvp()) {
+            state = State.ESCAPE;
+            return;
+        }
+
+        if (!ready) {
+            int slot = findSlot(this::isInvisPotion);
+            if (slot >= 0 && mc.player.age > 20) useSlot(slot);
+        }
+
+        if (!inFarmZone()) {
+            if (mc.player.age % 50 == 0) mc.player.networkHandler.sendChatCommand("home");
+            return;
+        }
+
+        if (!ready) return;
+
+        int speedSlot = useSpeed.getValue() && mc.player.getStatusEffect(StatusEffects.SPEED) == null ? findSlot(this::isSpeedPotion) : -1;
+        if (speedSlot < 0) routine();
+        else useSlot(speedSlot);
+    }
+
+    private int scaled(int base) {
+        if (loot.is("Низкий")) return (int) (base * 1.5);
+        if (loot.is("Высокий")) return (int) (base * 0.8);
+        return base;
+    }
+
+    private boolean checkEscape() {
+        boolean aggro = wardenAggro();
+        long blocked = openAttempts.values().stream().filter(count -> count >= 2).count();
+
+        if ((aggro || inventoryCount() > scaled(20) || mc.player.getHungerManager().getFoodLevel() < 8
+                || (blocked >= 3 && mc.player.age % 30 == 0)) && mc.player.age > 100) {
+            if (aggro) died = true;
+            state = State.ESCAPE;
+            return true;
+        }
+
+        if (!ServerUtil.isPvp() && inventoryCount() > scaled(8)) {
+            state = State.ESCAPE;
+            return true;
+        }
+
+        int seconds = pvpSeconds();
+        if (seconds >= 0 && seconds < 7 && !playerNear(14.0) && inventoryCount() > scaled(7)) {
+            state = State.ESCAPE;
+            return true;
+        }
+        return false;
+    }
+
+    private void escape() {
+        if (onHomeAnarchy()) {
+            state = State.SAVE;
+            return;
+        }
+
+        if (wardenAggro() && ServerUtil.isPvp()) {
+            flee(true);
+            return;
+        }
+
+        BlockPos near = pickChest();
+        if (mc.currentScreen instanceof GenericContainerScreen
+                || (near != null && chestRemaining(near) < 0 && mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(near)) <= 16.0)) {
+            routine();
+            return;
+        }
+
+        if (ServerUtil.isPvp()) {
+            if (inventoryCount() >= 23 || playerNear(2.0) || pvpSeconds() <= 16 || near == null) flee(true);
+            else routine();
+            return;
+        }
+
+        state = State.SAVE;
+    }
+
+    private void flee(boolean warden) {
+        closeContainer();
+        freeHand();
+
+        BlockPos best = null;
+        double bestScore = -1.0;
+        int y = mc.player.getBlockPos().getY();
+
+        for (int angle = 0; angle < 360; angle += 30) {
+            int x = clampX((int) (mc.player.getX() + Math.cos(Math.toRadians(angle)) * 25.0));
+            int z = clampZ((int) (mc.player.getZ() + Math.sin(Math.toRadians(angle)) * 25.0));
+            double score = safety(x, z, warden);
+
+            if (score > bestScore) {
+                bestScore = score;
+                best = new BlockPos(x, y, z);
+            }
+        }
+
+        walkTo(best);
+    }
+
+    private double safety(int x, int z, boolean warden) {
+        double min = Double.MAX_VALUE;
+
+        for (Entity entity : mc.world.getEntities()) {
+            if (entity == mc.player) continue;
+            if (!(entity instanceof PlayerEntity) && !(warden && entity instanceof WardenEntity)) continue;
+            min = Math.min(min, Math.hypot(entity.getX() - x, entity.getZ() - z));
+        }
+        return min;
+    }
+
+    private boolean wardenAggro() {
+        if (mc.player.age >= wardenAggroUntil) return false;
+
+        for (Entity entity : mc.world.getEntities()) {
+            if (!(entity instanceof WardenEntity warden)) continue;
+
+            double distSq = mc.player.squaredDistanceTo(warden);
+            if (distSq < 900.0 && facingMe(warden) && (distSq < 16.0 || approaching(warden))) return true;
+        }
+        return false;
+    }
+
+    private boolean approaching(WardenEntity warden) {
+        return (mc.player.getX() - warden.getX()) * (warden.getX() - warden.lastX)
+                + (mc.player.getZ() - warden.getZ()) * (warden.getZ() - warden.lastZ) > 0.01;
+    }
+
+    private boolean facingMe(WardenEntity warden) {
+        double yawToMe = Math.toDegrees(Math.atan2(-(mc.player.getX() - warden.getX()), mc.player.getZ() - warden.getZ()));
+        return Math.abs(MathHelper.wrapDegrees((float) (warden.getBodyYaw() - yawToMe))) < 10.0;
+    }
+
+    private int inventoryCount() {
+        int count = 0;
+        for (ItemStack stack : mc.player.getInventory().getMainStacks()) {
+            if (!stack.isEmpty()) count++;
+        }
+        return count;
+    }
+
+    private void updateZone() {
+        double centerX = (mc.player.getX() < 0 ? -1 : 1) * 2000.0;
+        double centerZ = (mc.player.getZ() < 0 ? -1 : 1) * 2000.0;
+        double y = mc.player.getY();
+        zone = new Box(centerX - 75.0, y, centerZ - 75.0, centerX + 75.0, y, centerZ + 75.0);
+    }
+
+    private boolean inFarmZone() {
+        return ServerUtil.getWorldType().equals("overworld") && inZoneBox(mc.player.getX(), mc.player.getZ());
+    }
+
+    private boolean inZoneBox(double x, double z) {
+        if (zone == null) updateZone();
+        return x >= zone.minX && x <= zone.maxX && z >= zone.minZ && z <= zone.maxZ;
+    }
+
+    private int clampX(int x) {
+        if (zone == null) updateZone();
+        return (int) MathHelper.clamp(x, zone.minX + 10, zone.maxX - 10);
+    }
+
+    private int clampZ(int z) {
+        if (zone == null) updateZone();
+        return (int) MathHelper.clamp(z, zone.minZ + 10, zone.maxZ - 10);
+    }
+
+    private void routine() {
+        if (inFarmZone() && visitAnarchy != ServerUtil.anarchy && ServerUtil.anarchy >= 0) {
+            visitAnarchy = ServerUtil.anarchy;
+            anarchyStats.computeIfAbsent(visitAnarchy, key -> new int[2])[1]++;
+        }
+
+        if (mc.currentScreen instanceof GenericContainerScreen screen) {
+            lootChest(screen);
+            return;
+        }
+
+        BlockPos pick = pickChest();
+        if (pick == null) pick = pickSoonest();
+
+        boolean stay = pick != null && currentChest != null && !pick.equals(currentChest) && chestRemaining(currentChest) > 25000;
+        if (!stay) chestSwitch.reset();
+        if (!stay || chestSwitch.hasTimeElapsed(1000)) currentChest = pick;
+
+        BlockPos target = currentChest;
+        if (target == null) {
+            if (travelToRecall()) return;
+
+            if (mc.player.age % 40 == 0) {
+                state = State.ESCAPE;
+                died = true;
+            }
+            return;
+        }
+
+        long remaining = chestRemaining(target);
+
+        if (remaining > 1000 && playerNearPos(target, 7.0)) {
+            BlockPos spot = sideSpot(target);
+            if (spot != null) {
+                if (mc.player.squaredDistanceTo(Vec3d.ofCenter(spot)) > 2.0) walkTo(spot);
+                else walkTarget = null;
+            }
+            return;
+        }
+
+        long threshold = (long) (waitLimit.getValue() * 1000.0F);
+
+        if (remaining > threshold && mc.player.age % 20 == 0 && hopTimer.hasTimeElapsed(12000)) {
+            Recall recall = soonestRecall(threshold);
+            if (recall != null) {
+                hopTo(recall);
+                return;
+            }
+            if (betterAnarchy()) {
+                hopAnarchy();
+                return;
+            }
+        }
+
+        if (remaining > 6000) {
+            if (!travelToRecall()) walkTo(orbitSpot(target));
+            return;
+        }
+
+        double distSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(target));
+        if (distSq <= 20.0) {
+            walkTarget = null;
+            if (openAttempts.getOrDefault(target, 0) < (remaining >= 0 ? 1 : 3) && openChest(target, remaining >= 0 ? 6 : 1)) {
+                openAttempts.merge(target, 1, Integer::sum);
+            }
+            return;
+        }
+
+        if (distSq > 10.0) freeHand();
+        walkTo(sideSpot(target));
+    }
+
+    private BlockPos orbitSpot(BlockPos chest) {
+        double angle = (mc.player.age / 40) * 2.4;
+        return new BlockPos(chest.getX() + (int) (Math.cos(angle) * 10.0), chest.getY(), chest.getZ() + (int) (Math.sin(angle) * 10.0));
+    }
+
+    private BlockPos sideSpot(BlockPos chest) {
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx == 0 && dz == 0) continue;
+
+                BlockPos side = chest.add(dx, 0, dz);
+                if (mc.world.getBlockState(side).isAir() && mc.world.getBlockState(side.up()).isAir()
+                        && !mc.world.getBlockState(side.down()).isAir() && visibleFrom(side, chest)) return side;
+            }
+        }
+
+        BlockPos up = chest.up();
+        if (mc.world.getBlockState(up).isAir() && mc.world.getBlockState(up.up()).isAir() && visibleFrom(up, chest)) return up;
+        return null;
+    }
+
+    private boolean visibleFrom(BlockPos from, BlockPos chest) {
+        Vec3d eye = Vec3d.ofCenter(from).add(0.0, mc.player.getEyeHeight(mc.player.getPose()) - 0.5, 0.0);
+        return visiblePoint(eye, chest) != null;
+    }
+
+    private Vec3d visiblePoint(Vec3d eye, BlockPos chest) {
+        Vec3d center = Vec3d.ofCenter(chest);
+        Vec3d best = null;
+        double bestSq = Double.MAX_VALUE;
+
+        for (double dx = -0.4; dx <= 0.41; dx += 0.4) {
+            for (double dy = -0.4; dy <= 0.41; dy += 0.4) {
+                for (double dz = -0.4; dz <= 0.41; dz += 0.4) {
+                    Vec3d point = center.add(dx, dy, dz);
+                    double sq = point.squaredDistanceTo(center);
+                    if (sq >= bestSq) continue;
+
+                    BlockHitResult hit = mc.world.raycast(new RaycastContext(eye, point,
+                            RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
+                    if (hit.getBlockPos().equals(chest)) {
+                        bestSq = sq;
+                        best = point;
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    private Rotation rotationTo(Vec3d eye, Vec3d aim) {
+        Vec3d diff = aim.subtract(eye);
+        float yaw = (float) MathHelper.wrapDegrees(Math.toDegrees(Math.atan2(diff.z, diff.x)) - 90.0);
+        float pitch = (float) MathHelper.wrapDegrees(-Math.toDegrees(Math.atan2(diff.y, Math.hypot(diff.x, diff.z))));
+        return new Rotation(yaw, pitch);
+    }
+
+    private boolean openChest(BlockPos chest, int rate) {
+        if (chest == null || mc.currentScreen instanceof GenericContainerScreen) return false;
+
+        Vec3d eye = mc.player.getEyePos();
+        Vec3d aim = visiblePoint(eye, chest);
+        if (aim == null) return false;
+
+        Rotation target = rotationTo(eye, aim);
+        float time = mc.player.age + mc.getRenderTickCounter().getTickProgress(false);
+        float sway = (float) ((Math.sin(time * 0.31F) * 0.5 + Math.sin(time * 0.73F + 1.1F) * 0.3 + Math.sin(time * 1.7F + 2.6F) * 0.2) * 8.0);
+
+        aiming = true;
+        RotationProcess.update(new Rotation(target.getYaw() + sway, MathHelper.clamp(target.getPitch() + sway / 4.0F, -90.0F, 90.0F)), 120.0F, 120.0F, 1, 1);
+
+        if (mc.player.age % rate != 0 || new Rotation(mc.player).getDelta(target) > 5.0F) return false;
+
+        BlockHitResult hit = mc.world.raycast(new RaycastContext(eye, aim,
+                RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
+        if (!hit.getBlockPos().equals(chest)) return false;
+
+        mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
+        mc.player.swingHand(Hand.MAIN_HAND);
+        return true;
+    }
+
+    private BlockPos pickChest() {
+        BlockPos best = null;
+        int bestTier = 99;
+        double bestSq = Double.MAX_VALUE;
+
+        for (BlockPos chest : helper().getChests()) {
+            if (!reachable(chest) || armoredNear(chest)) continue;
+
+            double distSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(chest));
+            long remaining = chestRemaining(chest);
+
+            if (wardenNear(chest) && !(remaining < 0 && distSq <= 16.0)) continue;
+            if (remaining < 0 && openAttempts.getOrDefault(chest, 0) >= 3) continue;
+
+            int tier = -1;
+            if (remaining < 0 && distSq <= 25.0) tier = 0;
+            else if (remaining >= 0 && remaining <= 5000 && distSq <= 144.0) tier = 1;
+            else if (remaining < 0 && distSq <= 144.0) tier = 2;
+            else if (remaining >= 0 && remaining <= 15000 && distSq <= 625.0) tier = 3;
+            else if (remaining < 0) tier = 4;
+            if (tier < 0) continue;
+
+            double up = Vec3d.ofCenter(chest).y - mc.player.getEyeY();
+            double dx = chest.getX() + 0.5 - mc.player.getX();
+            double dz = chest.getZ() + 0.5 - mc.player.getZ();
+            double weightedSq = dx * dx + dz * dz + (up > 0.0 ? 2 : 1) * up * up;
+
+            if (tier < bestTier || (tier == bestTier && weightedSq < bestSq)) {
+                bestTier = tier;
+                bestSq = weightedSq;
+                best = chest;
+            }
+        }
+        return best;
+    }
+
+    private BlockPos pickSoonest() {
+        BlockPos best = null;
+        long bestMs = 45000;
+
+        for (BlockPos chest : helper().getChests()) {
+            long remaining = chestRemaining(chest);
+            if (remaining >= 0 && remaining < bestMs && reachable(chest) && !wardenNear(chest) && !armoredNear(chest)) {
+                bestMs = remaining;
+                best = chest;
+            }
+        }
+        return best;
+    }
+
+    private boolean reachable(BlockPos chest) {
+        return sideSpot(chest) != null;
+    }
+
+    private boolean wardenNear(BlockPos pos) {
+        for (BlockPos spot : wardenSpots.keySet()) {
+            if (spot.getSquaredDistance(pos) < 25.0) return true;
+        }
+        return false;
+    }
+
+    private boolean armoredNear(BlockPos pos) {
+        for (Entity entity : mc.world.getEntities()) {
+            if (!(entity instanceof PlayerEntity player) || player == mc.player) continue;
+            if (player.getEntityPos().squaredDistanceTo(Vec3d.ofCenter(pos)) >= 20.0) continue;
+
+            for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+                if (!player.getEquippedStack(slot).isEmpty()) return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean playerNear(double range) {
+        for (Entity entity : mc.world.getEntities()) {
+            if (!(entity instanceof PlayerEntity player) || player == mc.player) continue;
+            if (mc.player.squaredDistanceTo(player) < range * range) return true;
+        }
+        return false;
+    }
+
+    private boolean playerNearPos(BlockPos pos, double range) {
+        for (Entity entity : mc.world.getEntities()) {
+            if (!(entity instanceof PlayerEntity player) || player == mc.player) continue;
+            if (player.getEntityPos().squaredDistanceTo(Vec3d.ofCenter(pos)) < range * range) return true;
+        }
+        return false;
+    }
+
+    private boolean chestNear(double range) {
+        if (nearCurrentChest(range)) return true;
+
+        for (BlockPos chest : helper().getChests()) {
+            if (mc.player.squaredDistanceTo(Vec3d.ofCenter(chest)) < range * range) return true;
+        }
+        return false;
+    }
+
+    private boolean nearCurrentChest(double range) {
+        return currentChest != null && mc.player.squaredDistanceTo(Vec3d.ofCenter(currentChest)) < range * range;
+    }
+
+    private WardenHelper helper() {
+        return WardenHelper.get();
+    }
+
+    private void container(boolean active, boolean hopper, State next) {
+        if (!active) {
+            if (closeContainer()) {
+                if (hopper) finishDeposit();
+                state = next;
+            }
+            return;
+        }
+
+        if (mc.currentScreen instanceof GenericContainerScreen screen) {
+            if (hopper) storeLoot(screen);
+            else takeSupplies(screen);
+            return;
+        }
+
+        openChest(findNearbyChest(hopper), 2);
+    }
+
+    private void lootChest(GenericContainerScreen screen) {
+        if (isMoving()) {
+            walkTarget = null;
+            return;
+        }
+        if (mc.player.age % 2 != 0) return;
+
+        Slot slot = findSlot(screen, false, stack -> !stack.isEmpty() && !isJunk(stack));
+        if (slot == null) {
+            closeContainer();
+            return;
+        }
+
+        ItemStack taken = slot.getStack().copy();
+        click(screen, slot, 0, SlotActionType.QUICK_MOVE);
+        stacksTaken++;
+        anarchyStats.computeIfAbsent(ServerUtil.anarchy, key -> new int[2])[0]++;
+
+        if (!taken.isEmpty()) lootItems.merge(taken.getName().getString(), taken.getCount(), Integer::sum);
+        if (!lootCounted) {
+            lootCounted = true;
+            looted++;
+            storedChests++;
+        }
+        markEmptied();
+    }
+
+    private void storeLoot(GenericContainerScreen screen) {
+        if (mc.player.age % 2 != 0) return;
+
+        boolean keptPotion = false, keptCarrot = false;
+        int moved = 0;
+
+        for (Slot slot : screen.getScreenHandler().slots) {
+            if (moved >= 4) return;
+
+            ItemStack stack = slot.getStack();
+            if (!isPlayerSlot(screen, slot) || stack.isEmpty()) continue;
+            if (useSpeed.getValue() && isSpeedPotion(stack)) continue;
+
+            if (!keptPotion && isInvisPotion(stack)) keptPotion = true;
+            else if (!keptCarrot && stack.isOf(Items.GOLDEN_CARROT)) keptCarrot = true;
+            else {
+                ItemStack moving = stack.copy();
+                click(screen, slot, 0, SlotActionType.QUICK_MOVE);
+                moved++;
+                storedStacks++;
+                tripStacks++;
+                if (!moving.isEmpty()) stored.merge(moving.getName().getString(), moving.getCount(), Integer::sum);
+            }
+        }
+    }
+
+    private void takeSupplies(GenericContainerScreen screen) {
+        if (mc.player.age % 2 != 0) return;
+
+        ItemStack cursor = screen.getScreenHandler().getCursorStack();
+        Predicate<ItemStack> same = stack -> stack.isEmpty() || ItemStack.areItemsAndComponentsEqual(stack, cursor);
+
+        if (!cursor.isEmpty()) {
+            if (!wantSupply(cursor)) click(screen, findSlot(screen, false, same), 0, SlotActionType.PICKUP);
+            else click(screen, findSlot(screen, true, same), 1, SlotActionType.PICKUP);
+            return;
+        }
+
+        click(screen, findSlot(screen, false, this::wantSupply), 0, SlotActionType.PICKUP);
+    }
+
+    private Slot findSlot(GenericContainerScreen screen, boolean player, Predicate<ItemStack> match) {
+        for (Slot slot : screen.getScreenHandler().slots) {
+            if (isPlayerSlot(screen, slot) == player && match.test(slot.getStack())) return slot;
+        }
+        return null;
+    }
+
+    private boolean isPlayerSlot(GenericContainerScreen screen, Slot slot) {
+        return slot.id >= screen.getScreenHandler().getRows() * 9;
+    }
+
+    private void click(GenericContainerScreen screen, Slot slot, int button, SlotActionType type) {
+        if (slot == null) return;
+        mc.interactionManager.clickSlot(screen.getScreenHandler().syncId, slot.id, button, type, mc.player);
+    }
+
+    private boolean cursorBusy() {
+        return mc.currentScreen instanceof GenericContainerScreen screen && !screen.getScreenHandler().getCursorStack().isEmpty();
+    }
+
+    private boolean closeContainer() {
+        if (mc.currentScreen instanceof GenericContainerScreen && mc.player.age % 2 == 0) mc.player.closeHandledScreen();
+        return !(mc.currentScreen instanceof GenericContainerScreen);
+    }
+
+    private boolean wantSupply(ItemStack stack) {
+        if (stack.isEmpty()) return false;
+        if (isInvisPotion(stack)) return invisCount() < 1;
+        if (stack.isOf(Items.GOLDEN_CARROT)) return countItem(Items.GOLDEN_CARROT) < 3;
+        return useSpeed.getValue() && isSpeedPotion(stack) && findSlot(this::isSpeedPotion) < 0;
+    }
+
+    private boolean needSupplies() {
+        return invisCount() < 1 || countItem(Items.GOLDEN_CARROT) < 3
+                || (useSpeed.getValue() && findSlot(this::isSpeedPotion) < 0);
+    }
+
+    private int invisCount() {
+        int total = 0;
+        for (ItemStack stack : mc.player.getInventory().getMainStacks()) {
+            if (isInvisPotion(stack)) total++;
+        }
+        return total;
+    }
+
+    private int countItem(net.minecraft.item.Item item) {
+        int total = 0;
+        for (ItemStack stack : mc.player.getInventory().getMainStacks()) {
+            if (stack.isOf(item)) total += stack.getCount();
+        }
+        return total;
+    }
+
+    private int findSlot(Predicate<ItemStack> match) {
+        for (int slot = 0; slot < 36; slot++) {
+            if (match.test(mc.player.getInventory().getStack(slot))) return slot;
+        }
+        return -1;
+    }
+
+    private boolean hasLootToStore() {
+        boolean keptPotion = false, keptCarrot = false;
+
+        for (ItemStack stack : mc.player.getInventory().getMainStacks()) {
+            if (stack.isEmpty()) continue;
+            if (useSpeed.getValue() && isSpeedPotion(stack)) continue;
+
+            if (!keptPotion && isInvisPotion(stack)) keptPotion = true;
+            else if (!keptCarrot && stack.isOf(Items.GOLDEN_CARROT)) keptCarrot = true;
+            else return true;
+        }
+        return false;
+    }
+
+    private void useSlot(int slot) {
+        if (slot < 0 || mc.currentScreen != null) return;
+
+        if (slot >= 9) {
+            if (isMoving()) walkTarget = null;
+            if (mc.player.age % 4 == 0) {
+                mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, slot,
+                        mc.player.getInventory().getSelectedSlot(), SlotActionType.SWAP, mc.player);
+            }
+            return;
+        }
+
+        if (mc.player.getInventory().getSelectedSlot() != slot) {
+            mc.player.getInventory().setSelectedSlot(slot);
+            mc.player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(slot));
+        }
+
+        useRequested = true;
+        useHeld = true;
+        mc.options.useKey.setPressed(true);
+    }
+
+    private void releaseUse() {
+        if (!useHeld) return;
+        useHeld = false;
+        eating = false;
+        mc.options.useKey.setPressed(false);
+    }
+
+    private void eatIfNeeded() {
+        if (mc.currentScreen != null || isDrinking() || nearCurrentChest(5.0)
+                || mc.player.getHungerManager().getFoodLevel() >= 17) {
+            eating = false;
+            return;
+        }
+
+        int slot = findSlot(stack -> stack.isOf(Items.GOLDEN_CARROT));
+        if (slot < 0) {
+            eating = false;
+            return;
+        }
+
+        eating = true;
+        walkTarget = null;
+        useSlot(slot);
+    }
+
+    private void freeHand() {
+        if (mc.player.getMainHandStack().isEmpty()) return;
+
+        for (int slot = 0; slot < 9; slot++) {
+            if (!mc.player.getInventory().getStack(slot).isEmpty()) continue;
+
+            if (mc.player.getInventory().getSelectedSlot() != slot) {
+                mc.player.getInventory().setSelectedSlot(slot);
+                mc.player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(slot));
+            }
+            return;
+        }
+
+        for (int slot = 9; slot < 36; slot++) {
+            if (!mc.player.getInventory().getStack(slot).isEmpty()) continue;
+
+            if (mc.player.age % 10 >= 2 && isMoving()) walkTarget = null;
+            if (mc.player.age % 10 == 4) {
+                mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, slot,
+                        mc.player.getInventory().getSelectedSlot(), SlotActionType.SWAP, mc.player);
+            }
+            return;
+        }
+    }
+
+    private boolean isJunk(ItemStack stack) {
+        if (loot.is("Низкий")) return false;
+        return junkBase(stack) || (loot.is("Высокий") && junkHigh(stack));
+    }
+
+    private boolean junkBase(ItemStack stack) {
+        return stack.isIn(ItemTags.SHOVELS) || stack.isIn(ItemTags.AXES)
+                || stack.getItem() instanceof BannerItem
+                || (stack.getItem() instanceof SmithingTemplateItem && !stack.isOf(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE))
+                || stack.isOf(Items.BLAZE_ROD) || stack.isOf(Items.ENCHANTED_BOOK) || stack.isOf(Items.TRIDENT)
+                || stack.isOf(Items.NAME_TAG) || stack.isOf(Items.SCULK) || stack.isOf(Items.SCULK_SENSOR)
+                || stack.isOf(Items.ENDER_CHEST) || stack.isOf(Items.REINFORCED_DEEPSLATE) || stack.isOf(Items.PUFFERFISH)
+                || stack.isOf(Items.HONEY_BOTTLE) || stack.isOf(Items.FERMENTED_SPIDER_EYE) || stack.isOf(Items.ANVIL)
+                || stack.isOf(Items.COOKED_PORKCHOP);
+    }
+
+    private boolean junkHigh(ItemStack stack) {
+        return stack.isIn(ItemTags.ARROWS) || stack.isIn(ItemTags.PICKAXES) || stack.isIn(ItemTags.AXES)
+                || stack.isOf(Items.CHORUS_FRUIT) || stack.isOf(Items.DISC_FRAGMENT_5) || stack.isOf(Items.NAUTILUS_SHELL)
+                || stack.isOf(Items.BOOKSHELF) || stack.isOf(Items.COOKED_MUTTON) || stack.isOf(Items.SKELETON_SPAWN_EGG)
+                || stack.isOf(Items.CREEPER_SPAWN_EGG) || stack.isOf(Items.ZOMBIE_SPAWN_EGG) || stack.isOf(Items.VINDICATOR_SPAWN_EGG)
+                || stack.isOf(Items.PIGLIN_SPAWN_EGG) || stack.isOf(Items.VEX_SPAWN_EGG) || stack.isOf(Items.ENDERMITE_SPAWN_EGG)
+                || stack.isOf(Items.CAT_SPAWN_EGG) || stack.isOf(Items.FIRE_CHARGE) || stack.isOf(Items.LEATHER)
+                || stack.isOf(Items.SHULKER_SHELL) || stack.isOf(Items.EXPERIENCE_BOTTLE) || stack.isOf(Items.WITHER_ROSE)
+                || stack.isOf(Items.EMERALD) || stack.isOf(Items.SUGAR) || hasFtid(stack, "potion-popper")
+                || stack.contains(DataComponentTypes.JUKEBOX_PLAYABLE) || stack.isOf(Items.GHAST_TEAR)
+                || stack.isOf(Items.DRAGON_BREATH) || stack.isOf(Items.ENCHANTING_TABLE) || stack.isOf(Items.DIAMOND_HELMET)
+                || stack.isOf(Items.DIAMOND_CHESTPLATE) || stack.isOf(Items.DIAMOND_LEGGINGS) || stack.isOf(Items.DIAMOND_BOOTS);
+    }
+
+    private boolean hasFtid(ItemStack stack, String id) {
+        NbtComponent data = stack.get(DataComponentTypes.CUSTOM_DATA);
+        return data != null && id.equals(data.copyNbt().getCompoundOrEmpty("PublicBukkitValues").getString("minecraft:ftid", ""));
+    }
+
+    private boolean isInvisPotion(ItemStack stack) {
+        RegistryEntry<Potion> potion = stack.getOrDefault(DataComponentTypes.POTION_CONTENTS, PotionContentsComponent.DEFAULT).potion().orElse(null);
+        return potion != null && (potion.equals(Potions.INVISIBILITY) || potion.equals(Potions.LONG_INVISIBILITY));
+    }
+
+    private boolean isSpeedPotion(ItemStack stack) {
+        if (!stack.isOf(Items.POTION)) return false;
+
+        for (StatusEffectInstance effect : stack.getOrDefault(DataComponentTypes.POTION_CONTENTS, PotionContentsComponent.DEFAULT).getEffects()) {
+            if (effect.getEffectType().equals(StatusEffects.SPEED)) return true;
+        }
+        return false;
+    }
+
+    private BlockPos findNearbyChest(boolean hopper) {
+        BlockPos origin = mc.player.getBlockPos();
+        BlockPos.Mutable pos = new BlockPos.Mutable();
+
+        for (int dx = -4; dx <= 4; dx++) {
+            for (int dy = -4; dy <= 4; dy++) {
+                for (int dz = -4; dz <= 4; dz++) {
+                    pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+                    if (!mc.world.getBlockState(pos).isOf(Blocks.CHEST) || isHopperChest(pos) != hopper) continue;
+                    if (!mc.world.getBlockState(pos.up()).isAir()) continue;
+
+                    BlockHitResult hit = mc.world.raycast(new RaycastContext(mc.player.getEyePos(), Vec3d.ofCenter(pos),
+                            RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
+                    if (hit.getBlockPos().equals(pos)) return pos.toImmutable();
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean isHopperChest(BlockPos pos) {
+        if (mc.world.getBlockState(pos.down()).isOf(Blocks.HOPPER)) return true;
+
+        BlockState state = mc.world.getBlockState(pos);
+        if (state.get(Properties.CHEST_TYPE) == ChestType.SINGLE) return false;
+
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            BlockPos partner = pos.offset(direction);
+            BlockState other = mc.world.getBlockState(partner);
+
+            if (other.isOf(Blocks.CHEST) && other.get(Properties.CHEST_TYPE) != ChestType.SINGLE
+                    && other.get(Properties.CHEST_TYPE) != state.get(Properties.CHEST_TYPE)
+                    && other.get(Properties.HORIZONTAL_FACING) == state.get(Properties.HORIZONTAL_FACING)
+                    && mc.world.getBlockState(partner.down()).isOf(Blocks.HOPPER)) return true;
+        }
+        return false;
+    }
+
+    private BlockPos hopperChestFar() {
+        BlockPos origin = mc.player.getBlockPos();
+        BlockPos.Mutable pos = new BlockPos.Mutable();
+        BlockPos best = null;
+        double bestDist = Double.MAX_VALUE;
+
+        for (int dx = -16; dx <= 16; dx++) {
+            for (int dy = -6; dy <= 6; dy++) {
+                for (int dz = -16; dz <= 16; dz++) {
+                    pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+                    if (!mc.world.getBlockState(pos).isOf(Blocks.CHEST) || !isHopperChest(pos)) continue;
+
+                    double dist = mc.player.squaredDistanceTo(Vec3d.ofCenter(pos));
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        best = pos.toImmutable();
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    private void dropFloorTrash() {
+        if (!trash.getValue() || mc.currentScreen != null || mc.player.age % 4 != 0 || !isMoving()) return;
+
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack stack = mc.player.getInventory().getStack(slot);
+            if (!isFloorTrash(stack)) continue;
+
+            mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, slot < 9 ? 36 + slot : slot, 1, SlotActionType.THROW, mc.player);
+            return;
+        }
+    }
+
+    private boolean isFloorTrash(ItemStack stack) {
+        return !stack.isEmpty() && isJunk(stack) && !isInvisPotion(stack) && !isSpeedPotion(stack) && !stack.isOf(Items.GOLDEN_CARROT);
+    }
+
+    private void updateChestMemory() {
+        int anarchy = ServerUtil.anarchy;
+        if (anarchy < 0) return;
+
+        long now = System.currentTimeMillis();
+        for (BlockPos chest : helper().getChests()) {
+            long remaining = helper().getRemaining(chest);
+            if (remaining <= 1000) continue;
+
+            String key = chestKey(anarchy, chest);
+            timers.put(key, now + remaining);
+            emptied.remove(key);
+            if (remaining > period && remaining <= TTL) period = remaining;
+        }
+    }
+
+    private long chestRemaining(BlockPos chest) {
+        if (chest == null) return -1L;
+
+        long remaining = helper().getRemaining(chest);
+        if (remaining >= 0) return remaining;
+
+        String key = chestKey(ServerUtil.anarchy, chest);
+        Long readyAt = timers.get(key);
+
+        if (readyAt == null) {
+            Long openedAt = emptied.get(key);
+            if (openedAt == null || period <= 60000L) return -1L;
+            readyAt = openedAt + period;
+        }
+
+        long left = readyAt - System.currentTimeMillis();
+        return left > 0 ? left : -1L;
+    }
+
+    private String chestKey(int anarchy, BlockPos chest) {
+        return anarchy + ";" + chest.getX() + "," + chest.getY() + "," + chest.getZ();
+    }
+
+    private void markEmptied() {
+        int anarchy = ServerUtil.anarchy;
+        if (anarchy < 0 || currentChest == null) return;
+
+        String key = chestKey(anarchy, currentChest);
+        long now = System.currentTimeMillis();
+        emptied.put(key, now);
+        if (period > 60000L) timers.put(key, now + period);
+    }
+
+    private Path timersFile() {
+        return Client.get().configManager().getConfigDir().getParent().resolve("warden_timers.json");
+    }
+
+    private void saveTimers() {
+        try {
+            long now = System.currentTimeMillis();
+            timers.entrySet().removeIf(entry -> entry.getValue() + TTL < now);
+            emptied.entrySet().removeIf(entry -> entry.getValue() + TTL < now);
+
+            JsonObject root = new JsonObject();
+            root.addProperty("period", period);
+
+            JsonObject chests = new JsonObject();
+            timers.forEach(chests::addProperty);
+            JsonObject opened = new JsonObject();
+            emptied.forEach(opened::addProperty);
+
+            root.add("chests", chests);
+            root.add("opened", opened);
+            Files.writeString(timersFile(), root.toString());
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void loadTimers() {
+        try {
+            Path file = timersFile();
+            if (!Files.exists(file)) return;
+
+            JsonObject root = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+            period = root.has("period") ? root.get("period").getAsLong() : 0L;
+            long now = System.currentTimeMillis();
+
+            JsonObject chests = root.getAsJsonObject("chests");
+            if (chests != null) {
+                for (String key : chests.keySet()) {
+                    long readyAt = chests.get(key).getAsLong();
+                    if (readyAt + TTL >= now) timers.put(key, readyAt);
+                }
+            }
+
+            JsonObject opened = root.getAsJsonObject("opened");
+            if (opened != null) {
+                for (String key : opened.keySet()) {
+                    long at = opened.get(key).getAsLong();
+                    if (at + TTL >= now) emptied.put(key, at);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private int bestNextAnarchy() {
+        if (!smart.getValue() || timers.isEmpty()) return -1;
+
+        int current = ServerUtil.anarchy;
+        int bestIndex = -1;
+        double bestScore = Double.NEGATIVE_INFINITY;
+
+        for (int index = 1; index < anarchies.size(); index++) {
+            int anarchy = anarchies.at(index);
+            if (anarchy == current) continue;
+
+            double score = anarchyScore(anarchy);
+            if (score > bestScore) {
+                bestScore = score;
+                bestIndex = index;
+            }
+        }
+        return Double.isInfinite(bestScore) ? -1 : bestIndex;
+    }
+
+    /** Оценка анархии: готовые сундуки важнее всего, дальше средний остаток таймеров и прошлый выхлоп. */
+    private double anarchyScore(int anarchy) {
+        if (anarchy < 0) return Double.NEGATIVE_INFINITY;
+
+        long now = System.currentTimeMillis();
+        String prefix = anarchy + ";";
+        long sum = 0L;
+        int count = 0, ready = 0;
+
+        for (Map.Entry<String, Long> entry : timers.entrySet()) {
+            if (!entry.getKey().startsWith(prefix)) continue;
+
+            long left = entry.getValue() - now;
+            if (left <= 30000L) ready++;
+            sum += Math.max(0L, left);
+            count++;
+        }
+
+        if (count == 0) return Double.NEGATIVE_INFINITY;
+
+        double average = (double) sum / count;
+        return ready * 40.0 - Math.min(120.0, average / 60000.0) * 2.0 + Math.min(30.0, stacksPerVisit(anarchy) * 3.0);
+    }
+
+    private double stacksPerVisit(int anarchy) {
+        int[] stats = anarchyStats.get(anarchy);
+        return stats == null || stats[1] <= 0 ? 0.0 : (double) stats[0] / stats[1];
+    }
+
+    private boolean betterAnarchy() {
+        if (!smart.getValue()) return false;
+
+        double current = anarchyScore(ServerUtil.anarchy);
+        if (Double.isInfinite(current)) return false;
+
+        int best = bestNextAnarchy();
+        return best >= 0 && anarchyScore(anarchies.at(best)) > current + 20.0;
+    }
+
+    /** Уходит с выработанной анархии: с лутом — через склад, пустым — сразу на лучшую. */
+    private void hopAnarchy() {
+        int best = bestNextAnarchy();
+        if (best < 1) return;
+
+        hopTimer.reset();
+        clearRecall();
+        notifyTg("[AW] умный переход на анархию " + anarchies.at(best));
+
+        if (hasLootToStore()) {
+            died = true;
+            state = State.ESCAPE;
+            return;
+        }
+        goFarm(best);
+    }
+
+    /** Идёт к запомненному сундуку на другой анархии: с лутом — сначала через склад. */
+    private void hopTo(Recall recall) {
+        hopTimer.reset();
+        recallChest = recall.chest();
+        recallAnarchy = recall.anarchy();
+
+        long seconds = recall.delay() / 1000L;
+        notifyTg("[AW] возвращаюсь на анархию " + recall.anarchy() + " к сундуку "
+                + recall.chest().getX() + " " + recall.chest().getY() + " " + recall.chest().getZ()
+                + (seconds > 0 ? ", будет готов через " + seconds + "с" : ", он уже готов"));
+
+        if (hasLootToStore()) {
+            died = true;
+            state = State.ESCAPE;
+            return;
+        }
+        goFarm(recall.index());
+    }
+
+    private void goFarm(int index) {
+        farmIndex = index;
+        currentChest = null;
+        walkTarget = null;
+        visitAnarchy = -1;
+        openAttempts.clear();
+        state = State.COLLECTING;
+    }
+
+    /** Пока запомненный сундук далеко, идём прямо к нему: ESP его ещё не видит. */
+    private boolean travelToRecall() {
+        if (recallChest == null || ServerUtil.anarchy != recallAnarchy) return false;
+
+        if (!inZoneBox(recallChest.getX(), recallChest.getZ())
+                || mc.player.squaredDistanceTo(Vec3d.ofCenter(recallChest)) <= 400.0
+                || helper().getChests().contains(recallChest)) {
+            clearRecall();
+            return false;
+        }
+
+        walkTo(recallChest);
+        return true;
+    }
+
+    private void clearRecall() {
+        recallChest = null;
+        recallAnarchy = -1;
+    }
+
+    /** Индекс анархии, где нас ждёт запомненный сундук, либо -1. */
+    private int recallIndex() {
+        return recallChest == null ? -1 : indexOfAnarchy(recallAnarchy);
+    }
+
+    private int indexOfAnarchy(int anarchy) {
+        if (anarchy < 0) return -1;
+
+        for (int index = 0; index < anarchies.size(); index++) {
+            if (anarchies.at(index) == anarchy) return index;
+        }
+        return -1;
+    }
+
+    /** Запомненный сундук на другой анархии, чей таймер уже дошёл до порога ожидания. */
+    private Recall soonestRecall(long threshold) {
+        if (!smart.getValue()) return null;
+
+        int current = ServerUtil.anarchy;
+        long now = System.currentTimeMillis();
+        Recall best = null;
+
+        for (Map.Entry<String, Long> entry : timers.entrySet()) {
+            long left = entry.getValue() - now;
+            if (left > threshold) continue;
+
+            Recall recall = parseTimerKey(entry.getKey(), left);
+            if (recall == null || recall.anarchy() == current) continue;
+            if (best == null || recall.delay() < best.delay()
+                    || (recall.delay() == best.delay() && recall.left() > best.left())) best = recall;
+        }
+        return best;
+    }
+
+    /** Разбирает ключ таймера в цель, если такая анархия есть в списке фермы. */
+    private Recall parseTimerKey(String key, long left) {
+        int split = key.indexOf(';');
+        if (split <= 0) return null;
+
+        try {
+            int index = indexOfAnarchy(Integer.parseInt(key.substring(0, split)));
+            if (index < 1) return null;
+
+            String[] parts = key.substring(split + 1).split(",");
+            if (parts.length != 3) return null;
+
+            BlockPos chest = new BlockPos(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+            return new Recall(index, anarchies.at(index), chest, left);
+        } catch (Exception error) {
+            return null;
+        }
+    }
+
+    /** Сколько ждать самый скорый запомненный сундук анархии, -1 если таймеров нет. */
+    private long soonestOn(int anarchy) {
+        String prefix = anarchy + ";";
+        long now = System.currentTimeMillis();
+        long best = -1L;
+
+        for (Map.Entry<String, Long> entry : timers.entrySet()) {
+            if (!entry.getKey().startsWith(prefix)) continue;
+
+            long wait = Math.max(0L, entry.getValue() - now);
+            if (best < 0 || wait < best) best = wait;
+        }
+        return best;
+    }
+
+    /** left — сырой остаток: отрицательный значит сундук уже стоит готовым. */
+    private record Recall(int index, int anarchy, BlockPos chest, long left) {
+        long delay() {
+            return Math.max(0L, left);
+        }
+    }
+
+    public String statsLine() {
+        long minutes = Math.max(1L, (System.currentTimeMillis() - startedAt) / 60000L);
+        StringBuilder line = new StringBuilder("сундуков вскрыто §f" + looted + " §7| стеков лута §f" + stacksTaken
+                + " §7(~§f" + (stacksTaken * 60L / minutes) + "§7/час) | таймеров в памяти §f" + timers.size()
+                + " §7| период возрождения §f" + (period / 1000L) + "с");
+
+        if (!lootItems.isEmpty()) {
+            line.append(" §7| лут: §f").append(topLoot(6));
+        }
+        return line.toString();
+    }
+
+    public String topLoot(int limit) {
+        return top(lootItems, limit);
+    }
+
+    public String topStored(int limit) {
+        return top(stored, limit);
+    }
+
+    private String top(Map<String, Integer> source, int limit) {
+        StringBuilder items = new StringBuilder();
+        int shown = 0;
+
+        for (Map.Entry<String, Integer> entry : source.entrySet().stream()
+                .filter(entry -> entry.getValue() > 0)
+                .sorted((first, second) -> Integer.compare(second.getValue(), first.getValue())).toList()) {
+            if (shown++ >= limit) {
+                items.append("...");
+                break;
+            }
+            items.append(entry.getKey()).append(" x").append(entry.getValue()).append(", ");
+        }
+
+        if (shown <= limit && items.length() > 2) items.setLength(items.length() - 2);
+        return items.toString();
+    }
+
+    private void printDebug() {
+        ChatUtils.addChatMessage("§7[AW] состояние §f" + state + " §7| анархия §f" + ServerUtil.anarchy
+                + "§7, нужна §f" + (anarchies.isEmpty() ? "нет" : String.valueOf(anarchies.at(farmIndex)))
+                + " §7(список: §f" + anarchies.size() + "§7) | в зоне фермы §f" + inFarmZone()
+                + " §7| сундуков у ESP §f" + helper().getChests().size() + " §7| варден §f" + wardenAggro()
+                + " §7| пвп §f" + ServerUtil.isPvp() + " §7| цель §f" + (walkTarget == null ? "нет" : String.valueOf(walkTarget)));
+
+        ChatUtils.addChatMessage("§7[AW] застрял §c" + stuck() + " §7| двигаюсь §f" + isMoving() + " §7| в блоке §f" + insideBlock()
+                + " §7| свечи §f" + (mc.world.getBlockState(mc.player.getBlockPos()).isIn(BlockTags.CANDLES)
+                || mc.world.getBlockState(mc.player.getBlockPos().down()).isIn(BlockTags.CANDLES)));
+
+        BlockPos reach = findNearbyChest(true);
+        BlockPos far = hopperChestFar();
+        ChatUtils.addChatMessage("§7[AW] лут в инвентаре §f" + hasLootToStore() + " §7| приёмник в руке §f"
+                + (reach == null ? "нет" : String.valueOf(reach)) + " §7| ближайший приёмник §f"
+                + (far == null ? "не найден в радиусе 16" : far + " (" + (int) Math.sqrt(mc.player.squaredDistanceTo(Vec3d.ofCenter(far))) + " бл.)")
+                + " §7| экран §f" + (mc.currentScreen == null ? "нет" : mc.currentScreen.getClass().getSimpleName()));
+
+        ChatUtils.addChatMessage("§7[AW] " + statsLine());
+
+        Recall recall = soonestRecall((long) (waitLimit.getValue() * 1000.0F));
+        ChatUtils.addChatMessage("§7[AW] цель возврата §f" + (recallChest == null ? "нет" : recallChest + " @ " + recallAnarchy)
+                + " §7| скорый сундук на другой анархии §f"
+                + (recall == null ? "нет" : recall.chest() + " @ " + recall.anarchy() + " через " + recall.delay() / 1000L + "с"));
+    }
+
+    private int pvpSeconds() {
+        for (var bar : mc.inGameHud.getBossBarHud().bossBars.values()) {
+            String name = bar.getName().getString().toLowerCase();
+            if (!name.contains("pvp") && !name.contains("пвп")) continue;
+
+            Matcher clock = CLOCK.matcher(name);
+            if (clock.find()) return Integer.parseInt(clock.group(1)) * 60 + Integer.parseInt(clock.group(2));
+
+            Matcher number = NUMBER.matcher(name);
+            if (number.find()) return Integer.parseInt(number.group());
+        }
+        return -1;
+    }
+
+    private boolean onHomeAnarchy() {
+        int home = anarchies.home();
+        return home >= 0 && ServerUtil.anarchy == home;
+    }
+
+    /** Держит бота в согласии с настройками, даже когда сам модуль выключен. */
+    private void startTelegramWatchdog() {
+        Thread watchdog = new Thread(() -> {
+            while (true) {
+                try {
+                    syncTelegram();
+                } catch (Exception ignored) {
+                }
+                try {
+                    Thread.sleep(5000L);
+                } catch (InterruptedException interrupted) {
+                    return;
+                }
+            }
+        }, "warden-telegram-watchdog");
+
+        watchdog.setDaemon(true);
+        watchdog.start();
+    }
+
+    /** Пересоздаёт бота при смене токена или чата и гасит его, когда настройка выключена. */
+    private synchronized void syncTelegram() {
+        String token = tgToken.getValue() == null ? "" : tgToken.getValue().trim();
+        String chat = tgChat.getValue() == null ? "" : tgChat.getValue().trim();
+
+        if (!telegram.getValue() || token.isEmpty() || chat.isEmpty()) {
+            if (bot != null) {
+                bot.stop();
+                bot = null;
+            }
+            return;
+        }
+
+        if (bot != null && bot.isRunning() && bot.token().equals(token) && bot.chatId().equals(chat)) return;
+
+        if (bot != null) bot.stop();
+        bot = new TelegramBot(token, chat, text -> mc.execute(() -> handleCommand(text)));
+        bot.start();
+        bot.send("Auto Warden на связи. /help — список команд.");
+    }
+
+    private void notifyTg(String text) {
+        if (tgNotify.getValue()) sendTg(text);
+    }
+
+    private void sendTg(String text) {
+        TelegramBot current = bot;
+        if (current != null) current.send(text);
+    }
+
+    /** Автоотчёт раз в N минут, 0 — выключено. */
+    private void periodicReport() {
+        int minutes = tgReport.getValue().intValue();
+        if (minutes <= 0 || !tgNotify.getValue()) return;
+
+        long now = System.currentTimeMillis();
+        if (now - lastReport < minutes * 60000L) return;
+
+        lastReport = now;
+        sendTg("[AW] отчёт" + NL + statsLine() + NL + storageLine());
+    }
+
+    /** Разбор команды из телеграма. Уже в потоке клиента, поэтому можно трогать игру. */
+    private void handleCommand(String raw) {
+        if (raw == null) return;
+
+        String text = raw.trim();
+        if (text.startsWith("/")) text = text.substring(1);
+
+        int at = text.indexOf('@');
+        int space = text.indexOf(' ');
+        if (at > 0 && (space < 0 || at < space)) text = text.substring(0, at) + (space < 0 ? "" : text.substring(space));
+
+        String[] parts = text.trim().split(" +", 2);
+        String command = parts[0].toLowerCase();
+        String argument = parts.length > 1 ? parts[1].trim() : "";
+
+        switch (command) {
+            case "help", "start", "помощь", "команды" -> sendTg(helpText());
+            case "stats", "стат", "статы" -> sendTg("[AW] " + statsLine());
+            case "storage", "склад" -> sendTg("[AW] " + storageLine());
+            case "loot", "лут" -> sendTg(lootText());
+            case "anarchy", "анархия", "анархии" -> anarchyCommand(argument);
+            case "where", "где" -> sendTg(whereText());
+            case "inv", "инв", "инвентарь" -> sendTg(inventoryText());
+            case "on", "вкл", "включить" -> {
+                if (mc.player == null) sendTg("[AW] сейчас не в игре, включать нечего.");
+                else if (isEnabled()) sendTg("[AW] уже работаю.");
+                else {
+                    setEnabled(true);
+                    sendTg("[AW] включил.");
+                }
+            }
+            case "off", "выкл", "выключить" -> {
+                if (!isEnabled()) sendTg("[AW] уже выключен.");
+                else {
+                    setEnabled(false);
+                    sendTg("[AW] выключил.");
+                }
+            }
+            case "reset", "сброс" -> {
+                stored.clear();
+                storedStacks = 0;
+                storedChests = 0;
+                deposits = 0;
+                tripStacks = 0;
+                saveStorage();
+                sendTg("[AW] статистику склада обнулил.");
+            }
+            case "debug", "отладка" -> {
+                debug.set(!debug.getValue());
+                sendTg("[AW] отладка " + (debug.getValue() ? "включена" : "выключена") + ".");
+            }
+            default -> sendTg("[AW] не знаю команду " + command + ", посмотри /help.");
+        }
+    }
+
+    private String helpText() {
+        return "Auto Warden — команды:" + NL
+                + "/stats — вскрытые сундуки и лут за сессию" + NL
+                + "/storage — сводка по складу" + NL
+                + "/loot — полный список лута на складе" + NL
+                + "/anarchy — анархии с оценками, /anarchy 305 — идти на неё" + NL
+                + "/where — где я, состояние, хп" + NL
+                + "/inv — что лежит в инвентаре" + NL
+                + "/on, /off — включить или выключить фарм" + NL
+                + "/reset — обнулить статистику склада" + NL
+                + "/debug — отладка в игровой чат" + NL
+                + "Русские слова тоже понимаю: статы, склад, лут, анархия, где, инв, вкл, выкл, сброс.";
+    }
+
+    private void anarchyCommand(String argument) {
+        if (argument.isEmpty()) {
+            StringBuilder text = new StringBuilder("[AW] склад: " + anarchies.home() + ", сейчас: " + ServerUtil.anarchy);
+
+            for (int index = 1; index < anarchies.size(); index++) {
+                int anarchy = anarchies.at(index);
+                double score = anarchyScore(anarchy);
+
+                text.append(NL).append(index == farmIndex ? "> " : "  ").append(anarchy)
+                        .append(" — оценка ").append(Double.isInfinite(score) ? "нет данных" : String.format("%.1f", score))
+                        .append(", стеков за визит ").append(String.format("%.1f", stacksPerVisit(anarchy)))
+                        .append(", сундуков в памяти ").append(knownChests(anarchy))
+                        .append(waitText(soonestOn(anarchy)));
+            }
+
+            if (anarchies.size() < 2) text.append(NL).append("список фермы пуст, добавь анархии в клик гуи.");
+            sendTg(text.toString());
+            return;
+        }
+
+        String digits = argument.replaceAll("[^0-9]", "");
+        if (digits.isEmpty()) {
+            sendTg("[AW] нужен номер анархии, например /anarchy 305");
+            return;
+        }
+
+        int target = Integer.parseInt(digits);
+        int index = indexOfAnarchy(target);
+
+        if (index < 0) {
+            sendTg("[AW] анархии " + target + " нет в списке, добавь её в клик гуи.");
+            return;
+        }
+        if (index == 0) {
+            sendTg("[AW] " + target + " — это анархия склада, фармить там нечего.");
+            return;
+        }
+
+        clearRecall();
+        hopTimer.reset();
+        goFarm(index);
+        sendTg("[AW] иду фармить анархию " + target + ".");
+    }
+
+    private String waitText(long wait) {
+        if (wait < 0) return "";
+        return wait == 0 ? ", сундук готов" : ", ближайший через " + wait / 1000L + "с";
+    }
+
+    private int knownChests(int anarchy) {
+        String prefix = anarchy + ";";
+        int count = 0;
+
+        for (String key : timers.keySet()) {
+            if (key.startsWith(prefix)) count++;
+        }
+        return count;
+    }
+
+    private String whereText() {
+        if (mc.player == null) return "[AW] сейчас не в игре.";
+
+        BlockPos pos = mc.player.getBlockPos();
+        return "[AW] " + (isEnabled() ? "работаю" : "выключен") + ", состояние " + state
+                + ", анархия " + ServerUtil.anarchy
+                + " (нужна " + (anarchies.isEmpty() ? "нет" : String.valueOf(anarchies.at(farmIndex))) + ")" + NL
+                + "хп " + (int) mc.player.getHealth() + ", позиция " + pos.getX() + " " + pos.getY() + " " + pos.getZ()
+                + ", в зоне фермы " + inFarmZone() + NL
+                + "сундуков у ESP " + helper().getChests().size() + ", варден рядом " + wardenAggro()
+                + ", пвп " + ServerUtil.isPvp()
+                + (recallChest == null ? "" : NL + "жду сундук " + recallChest.getX() + " " + recallChest.getY() + " "
+                + recallChest.getZ() + " на анархии " + recallAnarchy + waitText(soonestOn(recallAnarchy)));
+    }
+
+    private String inventoryText() {
+        if (mc.player == null) return "[AW] сейчас не в игре.";
+
+        Map<String, Integer> items = new LinkedHashMap<>();
+        for (ItemStack stack : mc.player.getInventory().getMainStacks()) {
+            if (!stack.isEmpty()) items.merge(stack.getName().getString(), stack.getCount(), Integer::sum);
+        }
+
+        if (items.isEmpty()) return "[AW] инвентарь пуст.";
+        return "[AW] в инвентаре: " + top(items, 12);
+    }
+
+    /** Закрывает рейс на склад: считает его в статистику и пишет в телеграм. */
+    private void finishDeposit() {
+        if (tripStacks <= 0) return;
+
+        deposits++;
+        notifyTg("[AW] сдал на склад " + tripStacks + " стеков, рейс #" + deposits + "." + NL + storageLine());
+        tripStacks = 0;
+        saveStorage();
+    }
+
+    public String storageLine() {
+        StringBuilder line = new StringBuilder("на складе §f" + storedStacks + " §7стеков за §f" + deposits
+                + " §7рейсов, вскрыто §f" + storedChests + " §7сундуков");
+
+        if (!stored.isEmpty()) line.append(" §7| §f").append(topStored(8));
+        return line.toString();
+    }
+
+    private String lootText() {
+        if (stored.isEmpty()) return "[AW] склад пуст, на него ещё ничего не сдавал.";
+
+        StringBuilder text = new StringBuilder("[AW] лут на складе (" + storedStacks + " стеков за " + deposits + " рейсов):");
+        stored.entrySet().stream()
+                .filter(entry -> entry.getValue() > 0)
+                .sorted((first, second) -> Integer.compare(second.getValue(), first.getValue()))
+                .limit(30)
+                .forEach(entry -> text.append(NL).append("- ").append(entry.getKey()).append(" x").append(entry.getValue()));
+
+        if (stored.size() > 30) text.append(NL).append("...и ещё ").append(stored.size() - 30).append(" видов предметов");
+        return text.toString();
+    }
+
+    private Path storageFile() {
+        return Client.get().configManager().getConfigDir().getParent().resolve("warden_storage.json");
+    }
+
+    private void saveStorage() {
+        try {
+            JsonObject root = new JsonObject();
+            root.addProperty("stacks", storedStacks);
+            root.addProperty("chests", storedChests);
+            root.addProperty("deposits", deposits);
+
+            JsonObject items = new JsonObject();
+            stored.forEach(items::addProperty);
+            root.add("items", items);
+
+            JsonObject anarchy = new JsonObject();
+            anarchyStats.forEach((key, value) -> anarchy.addProperty(String.valueOf(key), value[0] + ":" + value[1]));
+            root.add("anarchy", anarchy);
+
+            Files.writeString(storageFile(), root.toString());
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void loadStorage() {
+        try {
+            Path file = storageFile();
+            if (!Files.exists(file)) return;
+
+            JsonObject root = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+            storedStacks = root.has("stacks") ? root.get("stacks").getAsInt() : 0;
+            storedChests = root.has("chests") ? root.get("chests").getAsInt() : 0;
+            deposits = root.has("deposits") ? root.get("deposits").getAsInt() : 0;
+
+            stored.clear();
+            JsonObject items = root.getAsJsonObject("items");
+            if (items != null) {
+                for (String key : items.keySet()) stored.put(key, items.get(key).getAsInt());
+            }
+
+            anarchyStats.clear();
+            JsonObject anarchy = root.getAsJsonObject("anarchy");
+            if (anarchy != null) {
+                for (String key : anarchy.keySet()) {
+                    String[] parts = anarchy.get(key).getAsString().split(":");
+                    if (parts.length != 2) continue;
+                    anarchyStats.put(Integer.parseInt(key), new int[]{Integer.parseInt(parts[0]), Integer.parseInt(parts[1])});
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+}

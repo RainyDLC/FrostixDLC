@@ -9,14 +9,7 @@ import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Loads/saves color themes as individual .json files in a dedicated "theme" folder,
- * next to the regular config folder. Keeps track of the active theme.
- *
- * Colors are NOT applied anywhere automatically — read them through {@link ThemeColor}.
- */
 public class ThemeManager {
-
     private static final Path THEME_DIR = Path.of("C:/rainydlc/client1_21_11/theme");
     private static final Path ACTIVE_FILE = THEME_DIR.resolve(".active");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -73,7 +66,7 @@ public class ThemeManager {
         if (theme == null || theme.builtin) return;
         newName = newName == null ? "" : newName.trim();
         if (newName.isEmpty() || newName.equalsIgnoreCase(theme.name)) return;
-        // удаляем старый файл, переименовываем, сохраняем заново
+
         try {
             Files.deleteIfExists(THEME_DIR.resolve(theme.name + ".json"));
         } catch (IOException ignored) {}
@@ -94,9 +87,6 @@ public class ThemeManager {
         }
     }
 
-    // ── persistence ─────────────────────────────────────────────────────────
-
-    /** встроенная тема: визуалы/худ задаются, остальное фиксированное */
     private static Theme builtin(String name, int visual, int hud) {
         Theme t = new Theme(name);
         t.builtin = true;
@@ -111,13 +101,12 @@ public class ThemeManager {
         t.setSlider(Theme.OPACITY, 0.9F);
         t.setSlider(Theme.BLUR,    4F);
         t.setBool(Theme.SHADOW,     true);
-        t.setBool(Theme.DISTORTION, false); // искажение в деф-темах выключено
+        t.setBool(Theme.DISTORTION, false);
         return t;
     }
 
     public void load() {
         themes.clear();
-
 
         themes.add(builtin("Blue",   Theme.rgb(143, 219, 255), Theme.rgb(189, 238, 255)));
         themes.add(builtin("Red",    Theme.rgb(246, 124, 126), Theme.rgb(246, 124, 126)));
@@ -127,7 +116,7 @@ public class ThemeManager {
             try (DirectoryStream<Path> stream = Files.newDirectoryStream(THEME_DIR, "*.json")) {
                 for (Path path : stream) {
                     Theme t = readTheme(path);
-                    // пропускаем пользовательские файлы, конфликтующие с именами встроенных тем
+
                     if (t != null && !nameExists(t.name, null)) themes.add(t);
                 }
             }
@@ -135,7 +124,6 @@ public class ThemeManager {
             e.printStackTrace();
         }
 
-        // restore active
         String activeName = readActiveName();
         active = themes.stream()
                 .filter(t -> t.name.equals(activeName))
@@ -144,7 +132,7 @@ public class ThemeManager {
     }
 
     public void saveTheme(Theme theme) {
-        if (theme == null || theme.builtin) return; // встроенные темы не сохраняются в файлы
+        if (theme == null || theme.builtin) return;
         try {
             Files.createDirectories(THEME_DIR);
             JsonObject root = new JsonObject();
@@ -212,11 +200,9 @@ public class ThemeManager {
         return null;
     }
 
-    // ── helpers ─────────────────────────────────────────────────────────────
-
     private String uniqueName(String base, Theme exclude) {
         if (base == null || base.isBlank()) base = "Theme";
-        // имя файла не должно содержать запрещённых символов
+
         base = base.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
         if (base.isEmpty()) base = "Theme";
         String name = base;

@@ -24,7 +24,6 @@ import ru.white.module.api.settings.impl.ModeSetting;
         desc = "Позволяет использавать придметы без замедления"
 )
 public class NoSlow extends Module {
-
     public ModeSetting type = new ModeSetting(this, "Режим", "ФанТайм", "Тики", "Обычный");
 
     private int ticks = 0;

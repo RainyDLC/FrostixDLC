@@ -21,7 +21,6 @@ import ru.white.utils.other.Instance;
         category = Category.RENDER
 )
 public class WorldTweaks extends Module {
-
     public static WorldTweaks get() {
         return Instance.get(WorldTweaks.class);
     }
@@ -45,13 +44,11 @@ public class WorldTweaks extends Module {
     public BooleanSetting splashes = new BooleanSetting(this,"Брызги",true).setVisible(() -> rains.getValue());
     public BooleanSetting mists = new BooleanSetting(this,"Дымка",true).setVisible(() -> rains.getValue());
 
-    /** Показывать эффекты только когда в мире реально идёт дождь/гроза. */
     public BooleanSetting worldOnly = new BooleanSetting(this,"Только в непогоду",false);
 
     public ColorSetting tintColor = new ColorSetting(this, "Цвет", 0xFF00FFFF).setVisible(() -> typeColor.is("Свой"));
 
     public int getColor() {
-
         if(typeColor.is("Тема")) {
             return ColorUtil.getClientColor1(1);
         }
@@ -64,7 +61,6 @@ public class WorldTweaks extends Module {
             e.setDistance(fog.getValue());
             e.setColor(getColor());
 
-            // вспышка молний на мгновение озаряет туман — «шейдерная» гроза
             if (lightnings.getValue() && skyFlash.getValue() > 0.5F) {
                 float fl = SkyLightningRenderer.flashLevel();
                 if (fl > 0.01F) {
@@ -75,7 +71,6 @@ public class WorldTweaks extends Module {
 
             e.cancel();
         }
-
     }
 
     @EventHandler
@@ -100,7 +95,6 @@ public class WorldTweaks extends Module {
         }
     }
 
-    /** Гейт по погоде: если включено «Только в непогоду» — эффекты лишь в дождь/грозу. */
     public boolean weatherActive() {
         if (!worldOnly.getValue()) return true;
         MinecraftClient mc = MinecraftClient.getInstance();
@@ -114,5 +108,4 @@ public class WorldTweaks extends Module {
         int b = (int) ((base & 0xFF) + ((overlay & 0xFF) - (base & 0xFF)) * t);
         return (a << 24) | (r << 16) | (g << 8) | b;
     }
-
 }

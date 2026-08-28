@@ -1,6 +1,5 @@
 package ru.white.utils.animation;
 
-
 import lombok.Getter;
 
 @Getter

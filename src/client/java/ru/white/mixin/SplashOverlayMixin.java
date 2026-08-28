@@ -27,14 +27,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-/**
- * Кастомный экран загрузки RainyDLC вместо ванильного:
- * дождливое «стекло» с каплями, дышащее гало у логотипа,
- * стеклянная полоса прогресса и подсказки — стиль главного меню.
- */
 @Mixin(SplashOverlay.class)
 public abstract class SplashOverlayMixin {
-
     @Shadow @Final private MinecraftClient client;
     @Shadow @Final private ResourceReload reload;
     @Shadow @Final private boolean reloading;
@@ -47,12 +41,10 @@ public abstract class SplashOverlayMixin {
     @Unique private static final Identifier LOGO_TEX = Identifier.of("client", "textures/icon.png");
     @Unique private static final Identifier GLOW_TEX = Identifier.of("client", "textures/particles/glow.png");
 
-    // палитра главного меню: холодная дождевая синева
     @Unique private static final int ACCENT_R = 65, ACCENT_G = 145, ACCENT_B = 205;
 
     @Unique private static final long TIP_PERIOD_MS = 4200L;
 
-    /** Вращающиеся подсказки: {рус, англ}. */
     @Unique private static final String[][] TIPS = {
             {"Нажми Right Shift, чтобы открыть меню клиента",
              "Press Right Shift to open the client menu"},
@@ -70,7 +62,6 @@ public abstract class SplashOverlayMixin {
     @Unique private long lastDropFrame = -1L;
     @Unique private final List<GlassDrop> glassDrops = new ArrayList<>();
 
-    /** Капля дождя на «стекле» загрузочного экрана (как в главном меню). */
     @Unique
     private static final class GlassDrop {
         float x, y, r;
@@ -147,8 +138,6 @@ public abstract class SplashOverlayMixin {
         ci.cancel();
     }
 
-    // ── основной рендер ──────────────────────────────────────────────────
-
     @Unique
     private boolean drawRainyDLC(DrawContext context, float fade, long now) {
         double scaleFactor = client.getWindow().getScaleFactor();
@@ -183,8 +172,6 @@ public abstract class SplashOverlayMixin {
         return true;
     }
 
-    // ── фон: картинка меню + вуаль + виньетка ────────────────────────────
-
     @Unique
     private void drawBackdrop(int sw, int sh, float a) {
         try {
@@ -196,17 +183,13 @@ public abstract class SplashOverlayMixin {
 
         Draw.rect(0, 0, sw, sh, ColorUtil.getColor(0, a * 0.20F));
 
-        // фон остаётся резким: вместо блюра только тёмная вуаль
         Draw.rect(0, 0, sw, sh, ColorUtil.getColor(5, 12, 30, a * 0.35F));
 
-        // виньетка сверху и снизу — фокус на центре
         int edge = ColorUtil.getColor(3, 8, 20, a * 0.8F);
         int edgeT = ColorUtil.getColor(3, 8, 20, 0F);
         Draw.gradientRect(0, 0, sw, 64, new int[]{edge, edge, edgeT, edgeT}, 0);
         Draw.gradientRect(0, sh - 90, sw, 90, new int[]{edgeT, edgeT, edge, edge}, 0);
     }
-
-    // ── дышащее холодное гало за логотипом ───────────────────────────────
 
     @Unique
     private void drawHalo(float cx, float cy, float t, float a) {
@@ -218,8 +201,6 @@ public abstract class SplashOverlayMixin {
         Draw.texture(GLOW_TEX, cx - 105, cy - 85, 210, 170,
                 ColorUtil.getColor(ACCENT_R, ACCENT_G, ACCENT_B, a * 0.11F * breathe2));
     }
-
-    // ── центральный блок: логотип, название, статус загрузки ─────────────
 
     @Unique
     private void drawCenterBlock(int sw, int sh, float a, float t, float rise, long now) {
@@ -240,8 +221,6 @@ public abstract class SplashOverlayMixin {
                 ColorUtil.getColor(154, 164, 184, a * 0.85F));
     }
 
-    // ── стеклянная полоса прогресса с бликом и свечением кончика ─────────
-
     @Unique
     private void drawProgressBar(int sw, int sh, float a, float t) {
         float barW = Math.min(sw * 0.34F, 300F);
@@ -249,7 +228,6 @@ public abstract class SplashOverlayMixin {
         float x = sw / 2.0F - barW / 2.0F;
         float y = sh * 0.74F;
 
-        // стеклянная дорожка
         Draw.rect(x - 1.5F, y - 1.5F, barW + 3F, barH + 3F,
                 ColorUtil.getColor(8, 18, 36, a * 0.55F), (barH + 3F) / 2.0F);
         Draw.outline(x - 1.5F, y - 1.5F, barW + 3F, barH + 3F, 0.6F,
@@ -261,12 +239,10 @@ public abstract class SplashOverlayMixin {
             int light = ColorUtil.getColor(130, 210, 250, a);
             Draw.gradientRect(x, y, fillW, barH, new int[]{deep, light, light, deep}, barH / 2.0F);
 
-            // свечение у правого края заливки
             Draw.glow(x + fillW - 7F, y + barH / 2.0F - 7F, 14F, 14F,
                     ColorUtil.getColor(ACCENT_R, ACCENT_G, ACCENT_B, a),
                     7F, 4.5F, 0.45F, 0.6F);
 
-            // бегущий блик по залитой части
             float sweep = (t * 0.55F) % 1.0F;
             float sx = x + sweep * fillW;
             float shimW = Math.min(16F, fillW);
@@ -278,8 +254,6 @@ public abstract class SplashOverlayMixin {
         Fonts.sf_bold.draw(pct, x + barW + 9F, y - 2.5F, 8F,
                 ColorUtil.getColor(220, 226, 240, a));
     }
-
-    // ── вращающиеся подсказки с плавным кроссфейдом ──────────────────────
 
     @Unique
     private void drawTips(int sw, int sh, float a, long now) {
@@ -298,16 +272,12 @@ public abstract class SplashOverlayMixin {
                 ColorUtil.getColor(150, 200, 230, a * 0.55F * MathHelper.clamp(fadeMul, 0F, 1F)));
     }
 
-    // ── подпись внизу ────────────────────────────────────────────────────
-
     @Unique
     private void drawFooter(int sw, int sh, float a) {
         Fonts.sf_bold.drawCentered(
                 ru.white.lang.Lang.pick("RainyDLC · 2026 · Все права защищены", "RainyDLC · 2026 · All rights reserved"),
                 sw / 2.0F, sh - 22F, 8F, ColorUtil.getColor(255, a * 0.14F));
     }
-
-    // ── дождь на «стекле»: капли с физикой, как в главном меню ───────────
 
     @Unique
     private void updateGlassDrops(float w, float h, float anim, long now) {
@@ -337,7 +307,6 @@ public abstract class SplashOverlayMixin {
                 d.vy += 0.00035 * dt;
                 d.y += d.vy * dt;
 
-                // мокрый след за каплей
                 float trailH = d.y - d.slideStartY;
                 if (trailH > 2F) {
                     Draw.gradientRect(d.x - d.r * S * 0.7F, d.slideStartY,
@@ -354,7 +323,6 @@ public abstract class SplashOverlayMixin {
                     continue;
                 }
             } else {
-                // капля медленно наливается
                 if (d.r < 3.4F) d.r += 0.00035 * dt;
             }
 
@@ -372,7 +340,6 @@ public abstract class SplashOverlayMixin {
         }
     }
 
-    /** Реалистичная капля на стекле: тёмное тело, ядро, рефракция, блик. */
     @Unique
     private void drawGlassDrop(GlassDrop d, float anim, float S) {
         float dr = d.r * S;
@@ -393,8 +360,6 @@ public abstract class SplashOverlayMixin {
                     ColorUtil.replAlpha(ColorUtil.getColor(255), anim * 155), dr * 0.07F);
         }
     }
-
-    // ── аварийный рендер без шрифтов/пайплайнов ──────────────────────────
 
     @Unique
     private void drawFallback(DrawContext context, int width, int height, float alpha) {

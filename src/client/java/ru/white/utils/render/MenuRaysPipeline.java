@@ -23,12 +23,7 @@ import java.nio.ByteBuffer;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
-/**
- * Световые лучи на фоне меню — порт шейдера главного меню из старого клиента
- * (два источника лучей, бегущих по экрану) на конвейер 1.21.
- */
 public class MenuRaysPipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/menu_rays");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/menu_rays");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/menu_rays");
@@ -75,11 +70,6 @@ public class MenuRaysPipeline {
         initialized = true;
     }
 
-    /**
-     * @param intensity общая яркость (в оригинале 0.2)
-     * @param rays      скорость и частота лучей (в оригинале 0.08)
-     * @param reach     нижний порог засветки, растягивает лучи по экрану (в оригинале 0.26)
-     */
     public void draw(float alpha, int colorA, int colorB, float intensity, float rays, float reach) {
         if (alpha <= 0.01f) return;
 
@@ -88,7 +78,6 @@ public class MenuRaysPipeline {
 
         ensureInitialized();
 
-        // рисуем немедленно — сначала выпускаем накопленные батчи (порядок отрисовки)
         DrawBatcher.flushPending();
 
         int framebufferWidth = client.getWindow().getFramebufferWidth();
@@ -96,7 +85,6 @@ public class MenuRaysPipeline {
 
         dataBuffer.clear();
 
-        // разрешение в пикселях кадра — шейдер работает от gl_FragCoord
         dataBuffer.putFloat(framebufferWidth);
         dataBuffer.putFloat(framebufferHeight);
         dataBuffer.putFloat(0f);
@@ -147,7 +135,6 @@ public class MenuRaysPipeline {
                 OptionalInt.empty(),
                 client.getFramebuffer().getDepthAttachmentView(),
                 OptionalDouble.empty())) {
-
             renderPass.setPipeline(PIPELINE);
             renderPass.setVertexBuffer(0, dummyVertexBuffer);
 

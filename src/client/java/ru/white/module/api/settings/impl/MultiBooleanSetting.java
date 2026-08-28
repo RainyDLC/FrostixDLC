@@ -5,12 +5,10 @@ import ru.white.utils.animation.Animation;
 import lombok.Getter;
 import ru.white.module.api.Module;
 
-
 import java.util.*;
 import java.util.function.Supplier;
 
 public class MultiBooleanSetting extends Setting<Map<String, BooleanSetting>> {
-
     private final Map<String, BooleanSetting> settingsMap = new LinkedHashMap<>();
 
     @Getter
@@ -26,8 +24,6 @@ public class MultiBooleanSetting extends Setting<Map<String, BooleanSetting>> {
     }
 
     public BooleanSetting get(String name) {
-        // без toLowerCase(): он создавал новую строку на каждом вызове,
-        // а getValue(name) дёргается из HUD много раз за кадр
         for (Map.Entry<String, BooleanSetting> e : settingsMap.entrySet()) {
             if (e.getKey().equalsIgnoreCase(name)) return e.getValue();
         }
@@ -57,7 +53,6 @@ public class MultiBooleanSetting extends Setting<Map<String, BooleanSetting>> {
     public MultiBooleanSetting onSetVisible(Runnable action) {
         return (MultiBooleanSetting) super.onSetVisible(action);
     }
-
 
     public String getNames() {
         List<String> includedOptions = new ArrayList<>();

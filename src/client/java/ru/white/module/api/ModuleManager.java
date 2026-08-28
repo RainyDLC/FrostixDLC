@@ -7,7 +7,6 @@ import ru.white.module.impl.combat.*;
 import ru.white.module.impl.display.Arrows;
 import ru.white.module.impl.display.ClickGui;
 import ru.white.module.impl.display.Emotions;
-import ru.white.module.impl.display.Hud;
 import ru.white.module.impl.display.InterFace;
 import ru.white.module.impl.movement.*;
 import ru.white.module.impl.player.*;
@@ -17,7 +16,6 @@ import ru.white.module.impl.utils.*;
 import java.util.*;
 
 public final class ModuleManager extends LinkedHashMap<Class<? extends Module>, Module> {
-
     public void init() {
         addSorted(
                 new AttackAura(),
@@ -106,6 +104,7 @@ public final class ModuleManager extends LinkedHashMap<Class<? extends Module>, 
                 new AutoClanUpgrade(),
                 new AutoStorage(),
                 new WardenHelper(),
+                new AutoWarden(),
                 new AuraCrafter(),
                 new AutoResell(),
                 new ItemScroller(),

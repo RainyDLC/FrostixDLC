@@ -42,7 +42,6 @@ import java.util.List;
         category = Category.RENDER
 )
 public class TotemGhost extends Module implements ModulePreview {
-
     public ButtonSetting previewButton = PreviewSettings.button(this);
 
     public ModeSetting typeColor = new ModeSetting(this, "Режим цвета", "Тема", "Свой");
@@ -60,17 +59,15 @@ public class TotemGhost extends Module implements ModulePreview {
         return tintColor.getValue();
     }
 
-    // моделька игрока из ректов: {x1,y1,z1, x2,y2,z2} в блоках относительно ног
     private static final float[][] PARTS = {
-            {-0.25F, 1.50F, -0.25F, 0.25F, 2.00F, 0.25F},   // голова
-            {-0.25F, 0.75F, -0.125F, 0.25F, 1.50F, 0.125F}, // тело
-            {0.25F, 0.75F, -0.125F, 0.50F, 1.50F, 0.125F},  // правая рука
-            {-0.50F, 0.75F, -0.125F, -0.25F, 1.50F, 0.125F},// левая рука
-            {0.00F, 0.00F, -0.125F, 0.25F, 0.75F, 0.125F},  // правая нога
-            {-0.25F, 0.00F, -0.125F, 0.00F, 0.75F, 0.125F}  // левая нога
+            {-0.25F, 1.50F, -0.25F, 0.25F, 2.00F, 0.25F},
+            {-0.25F, 0.75F, -0.125F, 0.25F, 1.50F, 0.125F},
+            {0.25F, 0.75F, -0.125F, 0.50F, 1.50F, 0.125F},
+            {-0.50F, 0.75F, -0.125F, -0.25F, 1.50F, 0.125F},
+            {0.00F, 0.00F, -0.125F, 0.25F, 0.75F, 0.125F},
+            {-0.25F, 0.00F, -0.125F, 0.00F, 0.75F, 0.125F}
     };
 
-    // пивоты вращения частей: шея, центр тела, плечи, бёдра
     private static final float[][] PIVOTS = {
             {0.00F, 1.50F, 0.00F},
             {0.00F, 0.75F, 0.00F},
@@ -81,7 +78,6 @@ public class TotemGhost extends Module implements ModulePreview {
     };
     private static final int PART_COUNT = PARTS.length;
 
-    // грани и рёбра бокса по битовым индексам углов (bit0=x2, bit1=y2, bit2=z2)
     private static final int[][] FACES = {
             {0, 1, 3, 2}, {4, 5, 7, 6},
             {0, 1, 5, 4}, {2, 3, 7, 6},
@@ -106,8 +102,6 @@ public class TotemGhost extends Module implements ModulePreview {
     public void onWorldLoad(WorldLoadEvent e) {
         ghosts.clear();
     }
-
-    // ───────────────────────────── предпоказ ─────────────────────────────
 
     @Override
     public PreviewSettings previewSettings() {
@@ -141,13 +135,11 @@ public class TotemGhost extends Module implements ModulePreview {
         spawnGhost(entity);
     }
 
-    // публичный вход: сюда же стреляет FakePlayer при срабатывании фейкового тотема
     public void spawnGhost(Entity entity) {
         if (!isEnabled() || entity == null) return;
 
         Ghost g = new Ghost(entity.getEntityPos(), entity.getYaw());
 
-        // запоминаем последнюю позу: корпус, поворот/наклон головы и мах конечностей
         if (entity instanceof LivingEntity le) {
             g.bodyYaw = le.getBodyYaw();
             g.headYawDeg = MathHelper.clamp(MathHelper.wrapDegrees(le.getHeadYaw() - le.getBodyYaw()), -75F, 75F);
@@ -155,7 +147,6 @@ public class TotemGhost extends Module implements ModulePreview {
             float limbAngle = le.limbAnimator.getAnimationProgress();
             float limbDist = Math.min(le.limbAnimator.getSpeed(), 1F);
 
-            // формулы маха из ванильной BipedEntityModel
             g.partPitchDeg[0] = le.getPitch();
             g.partPitchDeg[2] = (float) Math.toDegrees(MathHelper.cos(limbAngle * 0.6662F + (float) Math.PI) * 2.0F * limbDist * 0.5F);
             g.partPitchDeg[3] = (float) Math.toDegrees(MathHelper.cos(limbAngle * 0.6662F) * 2.0F * limbDist * 0.5F);
@@ -184,8 +175,6 @@ public class TotemGhost extends Module implements ModulePreview {
         MatrixStack matrices = e.getMatrixStack();
         Vec3d cam = mc.gameRenderer.getCamera().getCameraPos();
 
-        // апдейт: прогресс, альфа, кэш матриц; рендер потом проходами по слоям,
-        // т.к. immediate с одним аллокатором держит активным только один слой
         Iterator<Ghost> it = ghosts.iterator();
         while (it.hasNext()) {
             Ghost g = it.next();
@@ -195,7 +184,6 @@ public class TotemGhost extends Module implements ModulePreview {
                 continue;
             }
 
-            // плавный взлёт с торможением + быстрое появление и угасание в конце
             float ease = 1F - (1F - t) * (1F - t) * (1F - t);
             float fadeIn = Math.min(t * 8F, 1F);
             float fadeOut = t > 0.55F ? 1F - (t - 0.55F) / 0.45F : 1F;
@@ -208,7 +196,7 @@ public class TotemGhost extends Module implements ModulePreview {
             matrices.push();
             matrices.translate(gx, gy, gz);
             matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-g.bodyYaw + t * 40F));
-            // каждая часть вращается вокруг своего пивота с запомненными углами позы
+
             for (int i = 0; i < PART_COUNT; i++) {
                 float pitch = g.partPitchDeg[i];
                 float yawOff = i == 0 ? g.headYawDeg : 0F;
@@ -238,7 +226,6 @@ public class TotemGhost extends Module implements ModulePreview {
 
         VertexConsumerProvider.Immediate immediate = VertexConsumerProvider.immediate(allocator);
 
-        // проход 1: грани ректов
         VertexConsumer buf = immediate.getBuffer(FILL_LAYER);
         for (Ghost g : ghosts) {
             int alpha = (int) (g.alphaValue * 0.25F * 255);
@@ -248,7 +235,6 @@ public class TotemGhost extends Module implements ModulePreview {
             }
         }
 
-        // проход 2: оутлайн
         buf = immediate.getBuffer(LINE_LAYER);
         for (Ghost g : ghosts) {
             int alpha = (int) (g.alphaValue * 0.45F * 255);
@@ -258,13 +244,11 @@ public class TotemGhost extends Module implements ModulePreview {
             }
         }
 
-        // проход 3: блюм — большой мягкий по центру модельки
         buf = immediate.getBuffer(GLOW_LAYER_BIG);
         for (Ghost g : ghosts) {
             drawGlow(buf, g.glowMatrix, cr, cg, cb, (int) (110 * g.alphaValue), 1.5F);
         }
 
-        // проход 4: малый яркий
         buf = immediate.getBuffer(GLOW_LAYER_SMALL);
         for (Ghost g : ghosts) {
             drawGlow(buf, g.glowMatrix, cr, cg, cb, (int) (160 * g.alphaValue), 0.7F);

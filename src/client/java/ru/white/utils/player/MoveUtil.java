@@ -15,7 +15,6 @@ import static net.minecraft.util.math.MathHelper.wrapDegrees;
 
 @UtilityClass
 public class MoveUtil implements IMinecraft {
-
     public static boolean isMoving() {
         if (mc.player == null) return false;
 
@@ -25,13 +24,11 @@ public class MoveUtil implements IMinecraft {
         float rotationYaw = mc.player.getYaw();
         float strafeFactor = 0f;
 
-        // Проверяем нажатие клавиш вперед/назад
         if (mc.player.input.playerInput.forward())
             strafeFactor = 1;
         if (mc.player.input.playerInput.backward())
             strafeFactor = -1;
 
-        // Проверяем нажатие клавиш влево/вправо (pressingLeft в MC означает движение влево, то есть стрейф > 0)
         if (strafeFactor == 0) {
             if (mc.player.input.playerInput.left())
                 rotationYaw -= 90;
@@ -54,7 +51,6 @@ public class MoveUtil implements IMinecraft {
     public double getDegreesRelativeToView(
             Vec3d positionRelativeToPlayer,
             float yaw) {
-
         float optimalYaw =
                 (float) Math.atan2(-positionRelativeToPlayer.x, positionRelativeToPlayer.z);
         double currentYaw = Math.toRadians(wrapDegrees(yaw));
@@ -146,7 +142,6 @@ public class MoveUtil implements IMinecraft {
             return;
         }
 
-
         Box box = AttackAura.target.getBoundingBox();
 
         double randX = MathHelper.lerp(Math.random(), box.minX, box.maxX);
@@ -198,7 +193,6 @@ public class MoveUtil implements IMinecraft {
         float forward = 0;
         float strafe = 0;
 
-
         if (InputUtil.isKeyPressed(mc.getWindow(), mc.options.forwardKey.getDefaultKey().getCode())) {
             forward += 1.0F;
         }
@@ -241,7 +235,6 @@ public class MoveUtil implements IMinecraft {
 
         return new double[]{xMovement, zMovement};
     }
-
 
     public static void fixMovementTest(EventMoveInput event, float yaw, float targetYaw) {
         float forward = event.getForward();
@@ -312,5 +305,4 @@ public class MoveUtil implements IMinecraft {
         if (moveStrafing < 0F) rotationYaw += 90F * forward;
         return Math.toRadians(rotationYaw);
     }
-
 }

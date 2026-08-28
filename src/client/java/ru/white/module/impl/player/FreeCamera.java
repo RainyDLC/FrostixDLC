@@ -20,7 +20,6 @@ import ru.white.utils.math.MathUtil;
         category = Category.PLAYER
 )
 public class FreeCamera extends Module {
-
     public Vec3d pos, prevPos;
 
     @Override

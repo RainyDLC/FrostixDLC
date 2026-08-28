@@ -46,7 +46,6 @@ import java.util.Optional;
         category = Category.RENDER
 )
 public class PenguinCompanion extends Module {
-
     private static final Logger LOGGER = LoggerFactory.getLogger("client/PenguinCompanion");
     private static final Identifier MODEL_ID = Identifier.of("client", "model_new/companion_mesh.bin");
     private static final String TEXTURE_PREFIX = "model_new/textures/";

@@ -13,16 +13,10 @@ import ru.white.module.api.ModuleInfo;
         category = Category.COMBAT
 )
 public class NoFriendDamage extends Module {
-
-
     @EventHandler
     public void onEvent(AttackEvent event) {
-
         if(Client.get().friendManager().isFriend(event.getTarget().getName().getString())) {
             event.cancel();
         }
-
     }
-
-
 }

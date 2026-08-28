@@ -1,6 +1,5 @@
 package ru.white.mixin;
 
-
 import ru.white.manager.event_impl.EventPacket;
 import ru.white.manager.event_impl.ScreenCloseEvent;
 import net.minecraft.client.MinecraftClient;
@@ -18,7 +17,6 @@ import static ru.white.utils.annotation.IMinecraft.mc;
 
 @Mixin(ClientConnection.class)
 public class ClientConnectionMixin {
-
     @Unique
     private static boolean stackOverflowFix;
 
@@ -34,7 +32,6 @@ public class ClientConnectionMixin {
 
     @Inject(method = "send(Lnet/minecraft/network/packet/Packet;)V", at = @At("HEAD"), cancellable = true)
     public void triggerSendPacketEvent(Packet<?> packet, CallbackInfo ci) {
-
         if (stackOverflowFix) return;
         EventPacket event = new EventPacket(packet,EventPacket.Type.SEND);
         event.hook();

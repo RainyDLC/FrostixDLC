@@ -26,8 +26,6 @@ import ru.white.utils.render.RenderUtil;
         category = Category.RENDER
 )
 public class CrossHair extends Module {
-
-    /** Сторона холста редактора: нечётная, чтобы у прицела был ровный центр. */
     public static final int GRID_SIZE = 21;
 
     public static CrossHair getInstance() {
@@ -94,14 +92,12 @@ public class CrossHair extends Module {
 
     public Animation animation = new Animation();
 
-    /** Насколько прицел расходится от центра при непрогретом ударе. */
     public float expandFor(float animValue) {
         return silaAnim.getValue() * animValue;
     }
 
     @EventHandler
     public void onRender(EventDisplay eventDisplay) {
-
         float targetScale = 2F;
         float currentScale = (float) mc.getWindow().getScaleFactor();
         float scaleFix = targetScale / currentScale;
@@ -113,7 +109,6 @@ public class CrossHair extends Module {
         float y = screenHeight / 2;
 
         if (type.is("Кастомный")) {
-
             animation.update();
 
             float cooldown = 1 - mc.player.getAttackCooldownProgress(0);
@@ -137,7 +132,6 @@ public class CrossHair extends Module {
         }
 
         if (type.is("Точка")) {
-
             RenderUtil.Render2D.gradientRect(x - 1.5F, y - 1.5F, 3, 3, new int[]{
                     ColorUtil.getColor(255),
                     ColorUtil.getColor(255),
@@ -149,10 +143,6 @@ public class CrossHair extends Module {
         }
     }
 
-    /**
-     * Рисует нарисованный вручную прицел. Обводка кладётся отдельным проходом снизу, иначе
-     * между соседними пикселями остались бы внутренние рамки.
-     */
     public void drawPixelCrosshair(float centerX, float centerY, float expand, float alphaMul) {
         if (alphaMul <= 0.01F) return;
 
@@ -178,7 +168,7 @@ public class CrossHair extends Module {
 
                 int dx = gx - c;
                 int dy = gy - c;
-                // центральные ряд и столбец при ударе остаются на месте, остальное расходится
+
                 float px = centerX + dx * ps + Math.signum(dx) * expand - ps / 2F;
                 float py = centerY + dy * ps + Math.signum(dy) * expand - ps / 2F;
                 consumer.accept(px, py, gx, gy);

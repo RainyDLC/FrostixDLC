@@ -1,6 +1,5 @@
 package ru.white.mixin;
 
-
 import ru.white.module.impl.utils.UnHook;
 import net.minecraft.client.gui.screen.pack.PackScreen;
 import net.minecraft.client.gui.tooltip.Tooltip;
@@ -20,7 +19,6 @@ import java.nio.file.Path;
 
 @Mixin(PackScreen.class)
 public abstract class PackScreenMixin {
-
     @Unique
     private static final Logger LOGGER = LoggerFactory.getLogger(PackScreenMixin.class);
     @Unique

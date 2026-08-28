@@ -30,7 +30,6 @@ import net.minecraft.util.math.RotationAxis;
         desc = "Анимации взмаха руки"
 )
 public class SwingAnimation extends Module {
-
     public static SwingAnimation get() {
         return Instance.get(SwingAnimation.class);
     }
@@ -152,7 +151,7 @@ public class SwingAnimation extends Module {
             }
             case "Пятый" -> {
                 matrices.translate(i * 0.56F, -0.42F, -0.72F);
-                // Умножаем на 180, так как размах синуса от -1 до 1 дает общую амплитуду в 360 градусов
+
                 matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-0 + t * 360));
                 matrices.translate(0, -0.1, 0);
             }

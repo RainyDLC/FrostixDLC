@@ -1,7 +1,6 @@
 package ru.white.utils.render;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
@@ -21,13 +20,7 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-/**
- * Осколки с содержимым настоящего меню: каждый элемент - две треугольные грани
- * с UV в захваченную панель. Формат элемента: 6 вершин по (x, y, u, v) + цвет,
- * итого 7 vec4 (112 байт) - совпадает с core/shard_tex.
- */
 public final class ShardTexturePipeline implements DrawBatcher.Batched {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/shard_tex");
     private static final Identifier SHADER = Identifier.of("client", "core/shard_tex");
 
@@ -47,8 +40,8 @@ public final class ShardTexturePipeline implements DrawBatcher.Batched {
     );
 
     private static final int MAX_SHARDS = 128;
-    private static final int ITEM_FLOATS = 28;          // 6 вершин * 4 + rgba
-    private static final int ITEM_SIZE = 7 * 16;        // 112 байт, std140
+    private static final int ITEM_FLOATS = 28;
+    private static final int ITEM_SIZE = 7 * 16;
     private static final int HEADER_SIZE = 16;
     private static final int UNIFORM_RING = 8;
 
@@ -63,7 +56,6 @@ public final class ShardTexturePipeline implements DrawBatcher.Batched {
     private int batchedItems;
     private final ArrayList<Chunk> chunks = new ArrayList<>();
 
-    /** Захваченная панель; ставится перед отрисовкой осколков. */
     private GpuTextureView panelView;
 
     @Override
@@ -75,7 +67,6 @@ public final class ShardTexturePipeline implements DrawBatcher.Batched {
         this.panelView = view;
     }
 
-    /** Одна пара граней: 24 float (x,y,u,v на вершину) + argb. */
     public void drawFacePair(float[] xyuv, int color) {
         ByteBuffer buffer = beginItem();
         for (int i = 0; i < 24; i++) {
@@ -220,7 +211,6 @@ public final class ShardTexturePipeline implements DrawBatcher.Batched {
         initialized = false;
     }
 
-    /** Константы вынесены, чтобы не тянуть наследование от UniformArrayPipeline. */
     static final class UniformArrayScale {
         static final float FIXED_GUI_SCALE = 2.0f;
     }

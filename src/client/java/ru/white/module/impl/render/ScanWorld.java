@@ -28,7 +28,6 @@ import java.awt.*;
         desc = "Сканирующая волна по миру"
 )
 public class ScanWorld extends Module {
-
     public ModeSetting typeColor = new ModeSetting(this, "Режим цвета", "Тема", "Свой");
     public ColorSetting tintColor = new ColorSetting(this, "Цвет", 0xFF50DCFF).setVisible(() -> typeColor.is("Свой"));
 
@@ -44,7 +43,7 @@ public class ScanWorld extends Module {
 
     private static final byte DEATH_STATUS = 3;
     private static final byte TOTEM_STATUS = 35;
-    /** Смерть засчитывается как килл, если цель атакована не раньше чем за это окно (как Kill Effect). */
+
     private static final long KILL_WINDOW_MS = 6500L;
 
     private long lastTriggerTime;
@@ -112,7 +111,7 @@ public class ScanWorld extends Module {
         } else if (packet.getStatus() == DEATH_STATUS && onKill.getValue()) {
             Entity entity = packet.getEntity(mc.world);
             if (!(entity instanceof LivingEntity living)) return;
-            // волна только на нашем килле: цель недавно атакована нами
+
             if (living.getId() != lastTargetId) return;
             if (System.currentTimeMillis() - lastAttackTime > KILL_WINDOW_MS) return;
             lastTargetId = -1;

@@ -26,7 +26,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/msdf");
     private static final Identifier SHADER_ID = Identifier.of("client", "core/msdf");
 
@@ -68,7 +67,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
     private static final int MAX_CHARS = 256;
     private static final int BUFFER_SIZE = 64 + MAX_CHARS * 64;
 
-    // Cache preprocessed strings — HUD draws the same strings every frame
     private static final int PREPROCESS_CACHE_SIZE = 256;
     private static final Map<String, String> preprocessCache = new LinkedHashMap<String, String>(PREPROCESS_CACHE_SIZE + 1, 0.75f, true) {
         @Override
@@ -77,8 +75,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
         }
     };
 
-    // Кольцо uniform-буферов: текст флашится много раз за кадр (смена атласа,
-    // Scissor), перезапись одного буфера до исполнения предыдущего draw теряет текст.
     private static final int UNIFORM_RING = 32;
 
     private GpuBuffer[] uniformBuffers;
@@ -87,10 +83,8 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
     private ByteBuffer dataBuffer;
     private boolean initialized = false;
 
-    // Кэш texture view по атласам — раньше view создавался и уничтожался на каждый flush
     private final Map<GpuTexture, GpuTextureView> textureViewCache = new java.util.HashMap<>();
 
-    // Заголовок uniform-блока: 64 байта (см. msdf-шейдер), дальше по 64 байта на глиф.
     private static final int HEADER_SIZE = 64;
 
     private int batchedChars = 0;
@@ -98,10 +92,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
     private float currentOutlineWidth = 0;
     private int currentOutlineColor = 0;
 
-    /**
-     * Пишем глиф прямо в uniform-буфер (без аллокации CharData на каждый символ).
-     * Это убирает мусор GC при отрисовке текста (особенно в ClickGui, где символов сотни).
-     */
     private void appendGlyph(float x, float y, float w, float h,
                              float u0, float v0, float u1, float v1,
                              int color, float rotation, float pivotX, float pivotY, float glyphScale) {
@@ -188,7 +178,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
     public void drawText(FontAtlas atlas, String text, float x, float y, float size, int color,
                          float outlineWidth, int outlineColor, float rotation) {
-
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.getFramebuffer() == null) return;
         if (text == null || text.isEmpty()) return;
@@ -220,7 +209,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
         float rotationRad = (float) Math.toRadians(rotation);
 
-        // Skip expensive width calculation when there's no rotation
         float pivotX = 0, pivotY = 0;
         if (rotation != 0) {
             pivotX = x + getTextWidth(atlas, text, size) / 2;
@@ -277,24 +265,18 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
             if (batchedChars >= MAX_CHARS) {
                 flush();
-                // flush() обнуляет currentAtlas — восстанавливаем, иначе
-                // остаток строки потеряется при финальном сбросе
+
                 currentAtlas = atlas;
             }
 
             i += charCount;
         }
-        // Внутри HUD-зоны не сбрасываем после каждой строки — подряд идущие строки
-        // одного атласа уйдут одним RenderPass (сброс сделает DrawBatcher).
+
         if (!ru.white.utils.render.DrawBatcher.isEnabled()) {
             flush();
         }
     }
 
-    /**
-     * Текст с затуханием справа при превышении maxWidth — одним батчем,
-     * без посимвольных вызовов drawText и повторных замеров ширины.
-     */
     public void drawTextFading(FontAtlas atlas, String text, float x, float y, float size,
                                float maxWidth, int color) {
         MinecraftClient client = MinecraftClient.getInstance();
@@ -386,10 +368,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
         }
     }
 
-    /**
-     * Зеркало {@link #drawTextFading}: при переполнении показывает конец строки
-     * и затухает слева (первые ~40px видимой области).
-     */
     public void drawTextFadingReverse(FontAtlas atlas, String text, float x, float y, float size,
                                       float maxWidth, int color) {
         MinecraftClient client = MinecraftClient.getInstance();
@@ -489,10 +467,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
         }
     }
 
-    /**
-     * Текст, выровненный по правому краю {@code rightX}; если строка заходит левее
-     * {@code fadeStartX}, левый край плавно затухает (для длинных значений настроек).
-     */
     public void drawTextRightAlignFadeLeft(FontAtlas atlas, String text, float rightX, float y, float size,
                                            float fadeStartX, int color) {
         MinecraftClient client = MinecraftClient.getInstance();
@@ -595,7 +569,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
     public void drawTextRotatedAroundPoint(FontAtlas atlas, String text, float x, float y, float size, int color,
                                            float outlineWidth, int outlineColor, float rotation, float pivotX, float pivotY) {
-
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.getFramebuffer() == null) return;
         if (text == null || text.isEmpty()) return;
@@ -677,15 +650,13 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
             if (batchedChars >= MAX_CHARS) {
                 flush();
-                // flush() обнуляет currentAtlas — восстанавливаем, иначе
-                // остаток строки потеряется при финальном сбросе
+
                 currentAtlas = atlas;
             }
 
             i += charCount;
         }
-        // Внутри HUD-зоны не сбрасываем после каждой строки — подряд идущие строки
-        // одного атласа уйдут одним RenderPass (сброс сделает DrawBatcher).
+
         if (!ru.white.utils.render.DrawBatcher.isEnabled()) {
             flush();
         }
@@ -693,20 +664,14 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
     @Override
     public int batchLayer() {
-        return 3; // текст — поверх заливок, обводок и текстур
+        return 3;
     }
 
-    /** Запечатанный ран текста: uniform-буфер загружен, текстура атласа запомнена. */
     private record FontChunk(GpuBuffer buffer, GpuTextureView view, int count) {
     }
 
     private final java.util.ArrayList<FontChunk> chunks = new java.util.ArrayList<>();
 
-    /**
-     * Завершить текущий ран (атлас/outline): бэкфилл заголовка, загрузка на GPU,
-     * чанк в очередь. Рендер-пасс НЕ создаётся — все чанки цикла рисуются
-     * в общий пасс DrawBatcher (смена шрифта больше не стоит отдельного пасса).
-     */
     private void sealChunk() {
         if (batchedChars == 0 || currentAtlas == null) {
             batchedChars = 0;
@@ -737,7 +702,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
             return;
         }
 
-        // Кольцо буферов на исходе — сливаем уже запечатанные чанки отдельным пассом
         if (chunks.size() >= UNIFORM_RING - 1) {
             ru.white.utils.render.DrawBatcher.drawImmediate(this, false);
         }
@@ -745,7 +709,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
         int count = batchedChars;
         int endPosition = dataBuffer.position();
 
-        // Бэкфилл 64-байтового заголовка (данные глифов уже в буфере)
         dataBuffer.position(0);
         dataBuffer.putFloat(getFixedScaledWidth());
         dataBuffer.putFloat(getFixedScaledHeight());
@@ -770,7 +733,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
         dataBuffer.position(0);
         dataBuffer.limit(endPosition);
 
-        // Буфер сразу полного размера uniform-блока — без пересозданий между кадрами
         GpuBuffer uniformBuffer = nextUniformBuffer();
         RenderSystem.getDevice().createCommandEncoder()
                 .writeToBuffer(uniformBuffer.slice(0, dataBuffer.remaining()), dataBuffer);
@@ -808,15 +770,9 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
     @Override
     public void discardBatch() {
-        // Только запечатанные чанки: текущий ран текста не трогаем —
-        // finally в DrawBatcher не должен убивать набор посреди строки
         chunks.clear();
     }
 
-    /**
-     * Завершить текущий ран; вне зоны батчинга — нарисовать немедленно.
-     * Внутри зоны отрисовку чанков сделает DrawBatcher.flushPending().
-     */
     public void flush() {
         sealChunk();
         if (!ru.white.utils.render.DrawBatcher.isEnabled() && !chunks.isEmpty()) {
@@ -827,7 +783,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
     private GpuTextureView getCachedTextureView(GpuTexture gpuTexture) {
         GpuTextureView view = textureViewCache.get(gpuTexture);
         if (view == null || view.isClosed()) {
-            // Убираем устаревшие записи (текстура перезагрузилась, например по F3+T)
             textureViewCache.entrySet().removeIf(e -> {
                 if (e.getKey().isClosed() || e.getValue().isClosed()) {
                     if (!e.getValue().isClosed()) e.getValue().close();
@@ -847,8 +802,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
         text = preprocessText(text);
 
-        // Быстрый путь: кэш по «сырой» строке (до strip) — большинство HUD-строк
-        // статичны, и strip (replace + regex) каждый кадр не нужен
         Float cached = atlas.widthCache.get(text);
         if (cached != null) {
             return cached * scale;
@@ -864,7 +817,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
         return base * scale;
     }
 
-    /** Ширина текста при scale = 1 (в единицах атласа). Глиф без замены — половина размера шрифта. */
     private float computeBaseWidth(FontAtlas atlas, String text) {
         float width = 0;
         float maxWidth = 0;
@@ -917,39 +869,39 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
     private static final Map<Integer, Integer> SMALL_CAPS_MAP = new java.util.HashMap<>();
     static {
-        SMALL_CAPS_MAP.put(0x1D00, (int)'a'); // ᴀ
-        SMALL_CAPS_MAP.put(0x0299, (int)'b'); // ʙ
-        SMALL_CAPS_MAP.put(0x1D04, (int)'c'); // ᴄ
-        SMALL_CAPS_MAP.put(0x1D05, (int)'d'); // ᴅ
-        SMALL_CAPS_MAP.put(0x1D07, (int)'e'); // ᴇ
-        SMALL_CAPS_MAP.put(0x0493, (int)'f'); // ғ
-        SMALL_CAPS_MAP.put(0x0262, (int)'g'); // ɢ
-        SMALL_CAPS_MAP.put(0x029C, (int)'h'); // ʜ
-        SMALL_CAPS_MAP.put(0x026A, (int)'i'); // ɪ
-        SMALL_CAPS_MAP.put(0x1D0A, (int)'j'); // ᴊ
-        SMALL_CAPS_MAP.put(0x1D0B, (int)'k'); // ᴋ
-        SMALL_CAPS_MAP.put(0x029F, (int)'l'); // ʟ
-        SMALL_CAPS_MAP.put(0x1D0D, (int)'m'); // ᴍ
-        SMALL_CAPS_MAP.put(0x0274, (int)'n'); // ɴ
-        SMALL_CAPS_MAP.put(0x1D0F, (int)'o'); // ᴏ
-        SMALL_CAPS_MAP.put(0x1D18, (int)'p'); // ᴘ
-        SMALL_CAPS_MAP.put(0x01EB, (int)'q'); // ǫ
-        SMALL_CAPS_MAP.put(0x0280, (int)'r'); // ʀ
-        SMALL_CAPS_MAP.put(0x1D1B, (int)'t'); // ᴛ
-        SMALL_CAPS_MAP.put(0x1D1C, (int)'u'); // ᴜ
-        SMALL_CAPS_MAP.put(0x1D20, (int)'v'); // ᴠ
-        SMALL_CAPS_MAP.put(0x1D21, (int)'w'); // ᴡ
-        SMALL_CAPS_MAP.put(0x028F, (int)'y'); // ʏ
-        SMALL_CAPS_MAP.put(0x1D22, (int)'z'); // ᴢ
+        SMALL_CAPS_MAP.put(0x1D00, (int)'a');
+        SMALL_CAPS_MAP.put(0x0299, (int)'b');
+        SMALL_CAPS_MAP.put(0x1D04, (int)'c');
+        SMALL_CAPS_MAP.put(0x1D05, (int)'d');
+        SMALL_CAPS_MAP.put(0x1D07, (int)'e');
+        SMALL_CAPS_MAP.put(0x0493, (int)'f');
+        SMALL_CAPS_MAP.put(0x0262, (int)'g');
+        SMALL_CAPS_MAP.put(0x029C, (int)'h');
+        SMALL_CAPS_MAP.put(0x026A, (int)'i');
+        SMALL_CAPS_MAP.put(0x1D0A, (int)'j');
+        SMALL_CAPS_MAP.put(0x1D0B, (int)'k');
+        SMALL_CAPS_MAP.put(0x029F, (int)'l');
+        SMALL_CAPS_MAP.put(0x1D0D, (int)'m');
+        SMALL_CAPS_MAP.put(0x0274, (int)'n');
+        SMALL_CAPS_MAP.put(0x1D0F, (int)'o');
+        SMALL_CAPS_MAP.put(0x1D18, (int)'p');
+        SMALL_CAPS_MAP.put(0x01EB, (int)'q');
+        SMALL_CAPS_MAP.put(0x0280, (int)'r');
+        SMALL_CAPS_MAP.put(0x1D1B, (int)'t');
+        SMALL_CAPS_MAP.put(0x1D1C, (int)'u');
+        SMALL_CAPS_MAP.put(0x1D20, (int)'v');
+        SMALL_CAPS_MAP.put(0x1D21, (int)'w');
+        SMALL_CAPS_MAP.put(0x028F, (int)'y');
+        SMALL_CAPS_MAP.put(0x1D22, (int)'z');
     }
 
-    private static final int LIGHTNING_CP = "⚡".codePointAt(0); // ⚡
+    private static final int LIGHTNING_CP = "⚡".codePointAt(0);
 
     private String preprocessText(String text) {
         String cached = preprocessCache.get(text);
         if (cached != null) return cached;
 
-        StringBuilder sb = null; // lazy init — avoid alloc if nothing changes
+        StringBuilder sb = null;
         int i = 0;
         while (i < text.length()) {
             int cp = text.codePointAt(i);
@@ -957,7 +909,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
 
             if (cp == LIGHTNING_CP) {
                 if (sb == null) sb = new StringBuilder(text.substring(0, i));
-                // skip (don't append)
             } else {
                 Integer rep = SMALL_CAPS_MAP.get(cp);
                 if (rep != null) {
@@ -975,13 +926,6 @@ public class FontPipeline implements ru.white.utils.render.DrawBatcher.Batched {
         return result;
     }
 
-    /**
-     * \u0420\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u0440\u0430\u0437\u0431\u043E\u0440\u0430 \u0446\u0432\u0435\u0442\u043E\u0432\u043E\u0433\u043E \u0442\u0435\u0433\u0430, \u0443\u043F\u0430\u043A\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0432 long: \u0441\u0442\u0430\u0440\u0448\u0438\u0435 32 \u0431\u0438\u0442\u0430 \u2014
-     * \u0446\u0432\u0435\u0442, \u043C\u043B\u0430\u0434\u0448\u0438\u0435 \u2014 \u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0441\u0438\u043C\u0432\u043E\u043B\u043E\u0432 \u043F\u0440\u043E\u043F\u0443\u0441\u0442\u0438\u0442\u044C (0 = \u0442\u0435\u0433\u0430 \u043D\u0435\u0442).
-     *
-     * \u0420\u0430\u043D\u044C\u0448\u0435 \u0437\u0434\u0435\u0441\u044C \u0432\u043E\u0437\u0432\u0440\u0430\u0449\u0430\u043B\u0441\u044F record ColorAdvance, \u0442.\u0435. \u0430\u043B\u043B\u043E\u043A\u0430\u0446\u0438\u044F \u043D\u0430 \u041A\u0410\u0416\u0414\u042B\u0419
-     * \u0441\u0438\u043C\u0432\u043E\u043B \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u043E\u043A\u0438 \u043A\u0430\u0436\u0434\u044B\u0439 \u043A\u0430\u0434\u0440. \u0423\u043F\u0430\u043A\u043E\u0432\u043A\u0430 \u0432 long \u0443\u0431\u0438\u0440\u0430\u0435\u0442 \u0435\u0451 \u043F\u043E\u043B\u043D\u043E\u0441\u0442\u044C\u044E.
-     */
     private static long advance(int skip, int color) {
         return ((long) color << 32) | (skip & 0xFFFFFFFFL);
     }

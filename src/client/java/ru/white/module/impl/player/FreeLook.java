@@ -19,17 +19,14 @@ import org.lwjgl.glfw.GLFW;
         category = Category.PLAYER
 )
 public class FreeLook extends Module {
-
-    // "Зажать" — активно пока зажата клавиша; "Нажать" — переключатель по клику
     public ModeSetting type = new ModeSetting(this, "Режим", "Зажать", "Нажать");
-    // отдельный бинд: фрилук работает только по нему, а не от включения модуля
+
     public BindSetting bind = new BindSetting(this, "Клавиша", -1);
 
     private boolean looking;
 
     @Override
     public void onDisable() {
-        // выключили модуль — гасим свободную камеру «чётко», если была активна
         if (looking) stopLook();
     }
 
@@ -39,10 +36,8 @@ public class FreeLook extends Module {
         if (key <= 0 || event.getKey() != key) return;
 
         if (type.is("Нажать")) {
-            // переключатель
             if (looking) stopLook(); else startLook();
         } else if (!looking) {
-            // "Зажать" — стартуем на нажатие, отпускание ловит тик
             startLook();
         }
     }
@@ -55,7 +50,6 @@ public class FreeLook extends Module {
             return;
         }
 
-        // режим "Зажать": активно ровно пока клавиша зажата
         if (type.is("Зажать")) {
             boolean down = mc.getWindow() != null
                     && GLFW.glfwGetKey(mc.getWindow().getHandle(), key) == GLFW.GLFW_PRESS;
@@ -63,7 +57,6 @@ public class FreeLook extends Module {
             else if (!down && looking) stopLook();
         }
 
-        // держим свободную камеру включённой, пока она активна
         if (looking) FreeLookUtil.active = true;
     }
 
@@ -71,15 +64,12 @@ public class FreeLook extends Module {
         if (mc.player == null) return;
         looking = true;
 
-        // стартуем от текущего направления игрока
         FreeLookUtil.freeYaw = mc.player.getYaw();
         FreeLookUtil.freePitch = mc.player.getPitch();
 
-        // forced не даёт ауре/ротации погасить active во время боя
         FreeLookUtil.forced = true;
         FreeLookUtil.active = true;
 
-        // сами перекидываем на сторонний вид (другой F5)
         mc.options.setPerspective(Perspective.THIRD_PERSON_BACK);
     }
 
@@ -87,7 +77,6 @@ public class FreeLook extends Module {
         looking = false;
         FreeLookUtil.forced = false;
 
-        // если AttackAura включена — не гасим active (аура продолжает крутить камеру)
         AttackAura aura = AttackAura.get();
         if (aura == null || !aura.isEnabled()) {
             FreeLookUtil.active = false;

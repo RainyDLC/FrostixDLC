@@ -30,25 +30,20 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 @Getter
 public class DragComponent extends Component implements IMinecraft {
-
     private DragSetting selected;
     private final Vector2f offset = new Vector2f();
     private final List<Module> modules = new CopyOnWriteArrayList<>();
     public static List<Line> lines = new CopyOnWriteArrayList<>();
     private final Script script = new Script();
 
-    // размер ячейки сетки и радиус «прилипания» (в координатах HUD)
     private static final float GRID = 8F;
     private static final float SNAP = 5F;
 
-    // направляющие, которые надо отрисовать в этом кадре (X — вертикальные, Y — горизонтальные)
     private final List<Float> guidesV = new CopyOnWriteArrayList<>();
     private final List<Float> guidesH = new CopyOnWriteArrayList<>();
 
-    // плавное появление/скрытие сетки при перетаскивании
     private final Animation gridAnim = new Animation();
 
-    // анимации направляющих: позиция плавно переезжает, прозрачность затухает
     private final Animation guideVAlpha = new Animation();
     private final Animation guideHAlpha = new Animation();
     private final Animation guideVPos = new Animation();
@@ -66,15 +61,12 @@ public class DragComponent extends Component implements IMinecraft {
         int screenWidth  = (int) (mc.getWindow().getScaledWidth()  / scaleFix);
         int screenHeight = (int) (mc.getWindow().getScaledHeight() / scaleFix);
 
-
-
         boolean shouldRender = mc.currentScreen instanceof ChatScreen;
         if (!shouldRender) selected = null;
 
         initModules();
         handleAnimation();
 
-        // сетка плавно появляется только пока тащишь элемент
         boolean dragging = shouldRender && selected != null && selected.active;
         gridAnim.update();
         gridAnim.run(dragging ? 1 : 0, 0.25, Easings.SINE_OUT, true);
@@ -86,7 +78,6 @@ public class DragComponent extends Component implements IMinecraft {
         guidesV.clear();
         guidesH.clear();
 
-        // зажатый ALT — свободное перемещение без сетки и прилипания
         boolean freeMove = InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
                 || InputUtil.isKeyPressed(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
 
@@ -104,7 +95,6 @@ public class DragComponent extends Component implements IMinecraft {
 
             lines.clear();
 
-            // выравнивание по другим элементам + по сетке
             if (!freeMove) {
                 applySnapping();
             }
@@ -112,7 +102,6 @@ public class DragComponent extends Component implements IMinecraft {
             handleDrags(screenWidth, screenHeight);
         }
 
-        // подсказка под прицелом, пока тащишь элемент
         if (gridAnim.get() > 0.01F) {
             String hint = "ALT - свободное перемещение";
             Fonts.sf_bold.draw(hint,
@@ -121,10 +110,8 @@ public class DragComponent extends Component implements IMinecraft {
                     15, ColorUtil.getColor(255, 0.3F * gridAnim.get()));
         }
 
-        // обновление анимаций направляющих
         updateGuideAnimations();
 
-        // отрисовка направляющих поверх сетки
         drawGuides(screenWidth, screenHeight, gridAnim.get());
     }
 
@@ -139,7 +126,7 @@ public class DragComponent extends Component implements IMinecraft {
 
         if (hasV) {
             float target = guidesV.get(0);
-            // если линия была скрыта — появляемся сразу на месте, без переезда через экран
+
             if (guideVAlpha.get() <= 0.01F) guideVPos.set(target);
             else guideVPos.run(target, 0.15, Easings.BACK_OUT, true);
         }
@@ -166,7 +153,6 @@ public class DragComponent extends Component implements IMinecraft {
             RenderUtil.Render2D.rect(0, y, width, 0.5F, i % 5 == 0 ? colorMajor : color);
         }
 
-        // центральные оси экрана
         int center = ColorUtil.getColor(255, 120, 170, (int) (70 * alpha));
         RenderUtil.Render2D.rect(width / 2F, 0, 0.6F, height, center);
         RenderUtil.Render2D.rect(0, height / 2F, width, 0.6F, center);
@@ -188,14 +174,12 @@ public class DragComponent extends Component implements IMinecraft {
         }
     }
 
-    // прилипание выделенного элемента к краям/центрам других элементов; если нет — к сетке
     private void applySnapping() {
         float sx = selected.targetPosition.x;
         float sy = selected.targetPosition.y;
         float sw = selected.size.x;
         float sh = selected.size.y;
 
-        // три опорные точки выделенного элемента по каждой оси: начало, центр, конец
         float[] sXs = { sx, sx + sw / 2F, sx + sw };
         float[] sYs = { sy, sy + sh / 2F, sy + sh };
 
@@ -330,7 +314,6 @@ public class DragComponent extends Component implements IMinecraft {
                 .forEach(modules::add);
     }
 
-
     @EventHandler
     public void onEvent(MousePressEvent event) {
         if (event.getKey() != 0) {
@@ -379,7 +362,6 @@ public class DragComponent extends Component implements IMinecraft {
     public Vector2f getMouse(double mouseX, double mouseY) {
         return new Vector2f((float) (mouseX * mc.getWindow().getScaleFactor() / 2), (float) (mouseY * mc.getWindow().getScaleFactor() / 2));
     }
-
 
     @AllArgsConstructor
     public static class Line {

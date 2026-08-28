@@ -33,24 +33,20 @@ public class ColorUtil {
     public static int getHealthColor(float health, float maxHealth) {
         float progress = MathHelper.clamp(health / maxHealth, 0F, 1F);
 
-        // Красный -> Оранжевый -> Жёлтый -> Зелёный
-        // (константы вместо new Color(...).getRGB() — те же значения ARGB)
         if (progress <= 0.5F) {
             return interpolateColor2(
-                    0xFFFF0000,                         // red
-                    0xFFFFFF00,                         // yellow
+                    0xFFFF0000,
+                    0xFFFFFF00,
                     progress / 0.5F
             );
         } else {
             return interpolateColor2(
-                    0xFFFFFF00,                         // yellow
-                    0xFF00FF00,                         // green
+                    0xFFFFFF00,
+                    0xFF00FF00,
                     (progress - 0.5F) / 0.5F
             );
         }
     }
-
-
 
     public int client() {
         ru.white.manager.Theme theme = getTheme();
@@ -99,20 +95,15 @@ public class ColorUtil {
     }
 
     public static int applyOpacity(int color, float opacity) {
-        // Извлекаем текущую альфу (сдвигаем на 24 бита вправо и берем последние 8 бит)
         int alpha = (color >> 24) & 0xFF;
 
-        // Умножаем текущую альфу на коэффициент и проверяем, чтобы она не вышла за
-        // рамки 0-255
         int newAlpha = (int) (alpha * opacity);
         newAlpha = Math.max(0, Math.min(255, newAlpha));
 
-        // Склеиваем обратно: (Цвет без альфы) | (Новая альфа сдвинутая влево)
         return (color & 0x00FFFFFF) | (newAlpha << 24);
     }
 
     public static int interpolateColor(int color1, int color2, float factor) {
-        // Ограничиваем фактор от 0 до 1
         factor = Math.min(1.0f, Math.max(0.0f, factor));
 
         int a1 = (color1 >> 24) & 0xFF;
@@ -216,8 +207,7 @@ public class ColorUtil {
 
     public static int skyRainbow(int speed, int index) {
         double angle = (int) ((System.currentTimeMillis() / speed + index) % 360);
-        // Color.getHSBColor(...).hashCode() возвращает то же ARGB-значение, что и HSBtoRGB,
-        // но без аллокации Color
+
         return Color.HSBtoRGB(
                 ((angle %= 360) / 360.0) < 0.5 ? -((float) (angle / 360.0)) : (float) (angle / 360.0),
                 0.5F,
@@ -241,7 +231,7 @@ public class ColorUtil {
 
     public static int fadeBetween(float speed, int offset, int color1, int color2) {
         long time = System.currentTimeMillis() + offset;
-        double factor = (Math.sin(time * 0.001 * speed) + 1) / 2.0; // колебание от 0 до 1
+        double factor = (Math.sin(time * 0.001 * speed) + 1) / 2.0;
 
         int r1 = (color1 >> 16) & 0xFF;
         int g1 = (color1 >> 8) & 0xFF;
@@ -384,8 +374,6 @@ public class ColorUtil {
         return getColor(brightness, Math.round(alpha * 255));
     }
 
-
-
     public int getColor(int brightness) {
         return getColor(brightness, brightness, brightness);
     }
@@ -408,15 +396,12 @@ public class ColorUtil {
         int b = blue(color);
         int a = alpha(color);
 
-        // целевой серый
         int target = 128;
 
-        // интерполяция к серому
         r = Math.round(r + (target - r) * percent01);
         g = Math.round(g + (target - g) * percent01);
         b = Math.round(b + (target - b) * percent01);
 
-        // чуть затемняем (например на 10%)
         float darkFactor = (percent01 / 2);
         r = Math.round(r * darkFactor);
         g = Math.round(g * darkFactor);
@@ -490,22 +475,18 @@ public class ColorUtil {
     }
 
     public int getClientColor1(int index) {
-
         return Hud.getVisualsColor();
     }
     public int getRectColor(float alpha) {
         return ColorUtil.replAlpha(ThemeColor.getBackgroundColor(),alpha * Hud.getAlpha());
     }
     public int getClientColor(int index) {
-
         return Hud.getHudColor();
     }
     public static int gradient(int c1, int c2, int c3, int c4, int c5, int index, int speed) {
-        // 1. Рассчитываем время (0.0 - 1.0)
         double time = (System.currentTimeMillis() + (index * 50L)) % (long) speed;
         float ratio = (float) (time / (double) speed);
 
-        // 2. Определяем, между какими цветами мы сейчас находимся
         int color1, color2;
         float localRatio;
 
@@ -521,7 +502,6 @@ public class ColorUtil {
             color1 = c5; color2 = c1; localRatio = (ratio - 0.8f) / 0.2f;
         }
 
-        // 3. Плавная интерполяция через HSB (чтобы не было серых пятен)
         return getHSBColor(color1, color2, localRatio);
     }
 
@@ -529,10 +509,8 @@ public class ColorUtil {
         float[] hsb1 = Color.RGBtoHSB((color1 >> 16) & 0xFF, (color1 >> 8) & 0xFF, color1 & 0xFF, null);
         float[] hsb2 = Color.RGBtoHSB((color2 >> 16) & 0xFF, (color2 >> 8) & 0xFF, color2 & 0xFF, null);
 
-        // Сглаживаем ratio для мягкости
         float smooth = (float) (1 - Math.cos(ratio * Math.PI)) / 2f;
 
-        // Интерполируем Hue, Saturation и Brightness отдельно
         float h = interpolateFloat(hsb1[0], hsb2[0], smooth);
         float s = interpolateFloat(hsb1[1], hsb2[1], smooth);
         float b = interpolateFloat(hsb1[2], hsb2[2], smooth);
@@ -541,7 +519,6 @@ public class ColorUtil {
     }
 
     private static float interpolateFloat(float f1, float f2, float ratio) {
-        // Проверка, чтобы Hue не крутился по кругу через весь спектр
         if (Math.abs(f2 - f1) > 0.5) {
             if (f2 > f1) f1 += 1.0f; else f2 += 1.0f;
         }
@@ -553,13 +530,8 @@ public class ColorUtil {
         return (int) (b1 + (b2 - b1) * fraction);
     }
     public int getColorRectMain(float alpha) {
-
         return ColorUtil.replAlpha(getClientColor(1),alpha);
     }
-
-
-
-
 
     public static int gradient(int first, int second, int third, int index, int speed) {
         float angle = ((System.currentTimeMillis() / (float) speed + index) % 360) / 360f;
@@ -572,7 +544,6 @@ public class ColorUtil {
             color = interpolate(second, third, (angle - 0.5f) * 2f);
         }
 
-        // Тот же float-роундтрип, что и раньше (через rgba()), но без промежуточного float[4]
         float[] hsb = Color.RGBtoHSB(
                 (int) (((color >> 16 & 0xFF) / 255f) * 255),
                 (int) (((color >> 8 & 0xFF) / 255f) * 255),
@@ -603,12 +574,7 @@ public class ColorUtil {
         return Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
     }
 
-
-
     public static int getColor(int red, int green, int blue, int alpha) {
-        // Раньше здесь был ConcurrentHashMap + DelayQueue + поток-чистильщик,
-        // кэширующие четыре сдвига. Хэш-поиск и аллокация ключа стоили дороже
-        // самого вычисления, поэтому считаем напрямую — результат бит-в-бит тот же.
         return computeColor(red, green, blue, alpha);
     }
     public int getColorRaw(int red, int green, int blue, int alpha) {
@@ -639,7 +605,6 @@ public class ColorUtil {
         return red + "," + green + "," + blue + "," + alpha;
     }
 
-    /** Оставлено для совместимости: кэш цветов больше не использует отдельный поток. */
     public void shutdownCacheCleaner() {
     }
 }

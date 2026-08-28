@@ -4,10 +4,8 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 
 public class ShaderEspRenderer {
-
     private ShaderEspOutlinePipeline outlinePipeline;
 
-    /** Настройки внешнего вида — модуль пишет сюда перед вызовом renderFromFbo. */
     public final ShaderEspOutlinePipeline.Params params = new ShaderEspOutlinePipeline.Params();
 
     private static ShaderEspRenderer instance;

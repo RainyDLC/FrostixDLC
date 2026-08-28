@@ -1,6 +1,5 @@
 package ru.white.module.impl.utils;
 
-
 import ru.white.Client;
 import ru.white.module.api.Category;
 import ru.white.module.api.Module;
@@ -17,7 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-
 @ModuleInfo(name = "Un Hook", desc = "Убирает сторонние хуки и инжекты", category = Category.OTHER)
 public class UnHook extends Module {
     public final String path = System.getProperty("user.home") + "/AppData/Roaming/.tlauncher/legacy/Minecraft/game/";
@@ -30,7 +28,6 @@ public class UnHook extends Module {
 
     private final List<Module> savedModules = new ArrayList<>();
 
-
     @Override
     public void onEnable() {
         super.onEnable();
@@ -42,7 +39,6 @@ public class UnHook extends Module {
                 mc.inGameHud.getChatHud().clear(false);
             }
         }
-
 
         String minecraftPath = path;
         if (minecraftPath != null && !minecraftPath.isEmpty()) {
@@ -145,7 +141,6 @@ public class UnHook extends Module {
             Files.write(sourceLog, new byte[0]);
 
             System.out.println("Logs sanitized.");
-
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -220,7 +215,6 @@ public class UnHook extends Module {
             Runtime.getRuntime().exec(command);
 
             psScript.deleteOnExit();
-
         } catch (Exception e) {
             e.printStackTrace();
         }

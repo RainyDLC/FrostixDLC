@@ -8,7 +8,7 @@ import ru.white.manager.events.orbit.EventHandler;
 import ru.white.module.api.Category;
 import ru.white.module.api.Module;
 import ru.white.module.api.ModuleInfo;
-import ru.white.module.impl.render.Particles; // Импортируем наш модуль частиц
+import ru.white.module.impl.render.Particles;
 import ru.white.module.impl.render.TotemGhost;
 import ru.white.utils.math.MathUtil;
 import net.minecraft.client.network.OtherClientPlayerEntity;
@@ -47,7 +47,6 @@ public class FakePlayer extends Module {
     private int fakeRegenTicks = 0;
     private long lastSoundTime = 0;
 
-
     @EventHandler
     public void onRender(EventRender3D event) {
         if (mc.player == null || mc.world == null || fakePlayer == null) return;
@@ -69,23 +68,17 @@ public class FakePlayer extends Module {
         }
     }
 
-    /* =======================
-       PACKETS
-       ======================= */
     @EventHandler
     public void onPacket(EventPacket event) {
         if (mc.player == null || mc.world == null || fakePlayer == null) return;
 
-        // Only process on SEND (client->server), not on receive
         if (!event.isSend()) return;
 
         if (event.getPacket() instanceof PlayerInteractEntityC2SPacket packet) {
-            // Check if the crosshair target is our FakePlayer
             if (mc.crosshairTarget instanceof net.minecraft.util.hit.EntityHitResult entityHit) {
                 Entity targetEntity = entityHit.getEntity();
                 if (targetEntity != null && targetEntity.getId() == fakePlayer.getId()) {
                     packet.handle(new PlayerInteractEntityC2SPacket.Handler() {
-
                         @Override
                         public void attack() {
                             handleAttack();
@@ -106,9 +99,6 @@ public class FakePlayer extends Module {
         }
     }
 
-    /* =======================
-       ATTACK LOGIC
-       ======================= */
     private void handleAttack() {
         if (mc.player.squaredDistanceTo(fakePlayer) > 36) return;
 
@@ -134,16 +124,13 @@ public class FakePlayer extends Module {
     }
 
     private float calculateDamage(PlayerEntity attacker, LivingEntity target) {
-
         ItemStack weapon = attacker.getMainHandStack();
 
-        // ===== BASE DAMAGE =====
         double base = attacker.getAttributeValue(EntityAttributes.ATTACK_DAMAGE);
 
         float cooled = attacker.getAttackCooldownProgress(0.5f);
         float damage = (float) (base * (0.2F + cooled * cooled * 0.8F));
 
-        // ===== CRIT (vanilla logic) =====
         boolean crit =
                 attacker.getVelocity().y < -0.08D &&
                         !attacker.isOnGround() &&
@@ -153,11 +140,9 @@ public class FakePlayer extends Module {
             damage *= 1.5F;
         }
 
-        // ===== ENCHANTMENTS =====
         DynamicRegistryManager registryManager = attacker.getEntityWorld().getRegistryManager();
         var enchantmentRegistry = registryManager.getOrThrow(RegistryKeys.ENCHANTMENT);
 
-        // Sharpness: 0.5 + 0.5 * level (vanilla formula)
         int sharp = enchantmentRegistry.getEntry(Enchantments.SHARPNESS.getValue())
                 .map(entry -> EnchantmentHelper.getLevel(entry, weapon))
                 .orElse(0);
@@ -166,7 +151,6 @@ public class FakePlayer extends Module {
             damage += sharpBonus;
         }
 
-        // Smite: 2.5 * level
         int smite = enchantmentRegistry.getEntry(Enchantments.SMITE.getValue())
                 .map(entry -> EnchantmentHelper.getLevel(entry, weapon))
                 .orElse(0);
@@ -175,7 +159,6 @@ public class FakePlayer extends Module {
             damage += smiteBonus;
         }
 
-        // Bane of Arthropods: 2.5 * level
         int bane = enchantmentRegistry.getEntry(Enchantments.BANE_OF_ARTHROPODS.getValue())
                 .map(entry -> EnchantmentHelper.getLevel(entry, weapon))
                 .orElse(0);
@@ -209,9 +192,6 @@ public class FakePlayer extends Module {
                 || e instanceof BeeEntity;
     }
 
-    /* =======================
-       DAMAGE / TOTEM
-       ======================= */
     private void applyFakeDamage(OtherClientPlayerEntity target, float damage) {
         float absorption = target.getAbsorptionAmount();
 
@@ -230,7 +210,6 @@ public class FakePlayer extends Module {
         target.hurtTime = 10;
         target.timeUntilRegen = 10;
 
-        // Add effects only if they don't exist or are about to expire
         if (!target.hasStatusEffect(StatusEffects.REGENERATION) ||
                 target.getStatusEffect(StatusEffects.REGENERATION).getDuration() < 100) {
             target.addStatusEffect(
@@ -247,7 +226,6 @@ public class FakePlayer extends Module {
 
         if (target.getHealth() <= 1.0F
                 && target.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING)) {
-
             triggerTotem(target);
         }
     }
@@ -263,9 +241,6 @@ public class FakePlayer extends Module {
         if (totemGhost != null) {
             totemGhost.spawnGhost(target);
         }
-
-
-
 
         Particles particles = Client.get().moduleManager().get(Particles.class);
 
@@ -287,9 +262,7 @@ public class FakePlayer extends Module {
                     ParticleTypes.TOTEM_OF_UNDYING,
                     30
             );
-
         }
-
 
         target.clearStatusEffects();
         target.setHealth(4.0F);
@@ -298,11 +271,7 @@ public class FakePlayer extends Module {
         fakeRegenTicks = 1400;
     }
 
-    /* =======================
-       EXPLOSION
-       ======================= */
     private void handleExplosion(ExplosionS2CPacket explosion) {
-
         Vec3d expPos = explosion.center();
         double dist = fakePlayer.getEntityPos().distanceTo(expPos);
 
@@ -319,9 +288,6 @@ public class FakePlayer extends Module {
         );
     }
 
-    /* =======================
-       ENABLE / DISABLE
-       ======================= */
     public void onToggled(boolean active) {
         if (mc.player == null || mc.world == null) return;
 

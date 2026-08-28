@@ -1,6 +1,5 @@
 package ru.white.module.impl.player;
 
-
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.BubbleColumnBlock;
@@ -19,7 +18,6 @@ import ru.white.utils.other.Instance;
         category = Category.PLAYER
 )
 public class NoPush extends Module {
-
     public static NoPush get() {
         return Instance.get(NoPush.class);
     }
@@ -33,11 +31,8 @@ public class NoPush extends Module {
     @EventHandler
     public void onEvent(MotionEvent event) {
 if (mc.player != null && mc.world != null && mc.player.isSubmergedInWater() && xyiOblamova.getValue()) {
-
-
         BlockPos pos = mc.player.getBlockPos();
         BlockState state = mc.world.getBlockState(pos);
-
 
         boolean isUpwardBubbles = state.getBlock() == Blocks.BUBBLE_COLUMN && !state.get(BubbleColumnBlock.DRAG);
 
@@ -55,6 +50,4 @@ if (mc.player != null && mc.world != null && mc.player.isSubmergedInWater() && x
         }
     }
 }
-
-
 }

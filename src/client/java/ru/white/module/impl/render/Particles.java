@@ -58,7 +58,6 @@ import java.util.function.Function;
         category = Category.RENDER
 )
 public class Particles extends Module implements ModulePreview {
-
     public ButtonSetting previewButton = PreviewSettings.button(this);
 
     public BooleanSetting onAttack = new BooleanSetting(this,"При атаке",true);
@@ -217,8 +216,6 @@ public class Particles extends Module implements ModulePreview {
         }
     }
 
-    // ───────────────────────────── предпоказ ─────────────────────────────
-
     @Override
     public PreviewSettings previewSettings() {
         return previewSettings;
@@ -229,7 +226,6 @@ public class Particles extends Module implements ModulePreview {
         return true;
     }
 
-    /** Каждый цикл показывает следующий включённый повод для частиц. */
     @Override
     public void previewSpawn(PreviewContext ctx) {
         Entity target = ctx.dummy();
@@ -357,10 +353,8 @@ public class Particles extends Module implements ModulePreview {
             }
         }
 
-
         if (totemParticlesLeftToSpawn > 0 && totemTargetEntity != null) {
             if (totemTargetEntity.isAlive() || mc.world.getEntityById(totemTargetEntity.getId()) != null) {
-
                 long elapsed = System.currentTimeMillis() - totemSpawnStartTime;
                 long totalDuration = 1500;
 
@@ -530,8 +524,6 @@ public class Particles extends Module implements ModulePreview {
 
         matrix.push();
         for (Particle particle : particles) {
-
-
             float animValue = particle.animation.get();
             int alpha = (int) (animValue * 255 * glowsiz.getValue());
             if (alpha <= 0) continue;
@@ -558,7 +550,6 @@ public class Particles extends Module implements ModulePreview {
         VertexConsumer buffer = immediate.getBuffer(ROMB_ESP.apply(ParticleType.BLOOM.texture));
 
         drawTexturedQuad(buffer, matrix4f, normalMatrix, -pos * 3, -pos * 3, pos * 6, pos * 6, color, alpha);
-
 
         matrix.pop();
     }

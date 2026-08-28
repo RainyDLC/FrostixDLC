@@ -6,19 +6,17 @@ import ru.white.module.api.Module;
 import ru.white.utils.math.ChatUtils;
 import net.minecraft.client.util.InputUtil;
 
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class BindCommand extends Command {
-
     public BindCommand() {
         super("bind", ".bind <модуль> <клавиша|none>", "Биндить модуль на клавишу");
     }
 
     @Override
-    
+
     public void execute(String[] args) {
         if (args.length == 0) {
             showHelp();
@@ -46,7 +44,6 @@ public class BindCommand extends Command {
             return;
         }
 
-        // показать текущий бинд
         if (args.length < 2) {
             if (module.getKey() > 0) {
                 ChatUtils.addChatMessage("§7" + module.getName() + " забинжен на §a" + keyName(module.getKey()));
@@ -73,7 +70,6 @@ public class BindCommand extends Command {
         ChatUtils.addChatMessage("§a" + module.getName() + "§r забинжен на §a" + keyName(code));
     }
 
-    
     private static int parseKey(String name) {
         try {
             InputUtil.Key key = InputUtil.fromTranslationKey("key.keyboard." + name);
@@ -83,7 +79,6 @@ public class BindCommand extends Command {
         }
     }
 
-    
     private static String keyName(int code) {
         try {
             return InputUtil.Type.KEYSYM.createFromCode(code).getLocalizedText().getString();
@@ -96,7 +91,6 @@ public class BindCommand extends Command {
     public List<String> getSuggestions(String subPrefix) {
         String[] parts = subPrefix.split(" ", 2);
 
-        // первый аргумент — имя модуля (+ list)
         if (parts.length <= 1) {
             String p = parts[0].toLowerCase();
             List<String> out = new ArrayList<>();
@@ -108,7 +102,6 @@ public class BindCommand extends Command {
             return out;
         }
 
-        // второй аргумент — клавиша
         String moduleName = parts[0];
         String keyPrefix = parts[1].toLowerCase();
         return KEY_SUGGESTIONS.stream()
@@ -130,7 +123,6 @@ public class BindCommand extends Command {
         for (int i = 1; i <= 12; i++) KEY_SUGGESTIONS.add("f" + i);
     }
 
-    
     private void showHelp() {
         ChatUtils.addChatMessage("§7.bind §f<модуль> <клавиша>§8 | §7.bind §f<модуль> none§8 | §7.bind list");
     }

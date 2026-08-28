@@ -1,11 +1,9 @@
 package ru.white.utils.math;
 
-
 import lombok.Getter;
 
 @Getter
 public class StopWatchP {
-
     private long startTime;
 
     public StopWatchP() {
@@ -57,6 +55,4 @@ public class StopWatchP {
         }
         return elapsed;
     }
-
-
 }

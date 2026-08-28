@@ -1,11 +1,6 @@
 package ru.white.theme;
 
-/**
- * A single color theme. Holds 6 customizable colors.
- * Index order matches {@link ThemeColor} getters.
- */
 public class Theme {
-
     public static final int ACCENT      = 0;
     public static final int BACKGROUND  = 1;
     public static final int OUTLINE     = 2;
@@ -22,7 +17,6 @@ public class Theme {
             "Цвет разделителей", "Цвет светлого фона"
     };
 
-    // ── слайдеры темы (как SliderSetting: значение/мин/макс/шаг) ──────────────
     public static final int OPACITY = 0;
     public static final int BLUR    = 1;
 
@@ -30,10 +24,9 @@ public class Theme {
     public static final float[]  SLIDER_MIN   = { 0.1F, 0.0F };
     public static final float[]  SLIDER_MAX   = { 1.0F, 6.0F };
     public static final float[]  SLIDER_DEF   = { 1.0F, 0.0F };
-    /** шаг слайдера, 0 — плавный */
+
     public static final float[]  SLIDER_STEP  = { 0.0F, 1.0F };
 
-    // ── булевы переключатели темы ────────────────────────────────────────────
     public static final int SHADOW     = 0;
     public static final int DISTORTION = 1;
 
@@ -42,11 +35,11 @@ public class Theme {
 
     public String name;
     public final int[] colors = new int[COLOR_COUNT];
-    /** значения слайдеров темы, индексы — {@link #OPACITY}, {@link #BLUR} */
+
     public final float[] sliders = new float[2];
-    /** булевы переключатели темы, индексы — {@link #SHADOW}, {@link #DISTORTION} */
+
     public final boolean[] booleans = new boolean[BOOL_NAMES.length];
-    /** встроенная тема — её нельзя редактировать, переименовывать или удалять */
+
     public boolean builtin = false;
 
     public static int rgb(int r, int g, int b) {
@@ -55,7 +48,7 @@ public class Theme {
 
     public Theme(String name) {
         this.name = name;
-        // по умолчанию всё белое, кроме фона (тёмный, как цвет ректов)
+
         colors[ACCENT]     = 0xFFFFFFFF;
         colors[BACKGROUND] = 0xFF0E0E12;
         colors[OUTLINE]    = 0xFFFFFFFF;
@@ -64,9 +57,9 @@ public class Theme {
         colors[ELEMENT]    = 0xFFFFFFFF;
         colors[SEPARATOR]  = 0xFFFFFFFF;
         colors[LIGHT_BG]   = 0xFF1A1A20;
-        // значения слайдеров по умолчанию
+
         System.arraycopy(SLIDER_DEF, 0, sliders, 0, sliders.length);
-        // значения переключателей по умолчанию
+
         System.arraycopy(BOOL_DEF, 0, booleans, 0, booleans.length);
     }
 
@@ -78,7 +71,6 @@ public class Theme {
         colors[index] = argb;
     }
 
-    /** Значение слайдера, зажатое в его диапазон [min..max]. */
     public float getSlider(int index) {
         return clampSlider(index, sliders[index]);
     }

@@ -7,14 +7,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Блокирует выход с сервера (кнопки выхода в меню паузы) во время ПВП,
- * если включён модуль {@link PvpSafe}. Кики сервера сюда не попадают —
- * они идут через disconnect(Text)/onDisconnected.
- */
 @Mixin(MinecraftClient.class)
 public class MinecraftClientDisconnectMixin {
-
     @Inject(
             method = {"disconnectWithProgressScreen()V", "disconnectWithSavingScreen()V"},
             at = @At("HEAD"),

@@ -2,11 +2,9 @@ package ru.white.module.api.settings.impl;
 
 import ru.white.module.api.Module;
 
-
 import ru.white.module.api.settings.Setting;
 import ru.white.utils.animation.Animation;
 import org.joml.Vector2f;
-
 
 public class DragSetting extends Setting<Vector2f> {
     public final Vector2f targetPosition = new Vector2f();
@@ -14,7 +12,7 @@ public class DragSetting extends Setting<Vector2f> {
     public final Vector2f size = new Vector2f();
     public boolean active = true;
     public boolean structure = false;
-    /** двигается только по Y — X задаётся кодом отрисовки */
+
     public boolean lockX = false;
     public Animation animationX = new Animation();
     public Animation animationY = new Animation();
@@ -43,7 +41,6 @@ public class DragSetting extends Setting<Vector2f> {
         this.active = active && !structure;
         this.structure = structure;
     }
-
 
     @Override
     public Setting<?> set(Vector2f value) {

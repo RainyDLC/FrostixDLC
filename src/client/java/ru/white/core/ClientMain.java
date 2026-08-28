@@ -20,12 +20,7 @@ import ru.white.script.LuaScriptManager;
 
 import java.lang.invoke.MethodHandles;
 
-/**
- * Ядро инициализации: в защищённой сборке класс зашифрован и загружается
- * только через NightixLoader после проверки целостности.
- */
 public final class ClientMain {
-
     private ClientMain() {
     }
 
@@ -60,7 +55,6 @@ public final class ClientMain {
         moduleManager.init();
         client.moduleManager(moduleManager);
 
-        // пользовательские Lua-модули — после основных модулей
         LuaScriptManager.get().loadAll();
 
         ComponentManager componentManager = new ComponentManager();
@@ -89,7 +83,6 @@ public final class ClientMain {
         Runtime.getRuntime().addShutdownHook(new Thread(client::unload));
     }
 
-    /** Иконка окна/таскбара из ресурсов клиента (без фона). */
     private static void applyWindowIcon() {
         try {
             long handle = MinecraftClient.getInstance().getWindow().getHandle();
@@ -104,7 +97,6 @@ public final class ClientMain {
                      GLFWImage i64 = GLFWImage.malloc();
                      GLFWImage i128 = GLFWImage.malloc();
                      GLFWImage.Buffer buffer = GLFWImage.malloc(2)) {
-
                     buffer.put(0, i64.set(img64.getWidth(), img64.getHeight(),
                             org.lwjgl.system.MemoryUtil.memByteBuffer(img64.pointer, img64.getWidth() * img64.getHeight() * 4)));
                     buffer.put(1, i128.set(img128.getWidth(), img128.getHeight(),
@@ -113,7 +105,6 @@ public final class ClientMain {
                 }
             }
         } catch (Exception e) {
-            // иконка не критична: окно может быть ещё не готово или ресурс недоступен
         }
     }
 }

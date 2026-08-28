@@ -27,7 +27,6 @@ import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
 public class GlassCompositePipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/glass_composite");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/glass_composite");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/glass_composite");
@@ -92,7 +91,6 @@ public class GlassCompositePipeline {
                           float edgeGlowIntensity, float edgeSoftness,
                           float iceIntensity, float frostScale, float crackIntensity,
                           float smokeAmount, float smokeScale, float smokeSpeed, float smokeReach) {
-
         ensureInitialized();
 
         prepareUniformData(width, height, saturation, reflect, tintColor, tintIntensity, edgeGlowIntensity,
@@ -121,7 +119,6 @@ public class GlassCompositePipeline {
                 () -> "minecraft:glass_composite_pass",
                 targetView,
                 OptionalInt.empty())) {
-
             renderPass.setPipeline(PIPELINE);
             renderPass.setVertexBuffer(0, dummyVertexBuffer);
             renderPass.bindTexture("SceneSampler", sceneView, linearSampler);
@@ -158,20 +155,17 @@ public class GlassCompositePipeline {
         dataBuffer.putFloat(b);
         dataBuffer.putFloat(a);
 
-        // settings: tintIntensity, edgeGlowIntensity, edgeSoftness(px), unused
         dataBuffer.putFloat(tintIntensity);
         dataBuffer.putFloat(edgeGlowIntensity);
         dataBuffer.putFloat(edgeSoftness);
         dataBuffer.putFloat(0);
 
-        // iceParams: time(sec), iceIntensity, frostScale, crackIntensity
         float time = (System.currentTimeMillis() % 100000L) / 1000.0f;
         dataBuffer.putFloat(time);
         dataBuffer.putFloat(iceIntensity);
         dataBuffer.putFloat(frostScale);
         dataBuffer.putFloat(crackIntensity);
 
-        // smokeParams: amount, scale, speed, reach(px)
         dataBuffer.putFloat(smokeAmount);
         dataBuffer.putFloat(smokeScale);
         dataBuffer.putFloat(smokeSpeed);

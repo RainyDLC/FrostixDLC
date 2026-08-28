@@ -1,6 +1,5 @@
 package ru.white.utils.math;
 
-
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Platform;

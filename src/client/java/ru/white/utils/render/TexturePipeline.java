@@ -1,6 +1,5 @@
 package ru.white.utils.render;
 
-
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
@@ -24,14 +23,7 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-/**
- * Текстуры: в зоне батчинга вызовы копятся (uniform-данные загружаются сразу,
- * своим буфером из кольца) и рисуются в общий пасс DrawBatcher одной серией
- * draw'ов с ребиндом текстуры между ними. Раньше каждая текстура создавала
- * собственный RenderPass и сбрасывала все накопленные батчи.
- */
 public class TexturePipeline implements DrawBatcher.Batched {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/texture");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/texture");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/texture");
@@ -67,11 +59,7 @@ public class TexturePipeline implements DrawBatcher.Batched {
                     .build());
 
     private static final int BUFFER_SIZE = 256;
-    // Кольцо uniform-буферов: каждый draw со своим буфером, перезапись одного
-    // буфера до исполнения предыдущего draw теряет/искажает текстуры.
-    // 1024, а не 64: молнии в главном меню дают 100-200 текстурных draw за кадр
-    // и при 64 досрочный сброс срабатывал каждый кадр, ломая порядок слоёв
-    // (заливки рисуются поверх текстур — фон затемнялся при наведении).
+
     private static final int UNIFORM_RING = 1024;
 
     private record TexDraw(RenderPipeline pipeline, GpuTextureView view, GpuBuffer uniformBuffer) {
@@ -85,7 +73,6 @@ public class TexturePipeline implements DrawBatcher.Batched {
 
     private final ArrayList<TexDraw> pendingDraws = new ArrayList<>();
 
-    // Кэш texture view — раньше view создавался и уничтожался на каждый draw
     private final java.util.Map<GpuTexture, GpuTextureView> textureViewCache = new java.util.HashMap<>();
 
     public TexturePipeline() {
@@ -173,16 +160,11 @@ public class TexturePipeline implements DrawBatcher.Batched {
 
         if (DrawBatcher.isEnabled()) {
             DrawBatcher.register(this);
-            // Кольцо буферов не резиновое — при переполнении сбрасываем досрочно.
-            // ВАЖНО: сбрасываем ВСЕ активные пайплайны вместе (flushPending,
-            // слои соблюдаются), а не только текстуры отдельным пассом — иначе
-            // текстуры уйдут под заливки/обводки, дорисованные в конце кадра,
-            // и фон под ними затемнится.
+
             if (pendingDraws.size() >= UNIFORM_RING) {
                 DrawBatcher.flushPending();
             }
         } else {
-            // Немедленный режим: сначала выпускаем накопленные батчи (порядок отрисовки)
             DrawBatcher.flushPending();
             DrawBatcher.drawImmediate(this);
         }
@@ -190,12 +172,11 @@ public class TexturePipeline implements DrawBatcher.Batched {
 
     @Override
     public int batchLayer() {
-        return 2; // текстуры — над заливками и обводками, под текстом
+        return 2;
     }
 
     @Override
     public void uploadBatch(CommandEncoder encoder) {
-        // uniform-данные уже загружены в момент вызова drawTexture
     }
 
     @Override

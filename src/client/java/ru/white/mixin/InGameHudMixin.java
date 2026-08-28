@@ -23,12 +23,10 @@ import static ru.white.utils.annotation.IMinecraft.mc;
 
 @Mixin(InGameHud.class)
 public abstract class InGameHudMixin  {
-
     @Inject(method = "render", at = @At("TAIL"))
     public void onRender(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.world == null) return;
-
 
         ScreenBlur.frame();
 
@@ -39,13 +37,7 @@ public abstract class InGameHudMixin  {
         context.createNewRootLayer();
         Render2D.beginOverlay();
 
-
-
-
         context.getMatrices().pushMatrix();
-
-
-
 
         EventDisplay event = new EventDisplay(context, tickCounter.getTickProgress(false));
 
@@ -53,7 +45,6 @@ public abstract class InGameHudMixin  {
 
         event.hook();
 
-        // осколки закрытого клик-гуя доживают поверх HUD, чтобы экран не держал управление
         if (Client.get().clickGuiScreen() != null) {
             Client.get().clickGuiScreen().renderShardsAfterClose();
         }
@@ -62,7 +53,6 @@ public abstract class InGameHudMixin  {
 
         context.getMatrices().popMatrix();
         Render2D.endOverlay();
-
     }
 
     @Inject(
@@ -71,8 +61,6 @@ public abstract class InGameHudMixin  {
             cancellable = true
     )
     private void onRenderStatusEffectOverlay(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
-
-
         ci.cancel();
     }
 
@@ -84,7 +72,6 @@ public abstract class InGameHudMixin  {
                 ci.cancel();
             }
         } catch (Exception e) {
-
         }
     }
     @Unique

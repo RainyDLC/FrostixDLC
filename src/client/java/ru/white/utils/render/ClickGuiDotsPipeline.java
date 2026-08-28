@@ -24,7 +24,6 @@ import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
 public class ClickGuiDotsPipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/clickgui_dots");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/clickgui_dots");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/clickgui_dots");
@@ -80,7 +79,6 @@ public class ClickGuiDotsPipeline {
 
         ensureInitialized();
 
-        // Рисуем немедленно — сначала выпускаем накопленные батчи (порядок отрисовки)
         DrawBatcher.flushPending();
 
         int framebufferWidth = client.getWindow().getFramebufferWidth();
@@ -143,7 +141,6 @@ public class ClickGuiDotsPipeline {
                 OptionalInt.empty(),
                 client.getFramebuffer().getDepthAttachmentView(),
                 OptionalDouble.empty())) {
-
             renderPass.setPipeline(PIPELINE);
             renderPass.setVertexBuffer(0, dummyVertexBuffer);
 

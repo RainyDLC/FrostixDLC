@@ -10,20 +10,15 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 
-/**
- * Хранилище и применение аккаунтов. Список лежит в alts.json рядом с конфигами,
- * формат аналогичен остальным cfg клиента.
- */
 public class AltManager {
-
     private static final Path FILE = Path.of("C:/rainydlc/client1_21_11/alts.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static AltManager instance;
 
     private final List<Account> accounts = new ArrayList<>();
-    private String activeName = null;   // последний применённый аккаунт
-    private boolean booted = false;     // одноразовое применение при запуске
+    private String activeName = null;
+    private boolean booted = false;
 
     public static AltManager get() {
         if (instance == null) {
@@ -50,15 +45,10 @@ public class AltManager {
         return account;
     }
 
-    /** Случайный валидный ник, которого ещё нет в списке. */
     public String randomName() {
         return randomName("");
     }
 
-    /**
-     * Ник вида {база}+{4..12 случайных букв/цифр}, уникальный и не длиннее 16 символов.
-     * База очищается до допустимых символов (буквы/цифры/_).
-     */
     public String randomName(String base) {
         base = base == null ? "" : base.trim();
         StringBuilder cleaned = new StringBuilder();
@@ -90,7 +80,6 @@ public class AltManager {
         save();
     }
 
-    /** Список с избранными сверху (порядок внутри групп сохраняется). */
     public List<Account> getSorted() {
         List<Account> sorted = new ArrayList<>();
         for (Account a : accounts) if (a.favorite) sorted.add(a);
@@ -98,7 +87,6 @@ public class AltManager {
         return sorted;
     }
 
-    /** Применяет аккаунт к текущей сессии Minecraft (оффлайн-логин) и запоминает его как активный. */
     public void login(Account account) {
         if (account == null) return;
         applySession(account);
@@ -112,21 +100,17 @@ public class AltManager {
         Session session = new Session(
                 account.name,
                 account.offlineUuid(),
-                "0",                  // accessToken — для оффлайна не используется
-                Optional.empty(),     // xuid
-                Optional.empty()      // clientId
+                "0",
+                Optional.empty(),
+                Optional.empty()
         );
         ((MinecraftClientAccessor) mc).setSession(session);
     }
 
-    /**
-     * Одноразовое применение сохранённого активного аккаунта при запуске.
-     * Вызывается, когда клиент уже готов (есть сессия). Если ещё рано — тихо ждёт следующего вызова.
-     */
     public void bootstrap() {
         if (booted) return;
         MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc == null || mc.getSession() == null) return; // ещё рано — попробуем позже
+        if (mc == null || mc.getSession() == null) return;
         booted = true;
         if (activeName == null) return;
         for (Account a : accounts) {
@@ -137,12 +121,9 @@ public class AltManager {
         }
     }
 
-    /** Сейчас активный ник (из текущей сессии). */
     public String currentName() {
         return MinecraftClient.getInstance().getSession().getUsername();
     }
-
-    // ── persistence ───────────────────────────────────────────────────────────
 
     public void save() {
         JsonObject root = new JsonObject();

@@ -28,8 +28,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(net.minecraft.client.render.WorldRenderer.class)
 public class WorldRendererMixin {
-
-
     @Shadow private @Nullable Framebuffer entityOutlineFramebuffer;
 
     @Inject(method = "drawEntityOutlinesFramebuffer", at = @At("HEAD"), cancellable = true, require = 0)
@@ -52,8 +50,7 @@ public class WorldRendererMixin {
     private static void renderShaderSkyLayer(GpuBufferSlice fogBuffer, SkyRenderState skyRenderState, SkyRendering skyRendering, CallbackInfo ci) {
         ShaderSky shaderSky = ShaderSky.getInstance();
         if (shaderSky == null || !shaderSky.isEnabled() || shaderSky.mode.is("Blur")) return;
-        // Only draw on top of the still-rendered vanilla sky; when vanilla sky is
-        // removed we already drew (and cancelled) in hideVanillaSky below.
+
         if (shaderSky.hideVanillaSky.getValue()) return;
 
         ShaderSkyRenderer.getInstance().renderCelestialShader();
@@ -70,7 +67,6 @@ public class WorldRendererMixin {
         if (shaderSky == null || !shaderSky.isEnabled() || shaderSky.mode.is("Blur")) return;
         if (!shaderSky.hideVanillaSky.getValue()) return;
 
-        // Replace the vanilla sky entirely with the procedural Shader Sky dome.
         ShaderSkyRenderer.getInstance().renderCelestialShader();
         ci.cancel();
     }
@@ -79,13 +75,9 @@ public class WorldRendererMixin {
     private void publishWorldRenderEvent(
             ObjectAllocator allocator, RenderTickCounter tickCounter, boolean renderBlockOutline, Camera camera, Matrix4f positionMatrix, Matrix4f basicProjectionMatrix, Matrix4f projectionMatrix, GpuBufferSlice fogBuffer, Vector4f fogColor, boolean renderSky, CallbackInfo ci
     ) {
-
         MatrixStack stack = new MatrixStack();
-        // защитная копия positionMatrix (ванилла может переиспользовать матрицу),
-        // второй дублирующий copy был лишним
+
         stack.multiplyPositionMatrix(new Matrix4f(positionMatrix));
-
-
 
         new EventRender3D(stack, tickCounter.getTickProgress(true)).hook();
 
@@ -124,6 +116,4 @@ public class WorldRendererMixin {
             cir.setReturnValue(false);
         }
     }
-
-
 }

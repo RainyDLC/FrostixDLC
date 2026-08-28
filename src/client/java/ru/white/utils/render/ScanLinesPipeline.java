@@ -23,12 +23,7 @@ import java.nio.ByteBuffer;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
-/**
- * Скан-линии фона меню: вся сетка строк рисуется одним полноэкранным quad'ом,
- * шаг строк и бегущая волна яркости считаются во фрагментном шейдере.
- */
 public class ScanLinesPipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/scanlines");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/scanlines");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/scanlines");
@@ -76,13 +71,6 @@ public class ScanLinesPipeline {
         initialized = true;
     }
 
-    /**
-     * @param step      расстояние между строками в пикселях гуи
-     * @param lineWidth толщина строки
-     * @param edgeFade  ширина затухания у левого/правого края
-     * @param period    период пробега волны, мс
-     * @param tower     высота ореола волны в пикселях
-     */
     public void draw(float width, float height, float alpha, int color,
                      float step, float lineWidth, float edgeFade, float period, float tower) {
         if (alpha <= 0.01f || width <= 0f || height <= 0f || step <= 0f) return;
@@ -92,7 +80,6 @@ public class ScanLinesPipeline {
 
         ensureInitialized();
 
-        // рисуем немедленно — сначала выпускаем накопленные батчи (порядок отрисовки)
         DrawBatcher.flushPending();
 
         float time = (System.currentTimeMillis() % (long) Math.max(1f, period)) / Math.max(1f, period);
@@ -149,7 +136,6 @@ public class ScanLinesPipeline {
                 OptionalInt.empty(),
                 client.getFramebuffer().getDepthAttachmentView(),
                 OptionalDouble.empty())) {
-
             renderPass.setPipeline(PIPELINE);
             renderPass.setVertexBuffer(0, dummyVertexBuffer);
 

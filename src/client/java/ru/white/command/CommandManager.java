@@ -5,12 +5,10 @@ import ru.white.command.impl.BlockEspCommand;
 import ru.white.command.impl.CfgCommand;
 import ru.white.command.impl.FriendCommand;
 import ru.white.command.impl.GpsCommand;
-import ru.white.command.impl.NeuroCommand;
 import ru.white.command.impl.PrefixCommand;
 import ru.white.command.impl.SpecCommand;
 import ru.white.command.impl.WayCommand;
 import ru.white.utils.math.ChatUtils;
-
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -18,7 +16,7 @@ import java.util.stream.Collectors;
 public class CommandManager {
     private char prefix = '.';
     private final Map<String, Command> commands = new LinkedHashMap<>();
-    
+
     public void init() {
         register(new CfgCommand());
         register(new FriendCommand());

@@ -13,13 +13,7 @@ import java.util.Map;
 
 import static ru.white.screen.editor.EditorTheme.TEXT;
 
-/**
- * Общие примитивы оверлей-редакторов: строки, тумблеры, кнопки и кэш анимаций к ним.
- * Каждый редактор держит свой экземпляр, чтобы ховеры разных экранов не смешивались.
- */
 public final class EditorWidgets {
-
-    /** Ховеры и переключатели строк — по ключу «модуль:сеттинг». */
     private final Map<String, Animation> anims = new HashMap<>();
     private final Map<String, float[]> smoothVals = new HashMap<>();
 
@@ -49,7 +43,6 @@ public final class EditorWidgets {
         return animation.getOutput();
     }
 
-    /** Плавная интерполяция произвольного значения — как smooth() в меню. */
     public float smooth(String key, float target) {
         float[] value = smoothVals.computeIfAbsent(key, k -> new float[]{target});
         value[0] += (target - value[0]) * 0.2F;
@@ -63,7 +56,6 @@ public final class EditorWidgets {
                 ColorUtil.replAlpha(ColorUtil.client(), alpha * hover), 4);
     }
 
-    /** Строка-переключатель: тумблер справа, как у BooleanSetting в меню. */
     public void drawToggleRow(Rect b, String label, boolean value, String key, float alpha) {
         if (b.width() <= 0F || alpha <= 0.01F) return;
 

@@ -31,7 +31,6 @@ import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
 public class ShaderSkyRenderer {
-
     private static final Identifier SHADER_PIPELINE_ID = Identifier.of("client", "pipeline/shader_sky");
     private static final Identifier BLUR_PIPELINE_ID = Identifier.of("client", "pipeline/shader_sky_blur");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/shader_sky");
@@ -233,7 +232,6 @@ public class ShaderSkyRenderer {
                 OptionalInt.empty(),
                 framebuffer.getDepthAttachmentView(),
                 java.util.OptionalDouble.empty())) {
-
             renderPass.setPipeline(SHADER_PIPELINE);
             renderPass.setVertexBuffer(0, celestialVertexBuffer);
             RenderSystem.bindDefaultUniforms(renderPass);
@@ -280,7 +278,6 @@ public class ShaderSkyRenderer {
                 OptionalInt.empty(),
                 framebuffer.getDepthAttachmentView(),
                 java.util.OptionalDouble.empty())) {
-
             renderPass.setPipeline(pipeline);
             renderPass.setVertexBuffer(0, dummyVertexBuffer);
             if (texture != null) {

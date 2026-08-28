@@ -5,7 +5,6 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
 
-import ru.white.Client;
 import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.module.impl.combat.AttackAura;
 import ru.white.utils.annotation.IMinecraft;
@@ -23,13 +22,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-/**
- * Конструктор ротации AttackAura: пресеты, три вкладки параметров,
- * живое превью наведения по силуэту модели. Правки применяются напрямую
- * к настройкам модуля и сохраняются вместе с конфигом.
- */
 public class RotationBuilderScreen extends Screen implements IMinecraft {
-
     private static final String[] TABS = {"Скорости", "Случайность", "Осцилляция"};
 
     private static final LinkedHashMap<String, float[]> PRESETS = new LinkedHashMap<>();
@@ -57,7 +50,6 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
 
     private final Animation anim = new Animation();
 
-    // hit-геометрия, заполняется каждый кадр в render()
     private final List<String> chipNames = new ArrayList<>();
     private final List<float[]> chipRects = new ArrayList<>();
     private final List<float[]> sliderRects = new ArrayList<>();
@@ -114,7 +106,6 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
         Font f = Fonts.sf_regular;
         int accent = ColorUtil.client();
 
-        // затемнение фона
         RenderUtil.Blur.blur(0, 0, screenWidth, screenHeight, a, 10F, ColorUtil.getColor(0, 0.45F));
 
         float w = 470F, h = 310F;
@@ -126,7 +117,6 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
         RenderUtil.Blur.blur(x, y, w, h, a, 10F, ColorUtil.multAlpha(ColorUtil.multDark(ColorUtil.background(), 0.55F), a));
         RenderUtil.Render2D.outline(x, y, w, h, 0.8F, ColorUtil.replAlpha(accent, a * 90), 10F);
 
-        // ── заголовок ──
         f.draw("Конструктор ротации", x + 14, y + 12, 9F, ColorUtil.getColor(235, a));
         String presetLabel = "Профиль: " + activePreset;
         f.draw(presetLabel, x + 14, y + 27, 6F, ColorUtil.replAlpha(accent, a * 0.9F));
@@ -140,7 +130,6 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
         RenderUtil.Render2D.outline(cx, cyC, closeS, closeS, 0.5F, ColorUtil.getColor(255, a * (cHov ? 0.45F : 0.15F)), 5F);
         f.drawCentered("X", cx + closeS / 2F, cyC + 5F, 6.5F, ColorUtil.getColor(255, a * (cHov ? 0.95F : 0.55F)));
 
-        // сброс — в шапке слева от крестика, чтобы не пересекался с пресетами
         float resetW = 46F;
         float resetX = cx - resetW - 6F;
         resetRect = new float[]{resetX, cyC, resetW, closeS};
@@ -149,7 +138,6 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
         RenderUtil.Render2D.outline(resetX, cyC, resetW, closeS, 0.5F, ColorUtil.getColor(255, 90, 90, a * (rHovH ? 0.65F : 0.28F)), 5F);
         f.drawCentered("Сброс", resetX + resetW / 2F, cyC + 4.5F, 6F, ColorUtil.getColor(255, 130, 130, a * (rHovH ? 1F : 0.8F)));
 
-        // ── пресеты: переносятся на новую строку, если не влезают ──
         chipNames.clear();
         chipRects.clear();
         float chipY = y + 44F;
@@ -176,7 +164,6 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
         }
         float presetsBottom = chipY + 16F;
 
-        // ── вкладки (левая колонка) ──
         float tabX = x + 12F;
         float tabY = presetsBottom + 6F;
         float tabW = 104F;
@@ -196,7 +183,6 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
             tabY += 30F;
         }
 
-        // ── превью (низ левой колонки) ──
         float pvX = x + 12F;
         float pvY = tabY + 4F;
         float pvW = tabW;
@@ -208,18 +194,17 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
         float by = pvY + pvH / 2F + 26F;
 
         int limb = ColorUtil.getColor(185, a * 0.30F);
-        // ноги
+
         RenderUtil.Render2D.rect(bx - 8F, by - 16F, 7F, 16F, limb, 1.5F);
         RenderUtil.Render2D.rect(bx + 1F, by - 16F, 7F, 16F, limb, 1.5F);
-        // корпус
+
         RenderUtil.Render2D.rect(bx - 9F, by - 34F, 18F, 18F, ColorUtil.getColor(205, a * 0.38F), 2F);
-        // руки
+
         RenderUtil.Render2D.rect(bx - 15F, by - 33F, 5F, 15F, limb, 1.5F);
         RenderUtil.Render2D.rect(bx + 10F, by - 33F, 5F, 15F, limb, 1.5F);
-        // голова
+
         RenderUtil.Render2D.rect(bx - 6F, by - 48F, 12F, 13F, ColorUtil.getColor(225, a * 0.45F), 2F);
 
-        // точка наведения: живёт от осцилляции и рандома
         long ms = System.currentTimeMillis();
         float t = ms / 1000F;
         float ox = (float) Math.sin(t * 2.1) * aura().cOscX.getValue() * 8F
@@ -236,7 +221,6 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
 
         f.drawCentered("Превью наведения", pvX + pvW / 2F, pvY + pvH - 9F, 5.5F, ColorUtil.getColor(200, a * 0.55F));
 
-        // ── слайдеры активной вкладки ──
         float sx = x + 128F;
         float sy = y + 56F;
         float sw = x + w - 14F - sx;
@@ -277,7 +261,6 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
 
         Scissor.reset();
 
-        // live-обновление во время драга уже выше; здесь только рендер
         Render2D.endOverlay();
         if (context != null) context.getMatrices().popMatrix();
     }
@@ -349,10 +332,6 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
         }
     }
 
-    /**
-     * Применяет пресет конструктора по имени к настройкам AttackAura.
-     * Вызывается при переключении типа наведения на Matrix / Neuro / Grim.
-     */
     public static boolean applyPreset(String name) {
         float[] v = PRESETS.get(name);
         if (v == null) return false;

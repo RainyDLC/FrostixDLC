@@ -2,7 +2,6 @@ package ru.white.mixin;
 
 import ru.white.manager.event_impl.CameraPositionEvent;
 import ru.white.manager.event_impl.EventRotation;
-import ru.white.manager.rotation.RotationProcess;
 import ru.white.module.impl.render.NoRender;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.Entity;
@@ -37,7 +36,6 @@ public abstract class CameraMixin {
     private void onUpdateHead(World area, Entity focusedEntity, boolean thirdPerson, boolean inverseView, float tickProgress, CallbackInfo ci) {
         this.night$inverseView = thirdPerson && inverseView;
         if (focusedEntity != null) {
-
             this.night$originalYaw = focusedEntity.getYaw(tickProgress);
             this.night$originalPitch = focusedEntity.getPitch(tickProgress);
             this.night$rotationEvent = new EventRotation(this.night$originalYaw, this.night$originalPitch, tickProgress);
@@ -61,7 +59,6 @@ public abstract class CameraMixin {
     @Redirect(method = "update", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/Camera;setRotation(FF)V"))
     private void redirectSetRotation(Camera instance, float yaw, float pitch) {
         if (this.night$rotationEvent != null && (this.night$rotationEvent.getYaw() != this.night$originalYaw || this.night$rotationEvent.getPitch() != this.night$originalPitch)) {
-
             if (this.night$inverseView) {
                 this.setRotation(this.night$rotationEvent.getYaw() + 180.0F, -this.night$rotationEvent.getPitch());
             } else {
@@ -72,13 +69,11 @@ public abstract class CameraMixin {
         }
     }
 
-
     @Shadow
     private Vec3d pos;
 
     @Shadow @Final
     private BlockPos.Mutable blockPos;
-
 
     @Inject(method = "setPos(Lnet/minecraft/util/math/Vec3d;)V", at = @At("HEAD"), cancellable = true)
     private void posHook(Vec3d pos, CallbackInfo ci) {

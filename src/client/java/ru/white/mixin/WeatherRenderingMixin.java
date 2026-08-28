@@ -12,8 +12,6 @@ import ru.white.module.impl.render.WorldTweaks;
 
 @Mixin(WeatherRendering.class)
 public class WeatherRenderingMixin {
-
-    /** Убираем ванильные осадки — их заменяет шейдерный дождь из World Tweaks. */
     @Inject(method = "renderPrecipitation", at = @At("HEAD"), cancellable = true)
     private void storm$cancelVanillaRain(VertexConsumerProvider consumers, Vec3d pos,
                                          WeatherRenderState state, CallbackInfo ci) {

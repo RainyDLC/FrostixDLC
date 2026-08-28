@@ -23,7 +23,6 @@ import java.util.regex.Pattern;
 
 @Mixin(ItemStack.class)
 public abstract class ItemStackTooltipMixin {
-
     @Unique
     private static final Pattern PRICE_PATTERN = Pattern.compile("Цен[аaAАыЫ]?:?\\s*([\\d,\\s\\.]+)", Pattern.CASE_INSENSITIVE);
 

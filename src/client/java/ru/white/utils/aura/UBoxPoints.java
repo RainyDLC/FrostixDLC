@@ -1,6 +1,5 @@
 package ru.white.utils.aura;
 
-
 import ru.white.module.impl.combat.AttackAura;
 import ru.white.utils.animation.Easings;
 import ru.white.utils.annotation.IMinecraft;
@@ -20,7 +19,6 @@ import java.util.stream.IntStream;
 
 @UtilityClass
 public class UBoxPoints implements IMinecraft {
-
     public static double clamp(double value, double min, double max) {
         return Math.min(max, Math.max(value, min));
     }
@@ -86,7 +84,6 @@ public class UBoxPoints implements IMinecraft {
         final int pointsCountXZ = lerp(minPointsCountXZ, maxPointsCountXZ, factorCount);
         final int pointsCountY = lerp(minPointsCountY, maxPointsCountY, factorCount);
 
-
         float scaleSeenCheck = .0F;
         for (final Integer xsI : IntStream.range(0, pointsCountXZ).toArray()) {
             final boolean edgeX = xsI == 0 || xsI == pointsCountXZ - 1;
@@ -117,7 +114,6 @@ public class UBoxPoints implements IMinecraft {
                 RaycastContext.FluidHandling.NONE).getType() != HitResult.Type.BLOCK;
     }
 
-    /** Радиус, в пределах которого точка прицела гарантированно проходит валидацию удара. */
     private static double auraReach() {
         try {
             return LagCompensation.safeReach(AttackAura.get().attackRange.getValue());
@@ -126,63 +122,26 @@ public class UBoxPoints implements IMinecraft {
         }
     }
 
-    /**
-     * Точка на хитбоксе, в которую реально можно попасть.
-     *
-     * Перебираем сетку точек по поверхности бокса и оставляем только те, что
-     * одновременно лежат в пределах радиуса атаки от глаз и не перекрыты блоками.
-     * Из оставшихся берём ближайшую к их центру масс — она устойчивее всего к
-     * дрожанию цели и к погрешности интерполяции.
-     *
-     * Смысл проверки радиуса: прежний выбор точки учитывал только видимость,
-     * поэтому прицел мог уехать на дальнюю сторону или на верх хитбокса — за
-     * предел досягаемости. Аура наводилась туда, а проверка удара по этой же
-     * точке уже не проходила, и получался замах в пустоту.
-     *
-     * @return null, если ни одна точка не подходит — вызывающий код откатывается
-     *         на прежнее поведение.
-     */
     public static Vec3d getReachablePoint(Box box, double reach, boolean throughWalls) {
         if (box == null || mc.player == null || mc.world == null) return null;
 
         final Vec3d eye = mc.player.getEyePos();
         final double reachSq = reach * reach;
 
-        // В упор направление на цель вырождается. Точка прицела лежит на оси бокса,
-        // а глаза внутри хитбокса от этой оси меньше чем в 0.5 блока: вектор
-        // получается почти нулевым, и yaw из atan2 по нему — случайный (ровно в
-        // центре это вообще yaw 0, то есть взгляд на юг). Прицел от этого дёргался,
-        // а в тик удара его ещё и рвало на случайный угол — доводка отрабатывает
-        // «на сколько нужно», не разбирая, откуда взялось нужное.
-        //
-        // Внутри хитбокса попадание уже гарантировано под любым углом (проверка
-        // contains в LagCompensation.rayHitsBox и RayTraceUtil.rayTraceEntity),
-        // поэтому доворачивать некуда: минимальная и заодно самая человечная
-        // коррекция здесь — нулевая. Держим текущий взгляд.
         if (box.expand(LagCompensation.RAY_EPSILON).contains(eye)) {
             return eye.add(mc.player.getRotationVec(1.0F));
         }
 
-        // Естественный прицел: центр по X/Z, по высоте — уровень глаз, поджатый
-        // к боксу. В обычном бою он проходит сразу, и тогда хватает одного луча.
         Vec3d ideal = new Vec3d(
                 (box.minX + box.maxX) * 0.5D,
                 MathHelper.clamp(eye.y, box.minY, box.maxY),
                 (box.minZ + box.maxZ) * 0.5D);
 
-        // Ближайшая к глазам точка бокса: именно её меряет LagCompensation.attackDistance,
-        // поэтому она в пределах радиуса всегда, когда удар вообще разрешён.
         Vec3d nearest = new Vec3d(
                 MathHelper.clamp(eye.x, box.minX, box.maxX),
                 MathHelper.clamp(eye.y, box.minY, box.maxY),
                 MathHelper.clamp(eye.z, box.minZ, box.maxZ));
 
-        // На дистанции у предела центр бокса уже за радиусом, а ближняя сторона — ещё
-        // нет. Раньше в этом случае выбор точки проваливался в перебор сетки, и прицел
-        // прыгал между центром и точкой сетки при каждом колебании дистанции: точка
-        // уезжала за тик на пол-блока, прицел гнался за ней и в момент удара оказывался
-        // мимо хитбокса — удар терялся на рейкасте. Вместо прыжка подтягиваем точку от
-        // центра к ближней стороне: она смещается плавно вместе с дистанцией.
         for (double blend = 0.0D; blend <= 1.0001D; blend += 0.2D) {
             Vec3d point = new Vec3d(
                     lerp(ideal.x, nearest.x, blend),
@@ -199,7 +158,6 @@ public class UBoxPoints implements IMinecraft {
         for (int a = 0; a <= last; a++) {
             for (int b = 0; b <= last; b++) {
                 for (int c = 0; c <= last; c++) {
-                    // только оболочка бокса: внутренние точки для прицела бесполезны
                     if (a > 0 && a < last && b > 0 && b < last && c > 0 && c < last) continue;
                     Vec3d point = new Vec3d(
                             lerp(box.minX, box.maxX, t[a]),
@@ -239,7 +197,6 @@ public class UBoxPoints implements IMinecraft {
         return getBestVector3dLegacy(aabb, alwaysMultipoints);
     }
 
-    /** Прежний выбор точки — резерв, когда достижимых точек не нашлось. */
     private static Vec3d getBestVector3dLegacy(Box aabb, boolean alwaysMultipoints) {
         if (aabb == null) return mc.player.getEyePos();
         double[] whh = new double[]{aabb.maxX - aabb.minX, aabb.maxY - aabb.minY, (aabb.maxY - aabb.minY) / 1.1F};
@@ -262,31 +219,4 @@ public class UBoxPoints implements IMinecraft {
             return normalVecs != null && !normalVecs.isEmpty() ? normalVecs.getFirst() : defaultVec;
         }
     }
-    public static Vec3d getVecNewStatic(Box aabb) {
-
-        if (aabb == null) return mc.player.getEyePos();
-
-
-        double centerX = aabb.minX + (aabb.maxX - aabb.minX) / 2.0;
-        double centerY = aabb.minY + (aabb.maxY - aabb.minY) / 2.0;
-        double centerZ = aabb.minZ + (aabb.maxZ - aabb.minZ) / 2.0;
-
-
-        Vec3d centerVec = new Vec3d(centerX, centerY + 0.25F, centerZ);
-
-
-
-        if (!seenOnceVector3d(mc.player, centerVec)) {
-
-
-            final List<Vec3d> normalVecs = entityBoxVec3dsAlternate(aabb);
-            if (normalVecs != null && !normalVecs.isEmpty()) {
-                normalVecs.sort(Comparator.comparing(vec -> vec.squaredDistanceTo(mc.player.getEyePos())));
-                return normalVecs.get(0);
-            }
-        }
-
-        return centerVec;
-    }
-
 }

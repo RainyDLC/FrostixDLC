@@ -1,6 +1,5 @@
 package ru.white.manager;
 
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -8,14 +7,11 @@ import java.io.IOException;
 import java.util.Properties;
 
 public class GuiManager {
-
     public static final File file = new File("C:/rainydlc/client1_21_11/config", "theme/theme.json");
     private Theme currentTheme = Theme.NIGHT;
 
-
     public void init() {
         try {
-            // создаём родительские папки
             File parent = file.getParentFile();
             if (parent != null && !parent.exists()) {
                 parent.mkdirs();

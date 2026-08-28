@@ -1,6 +1,5 @@
 package ru.white.manager.events;
 
-
 import ru.white.Client;
 
 public class Event {

@@ -10,7 +10,6 @@ public class MousePressEvent extends Event {
     private final Screen screen;
     private double mouseX, mouseY;
 
-
     public MousePressEvent(int button, int action, int modifiers, Screen screen,double mouseX,double mouseY) {
         this.button = button;
         this.action = action;
@@ -19,8 +18,6 @@ public class MousePressEvent extends Event {
         this.mouseX = mouseX;
         this.mouseY = mouseY;
     }
-
-
 
     public int getKey() {
         return button;
@@ -49,4 +46,3 @@ public class MousePressEvent extends Event {
         return screen;
     }
 }
-

@@ -12,7 +12,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LightmapTextureManager.class)
 public class LightmapTextureManagerMixin {
-
     @Redirect(method = "update", at = @At(value = "INVOKE", target = "Ljava/lang/Double;floatValue()F", ordinal = 1))
     private float night$getGammaValue(Double instance) {
         if (Client.get() != null) {

@@ -17,7 +17,6 @@ import lombok.Getter;
 @Getter
 @ModuleInfo(name = "Glass Hands", category = Category.RENDER, desc = "Делает руки и предметы стеклянными")
 public class GlassHands extends Module {
-
     private static GlassHands instance;
 
     public BooleanSetting enableBlur = new BooleanSetting(this, "Блюр", true);
@@ -31,7 +30,6 @@ public class GlassHands extends Module {
     public SliderSetting tintIntensity = new SliderSetting(this, "Сила оттенка", 0.2f, 0.0f, 1.0f, 0.01f)
             .setVisible(() -> enableBlur.getValue());
 
-    /** 0 — кромка повторяет силуэт предмета, больше — «оплавленное» стекло с круглыми углами. */
     public SliderSetting edgeSoftness = new SliderSetting(this, "Сглаживание краёв", 0f, 0f, 28f, 1f)
             .setVisible(() -> enableBlur.getValue());
 
@@ -40,7 +38,6 @@ public class GlassHands extends Module {
     public ColorSetting tintColor = new ColorSetting(this, "Цвет", 0xFF00FFFF).setVisible(() -> typeColor.is("Свой"));
 
     public int getColor() {
-
         if(typeColor.is("Тема")) {
             return ColorUtil.getClientColor1(1);
         }
@@ -135,8 +132,6 @@ public class GlassHands extends Module {
         renderer.setSaturation(saturation.getValue());
         renderer.setEdgeSoftness(edgeSoftness.getValue());
 
-        // reflect и crackIntensity — тоже входы преломления: reflect уходит в шейдер отдельным
-        // юниформом, а crack вообще никто не сбрасывал и он висел на дефолтных 0.5
         if (enableIce.getValue()) {
             renderer.setReflect(true);
             renderer.setIceIntensity(iceIntensity.getValue());
@@ -179,7 +174,6 @@ public class GlassHands extends Module {
             renderer.setTintIntensity(0.0f);
         }
 
-
         renderer.setOutlineEnabled(enableEdgeGlow.getValue());
         if (enableEdgeGlow.getValue()) {
             float strength = edgeGlowIntensity.getValue() * 20.0f;
@@ -197,6 +191,5 @@ public class GlassHands extends Module {
             renderer.setShimmerWidth(shimmerWidth.getValue());
             renderer.setShimmerPeriodSec(shimmerPeriod.getValue());
         }
-
     }
 }

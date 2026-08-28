@@ -18,10 +18,8 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.item.HeldItemRenderer;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.CrossbowItem;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.consume.UseAction;
 import net.minecraft.util.Arm;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.RotationAxis;
@@ -36,7 +34,6 @@ import ru.white.module.impl.render.NoRender;
 
 @Mixin(HeldItemRenderer.class)
 public abstract class HeldItemRendererMixin {
-
     @WrapWithCondition(
         method = "renderMapInOneHand",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/util/math/MatrixStack;multiply(Lorg/joml/Quaternionfc;)V", ordinal = 1)
@@ -53,8 +50,6 @@ public abstract class HeldItemRendererMixin {
         return false;
     }
 
-
-
     @WrapOperation(
         method = "renderItem(FLnet/minecraft/client/util/math/MatrixStack;" +
                 "Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;" +
@@ -69,7 +64,6 @@ public abstract class HeldItemRendererMixin {
     )
     private void replacePitchRotation(MatrixStack matrices, Quaternionfc quaternion, Operation<Void> original,
             @Local(ordinal = 3) float h) {
-
         if(!NoRender.getInstance().removeCamreZalupa.getValue()) {
             float cameraPitch = MinecraftClient.getInstance().gameRenderer.getCamera().getPitch();
             matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees((cameraPitch - h) * 0.1F));
@@ -90,16 +84,12 @@ public abstract class HeldItemRendererMixin {
     )
     private void replaceYawRotation(MatrixStack matrices, Quaternionfc quaternion, Operation<Void> original,
             @Local(ordinal = 4) float i) {
-
         if(!NoRender.getInstance().removeCamreZalupa.getValue()) {
         float cameraYaw = MinecraftClient.getInstance().gameRenderer.getCamera().getYaw();
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees((cameraYaw - i) * 0.1F));
         }
     }
 
-
-
-    /** В редакторе руки показываются всегда, даже если ванильно их бы не рисовали. */
     @ModifyExpressionValue(
             method = "renderItem(FLnet/minecraft/client/util/math/MatrixStack;" +
                     "Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;" +
@@ -122,7 +112,6 @@ public abstract class HeldItemRendererMixin {
         return HandsEditor.getInstance().isActive() || original;
     }
 
-    /** Пустые руки настраивать нечем, поэтому в редакторе подставляются предметы-превью. */
     @ModifyArg(
             method = "renderItem(FLnet/minecraft/client/util/math/MatrixStack;" +
                     "Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;" +
@@ -185,7 +174,6 @@ public abstract class HeldItemRendererMixin {
             at = @At("TAIL")
     )
     private void onRenderItemPost(float tickProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, ClientPlayerEntity player, int light, CallbackInfo ci) {
-        // команды рук здесь ещё в очереди — снимок делает GameRenderMixin после её отправки
         if (HandsEditor.getInstance().isActive()) return;
 
         GlassHands glassHands = GlassHands.getInstance();
@@ -193,7 +181,6 @@ public abstract class HeldItemRendererMixin {
             new GlassHandsRenderEvent(GlassHandsRenderEvent.Phase.POST, matrices, tickProgress).hook();
         }
     }
-
 
     @Inject(
             method = "renderFirstPersonItem",
@@ -204,13 +191,11 @@ public abstract class HeldItemRendererMixin {
         RenderItemEvent event = new RenderItemEvent(matrices, hand, arm);
         event.hook();
 
-        // напрямую, а не через событие модуля: редактор двигает руки и при выключенном Hands
         if (!item.isEmpty()) {
             Hands hands = Hands.get();
             if (hands != null) hands.applyHandTranslation(matrices, arm);
         }
     }
-
 
     @WrapWithCondition(
             method = "renderFirstPersonItem",
@@ -278,6 +263,4 @@ public abstract class HeldItemRendererMixin {
             HandsEditor.getInstance().updateHandBounds(arm, matrices);
         }
     }
-
-
 }

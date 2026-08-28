@@ -26,14 +26,7 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
-/**
- * "Burning hands": трёхпроходный огонь вокруг рук/предмета.
- * 1) glow  — мягкое пламя-ореол вокруг силуэта (по маске);
- * 2) trail — накопительный буфер (пинг-понг), дым уносится вверх и затухает;
- * 3) composite — аддитивное наложение glow+trail на фреймбуфер.
- */
 public class BurningHandsPipeline {
-
     private static final BlendFunction REPLACE_BLEND = new BlendFunction(
             SourceFactor.ONE, DestFactor.ZERO,
             SourceFactor.ONE, DestFactor.ZERO
@@ -123,7 +116,6 @@ public class BurningHandsPipeline {
         initialized = true;
     }
 
-    /** Обновляет UBO один раз на кадр — все три прохода читают одни данные. */
     public void updateUniforms(int width, int height, boolean fillMode,
                                float radiusPx, float strength, float flameSpeed, float colorMix,
                                float decay, float flameHeightPx, float flowSpeed, float trailStrength,

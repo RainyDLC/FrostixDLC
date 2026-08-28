@@ -13,15 +13,12 @@ import ru.white.module.impl.display.interfaceimpl.*;
 import ru.white.module.impl.player.ClickHelper;
 import ru.white.utils.other.Instance;
 
-import java.io.PrintStream;
-
 @ModuleInfo(
         name = "Inter Face",
         desc = "Настройка интерфейса (HUD) клиента",
         category = Category.RENDER
 )
 public class InterFace extends Module {
-
     public static InterFace getInstance() {
         return Instance.get(InterFace.class);
     }
@@ -107,7 +104,6 @@ public class InterFace extends Module {
         if (element.getValue("Target Hud")) targetHud.onRender(targetHudDrag, this, eventDisplay);
         if (element.getValue("Use Tracker")) useTrackerHud.onRender(useTracker, this);
         if(element.getValue("Item hud")) {
-
             Vector2f size = ClickHelper.getInstance().getHudSize();
 
             itemHud.size.set(size.x,size.y);

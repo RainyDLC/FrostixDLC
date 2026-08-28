@@ -16,7 +16,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(StatusEffectFogModifier.class)
 public abstract class StatusEffectFogModifierMixin {
-
     @Shadow
     public abstract RegistryEntry<StatusEffect> getStatusEffect();
 

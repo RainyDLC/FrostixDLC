@@ -1,12 +1,10 @@
 package ru.white.module.api.settings;
 
-
 import ru.white.utils.animation.Animation;
 import ru.white.utils.animation.satoshi.EaseInOutQuad;
 import ru.white.utils.annotation.IMinecraft;
 import lombok.Getter;
 import ru.white.module.api.Module;
-
 
 import java.util.function.Supplier;
 
@@ -41,7 +39,6 @@ public class Setting<Value> implements ISetting, IMinecraft {
         }
         return this;
     }
-
 
     @Override
     public Setting<?> setVisible(Supplier<Boolean> value) {

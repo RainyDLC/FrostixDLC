@@ -622,7 +622,7 @@ public final class InventoryPresetManager {
             object.addProperty("count", entry.count());
             if (!entry.displayName().isBlank()) object.addProperty("displayName", entry.displayName());
             if (!entry.potionSignature().isBlank()) object.addProperty("potionSignature", entry.potionSignature());
-            // компонент зелья кладём деревом, а не строкой — так файл остаётся читаемым
+
             if (!entry.potionData().isBlank()) object.add("potionData", JsonParser.parseString(entry.potionData()));
             slots.add(object);
         }

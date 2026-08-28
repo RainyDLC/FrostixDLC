@@ -1,7 +1,6 @@
 package ru.white.utils.animation.satoshi;
 
 public class EaseBackOut extends Animation {
-
     public EaseBackOut(int ms, double endPoint) {
         super(ms, endPoint);
     }

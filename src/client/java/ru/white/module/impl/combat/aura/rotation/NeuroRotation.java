@@ -14,7 +14,6 @@ import ru.white.utils.aura.UAttack;
 import ru.white.utils.math.MathUtil;
 
 public class NeuroRotation implements RotationAura {
-
     private boolean initialized;
     private float lastCameraYaw;
     private float lastCameraPitch;
@@ -48,7 +47,6 @@ public class NeuroRotation implements RotationAura {
         float pitchErr = centerPitch - cameraPitch;
         float distance = (float) mc.player.getEyePos().distanceTo(target.getBoundingBox().getCenter());
 
-        // контекст ударов: как давно был последний удар (для отвода камеры после удара)
         if (aura.justAttacked) {
             aura.justAttacked = false;
             sinceAttack = 0;
@@ -56,7 +54,6 @@ public class NeuroRotation implements RotationAura {
             sinceAttack = Math.min(sinceAttack + 1, 999);
         }
 
-        // ── приоритет: полная копия записанной траектории (подлёт/отвод как у игрока) ──
         float[] move = NeuroManager.get().nextMove(yawErr, pitchErr, Math.min(sinceAttack, 60));
         if (move != null) {
             float replayYaw = cameraYaw + move[0];
@@ -73,7 +70,6 @@ public class NeuroRotation implements RotationAura {
             return;
         }
 
-        // ── фолбэк: предсказание сети, когда похожей записи нет ──
         double[] features = NeuroModel.features(
                 yawErr, pitchErr,
                 appliedYaw, appliedPitch,
@@ -98,11 +94,11 @@ public class NeuroRotation implements RotationAura {
         float aimPitchDelta = basePitch - cameraPitch;
         float aimError = (float) Math.hypot(aimYawDelta, aimPitchDelta);
         float styleScale = MathHelper.clamp(1F - aimError / 35F, 0.15F, 1F);
-        // чем более дёрганым был игрок в этой ситуации (низкая smoothness) — тем сильнее тряска
+
         float jitterScale = 1F + (1F - prediction.smoothness) * 0.9F;
         float styleYaw = (prediction.yawShake + prediction.yawLead * 0.16F + prediction.yawAccel * 0.05F) * styleScale * jitterScale;
         float stylePitch = (prediction.pitchShake + prediction.pitchLead * 0.16F + prediction.pitchAccel * 0.05F) * styleScale * jitterScale;
-        // реплей записанного почерка руки: реальные дёргания мыши под текущую скорость поворота
+
         float[] handJitter = NeuroManager.get().nextJitter((float) Math.hypot(appliedYaw, appliedPitch));
         float jitterYaw = MathHelper.clamp(handJitter[0], -8F, 8F);
         float jitterPitch = MathHelper.clamp(handJitter[1], -5F, 5F);
@@ -111,7 +107,7 @@ public class NeuroRotation implements RotationAura {
         float pitch = MathHelper.clamp(basePitch + stylePitch + jitterPitch, -90F, 90F);
         float yawDelta = MathHelper.wrapDegrees(yaw - cameraYaw);
         float pitchDelta = pitch - cameraPitch;
-        // выученный пиковый рывок кратковременно ускоряет доводку, как резкое движение мыши
+
         float peakBoost = prediction.peak * 18F;
         float yawSpeed = MathHelper.clamp(Math.max(prediction.yawSpeed, Math.abs(aimYawDelta) * 0.6F ) + peakBoost, 0, 80);
         float pitchSpeed = MathHelper.clamp(Math.max(prediction.pitchSpeed, Math.abs(aimPitchDelta) * 0.03F ) + peakBoost * 0.4F, 0, 11);

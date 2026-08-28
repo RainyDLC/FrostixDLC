@@ -12,12 +12,7 @@ import net.minecraft.util.Identifier;
 
 import java.nio.ByteBuffer;
 
-/**
- * Обводки: элементы копятся чанками по MAX_OUTLINES и уходят в общий пасс
- * DrawBatcher. См. {@link UniformArrayPipeline}.
- */
 public class OutlinePipeline extends UniformArrayPipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/outline");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/outline");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/outline");
@@ -36,7 +31,6 @@ public class OutlinePipeline extends UniformArrayPipeline {
                     .build()
     );
 
-    // Должно совпадать с outline.vsh: vec4 screen + vec4 outlines[64 * 13]
     private static final int MAX_OUTLINES = 64;
     private static final int OUTLINE_SIZE = 13 * 16;
     private static final int UNIFORM_RING = 32;
@@ -47,7 +41,7 @@ public class OutlinePipeline extends UniformArrayPipeline {
 
     @Override
     public int batchLayer() {
-        return 1; // обводки — над заливками, под текстурами и текстом
+        return 1;
     }
 
     public void drawOutline(float x, float y, float width, float height,

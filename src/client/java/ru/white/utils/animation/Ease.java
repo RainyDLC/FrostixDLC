@@ -33,5 +33,4 @@ public enum Ease {
         }
         return formattedName.toString().trim();
     }
-
 }

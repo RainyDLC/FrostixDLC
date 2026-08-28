@@ -1,6 +1,5 @@
 package ru.white.utils.math;
 
-
 import lombok.Generated;
 
 public class Timer {
@@ -31,7 +30,6 @@ public class Timer {
     public void setMillis(long millis) {
         this.millis = millis;
     }
-
 
     public static class TimerNew {
         private long time;
@@ -75,6 +73,4 @@ public class Timer {
             return getMs(System.nanoTime() - time);
         }
     }
-
 }
-

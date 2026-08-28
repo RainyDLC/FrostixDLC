@@ -24,15 +24,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-/**
- * Шейдерный дождь для World Tweaks: когерентный ветер (все струи наклонены
- * согласованно, с порывами), конусные струи с затуханием по глубине,
- * брызги-короны при ударе о землю, расходящиеся круги на воде и приземная
- * дымка, которая подсвечивается вспышками молний.
- * Ванильный рендер осадков отменяется миксином {@code WeatherRenderingMixin}.
- */
 public final class SkyRainRenderer {
-
     private static final int MAX_RIPPLES = 90;
     private static final long RIPPLE_LIFE = 650L;
     private static final int MAX_SPLASHES = 64;
@@ -57,7 +49,6 @@ public final class SkyRainRenderer {
     private static final RenderLayer RAIN_LAYER = RenderLayer.of("skystorm_rain",
             RenderSetup.builder(RAIN_PIPELINE).translucent().expectedBufferSize(1 << 16).build());
 
-    /** Дымка: текстурные билборды с проверкой глубины — стелется по рельефу. */
     private static final RenderPipeline MIST_PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.TRANSFORMS_AND_PROJECTION_SNIPPET)
                     .withLocation(Identifier.of("client", "pipeline/skystorm_mist"))
@@ -81,8 +72,8 @@ public final class SkyRainRenderer {
 
     private static class Drop {
         double x, y, prevY, z;
-        double vx, vz;      // горизонтальная скорость (ветер), м/с
-        double speed;       // вертикальная скорость, м/с
+        double vx, vz;
+        double speed;
         double floorTop;
         float len;
         boolean water;
@@ -127,21 +118,18 @@ public final class SkyRainRenderer {
     private static Mist[] mists;
     private static long nextAmbientRipple;
 
-    // конфигурация из WorldTweaks (обновляется в update())
     private static boolean cfgSplashes = true;
     private static boolean cfgMist = true;
     private static boolean cfgWind = true;
     private static float cfgWindStrength = 40f;
     private static float cfgRadius = 18f;
 
-    // когерентный ветер
     private static final float windBaseAngle = (float) (Math.random() * Math.PI * 2);
     private static float windX, windZ;
 
     private SkyRainRenderer() {
     }
 
-    /** Вызывается из WorldTweaks на тике. */
     public static void update(boolean enabled, int count, float radius,
                               boolean windOn, float windStrength,
                               boolean splashesOn, boolean mistOn) {
@@ -161,7 +149,6 @@ public final class SkyRainRenderer {
 
         updateWind(now());
 
-        // синхронизация пула капель
         while (drops.size() < count) {
             Drop d = new Drop();
             respawn(mc, d, radius);
@@ -178,7 +165,7 @@ public final class SkyRainRenderer {
         while (it.hasNext()) {
             Drop d = it.next();
             d.prevY = d.y;
-            d.y -= d.speed * 0.05; // тик 50 мс
+            d.y -= d.speed * 0.05;
 
             double dx = d.x - mc.player.getX();
             double dz = d.z - mc.player.getZ();
@@ -202,7 +189,6 @@ public final class SkyRainRenderer {
         ripples.removeIf(r -> now - r.born > RIPPLE_LIFE);
         splashes.removeIf(s -> now - s.born > SPLASH_LIFE);
 
-        // фоновые круги на ближайшей воде — дождь «идёт везде»
         if (now >= nextAmbientRipple) {
             nextAmbientRipple = now + 40;
             for (int a = 0; a < 3; a++) {
@@ -227,7 +213,6 @@ public final class SkyRainRenderer {
         mists = null;
     }
 
-    /** Рендер: дымка → струи → круги → брызги. Слои строго последовательные. */
     public static void render(EventRender3D e) {
         MinecraftClient mc = MinecraftClient.getInstance();
         if ((drops.isEmpty() && ripples.isEmpty() && splashes.isEmpty() && mists == null)
@@ -236,7 +221,6 @@ public final class SkyRainRenderer {
         Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
         var camRot = mc.gameRenderer.getCamera().getRotation();
 
-        // горизонтальный базис камеры — для ширины струй и языков брызг
         Vector3f rv = camRot.transform(new Vector3f(1, 0, 0));
         float rx = rv.x, rz = rv.z;
         float rl = (float) Math.sqrt(rx * rx + rz * rz);
@@ -254,12 +238,10 @@ public final class SkyRainRenderer {
         float cullSq = 70f * 70f;
         long now = now();
 
-        // уровень засветки от молний — весь дождь вспыхивает вместе с небом
         float fl = SkyLightningRenderer.flashLevel();
         int rainR = lerp(170, 240, fl), rainG = lerp(205, 248, fl);
         float alphaMul = 1f + fl * 1.2f;
 
-        // ── Pass 0: приземная дымка ──
         if (cfgMist && mists != null) {
             Vector3f right = camRot.transform(new Vector3f(1, 0, 0));
             Vector3f up = camRot.transform(new Vector3f(0, 1, 0));
@@ -279,19 +261,17 @@ public final class SkyRainRenderer {
             consumers.draw(MIST_LAYER);
         }
 
-        // ── Pass 1: струи дождя (конусные, затухание по глубине) ──
         VertexConsumer buf = consumers.getBuffer(RAIN_LAYER);
 
         for (Drop d : drops) {
             float px = (float) (d.x - camPos.x);
-            // интерполяция между тиками — движение плавное на любом FPS
+
             double ry = d.prevY + (d.y - d.prevY) * pTicks;
             float py = (float) (ry - camPos.y);
             float pz = (float) (d.z - camPos.z);
             float distSq = px * px + py * py + pz * pz;
             if (distSq > cullSq || py < -8f) continue;
 
-            // шейдерное растворение в тумане: дальние капли гаснут
             float fogFade = 1f - distSq / cullSq;
             fogFade = 0.3f + 0.7f * fogFade * fogFade;
 
@@ -300,7 +280,6 @@ public final class SkyRainRenderer {
             float sz = cfgWind ? (float) (d.vz / d.speed) * len : 0f;
             float tx = px + sx, ty = py + len, tz = pz + sz;
 
-            // конус: низ шире и ярче (голова капли), верх уже и прозрачнее
             float wB = 0.020f;
             float wT = wB * 0.32f;
             int bottomCol = argb(rainR, rainG, 255, (int) (145 * fogFade * alphaMul));
@@ -313,7 +292,6 @@ public final class SkyRainRenderer {
         }
         consumers.draw(RAIN_LAYER);
 
-        // ── Pass 2: круги на воде ──
         VertexConsumer rippleBuf = consumers.getBuffer(RAIN_LAYER);
         for (Ripple r : ripples) {
             float t = (now - r.born) / (float) RIPPLE_LIFE;
@@ -329,7 +307,6 @@ public final class SkyRainRenderer {
                     (float) (r.z - camPos.z),
                     rad, 0.05f, col, 28);
 
-            // второе кольцо появляется чуть позже — красивая рябь
             if (t > 0.2f) {
                 float t2 = (t - 0.2f) / 0.8f;
                 float rad2 = 0.04f + 0.32f * (1f - (1f - t2) * (1f - t2));
@@ -343,7 +320,6 @@ public final class SkyRainRenderer {
         }
         consumers.draw(RAIN_LAYER);
 
-        // ── Pass 3: брызги-короны об землю ──
         if (cfgSplashes && !splashes.isEmpty()) {
             VertexConsumer splashBuf = consumers.getBuffer(RAIN_LAYER);
             for (Splash s : splashes) {
@@ -354,12 +330,10 @@ public final class SkyRainRenderer {
                 float cz = (float) (s.z - camPos.z);
                 float fade = (1f - t) * (1f - t);
 
-                // расширяющееся колечко у земли
                 float rad = 0.07f + 0.26f * (1f - fade);
                 ringQuads(splashBuf, matrix, cx, cy, cz, rad, 0.03f,
                         argb(rainR, rainG, 255, (int) (115 * fade * alphaMul)), 12);
 
-                // корона: веер коротких вертикальных языков воды
                 float h = 0.30f * (float) Math.sin(Math.min(1f, t * 1.2f) * Math.PI);
                 if (h < 0.01f) continue;
                 int spokes = 5;
@@ -380,9 +354,6 @@ public final class SkyRainRenderer {
         }
     }
 
-    // ── ветер ──
-
-    /** Медленно дрейфующее направление + порывы: весь дождь наклонён согласованно. */
     private static void updateWind(long now) {
         float t = now * 0.001f;
         double sway = Math.sin(t * 0.11) * 0.38 + Math.sin(t * 0.043 + 1.7) * 0.62;
@@ -405,7 +376,6 @@ public final class SkyRainRenderer {
         }
     }
 
-    /** Переносит каплю в новую точку около игрока и пересчитывает ей уровень пола/воды. */
     private static void respawn(MinecraftClient mc, Drop d, float radius) {
         double ang = Math.random() * Math.PI * 2;
         double dist = (0.2 + Math.random() * 0.8) * radius;
@@ -413,7 +383,7 @@ public final class SkyRainRenderer {
         d.z = mc.player.getZ() + Math.sin(ang) * dist;
         d.speed = 12.0 + Math.random() * 7.0;
         d.len = 0.45f + (float) Math.random() * 0.35f;
-        // небольшой персональный разброс направления поверх общего ветра
+
         double jitter = (Math.random() - 0.5) * 0.18;
         double ca = Math.cos(jitter), sa = Math.sin(jitter);
         d.vx = windX * ca - windZ * sa;
@@ -435,7 +405,6 @@ public final class SkyRainRenderer {
         }
     }
 
-    /** Верхний уровень воды в колонке рядом с игроком, иначе -inf. */
     private static double findWaterTop(MinecraftClient mc, double x, double z, int playerY) {
         for (int y = playerY + 6; y >= playerY - 8; y--) {
             var state = mc.world.getBlockState(BlockPos.ofFloored(x, y, z));
@@ -447,7 +416,6 @@ public final class SkyRainRenderer {
         return Double.NEGATIVE_INFINITY;
     }
 
-    /** Верхняя поверхность (земля или вода) для постановки дымки, иначе NaN. */
     private static double findSurfaceTop(MinecraftClient mc, double x, double z, int playerY) {
         for (int y = playerY + 10; y >= playerY - 14; y--) {
             var state = mc.world.getBlockState(BlockPos.ofFloored(x, y, z));
@@ -458,8 +426,6 @@ public final class SkyRainRenderer {
         }
         return Double.NaN;
     }
-
-    // ── дымка ──
 
     private static void updateMist(MinecraftClient mc, long now, float radius) {
         if (!cfgMist) {
@@ -492,8 +458,6 @@ public final class SkyRainRenderer {
         }
     }
 
-    // ── утилиты ──
-
     private static long now() {
         return System.currentTimeMillis();
     }
@@ -519,7 +483,6 @@ public final class SkyRainRenderer {
         );
     }
 
-    /** Билборд-спрайт (дымка). Позиция уже относительно камеры. */
     private static void sprite(VertexConsumer buf, Matrix4f matrix, float px, float py, float pz,
                                Vector3f right, Vector3f up, float half, int color) {
         float r = ((color >> 16) & 0xFF) / 255f;
@@ -535,7 +498,6 @@ public final class SkyRainRenderer {
         buf.vertex(matrix, px + rx2 - ux, py + ry - uy, pz - rz2 - uz).texture(1f, 0f).color(r, g, b, a);
     }
 
-    /** Плоское кольцо-рябь на поверхности воды/земли. */
     private static void ringQuads(VertexConsumer buf, Matrix4f matrix,
                                   float cx, float cy, float cz,
                                   float radius, float width, int color, int segs) {

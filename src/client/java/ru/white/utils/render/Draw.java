@@ -5,24 +5,10 @@ import ru.white.Client;
 import ru.white.theme.ThemeColor;
 import ru.white.utils.colors.ColorUtil;
 
-/**
- * Единая точка входа для 2D-рендера: {@code Draw.rect(...)}, {@code Draw.blur(...)},
- * {@code Draw.outline(...)} и т.д. Вместо цепочек
- * {@code Client.get().render2D().getXxxPipeline().drawXxx(...)}.
- *
- * Старый {@link RenderUtil} делегирует сюда — старые вызовы продолжают работать.
- */
 public final class Draw {
-
-    // Параметры «стеклянного» блюра, когда включено искажение темы.
-    // Ровно те значения, что реально применялись раньше (были захардкожены в BlurPipeline).
     private static final float GLASS_DISTORTION = 125f;
     private static final float GLASS_WAVE_SIZE = 75f;
 
-    // Скретч-буферы вместо new float[]/new int[] на каждый примитив.
-    // Пайплайны читают эти массивы синхронно (копируют в ByteBuffer) и нигде
-    // не сохраняют ссылку, поэтому переиспользование безопасно. Весь 2D-рендер
-    // идёт с одного (рендерного) потока.
     private static final float[] RADII = new float[4];
     private static final int[] COLORS4 = new int[4];
     private static final int[] COLORS8 = new int[8];
@@ -52,8 +38,6 @@ public final class Draw {
         r2d().flushAll();
     }
 
-    // ── блюр ─────────────────────────────────────────────────────────────
-
     public static void blur(float x, float y, float width, float height, float alpha, int tintColor) {
         blur(x, y, width, height, alpha, 0f, 0f, 0f, 0f, tintColor);
     }
@@ -76,7 +60,6 @@ public final class Draw {
         }
     }
 
-    /** Всегда «стеклянный» блюр, независимо от настройки темы. */
     public static void glass(float x, float y, float width, float height,
                              float alpha, float topLeft, float topRight,
                              float bottomRight, float bottomLeft, int tintColor) {
@@ -84,8 +67,6 @@ public final class Draw {
                 radii(topLeft, topRight, bottomRight, bottomLeft), tintColor,
                 GLASS_DISTORTION, GLASS_WAVE_SIZE, 0f, 0f);
     }
-
-    // ── заливки ──────────────────────────────────────────────────────────
 
     public static void rect(float x, float y, float width, float height, int color) {
         rect(x, y, width, height, color, 0f);
@@ -132,8 +113,6 @@ public final class Draw {
         r2d().getRectPipeline().drawGlow(x, y, width, height, color,
                 radii(topLeft, topRight, bottomRight, bottomLeft), glowSize, strength, softness);
     }
-
-    // ── обводки ──────────────────────────────────────────────────────────
 
     public static void outline(float x, float y, float width, float height, float thickness, int color) {
         outline(x, y, width, height, thickness, color, 0f, 0f, 0f, 0f);
@@ -190,8 +169,6 @@ public final class Draw {
     private static int glassColor(float alpha) {
         return ColorUtil.getColor(255, Math.min(alpha, 1f));
     }
-
-    // ── текстуры ─────────────────────────────────────────────────────────
 
     public static void texture(Identifier id, float x, float y, float width, float height, int color) {
         texture(id, x, y, width, height, 0, 0, 1, 1, color, 1f, 0f);

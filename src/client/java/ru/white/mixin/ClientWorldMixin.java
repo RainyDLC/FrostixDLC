@@ -12,7 +12,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ClientWorld.class)
 public class ClientWorldMixin implements IMinecraft {
-
     @Shadow
     @Final
     private ClientWorld.Properties clientWorldProperties;
@@ -21,7 +20,4 @@ public class ClientWorldMixin implements IMinecraft {
     public void initHook(CallbackInfo info) {
         new WorldLoadEvent().hook();
     }
-
-
-
 }

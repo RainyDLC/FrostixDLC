@@ -1,7 +1,6 @@
 package ru.white.utils.render.font;
 
 public class Glyph {
-
     public final int id;
     public final float x;
     public final float y;

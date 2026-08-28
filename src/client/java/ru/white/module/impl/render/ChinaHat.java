@@ -11,11 +11,7 @@ import ru.white.utils.other.Instance;
         category = Category.RENDER
 )
 public class ChinaHat extends Module {
-
-
     public static ChinaHat getInstance() {
         return Instance.get(ChinaHat.class);
     }
-
-
 }

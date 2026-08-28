@@ -1,6 +1,5 @@
 package ru.white.module.impl.player;
 
-
 import ru.white.manager.event_impl.EventTick;
 import ru.white.manager.events.orbit.EventHandler;
 import ru.white.module.api.Category;
@@ -21,7 +20,6 @@ import net.minecraft.screen.slot.SlotActionType;
 
 @ModuleInfo(name = "Auto Leave",desc = "Данный модуль был сделан акарачком поэтому может работать через жопу", category = Category.PLAYER)
 public class AutoLeave extends Module {
-
     public static AutoLeave get() {
         return Instance.get(AutoLeave.class);
     }

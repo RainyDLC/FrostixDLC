@@ -14,7 +14,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(AtmosphericFogModifier.class)
 public class AtmosphericFogModifierMixin {
-
     @Inject(method = "getFogColor", at = @At("RETURN"), cancellable = true)
     private void onGetFogColor(ClientWorld world, Camera camera, int viewDistance, float tickProgress, CallbackInfoReturnable<Integer> cir) {
         WorldTweaks worldTweaks = WorldTweaks.get();

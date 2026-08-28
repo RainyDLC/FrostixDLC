@@ -47,7 +47,6 @@ import static java.lang.Math.sin;
         category = Category.RENDER
 )
 public class Trails extends Module implements ModulePreview {
-
     public ButtonSetting previewButton = PreviewSettings.button(this);
 
     public final ModeSetting    colorMode    = new ModeSetting(this,    "Цвет",         "Клиент",   "Случайный");
@@ -59,12 +58,9 @@ public class Trails extends Module implements ModulePreview {
     public final BooleanSetting dashDots     = new BooleanSetting(this, "Точки",        true);
     public final BooleanSetting lighting     = new BooleanSetting(this, "Свечение",     true);
 
-    // шлейф непрерывный — интервалу нечего перезапускать
     private final PreviewSettings previewSettings = PreviewSettings.withoutInterval(this, 4F, 0F);
 
-    /** За сколько секунд болванчик обходит круг в предпоказе. */
     private static final double PREVIEW_ORBIT_MS = 4000.0;
-
 
     private static final int   DASH_TEX_COUNT = 21;
     private static final long  DASH_FRAME_TIME_MS = 80L;
@@ -86,7 +82,6 @@ public class Trails extends Module implements ModulePreview {
             DASH_ANIM_GROUPS.add(grp);
         }
     }
-
 
     private static final RenderPipeline SPARK_PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.POSITION_COLOR_SNIPPET)
@@ -119,12 +114,10 @@ public class Trails extends Module implements ModulePreview {
                             .expectedBufferSize(1536)
                             .build()));
 
-
     private final List<DashCubic> cubics        = new ArrayList<>();
     private final List<DashCubic> filteredCache = new ArrayList<>();
     private final Random          rng           = new Random(1234567891L);
     private final BufferAllocator allocator     = new BufferAllocator(1 << 18);
-
 
     private final Vector3f    renderRight   = new Vector3f();
     private final Vector3f    renderUp      = new Vector3f();
@@ -161,8 +154,6 @@ public class Trails extends Module implements ModulePreview {
         previewPrevInit = false;
     }
 
-    // ───────────────────────────── предпоказ ─────────────────────────────
-
     @Override
     public PreviewSettings previewSettings() {
         return previewSettings;
@@ -173,7 +164,6 @@ public class Trails extends Module implements ModulePreview {
         return true;
     }
 
-    /** Болванчика ведём сами по кругу — стоящий на месте шлейф показать нечем. */
     @Override
     public boolean previewControlsDummy() {
         return true;
@@ -205,7 +195,6 @@ public class Trails extends Module implements ModulePreview {
         previewEntity.setHeadYaw(yaw);
     }
 
-    /** Шлейф непрерывный, отдельный «залп» ему не нужен. */
     @Override
     public void previewSpawn(PreviewContext ctx) {
     }
@@ -217,7 +206,6 @@ public class Trails extends Module implements ModulePreview {
         cubics.clear();
         filteredCache.clear();
     }
-
 
     @EventHandler
     public void onTick(EventTick e) {
@@ -232,9 +220,7 @@ public class Trails extends Module implements ModulePreview {
             return;
         }
 
-
         long nowMs = System.currentTimeMillis();
-
 
         int size = cubics.size();
         for (int i = 0; i < size; i++) {
@@ -243,7 +229,6 @@ public class Trails extends Module implements ModulePreview {
             if (c.cachedTimePC >= 1f && c.alphaTarget != 0f) c.alphaTarget = 0f;
             c.alphaAnim += (c.alphaTarget - c.alphaAnim) * 0.08f;
         }
-
 
         for (int i = cubics.size() - 1; i >= 0; i--) {
             DashCubic c = cubics.get(i);
@@ -277,7 +262,6 @@ public class Trails extends Module implements ModulePreview {
         tickPreviewTrail(lr);
     }
 
-    /** Тот же шлейф, но за болванчиком, которого редактор водит по кругу перед игроком. */
     private void tickPreviewTrail(double lr) {
         if (previewEntity == null || previewEntity.isRemoved()) {
             previewPrevInit = false;
@@ -312,7 +296,6 @@ public class Trails extends Module implements ModulePreview {
         }
     }
 
-
     @EventHandler
     public void onRender3D(EventRender3D e) {
         if (mc.player == null || stateAnim < 0.05f || filteredCache.isEmpty()) return;
@@ -329,7 +312,6 @@ public class Trails extends Module implements ModulePreview {
 
         VertexConsumerProvider.Immediate immediate = VertexConsumerProvider.immediate(allocator);
 
-
         float       fCamYaw   = mc.gameRenderer.getCamera().getYaw();
         float       fCamPitch = mc.gameRenderer.getCamera().getPitch();
         Quaternionf camRot    = mc.gameRenderer.getCamera().getRotation();
@@ -338,7 +320,6 @@ public class Trails extends Module implements ModulePreview {
         bloomRotCache.identity()
                 .rotateY((float) Math.toRadians(-fCamYaw))
                 .rotateX((float) Math.toRadians(fCamPitch));
-
 
         for (int i = 0; i < fsz; i++) {
             DashCubic  cubic = filteredCache.get(i);
@@ -359,7 +340,6 @@ public class Trails extends Module implements ModulePreview {
                         ColorUtil.multDark(ColorUtil.overCol(col, -1, 0.4f), aPC));
             matrix.pop();
         }
-
 
         VertexConsumer bloomBuf = immediate.getBuffer(CUBIC_LAYER.apply(BLOOM_TEX));
         for (int i = 0; i < fsz; i++) {
@@ -391,7 +371,6 @@ public class Trails extends Module implements ModulePreview {
 
         immediate.draw();
     }
-
 
     private void applyBodyRotation(MatrixStack m, float[] rotate, float camYaw, float camPitch) {
         if (rotateMode.is("Движение")) {
@@ -545,7 +524,6 @@ public class Trails extends Module implements ModulePreview {
             }
         }
 
-
         Identifier getCurrent(long nowMs) {
             if (textures.isEmpty()) return null;
             if (animated && textures.size() > 1 && animDur > 0) {
@@ -572,7 +550,6 @@ public class Trails extends Module implements ModulePreview {
             cosYaw        = Math.cos(yaw);
             cosPitchOffset = Math.cos(pitch);
         }
-
 
         void update(long nowMs) {
             float timePC  = MathHelper.clamp((nowMs - startTime) / 1000f, 0f, 1f);

@@ -27,7 +27,6 @@ import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
 public class MaskDiffPipeline {
-
     private static final Identifier PIPELINE_ID = Identifier.of("client", "pipeline/mask_diff");
     private static final Identifier VERTEX_SHADER = Identifier.of("client", "core/mask_diff");
     private static final Identifier FRAGMENT_SHADER = Identifier.of("client", "core/mask_diff");
@@ -90,7 +89,6 @@ public class MaskDiffPipeline {
     public void createMask(GpuTextureView targetView, GpuTextureView beforeView,
                            GpuTextureView afterView, GpuTextureView depthBeforeView,
                            GpuTextureView depthAfterView, int width, int height) {
-
         ensureInitialized();
 
         CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
@@ -116,7 +114,6 @@ public class MaskDiffPipeline {
                 () -> "minecraft:mask_diff_pass",
                 targetView,
                 OptionalInt.of(0x00000000))) {
-
             renderPass.setPipeline(PIPELINE);
             renderPass.setVertexBuffer(0, dummyVertexBuffer);
             renderPass.bindTexture("BeforeSampler", beforeView, sampler);

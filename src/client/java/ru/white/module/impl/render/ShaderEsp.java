@@ -31,12 +31,10 @@ import java.util.WeakHashMap;
 
 @ModuleInfo(name = "Shader ESP", category = Category.RENDER, desc = "Шейдерный ESP с ореолом свечения для сущностей")
 public class ShaderEsp extends Module implements ModulePreview {
-
     private static ShaderEsp instance;
 
     public ButtonSetting previewButton = PreviewSettings.button(this);
 
-    // ---- цели ----
     public BooleanSetting localPlayer  = new BooleanSetting(this, "Локальный игрок", true);
     public BooleanSetting players      = new BooleanSetting(this, "Игроки", true);
     public BooleanSetting ignoreNaked  = new BooleanSetting(this, "Игнорировать голых", false)
@@ -44,7 +42,6 @@ public class ShaderEsp extends Module implements ModulePreview {
     public BooleanSetting mobs         = new BooleanSetting(this, "Мобы", true);
     public BooleanSetting items        = new BooleanSetting(this, "Предметы", false);
 
-    // ---- цвет ----
     public ModeSetting typeColor = new ModeSetting(this, "Режим цвета", "Тема", "Свой");
     public ColorSetting tintColor = new ColorSetting(this, "Цвет", 0xFFFF3355)
             .setVisible(() -> typeColor.is("Свой"));
@@ -54,7 +51,6 @@ public class ShaderEsp extends Module implements ModulePreview {
     public ColorSetting friendTint = new ColorSetting(this, "Цвет друга", 0xFF55FF55)
             .setVisible(() -> friendColor.getValue());
 
-    // ---- внешний ореол ----
     public BooleanSetting glow = new BooleanSetting(this, "Свечение", true);
     public SliderSetting glowRadius = new SliderSetting(this, "Радиус свечения", 0.55f, 0f, 1f, 0.01f)
             .setVisible(() -> glow.getValue());
@@ -63,14 +59,12 @@ public class ShaderEsp extends Module implements ModulePreview {
     public SliderSetting glowFalloff = new SliderSetting(this, "Спад свечения", 1.1f, 0.2f, 4f, 0.05f)
             .setVisible(() -> glow.getValue());
 
-    // ---- заливка силуэта ----
     public BooleanSetting fill = new BooleanSetting(this, "Заливка", true);
     public SliderSetting fillOpacity = new SliderSetting(this, "Плотность заливки", 0.45f, 0f, 1.5f, 0.01f)
             .setVisible(() -> fill.getValue());
     public SliderSetting innerGlow = new SliderSetting(this, "Внутреннее свечение", 0.6f, 0f, 2f, 0.05f)
             .setVisible(() -> fill.getValue());
 
-    // ---- кромка ----
     public BooleanSetting outline = new BooleanSetting(this, "Обводка", true);
     public ModeSetting outlineMode = new ModeSetting(this, "Тип обводки", "Снаружи", "Внутри", "Обе")
             .setVisible(() -> outline.getValue());
@@ -81,7 +75,6 @@ public class ShaderEsp extends Module implements ModulePreview {
     public SliderSetting outlineWhite = new SliderSetting(this, "Белизна обводки", 0.45f, 0f, 1f, 0.01f)
             .setVisible(() -> outline.getValue());
 
-    // ---- анимации ----
     public BooleanSetting pulse = new BooleanSetting(this, "Пульсация", false);
     public SliderSetting pulseSpeed = new SliderSetting(this, "Скорость пульсации", 1f, 0.1f, 5f, 0.1f)
             .setVisible(() -> pulse.getValue());
@@ -96,7 +89,6 @@ public class ShaderEsp extends Module implements ModulePreview {
     public SliderSetting shimmerBrightness = new SliderSetting(this, "Яркость шиммера", 0.8f, 0f, 2f, 0.05f)
             .setVisible(() -> shimmer.getValue());
 
-    // ESP виден постоянно, повторять нечего — интервала у предпоказа нет
     private final PreviewSettings previewSettings = PreviewSettings.withoutInterval(this, 4F, 0F);
 
     private static final Set<Entity> allTargets =
@@ -154,13 +146,10 @@ public class ShaderEsp extends Module implements ModulePreview {
             }
         }
 
-        // болванчика подсвечиваем даже когда «Игроки» выключены — иначе показывать нечего
         if (previewDummy != null && !previewDummy.isRemoved()) {
             allTargets.add(previewDummy);
         }
     }
-
-    // ───────────────────────────── предпоказ ─────────────────────────────
 
     private Entity previewDummy;
 
@@ -184,7 +173,6 @@ public class ShaderEsp extends Module implements ModulePreview {
         previewDummy = ctx.dummy();
     }
 
-    /** Ореол горит на болванчике всё время, пока открыт редактор. */
     @Override
     public void previewSpawn(PreviewContext ctx) {
     }
