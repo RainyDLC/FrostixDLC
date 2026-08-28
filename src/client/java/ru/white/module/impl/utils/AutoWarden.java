@@ -4,11 +4,13 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.block.enums.ChestType;
 import net.minecraft.client.gui.screen.DeathScreen;
 import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
 import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.ItemEnchantmentsComponent;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.component.type.PotionContentsComponent;
 import net.minecraft.entity.Entity;
@@ -19,6 +21,7 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.WardenEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.BannerItem;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.item.SmithingTemplateItem;
@@ -88,6 +91,10 @@ public class AutoWarden extends Module {
     public final BooleanSetting report = new BooleanSetting(this, "Репортить обидчиков", false);
     public final ModeSetting loot = new ModeSetting(this, "Приоритеты лута", "Низкий", "Средний", "Высокий");
     public final BooleanSetting trash = new BooleanSetting(this, "Выкидывать мусор с пола", true);
+    public final SliderSetting lootSpeed = new SliderSetting(this, "Стаков за тик", 4, 1, 27, 1);
+    public final BooleanSetting homeAnchor = new BooleanSetting(this, "Не уходить со склада", true);
+    public final BooleanSetting camp = new BooleanSetting(this, "Караулить сундук", true);
+    public final SliderSetting campWait = new SliderSetting(this, "Караулить за, с", 10, 2, 60, 1).setVisible(camp::getValue);
     public final BooleanSetting smart = new BooleanSetting(this, "Умный выбор анархии", true);
     public final SliderSetting waitLimit = new SliderSetting(this, "Ждать сундук, с", 30, 5, 180, 5).setVisible(smart::getValue);
     public final BooleanSetting telegram = new BooleanSetting(this, "Телеграм", false);
@@ -129,9 +136,19 @@ public class AutoWarden extends Module {
     private int detourTries;
     private final Map<BlockPos, Integer> unreachable = new HashMap<>();
 
+    private BlockPos supplyChest;
+    private BlockPos depositChest;
+    private BlockPos openTarget;
+    private BlockPos homeSpot;
+    private int homeTick;
+    private int supplySlot = -1;
+    private int containerTick;
+    private final Map<BlockPos, Long> badChests = new HashMap<>();
+
     private boolean useHeld;
     private boolean useRequested;
     private boolean eating;
+    private int eatTick;
     private boolean aiming;
     private boolean lootCounted;
     private long period;
@@ -166,7 +183,11 @@ public class AutoWarden extends Module {
         if (anarchies.isEmpty() && ServerUtil.anarchy >= 0) anarchies.moveToFront(ServerUtil.anarchy);
 
         farmIndex = 1;
-        state = State.COLLECTING;
+        boolean atHome = mc.player != null && onHomeAnarchy();
+        state = atHome && (needSupplies() || hasLootToStore()) ? State.SAVE : State.COLLECTING;
+        homeSpot = atHome ? mc.player.getBlockPos().toImmutable() : null;
+        homeTick = 0;
+        supplySlot = -1;
         died = false;
         lootCounted = false;
         looted = 0;
@@ -182,6 +203,9 @@ public class AutoWarden extends Module {
         wardenSpots.clear();
         openAttempts.clear();
         unreachable.clear();
+        badChests.clear();
+        openTarget = null;
+        containerTick = 0;
         resetProgress();
         lootItems.clear();
         loadTimers();
@@ -214,6 +238,7 @@ public class AutoWarden extends Module {
         walkTarget = null;
         currentChest = null;
         eating = false;
+        eatTick = 0;
         clearRecall();
     }
 
@@ -271,7 +296,7 @@ public class AutoWarden extends Module {
 
         if (mc.player.age % 100 == 0 && inFarmZone() && (zone == null || !inZoneBox(mc.player.getX(), mc.player.getZ()))) updateZone();
 
-        if (mc.player.hasStatusEffect(StatusEffects.GLOWING) && playerNear(32.0)) {
+        if (mc.player.hasStatusEffect(StatusEffects.GLOWING) && playerNear(32.0) && !onHomeAnarchy()) {
             flee(false);
             return;
         }
@@ -391,6 +416,12 @@ public class AutoWarden extends Module {
             walkTarget = null;
             return;
         }
+        // зона есть только на фарме: на складе clamp увёл бы цель к её границе, за две тысячи блоков
+        if (onHomeAnarchy()) {
+            walkTarget = spot.toImmutable();
+            return;
+        }
+
         walkTarget = new BlockPos(clampX(spot.getX()), spot.getY(), clampZ(spot.getZ()));
     }
 
@@ -571,9 +602,49 @@ public class AutoWarden extends Module {
         }
 
         if (onHomeAnarchy()) {
+            if (holdHome()) return;
             freeHand();
             container(hasLootToStore(), true, State.TAKE);
         }
+    }
+
+    /**
+     * На складе держим точку, где включили модуль: иначе остаётся цель с фарма
+     * и Baritone уводит бота от «своих» сундуков к соседним.
+     */
+    private boolean holdHome() {
+        if (!homeAnchor.getValue()) {
+            return false;
+        }
+
+        if (homeSpot == null) {
+            homeSpot = mc.player.getBlockPos().toImmutable();
+            if (debug.getValue()) ChatUtils.addChatMessage("§7[AW] точка склада §f" + homeSpot.toShortString());
+        }
+
+        if (mc.currentScreen instanceof GenericContainerScreen) {
+            walkTarget = null;
+            return false;
+        }
+
+        if (mc.player.getEntityPos().squaredDistanceTo(Vec3d.ofCenter(homeSpot)) > 16.0) {
+            if (homeTick == 0) homeTick = mc.player.age;
+
+            // не дошли за 20 секунд — точка недостижима, закрепляемся там, где стоим
+            if (mc.player.age - homeTick > 400) {
+                homeSpot = mc.player.getBlockPos().toImmutable();
+                homeTick = 0;
+                walkTarget = null;
+                return false;
+            }
+
+            walkTarget = homeSpot;
+            return true;
+        }
+
+        homeTick = 0;
+        walkTarget = null;
+        return false;
     }
 
     private void take() {
@@ -599,13 +670,22 @@ public class AutoWarden extends Module {
             }
         }
 
-        if (onHomeAnarchy()) container(needSupplies() || cursorBusy(), false, State.COLLECTING);
+        if (onHomeAnarchy()) {
+            if (holdHome()) return;
+            container(needSupplies() || cursorBusy(), false, State.COLLECTING);
+        }
     }
 
     private void collect() {
         if (checkEscape()) return;
 
         eatIfNeeded();
+
+        // пока жуём — стоим: шаг или смена слота срывают укус, и морковь уходит впустую
+        if (busyEating()) {
+            walkTarget = null;
+            return;
+        }
 
         if (isDrinking()) {
             walkTarget = null;
@@ -816,6 +896,7 @@ public class AutoWarden extends Module {
 
         BlockPos pick = pickChest();
         if (pick == null) pick = pickSoonest();
+        if (holdCurrent(pick)) pick = currentChest;
 
         boolean stay = pick != null && currentChest != null && !pick.equals(currentChest) && chestRemaining(currentChest) > 25000;
         if (!stay) chestSwitch.reset();
@@ -833,8 +914,11 @@ public class AutoWarden extends Module {
         }
 
         long remaining = chestRemaining(target);
+        long campMs = campMs();
 
-        if (remaining > 1000 && playerNearPos(target, 7.0)) {
+        boolean ready = chestReady(target);
+
+        if (!ready && remaining > Math.max(1000L, campMs) && playerNearPos(target, 7.0)) {
             BlockPos spot = sideSpot(target);
             if (spot != null) {
                 if (mc.player.squaredDistanceTo(Vec3d.ofCenter(spot)) > 2.0) walkTo(spot);
@@ -845,7 +929,7 @@ public class AutoWarden extends Module {
 
         long threshold = (long) (waitLimit.getValue() * 1000.0F);
 
-        if (remaining > threshold && mc.player.age % 20 == 0 && hopTimer.hasTimeElapsed(12000)) {
+        if (!ready && remaining > threshold && mc.player.age % 20 == 0 && hopTimer.hasTimeElapsed(12000)) {
             Recall recall = soonestRecall(threshold);
             if (recall != null) {
                 hopTo(recall);
@@ -857,7 +941,7 @@ public class AutoWarden extends Module {
             }
         }
 
-        if (remaining > 6000) {
+        if (!ready && remaining > Math.max(6000L, campMs)) {
             if (!travelToRecall()) walkTo(orbitSpot(target));
             return;
         }
@@ -865,7 +949,14 @@ public class AutoWarden extends Module {
         double distSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(target));
         if (distSq <= 20.0) {
             walkTarget = null;
-            if (openAttempts.getOrDefault(target, 0) < (remaining >= 0 ? 1 : 3) && openChest(target, remaining >= 0 ? 6 : 1)) {
+
+            // караулим: стоим у сундука со сведённым прицелом, чтобы нажать в первый же тик готовности
+            if (!ready) {
+                aimChest(target);
+                return;
+            }
+
+            if (openAttempts.getOrDefault(target, 0) < 3 && openChest(target, 1)) {
                 openAttempts.merge(target, 1, Integer::sum);
             }
             return;
@@ -932,22 +1023,33 @@ public class AutoWarden extends Module {
         return new Rotation(yaw, pitch);
     }
 
-    private boolean openChest(BlockPos chest, int rate) {
-        if (chest == null || mc.currentScreen instanceof GenericContainerScreen) return false;
+    /** Ведёт прицел в сундук. Возвращает точку клика, когда голова уже доведена, иначе null. */
+    private Vec3d aimChest(BlockPos chest) {
+        if (chest == null) return null;
 
         Vec3d eye = mc.player.getEyePos();
         Vec3d aim = visiblePoint(eye, chest);
-        if (aim == null) return false;
+        if (aim == null) return null;
 
         Rotation target = rotationTo(eye, aim);
         float time = mc.player.age + mc.getRenderTickCounter().getTickProgress(false);
-        float sway = (float) ((Math.sin(time * 0.31F) * 0.5 + Math.sin(time * 0.73F + 1.1F) * 0.3 + Math.sin(time * 1.7F + 2.6F) * 0.2) * 8.0);
+        float sway = (float) ((Math.sin(time * 0.31F) * 0.5 + Math.sin(time * 0.73F + 1.1F) * 0.3 + Math.sin(time * 1.7F + 2.6F) * 0.2) * 3.0);
+        Rotation swayed = new Rotation(target.getYaw() + sway, MathHelper.clamp(target.getPitch() + sway / 4.0F, -90.0F, 90.0F));
 
         aiming = true;
-        RotationProcess.update(new Rotation(target.getYaw() + sway, MathHelper.clamp(target.getPitch() + sway / 4.0F, -90.0F, 90.0F)), 120.0F, 120.0F, 1, 1);
+        RotationProcess.update(swayed, 120.0F, 120.0F, 1, 1);
 
-        if (mc.player.age % rate != 0 || new Rotation(mc.player).getDelta(target) > 5.0F) return false;
+        // сверяемся с той ротацией, куда реально ведём, иначе дрожание само же и блокирует клик
+        return new Rotation(mc.player).getDelta(swayed) > 4.0F ? null : aim;
+    }
 
+    private boolean openChest(BlockPos chest, int rate) {
+        if (chest == null || mc.currentScreen instanceof GenericContainerScreen) return false;
+
+        Vec3d aim = aimChest(chest);
+        if (aim == null || mc.player.age % rate != 0) return false;
+
+        Vec3d eye = mc.player.getEyePos();
         BlockHitResult hit = mc.world.raycast(new RaycastContext(eye, aim,
                 RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
         if (!hit.getBlockPos().equals(chest)) return false;
@@ -955,6 +1057,27 @@ public class AutoWarden extends Module {
         mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
         mc.player.swingHand(Hand.MAIN_HAND);
         return true;
+    }
+
+    /** Голограмма обновляется раз в секунду, поэтому у самого конца верим её отсутствию, а не остатку. */
+    private boolean chestReady(BlockPos chest) {
+        long remaining = chestRemaining(chest);
+        return remaining < 0 || (remaining <= 2500 && !helper().hasHologram(chest));
+    }
+
+    private long campMs() {
+        return camp.getValue() ? (long) (campWait.getValue() * 1000.0F) : 0L;
+    }
+
+    /** Пока караулим сундук — не бросаем его из-за соседнего, иначе бот пляшет между ними. */
+    private boolean holdCurrent(BlockPos pick) {
+        if (!camp.getValue() || currentChest == null || pick == null || pick.equals(currentChest)) return false;
+        if (!nearCurrentChest(5.0) || !reachable(currentChest)) return false;
+        if (wardenNear(currentChest) || armoredNear(currentChest) || unreachable.containsKey(currentChest)) return false;
+        if (openAttempts.getOrDefault(currentChest, 0) >= 3) return false;
+
+        long remaining = chestRemaining(currentChest);
+        return remaining < 0 || remaining <= campMs();
     }
 
     private BlockPos pickChest() {
@@ -1070,53 +1193,138 @@ public class AutoWarden extends Module {
                 if (hopper) finishDeposit();
                 state = next;
             }
+            containerTick = 0;
+            supplySlot = -1;
             return;
         }
 
         if (mc.currentScreen instanceof GenericContainerScreen screen) {
-            if (hopper) storeLoot(screen);
-            else takeSupplies(screen);
+            if (containerTick == 0) containerTick = mc.player.age;
+
+            if (hopper ? storeLoot(screen) : takeSupplies(screen)) {
+                containerTick = mc.player.age;
+                if (openTarget != null) {
+                    badChests.remove(openTarget);
+                    if (hopper) depositChest = openTarget;
+                    else supplyChest = openTarget;
+                }
+                return;
+            }
+
+            // ничего не берётся и не кладётся — открыт сундук соседа, метим его и идём к следующему
+            if (mc.player.age - containerTick > 24 && !cursorBusy()) {
+                if (openTarget != null) {
+                    badChests.put(openTarget, System.currentTimeMillis() + 120000L);
+                    if (openTarget.equals(supplyChest)) supplyChest = null;
+                    if (openTarget.equals(depositChest)) depositChest = null;
+
+                    if (debug.getValue()) {
+                        ChatUtils.addChatMessage("§7[AW] сундук §f" + openTarget.toShortString()
+                                + " §7не тот, пробую соседний");
+                    }
+                }
+                containerTick = 0;
+                closeContainer();
+            }
             return;
         }
 
-        openChest(findNearbyChest(hopper), 2);
+        containerTick = 0;
+        openTarget = findNearbyChest(hopper);
+
+        // все сундуки в округе помечены как «не те» — снимаем метки и пробуем заново
+        if (openTarget == null) {
+            if (!badChests.isEmpty() && mc.player.age % 100 == 0) badChests.clear();
+            return;
+        }
+
+        openChest(openTarget, 2);
     }
 
     private void lootChest(GenericContainerScreen screen) {
-        if (isMoving()) {
+        // после отмены пути игрока ещё тащит по инерции — ждём только реальный разгон, а не любой сдвиг
+        if (mc.player.getVelocity().horizontalLengthSquared() > 0.02) {
             walkTarget = null;
             return;
         }
-        if (mc.player.age % 2 != 0) return;
 
-        Slot slot = findSlot(screen, false, stack -> !stack.isEmpty() && !isJunk(stack));
-        if (slot == null) {
-            closeContainer();
-            return;
+        int batch = Math.max(1, lootSpeed.getValue().intValue());
+
+        for (int index = 0; index < batch; index++) {
+            Slot slot = bestLootSlot(screen);
+            if (slot == null) {
+                closeContainer();
+                return;
+            }
+
+            ItemStack taken = slot.getStack().copy();
+            click(screen, slot, 0, SlotActionType.QUICK_MOVE);
+            stacksTaken++;
+            anarchyStats.computeIfAbsent(ServerUtil.anarchy, key -> new int[2])[0]++;
+
+            if (!taken.isEmpty()) lootItems.merge(taken.getName().getString(), taken.getCount(), Integer::sum);
+            if (!lootCounted) {
+                lootCounted = true;
+                looted++;
+                storedChests++;
+            }
+            markEmptied();
+
+            // стак не ушёл — в инвентаре нет места, дальше долбить бессмысленно
+            if (!slot.getStack().isEmpty()) {
+                closeContainer();
+                return;
+            }
         }
-
-        ItemStack taken = slot.getStack().copy();
-        click(screen, slot, 0, SlotActionType.QUICK_MOVE);
-        stacksTaken++;
-        anarchyStats.computeIfAbsent(ServerUtil.anarchy, key -> new int[2])[0]++;
-
-        if (!taken.isEmpty()) lootItems.merge(taken.getName().getString(), taken.getCount(), Integer::sum);
-        if (!lootCounted) {
-            lootCounted = true;
-            looted++;
-            storedChests++;
-        }
-        markEmptied();
     }
 
-    private void storeLoot(GenericContainerScreen screen) {
-        if (mc.player.age % 2 != 0) return;
+    /** Сначала дорогое: соседние автовардены выгребают сундук за пару секунд. */
+    private Slot bestLootSlot(GenericContainerScreen screen) {
+        Slot best = null;
+        int bestRank = 99;
+
+        for (Slot slot : screen.getScreenHandler().slots) {
+            if (isPlayerSlot(screen, slot)) continue;
+
+            ItemStack stack = slot.getStack();
+            if (stack.isEmpty() || isJunk(stack)) continue;
+
+            int rank = lootRank(stack);
+            if (rank < bestRank) {
+                bestRank = rank;
+                best = slot;
+                if (rank == 0) break;
+            }
+        }
+        return best;
+    }
+
+    private int lootRank(ItemStack stack) {
+        if (stack.isOf(Items.ELYTRA) || stack.isOf(Items.TOTEM_OF_UNDYING) || stack.isOf(Items.ENCHANTED_GOLDEN_APPLE)
+                || stack.isOf(Items.NETHERITE_INGOT) || stack.isOf(Items.NETHERITE_SCRAP) || stack.isOf(Items.ANCIENT_DEBRIS)
+                || stack.isOf(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE) || stack.isOf(Items.NETHER_STAR)
+                || stack.isOf(Items.NETHERITE_SWORD) || stack.isOf(Items.NETHERITE_HELMET)
+                || stack.isOf(Items.NETHERITE_CHESTPLATE) || stack.isOf(Items.NETHERITE_LEGGINGS)
+                || stack.isOf(Items.NETHERITE_BOOTS)
+                || (stack.getItem() instanceof BlockItem block && block.getBlock() instanceof ShulkerBoxBlock)) return 0;
+
+        if (stack.isOf(Items.DIAMOND) || stack.isOf(Items.DIAMOND_BLOCK) || stack.isOf(Items.GOLDEN_APPLE)
+                || stack.isOf(Items.END_CRYSTAL) || stack.isOf(Items.RESPAWN_ANCHOR) || stack.isOf(Items.BEACON)
+                || stack.isOf(Items.ENDER_PEARL) || stack.isOf(Items.GOLDEN_CARROT)
+                || isInvisPotion(stack) || isSpeedPotion(stack)) return 1;
+
+        ItemEnchantmentsComponent enchants = stack.get(DataComponentTypes.ENCHANTMENTS);
+        return enchants != null && !enchants.isEmpty() ? 1 : 2;
+    }
+
+    private boolean storeLoot(GenericContainerScreen screen) {
+        if (mc.player.age % 2 != 0) return false;
 
         boolean keptPotion = false, keptCarrot = false;
         int moved = 0;
 
         for (Slot slot : screen.getScreenHandler().slots) {
-            if (moved >= 4) return;
+            if (moved >= 4) return true;
 
             ItemStack stack = slot.getStack();
             if (!isPlayerSlot(screen, slot) || stack.isEmpty()) continue;
@@ -1133,21 +1341,52 @@ public class AutoWarden extends Module {
                 if (!moving.isEmpty()) stored.merge(moving.getName().getString(), moving.getCount(), Integer::sum);
             }
         }
+        return moved > 0;
     }
 
-    private void takeSupplies(GenericContainerScreen screen) {
-        if (mc.player.age % 2 != 0) return;
+    private boolean takeSupplies(GenericContainerScreen screen) {
+        if (mc.player.age % 2 != 0) return false;
 
         ItemStack cursor = screen.getScreenHandler().getCursorStack();
         Predicate<ItemStack> same = stack -> stack.isEmpty() || ItemStack.areItemsAndComponentsEqual(stack, cursor);
 
         if (!cursor.isEmpty()) {
-            if (!wantSupply(cursor)) click(screen, findSlot(screen, false, same), 0, SlotActionType.PICKUP);
-            else click(screen, findSlot(screen, true, same), 1, SlotActionType.PICKUP);
-            return;
+            // нужное кладём по одному правым кликом, а не всем стаком
+            if (wantSupply(cursor)) return click(screen, findSlot(screen, true, same), 1, SlotActionType.PICKUP);
+
+            // остаток возвращаем в тот же слот, откуда взяли: так стак не расползается по сундуку
+            Slot back = slotById(screen, supplySlot);
+            if (back == null || !same.test(back.getStack())) back = findSlot(screen, false, same);
+
+            // сундук забит — лучше унести лишнее с собой, чем уронить на пол при закрытии
+            if (back == null) back = findSlot(screen, true, ItemStack::isEmpty);
+
+            supplySlot = -1;
+            return click(screen, back, 0, SlotActionType.PICKUP);
         }
 
-        click(screen, findSlot(screen, false, this::wantSupply), 0, SlotActionType.PICKUP);
+        Slot source = smallestSupplySlot(screen);
+        if (source == null) return false;
+
+        supplySlot = source.id;
+        return click(screen, source, 0, SlotActionType.PICKUP);
+    }
+
+    /** Берём самый маленький подходящий стак: на курсоре не будет висеть пачка зелий, которую можно потерять. */
+    private Slot smallestSupplySlot(GenericContainerScreen screen) {
+        Slot best = null;
+
+        for (Slot slot : screen.getScreenHandler().slots) {
+            if (isPlayerSlot(screen, slot) || !wantSupply(slot.getStack())) continue;
+            if (best == null || slot.getStack().getCount() < best.getStack().getCount()) best = slot;
+            if (best.getStack().getCount() <= 1) break;
+        }
+        return best;
+    }
+
+    private Slot slotById(GenericContainerScreen screen, int id) {
+        if (id < 0 || id >= screen.getScreenHandler().slots.size()) return null;
+        return screen.getScreenHandler().slots.get(id);
     }
 
     private Slot findSlot(GenericContainerScreen screen, boolean player, Predicate<ItemStack> match) {
@@ -1161,9 +1400,10 @@ public class AutoWarden extends Module {
         return slot.id >= screen.getScreenHandler().getRows() * 9;
     }
 
-    private void click(GenericContainerScreen screen, Slot slot, int button, SlotActionType type) {
-        if (slot == null) return;
+    private boolean click(GenericContainerScreen screen, Slot slot, int button, SlotActionType type) {
+        if (slot == null) return false;
         mc.interactionManager.clickSlot(screen.getScreenHandler().syncId, slot.id, button, type, mc.player);
+        return true;
     }
 
     private boolean cursorBusy() {
@@ -1171,7 +1411,7 @@ public class AutoWarden extends Module {
     }
 
     private boolean closeContainer() {
-        if (mc.currentScreen instanceof GenericContainerScreen && mc.player.age % 2 == 0) mc.player.closeHandledScreen();
+        if (mc.currentScreen instanceof GenericContainerScreen) mc.player.closeHandledScreen();
         return !(mc.currentScreen instanceof GenericContainerScreen);
     }
 
@@ -1241,6 +1481,10 @@ public class AutoWarden extends Module {
             mc.player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(slot));
         }
 
+        holdUse();
+    }
+
+    private void holdUse() {
         useRequested = true;
         useHeld = true;
         mc.options.useKey.setPressed(true);
@@ -1250,28 +1494,51 @@ public class AutoWarden extends Module {
         if (!useHeld) return;
         useHeld = false;
         eating = false;
+        eatTick = 0;
         mc.options.useKey.setPressed(false);
     }
 
+    /** Уже жуём (или use-key вот-вот сработает) — прерывать нельзя. */
+    private boolean busyEating() {
+        if (!eating || mc.player == null) return false;
+        if (mc.player.isUsingItem()) return mc.player.getActiveItem().isOf(Items.GOLDEN_CARROT);
+        return eatTick > 0 && mc.player.age - eatTick <= 4;
+    }
+
     private void eatIfNeeded() {
-        if (mc.currentScreen != null || isDrinking() || nearCurrentChest(5.0)
-                || mc.player.getHungerManager().getFoodLevel() >= 17) {
+        // начатый укус доводим до конца: прерванный морковь не тратит, но и голод не лечит
+        boolean chewing = busyEating();
+
+        if (mc.currentScreen != null || isDrinking()
+                || (!chewing && (nearCurrentChest(5.0) || mc.player.getHungerManager().getFoodLevel() >= 17))) {
             eating = false;
+            eatTick = 0;
             return;
         }
 
         int slot = findSlot(stack -> stack.isOf(Items.GOLDEN_CARROT));
         if (slot < 0) {
             eating = false;
+            eatTick = 0;
             return;
         }
 
         eating = true;
         walkTarget = null;
+
+        // морковь уже в руке — только держим кнопку, переключение слота сорвало бы укус
+        if (mc.player.getMainHandStack().isOf(Items.GOLDEN_CARROT)) {
+            if (eatTick == 0) eatTick = mc.player.age;
+            holdUse();
+            return;
+        }
+
+        eatTick = 0;
         useSlot(slot);
     }
 
     private void freeHand() {
+        if (busyEating()) return;
         if (mc.player.getMainHandStack().isEmpty()) return;
 
         for (int slot = 0; slot < 9; slot++) {
@@ -1345,9 +1612,16 @@ public class AutoWarden extends Module {
         return false;
     }
 
+    /** Ближайший подходящий сундук. Тот, из которого уже брали, в приоритете; «не те» помечены на 2 минуты. */
     private BlockPos findNearbyChest(boolean hopper) {
         BlockPos origin = mc.player.getBlockPos();
         BlockPos.Mutable pos = new BlockPos.Mutable();
+        BlockPos remembered = hopper ? depositChest : supplyChest;
+        BlockPos best = null;
+        double bestSq = Double.MAX_VALUE;
+
+        long now = System.currentTimeMillis();
+        badChests.values().removeIf(expire -> expire < now);
 
         for (int dx = -4; dx <= 4; dx++) {
             for (int dy = -4; dy <= 4; dy++) {
@@ -1356,13 +1630,25 @@ public class AutoWarden extends Module {
                     if (!mc.world.getBlockState(pos).isOf(Blocks.CHEST) || isHopperChest(pos) != hopper) continue;
                     if (!mc.world.getBlockState(pos.up()).isAir()) continue;
 
-                    BlockHitResult hit = mc.world.raycast(new RaycastContext(mc.player.getEyePos(), Vec3d.ofCenter(pos),
-                            RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
-                    if (hit.getBlockPos().equals(pos)) return pos.toImmutable();
+                    boolean known = pos.equals(remembered);
+                    double distSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(pos));
+
+                    if (!known && (distSq >= bestSq || badChests.containsKey(pos))) continue;
+                    if (!visibleChest(pos)) continue;
+
+                    if (known) return pos.toImmutable();
+                    bestSq = distSq;
+                    best = pos.toImmutable();
                 }
             }
         }
-        return null;
+        return best;
+    }
+
+    private boolean visibleChest(BlockPos pos) {
+        BlockHitResult hit = mc.world.raycast(new RaycastContext(mc.player.getEyePos(), Vec3d.ofCenter(pos),
+                RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
+        return hit.getBlockPos().equals(pos);
     }
 
     private boolean isHopperChest(BlockPos pos) {
@@ -1407,15 +1693,46 @@ public class AutoWarden extends Module {
     }
 
     private void dropFloorTrash() {
-        if (!trash.getValue() || mc.currentScreen != null || mc.player.age % 4 != 0 || !isMoving()) return;
+        if (!trash.getValue() || mc.currentScreen != null || mc.player.age % 4 != 0) return;
+        if (busyEating() || isDrinking()) return;
 
-        for (int slot = 0; slot < 36; slot++) {
-            ItemStack stack = mc.player.getInventory().getStack(slot);
-            if (!isFloorTrash(stack)) continue;
+        // мусор из хотбара выкидываем как руками: берём в руку и жмём Q
+        for (int slot = 0; slot < 9; slot++) {
+            if (!isFloorTrash(mc.player.getInventory().getStack(slot))) continue;
 
-            mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, slot < 9 ? 36 + slot : slot, 1, SlotActionType.THROW, mc.player);
+            if (mc.player.getInventory().getSelectedSlot() != slot) {
+                mc.player.getInventory().setSelectedSlot(slot);
+                mc.player.networkHandler.sendPacket(new UpdateSelectedSlotC2SPacket(slot));
+                return;
+            }
+
+            mc.player.dropSelectedItem(true);
             return;
         }
+
+        // остальное сначала поднимаем в хотбар, и только стоя: клики по слотам на бегу видно со стороны
+        if (isMoving()) return;
+
+        for (int slot = 9; slot < 36; slot++) {
+            if (!isFloorTrash(mc.player.getInventory().getStack(slot))) continue;
+
+            mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, slot,
+                    swapSlot(), SlotActionType.SWAP, mc.player);
+            return;
+        }
+    }
+
+    /** Слот хотбара под обмен: сначала пустой, иначе первый без зелья и моркови. */
+    private int swapSlot() {
+        for (int slot = 0; slot < 9; slot++) {
+            if (mc.player.getInventory().getStack(slot).isEmpty()) return slot;
+        }
+
+        for (int slot = 0; slot < 9; slot++) {
+            ItemStack stack = mc.player.getInventory().getStack(slot);
+            if (!isInvisPotion(stack) && !isSpeedPotion(stack) && !stack.isOf(Items.GOLDEN_CARROT)) return slot;
+        }
+        return mc.player.getInventory().getSelectedSlot();
     }
 
     private boolean isFloorTrash(ItemStack stack) {
@@ -1457,6 +1774,20 @@ public class AutoWarden extends Module {
         return left > 0 ? left : -1L;
     }
 
+    private String posKey(BlockPos pos) {
+        return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+    }
+
+    private BlockPos parsePos(String value) {
+        try {
+            String[] parts = value.split(",");
+            return new BlockPos(Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim()),
+                    Integer.parseInt(parts[2].trim()));
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     private String chestKey(int anarchy, BlockPos chest) {
         return anarchy + ";" + chest.getX() + "," + chest.getY() + "," + chest.getZ();
     }
@@ -1491,6 +1822,8 @@ public class AutoWarden extends Module {
 
             root.add("chests", chests);
             root.add("opened", opened);
+            if (supplyChest != null) root.addProperty("supply", posKey(supplyChest));
+            if (depositChest != null) root.addProperty("deposit", posKey(depositChest));
             Files.writeString(timersFile(), root.toString());
         } catch (Exception ignored) {
         }
@@ -1503,6 +1836,8 @@ public class AutoWarden extends Module {
 
             JsonObject root = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
             period = root.has("period") ? root.get("period").getAsLong() : 0L;
+            if (root.has("supply")) supplyChest = parsePos(root.get("supply").getAsString());
+            if (root.has("deposit")) depositChest = parsePos(root.get("deposit").getAsString());
             long now = System.currentTimeMillis();
 
             JsonObject chests = root.getAsJsonObject("chests");
@@ -1781,6 +2116,13 @@ public class AutoWarden extends Module {
                 + (reach == null ? "нет" : String.valueOf(reach)) + " §7| ближайший приёмник §f"
                 + (far == null ? "не найден в радиусе 16" : far + " (" + (int) Math.sqrt(mc.player.squaredDistanceTo(Vec3d.ofCenter(far))) + " бл.)")
                 + " §7| экран §f" + (mc.currentScreen == null ? "нет" : mc.currentScreen.getClass().getSimpleName()));
+
+        ChatUtils.addChatMessage("§7[AW] сундук с зельями §f" + (supplyChest == null ? "не найден" : supplyChest.toShortString())
+                + " §7| приёмник §f" + (depositChest == null ? "не найден" : depositChest.toShortString())
+                + " §7| помечено «не те» §f" + badChests.size()
+                + " §7| точка склада §f" + (homeSpot == null ? "нет" : homeSpot.toShortString())
+                + " §7| караулю §f" + (currentChest != null && !chestReady(currentChest) && nearCurrentChest(5.0))
+                + " §7| стаков за тик §f" + lootSpeed.getValue().intValue());
 
         ChatUtils.addChatMessage("§7[AW] " + statsLine());
 

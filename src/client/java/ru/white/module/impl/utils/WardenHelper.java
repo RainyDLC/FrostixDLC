@@ -196,6 +196,11 @@ public class WardenHelper extends Module {
         return -1;
     }
 
+    /** Есть ли прямо сейчас голограмма с таймером над сундуком. */
+    public boolean hasHologram(BlockPos pos) {
+        return mc.world != null && readHologram(pos) >= 0;
+    }
+
     /** Читает голограмму над сундуком. Возвращает мс либо -1. */
     private long readHologram(BlockPos pos) {
         Box search = new Box(pos).expand(1.0, 4.0, 1.0);
