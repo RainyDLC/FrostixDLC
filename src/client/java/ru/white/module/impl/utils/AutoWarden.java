@@ -124,6 +124,7 @@ public class AutoWarden extends Module {
     private final TimerUtil hopTimer = new TimerUtil();
 
     private BlockPos walkTarget;
+    private int walkRange;
     private BlockPos progressTarget;
     private double progressBest;
     private int progressTick;
@@ -434,7 +435,14 @@ public class AutoWarden extends Module {
         RotationProcess.update(new Rotation((float) Math.toDegrees(Math.atan2(-relative.x, relative.z)), 20.0F), 25.0F, 25.0F, 2, 1);
     }
 
-    private void walkTo(BlockPos spot) {
+    /**
+     * Ставит точку хода. range — допуск: сколько блоков не дойти считается «дошли».
+     * Точки, посчитанные формулой (круг, отход), почти никогда не годятся как «встать ровно тут»,
+     * и без допуска Baritone доходит до ближайшего места, а потом бросает цель и бот стоит.
+     */
+    private void walkTo(BlockPos spot, int range) {
+        walkRange = range;
+
         if (spot == null) {
             walkTarget = null;
             return;
@@ -458,8 +466,8 @@ public class AutoWarden extends Module {
             return;
         }
 
-        if (Pathing.hasGoal(walkTarget) && Pathing.pathing()) return;
-        if (mc.player.age % 10 == 0 || (!isMoving() && mc.player.age % 5 == 0)) Pathing.goTo(walkTarget);
+        if (Pathing.hasGoal(walkTarget, walkRange) && Pathing.busy()) return;
+        if (mc.player.age % 10 == 0 || (!isMoving() && mc.player.age % 5 == 0)) Pathing.goTo(walkTarget, walkRange);
     }
 
     /** Направление хода: обычно прямо на цель, при обходе препятствия — вбок вдоль стены. */
@@ -512,13 +520,23 @@ public class AutoWarden extends Module {
 
         long idle = mc.player.age - progressTick;
 
-        // Baritone мог повести в обход, поэтому пока он реально идёт — терпим, но не дольше 30 секунд
-        if (Pathing.pathing()) {
+        // Baritone мог повести в обход, поэтому пока он идёт или считает — терпим, но не дольше 30 секунд
+        if (Pathing.busy()) {
             if (idle >= 600) giveUpTarget();
             return;
         }
 
-        if (idle < (Pathing.available() ? 100 : 30)) return;
+        // цель есть, а Baritone не идёт и не считает: значит он её бросил — дойти нельзя, ждать нечего
+        if (Pathing.available()) {
+            if (idle < 60) return;
+
+            // сундук пропускаем и берём другой; на складе и в отходе цель не сундук — просто ждём дальше
+            if (state == State.COLLECTING && currentChest != null) giveUpTarget();
+            else progressTick = mc.player.age;
+            return;
+        }
+
+        if (idle < 30) return;
 
         progressBest = distance;
         progressTick = mc.player.age;
@@ -593,7 +611,7 @@ public class AutoWarden extends Module {
         if (mc.world.getBlockState(mc.player.getBlockPos()).isIn(BlockTags.CANDLES)
                 || mc.world.getBlockState(mc.player.getBlockPos().down()).isIn(BlockTags.CANDLES)) return true;
 
-        return walkTarget != null && mc.player.age - progressTick > 20
+        return walkTarget != null && mc.player.age - progressTick > 20 && !Pathing.busy()
                 && !wardenAggro() && state == State.COLLECTING && inFarmZone() && mc.currentScreen == null
                 && !isMoving() && !isDrinking() && insideBlock();
     }
@@ -663,6 +681,7 @@ public class AutoWarden extends Module {
             }
 
             walkTarget = homeSpot;
+            walkRange = 1;
             return true;
         }
 
@@ -837,7 +856,7 @@ public class AutoWarden extends Module {
             }
         }
 
-        walkTo(best);
+        walkTo(best, 4);
     }
 
     private double safety(int x, int z, boolean warden) {
@@ -961,7 +980,7 @@ public class AutoWarden extends Module {
         // ждать столько не готовы, а уйти некуда — крутимся рядом, пока остаток не влезет в порог.
         // вплотную не крутимся: бегать от сундука и обратно — это и есть то самое топтание на месте
         if (!ready && remaining > Math.max(6000L, threshold) && distSq > 64.0) {
-            if (!travelToRecall()) walkTo(orbitSpot(target));
+            if (!travelToRecall()) walkTo(orbitSpot(target), 4);
             return;
         }
 
@@ -981,7 +1000,7 @@ public class AutoWarden extends Module {
         }
 
         if (distSq > 10.0) freeHand();
-        walkTo(sideSpot(target));
+        walkTo(sideSpot(target), 1);
     }
 
     private BlockPos orbitSpot(BlockPos chest) {
@@ -2149,7 +2168,7 @@ public class AutoWarden extends Module {
             return false;
         }
 
-        walkTo(recallChest);
+        walkTo(recallChest, 2);
         return true;
     }
 

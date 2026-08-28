@@ -5,6 +5,7 @@ import baritone.api.Settings;
 import baritone.api.behavior.IPathingBehavior;
 import baritone.api.pathing.goals.Goal;
 import baritone.api.pathing.goals.GoalBlock;
+import baritone.api.pathing.goals.GoalNear;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.registry.Registries;
@@ -37,9 +38,18 @@ public final class Pathing {
         return AVAILABLE;
     }
 
-    /** Ставит цель и запускает расчёт пути. */
+    /** Ставит цель и запускает расчёт пути ровно в этот блок. */
     public static void goTo(BlockPos pos) {
-        if (AVAILABLE && pos != null) Impl.goTo(pos);
+        goTo(pos, 0);
+    }
+
+    /**
+     * Ставит цель с допуском в range блоков. Ноль — встать ровно в этот блок; такую цель
+     * Baritone часто не может выполнить (в блоке нельзя стоять, на сундук нельзя встать),
+     * и тогда он доходит до ближайшей точки, а дальше каждый пересчёт падает и он бросает цель.
+     */
+    public static void goTo(BlockPos pos, int range) {
+        if (AVAILABLE && pos != null) Impl.goTo(pos, range);
     }
 
     /** Останавливает движение, если Baritone сейчас идёт. */
@@ -51,9 +61,19 @@ public final class Pathing {
         return AVAILABLE && Impl.pathing();
     }
 
+    /** true, если Baritone идёт по пути или считает новый. */
+    public static boolean busy() {
+        return AVAILABLE && Impl.busy();
+    }
+
     /** true, если текущая цель Baritone — ровно эта точка. */
     public static boolean hasGoal(BlockPos pos) {
-        return AVAILABLE && pos != null && Impl.hasGoal(pos);
+        return hasGoal(pos, 0);
+    }
+
+    /** true, если текущая цель Baritone — эта точка с этим допуском. */
+    public static boolean hasGoal(BlockPos pos, int range) {
+        return AVAILABLE && pos != null && Impl.hasGoal(pos, range);
     }
 
     public static String status() {
@@ -67,8 +87,12 @@ public final class Pathing {
 
     /** Вынесено в отдельный класс, чтобы классы Baritone грузились только когда мод реально есть. */
     private static final class Impl {
-        static void goTo(BlockPos pos) {
-            BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(pos));
+        static void goTo(BlockPos pos, int range) {
+            BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(goal(pos, range));
+        }
+
+        static Goal goal(BlockPos pos, int range) {
+            return range > 0 ? new GoalNear(pos, range) : new GoalBlock(pos);
         }
 
         static void cancel() {
@@ -80,15 +104,21 @@ public final class Pathing {
             return BaritoneAPI.getProvider().getPrimaryBaritone().getPathingBehavior().isPathing();
         }
 
-        static boolean hasGoal(BlockPos pos) {
+        static boolean busy() {
+            IPathingBehavior pathing = BaritoneAPI.getProvider().getPrimaryBaritone().getPathingBehavior();
+            return pathing.isPathing() || pathing.hasPath() || pathing.getInProgress().isPresent();
+        }
+
+        static boolean hasGoal(BlockPos pos, int range) {
             Goal goal = BaritoneAPI.getProvider().getPrimaryBaritone().getPathingBehavior().getGoal();
-            return goal instanceof GoalBlock block
-                    && block.x == pos.getX() && block.y == pos.getY() && block.z == pos.getZ();
+            return goal != null && goal.equals(goal(pos, range));
         }
 
         static String status() {
             IPathingBehavior pathing = BaritoneAPI.getProvider().getPrimaryBaritone().getPathingBehavior();
-            return pathing.isPathing() ? String.valueOf(pathing.getGoal()) : "стоит";
+            if (pathing.isPathing()) return "идёт " + pathing.getGoal();
+            if (pathing.getInProgress().isPresent()) return "считает " + pathing.getGoal();
+            return pathing.getGoal() == null ? "стоит" : "стоит, цель " + pathing.getGoal();
         }
 
         static void farmMode(boolean on) {
