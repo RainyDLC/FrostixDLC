@@ -15,7 +15,6 @@ import net.minecraft.component.type.NbtComponent;
 import net.minecraft.component.type.PotionContentsComponent;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityPose;
-import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.WardenEntity;
@@ -92,7 +91,6 @@ public class AutoWarden extends Module {
     public final ModeSetting loot = new ModeSetting(this, "Приоритеты лута", "Низкий", "Средний", "Высокий");
     public final BooleanSetting trash = new BooleanSetting(this, "Выкидывать мусор с пола", true);
     public final SliderSetting lootSpeed = new SliderSetting(this, "Стаков за тик", 4, 1, 27, 1);
-    public final BooleanSetting smart = new BooleanSetting(this, "Умный выбор анархии", true);
     public final SliderSetting waitLimit = new SliderSetting(this, "Ждать сундук, с", 30, 5, 180, 5);
     public final BooleanSetting telegram = new BooleanSetting(this, "Телеграм", false);
     public final StringSetting tgToken = new StringSetting(this, "Токен бота", "").setVisible(telegram::getValue);
@@ -122,9 +120,12 @@ public class AutoWarden extends Module {
     private BlockPos recallChest;
     private int recallAnarchy = -1;
     private final TimerUtil hopTimer = new TimerUtil();
+    private final TimerUtil switchTimer = new TimerUtil();
+    private final TimerUtil homeTimer = new TimerUtil();
 
     private BlockPos walkTarget;
     private int walkRange;
+    private Vec3d lastPos;
     private BlockPos progressTarget;
     private double progressBest;
     private int progressTick;
@@ -190,7 +191,9 @@ public class AutoWarden extends Module {
         // порядок из клик гуи не трогаем: подхватываем текущую анархию только когда пресет пустой
         if (anarchies.isEmpty() && ServerUtil.anarchy >= 0) anarchies.moveToFront(ServerUtil.anarchy);
 
-        farmIndex = 1;
+        // стоим на анархии из списка фермы — с неё и начинаем, лишний переход ни к чему
+        int current = indexOfAnarchy(ServerUtil.anarchy);
+        farmIndex = current >= 1 ? current : 1;
         boolean atHome = mc.player != null && onHomeAnarchy();
         state = atHome && (needSupplies() || hasLootToStore()) ? State.SAVE : State.COLLECTING;
         homeSpot = atHome ? mc.player.getBlockPos().toImmutable() : null;
@@ -212,6 +215,7 @@ public class AutoWarden extends Module {
         reportTarget = null;
         zone = null;
         walkTarget = null;
+        lastPos = null;
         wardenAggroUntil = 0;
         clearRecall();
         hopTimer.reset();
@@ -228,9 +232,6 @@ public class AutoWarden extends Module {
         lootItems.clear();
         loadTimers();
         loadStorage();
-
-        int best = bestNextAnarchy();
-        if (best >= 0) farmIndex = best;
 
         WardenHelper helper = WardenHelper.get();
         if (helper != null && !helper.isEnabled()) helper.setEnabled(true);
@@ -270,6 +271,7 @@ public class AutoWarden extends Module {
         useRequested = false;
         aiming = false;
 
+        checkTeleport();
         periodicReport();
 
         if (debug.getValue() && mc.player.age % 20 == 0) printDebug();
@@ -304,15 +306,16 @@ public class AutoWarden extends Module {
             return;
         }
 
+        // сайдбар после смены сервера приходит не сразу. Раньше тут стоял state = SAVE, и стоило
+        // переключиться на ферму, как склад забирал бота обратно, а склад отправлял снова на ферму
         if (ServerUtil.anarchy < 0) {
-            if (mc.player.age % 100 == 0 && mc.player.age > 300 && anarchies.home() >= 0) {
-                mc.player.networkHandler.sendChatCommand("an" + anarchies.home());
-            }
-            state = State.SAVE;
+            if (mc.player.age > 600) switchAnarchy(anarchies.home());
             return;
         }
 
-        if (mc.player.age % 100 == 0 && inFarmZone() && (zone == null || !inZoneBox(mc.player.getX(), mc.player.getZ()))) updateZone();
+        // зона живёт в своей четверти карты: после телепорта в другую её надо пересчитать,
+        // иначе бот считает, что фермы рядом нет, и вместо фарма жмёт home
+        if (zoneStale()) updateZone();
 
         if (mc.player.hasStatusEffect(StatusEffects.GLOWING) && playerNear(32.0) && !onHomeAnarchy()) {
             flee(false);
@@ -561,6 +564,29 @@ public class AutoWarden extends Module {
         detourTries = 0;
     }
 
+    /**
+     * Ловит телепорт по разрыву в позиции. У Baritone после него остаётся путь из старого места,
+     * и бывает, что новый он не считает, пока не пройдёшь пешком руками. Пометки сундуков тоже
+     * сбрасываем: зоны анархий стоят на одних координатах, и «недостижим» с прошлой там врёт.
+     */
+    private void checkTeleport() {
+        Vec3d pos = mc.player.getEntityPos();
+
+        if (lastPos != null && lastPos.squaredDistanceTo(pos) > 64.0) {
+            Pathing.cancel();
+            walkTarget = null;
+            currentChest = null;
+            resetProgress();
+            progressTick = mc.player.age;
+            unreachable.clear();
+            openAttempts.clear();
+            updateZone();
+
+            if (debug.getValue()) ChatUtils.addChatMessage("§7[AW] телепорт, сбрасываю путь и пометки");
+        }
+        lastPos = pos;
+    }
+
     /** Цель недостижима: помечаем сундук на минуту и идём искать другой. */
     private void giveUpTarget() {
         if (currentChest != null) {
@@ -608,12 +634,15 @@ public class AutoWarden extends Module {
      * Стоять у сундука и ждать таймер — это не «застрял», и дёргаться там нечего.
      */
     private boolean stuck() {
+        // пока идём, пьём или сидим в сундуке, дёргаться нечего: этим мы только рвём расчёт пути
+        if (mc.currentScreen != null || isMoving() || isDrinking()) return false;
+
+        // в свече бот вязнет намертво, и оттуда выпрыгиваем даже без цели хода
         if (mc.world.getBlockState(mc.player.getBlockPos()).isIn(BlockTags.CANDLES)
                 || mc.world.getBlockState(mc.player.getBlockPos().down()).isIn(BlockTags.CANDLES)) return true;
 
         return walkTarget != null && mc.player.age - progressTick > 20 && !Pathing.busy()
-                && !wardenAggro() && state == State.COLLECTING && inFarmZone() && mc.currentScreen == null
-                && !isMoving() && !isDrinking() && insideBlock();
+                && !wardenAggro() && state == State.COLLECTING && inFarmZone() && insideBlock();
     }
 
     private boolean insideBlock() {
@@ -633,6 +662,15 @@ public class AutoWarden extends Module {
         return mc.player.isUsingItem() && mc.player.getActiveItem().isOf(Items.POTION);
     }
 
+    /** Смена анархии: не чаще раза в пять секунд, иначе на каждый лишний an сервер отвечает «вы уже подключены». */
+    private boolean switchAnarchy(int number) {
+        if (number < 0 || mc.player.age < 40 || !switchTimer.every(5000L)) return false;
+
+        mc.player.networkHandler.sendChatCommand("an" + number);
+        if (debug.getValue()) ChatUtils.addChatMessage("§7[AW] перехожу на анархию §f" + number);
+        return true;
+    }
+
     private void save() {
         int home = anarchies.home();
 
@@ -643,9 +681,7 @@ public class AutoWarden extends Module {
             return;
         }
 
-        if (ServerUtil.anarchy != home && !ServerUtil.isPvp() && mc.player.age % 5 == 0 && mc.player.age > 5) {
-            mc.player.networkHandler.sendChatCommand("an" + home);
-        }
+        if (ServerUtil.anarchy != home && !ServerUtil.isPvp()) switchAnarchy(home);
 
         if (onHomeAnarchy()) {
             if (holdHome()) return;
@@ -693,8 +729,7 @@ public class AutoWarden extends Module {
     private void take() {
         if (died && anarchies.size() > 1) {
             int next = recallIndex();
-            if (next < 1) next = bestNextAnarchy();
-            farmIndex = next >= 1 ? next : (farmIndex + 1 >= anarchies.size() ? 1 : farmIndex + 1);
+            farmIndex = next >= 1 ? next : nextFarmIndex();
             died = false;
         }
 
@@ -747,7 +782,7 @@ public class AutoWarden extends Module {
 
         int target = anarchies.at(farmIndex);
         if (ServerUtil.anarchy != target) {
-            if (mc.player.age % 10 == 0 && mc.player.age > 10) mc.player.networkHandler.sendChatCommand("an" + target);
+            switchAnarchy(target);
             return;
         }
 
@@ -768,8 +803,10 @@ public class AutoWarden extends Module {
             if (slot >= 0 && mc.player.age > 20) useSlot(slot);
         }
 
+        // на телепорт домой стоим смирно: шаг в этот момент сервер считает попыткой сбежать и отменяет его
         if (!inFarmZone()) {
-            if (mc.player.age % 50 == 0) mc.player.networkHandler.sendChatCommand("home");
+            walkTarget = null;
+            if (mc.player.age > 40 && homeTimer.every(5000L)) mc.player.networkHandler.sendChatCommand("home");
             return;
         }
 
@@ -907,6 +944,14 @@ public class AutoWarden extends Module {
         zone = new Box(centerX - 75.0, y, centerZ - 75.0, centerX + 75.0, y, centerZ + 75.0);
     }
 
+    /** Зона привязана к своей четверти карты, и после телепорта в другую четверть она врёт. */
+    private boolean zoneStale() {
+        if (zone == null) return true;
+
+        return (zone.minX + zone.maxX < 0.0) != (mc.player.getX() < 0.0)
+                || (zone.minZ + zone.maxZ < 0.0) != (mc.player.getZ() < 0.0);
+    }
+
     private boolean inFarmZone() {
         return ServerUtil.getWorldType().equals("overworld") && inZoneBox(mc.player.getX(), mc.player.getZ());
     }
@@ -967,11 +1012,7 @@ public class AutoWarden extends Module {
                 hopTo(recall);
                 return;
             }
-            if (betterAnarchy()) {
-                hopAnarchy();
-                return;
-            }
-            // без умного выбора просто идём на следующую анархию: столько ждать мы не подписывались
+            // столько ждать мы не подписывались: идём на следующую анархию по списку
             if (hopNext()) return;
         }
 
@@ -1121,12 +1162,13 @@ public class AutoWarden extends Module {
     private boolean nearOpening(BlockPos chest) {
         if (chest == null || mc.player == null) return false;
         if (mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(chest)) > 36.0) return false;
-        if (!reachable(chest) || unreachable.containsKey(chest) || armoredNear(chest)) return false;
+        if (!reachable(chest) || unreachable.containsKey(chest)) return false;
         if (openAttempts.getOrDefault(chest, 0) >= 3) return false;
 
         long remaining = chestRemaining(chest);
         if (remaining < 0) return true;
-        if (wardenAggro() || wardenNear(chest) || playerNear(14.0)) return false;
+        // чужие рядом больше не повод уйти домой: сундук вот-вот откроется, уйдём — заберут его
+        if (wardenAggro() || wardenNear(chest)) return false;
 
         return inventoryCount() < 34 && remaining <= Math.max(8000L, Math.min(waitMs(), 15000L));
     }
@@ -1135,49 +1177,61 @@ public class AutoWarden extends Module {
     private boolean holdCurrent(BlockPos pick) {
         if (currentChest == null || pick == null || pick.equals(currentChest)) return false;
         if (!nearCurrentChest(5.0) || !reachable(currentChest)) return false;
-        if (wardenNear(currentChest) || armoredNear(currentChest) || unreachable.containsKey(currentChest)) return false;
+        if (wardenNear(currentChest) || unreachable.containsKey(currentChest)) return false;
         if (openAttempts.getOrDefault(currentChest, 0) >= 3) return false;
 
         long remaining = chestRemaining(currentChest);
-        return remaining < 0 || remaining <= waitMs();
+        if (remaining > waitMs()) return false;
+
+        // но караулить дольше, чем сходить за лучшим сундуком, смысла нет
+        return chestCost(currentChest) <= chestCost(pick) + 2000L;
     }
 
     private BlockPos pickChest() {
         BlockPos best = null;
-        int bestTier = 99;
-        double bestSq = Double.MAX_VALUE;
+        long bestCost = Long.MAX_VALUE;
 
         for (BlockPos chest : helper().getChests()) {
-            int tier = chestTier(chest);
-            if (tier >= 99) continue;
+            if (!chestUsable(chest)) continue;
 
-            double weightedSq = chestWeight(chest);
-
-            if (tier < bestTier || (tier == bestTier && weightedSq < bestSq)) {
-                bestTier = tier;
-                bestSq = weightedSq;
+            long cost = chestCost(chest);
+            if (cost < bestCost) {
+                bestCost = cost;
                 best = chest;
             }
         }
         return best;
     }
 
-    /** Приоритет сундука: 0 — готов и рядом, дальше по убыванию, 99 — не годится. */
-    private int chestTier(BlockPos chest) {
-        if (chest == null || !reachable(chest) || armoredNear(chest) || unreachable.containsKey(chest)) return 99;
-        if (openAttempts.getOrDefault(chest, 0) >= 3) return 99;
+    /**
+     * Годится ли сундук в цель: досягаем, не занят, не в чёрных списках и ждать его не дольше порога.
+     * Чужие игроки рядом ни на что не влияют: к спорным сундукам идём и караулим их наравне со всеми.
+     */
+    private boolean chestUsable(BlockPos chest) {
+        if (chest == null || !reachable(chest) || unreachable.containsKey(chest)) return false;
+        if (openAttempts.getOrDefault(chest, 0) >= 3) return false;
 
-        double distSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(chest));
         long remaining = chestRemaining(chest);
+        // раньше тут стояли зашитые пятнадцать секунд, и сундуки в пороге ожидания бот проходил мимо
+        if (remaining > waitMs()) return false;
 
-        if (wardenNear(chest) && !(remaining < 0 && distSq <= 16.0)) return 99;
+        boolean atChest = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(chest)) <= 20.0;
 
-        if (remaining < 0 && distSq <= 25.0) return 0;
-        if (remaining >= 0 && remaining <= 5000 && distSq <= 144.0) return 1;
-        if (remaining < 0 && distSq <= 144.0) return 2;
-        if (remaining >= 0 && remaining <= 15000 && distSq <= 625.0) return 3;
-        if (remaining < 0) return 4;
-        return 99;
+        // рядом с варденом берём только то, что готово и уже под носом
+        return !wardenNear(chest) || (remaining < 0 && atChest);
+    }
+
+    /**
+     * Через сколько миллисекунд сундук реально дадут облутать: что дольше — дорога до него или
+     * остаток таймера. Так сундук с таймером в пороге не пропускается, но и не выбирается вместо
+     * готового, до которого дойти быстрее, чем дождаться этого.
+     */
+    private long chestCost(BlockPos chest) {
+        long walk = (long) (Math.sqrt(chestWeight(chest)) * 250.0);
+        long wait = Math.max(chestRemaining(chest), 0L);
+
+        // при равном ожидании берём ближний: стоять у сундука лучше, чем бежать за таким же дальним
+        return Math.max(walk, wait) + walk / 4;
     }
 
     /** Дистанция для выбора: лезть наверх дороже, чем пройти по прямой. */
@@ -1194,26 +1248,21 @@ public class AutoWarden extends Module {
      */
     private BlockPos chooseChest(BlockPos pick) {
         if (pick == null || currentChest == null || pick.equals(currentChest)) return pick;
+        if (!chestUsable(currentChest)) return pick;
 
-        int current = chestTier(currentChest);
-        if (current >= 99) return pick;
-
-        int next = chestTier(pick);
-        if (next < current) return pick;
-        if (next > current) return currentChest;
-
-        // приоритет тот же — цель меняем только ради заметно более близкого сундука
-        return chestWeight(pick) + 16.0 < chestWeight(currentChest) ? pick : currentChest;
+        // цель меняем только ради заметно лучшего сундука, иначе выбор прыгает каждый тик
+        return chestCost(pick) + 2000L < chestCost(currentChest) ? pick : currentChest;
     }
 
+    /** Ничего в пороге ожидания нет: берём самый скорый, чтобы было у чего караулить или от чего уйти. */
     private BlockPos pickSoonest() {
         BlockPos best = null;
-        long bestMs = 45000;
+        long bestMs = Math.max(45000L, waitMs());
 
         for (BlockPos chest : helper().getChests()) {
             long remaining = chestRemaining(chest);
-            if (remaining >= 0 && remaining < bestMs && reachable(chest) && !wardenNear(chest)
-                    && !armoredNear(chest) && !unreachable.containsKey(chest)) {
+            if (remaining >= 0 && remaining < bestMs && reachable(chest)
+                    && !wardenNear(chest) && !unreachable.containsKey(chest)) {
                 bestMs = remaining;
                 best = chest;
             }
@@ -1228,18 +1277,6 @@ public class AutoWarden extends Module {
     private boolean wardenNear(BlockPos pos) {
         for (BlockPos spot : wardenSpots.keySet()) {
             if (spot.getSquaredDistance(pos) < 25.0) return true;
-        }
-        return false;
-    }
-
-    private boolean armoredNear(BlockPos pos) {
-        for (Entity entity : mc.world.getEntities()) {
-            if (!(entity instanceof PlayerEntity player) || player == mc.player) continue;
-            if (player.getEntityPos().squaredDistanceTo(Vec3d.ofCenter(pos)) >= 20.0) continue;
-
-            for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
-                if (!player.getEquippedStack(slot).isEmpty()) return true;
-            }
         }
         return false;
     }
@@ -2032,91 +2069,21 @@ public class AutoWarden extends Module {
         }
     }
 
-    private int bestNextAnarchy() {
-        if (!smart.getValue() || timers.isEmpty()) return -1;
-
-        int current = ServerUtil.anarchy;
-        int bestIndex = -1;
-        double bestScore = Double.NEGATIVE_INFINITY;
-
-        for (int index = 1; index < anarchies.size(); index++) {
-            int anarchy = anarchies.at(index);
-            if (anarchy == current) continue;
-
-            double score = anarchyScore(anarchy);
-            if (score > bestScore) {
-                bestScore = score;
-                bestIndex = index;
-            }
-        }
-        return Double.isInfinite(bestScore) ? -1 : bestIndex;
-    }
-
-    /** Оценка анархии: готовые сундуки важнее всего, дальше средний остаток таймеров и прошлый выхлоп. */
-    private double anarchyScore(int anarchy) {
-        if (anarchy < 0) return Double.NEGATIVE_INFINITY;
-
-        long now = System.currentTimeMillis();
-        String prefix = anarchy + ";";
-        long sum = 0L;
-        int count = 0, ready = 0;
-
-        for (Map.Entry<String, Long> entry : timers.entrySet()) {
-            if (!entry.getKey().startsWith(prefix)) continue;
-
-            long left = entry.getValue() - now;
-            if (left <= 30000L) ready++;
-            sum += Math.max(0L, left);
-            count++;
-        }
-
-        if (count == 0) return Double.NEGATIVE_INFINITY;
-
-        double average = (double) sum / count;
-        return ready * 40.0 - Math.min(120.0, average / 60000.0) * 2.0 + Math.min(30.0, stacksPerVisit(anarchy) * 3.0);
-    }
-
     private double stacksPerVisit(int anarchy) {
         int[] stats = anarchyStats.get(anarchy);
         return stats == null || stats[1] <= 0 ? 0.0 : (double) stats[0] / stats[1];
     }
 
-    private boolean betterAnarchy() {
-        if (!smart.getValue()) return false;
-
-        double current = anarchyScore(ServerUtil.anarchy);
-        if (Double.isInfinite(current)) return false;
-
-        int best = bestNextAnarchy();
-        return best >= 0 && anarchyScore(anarchies.at(best)) > current + 20.0;
-    }
-
-    /** Уходит с выработанной анархии: с лутом — через склад, пустым — сразу на лучшую. */
-    private void hopAnarchy() {
-        int best = bestNextAnarchy();
-        if (best < 1) return;
-
-        hopTimer.reset();
-        clearRecall();
-        notifyTg("[AW] умный переход на анархию " + anarchies.at(best));
-
-        if (hasLootToStore()) {
-            died = true;
-            state = State.ESCAPE;
-            return;
-        }
-        goFarm(best);
-    }
-
-    /** Простой переход на следующую анархию по списку, когда умный выбор выключен. */
+    /** Уходит с выработанной анархии на следующую по списку: порядок задаётся в клик гуи. */
     private boolean hopNext() {
-        if (smart.getValue() || anarchies.size() <= 2) return false;
+        if (anarchies.size() <= 2) return false;
 
-        int next = farmIndex + 1 >= anarchies.size() ? 1 : farmIndex + 1;
+        int next = nextFarmIndex();
         if (next == farmIndex) return false;
 
         hopTimer.reset();
         clearRecall();
+        notifyTg("[AW] перехожу на анархию " + anarchies.at(next));
 
         if (hasLootToStore()) {
             died = true;
@@ -2182,6 +2149,12 @@ public class AutoWarden extends Module {
         return recallChest == null ? -1 : indexOfAnarchy(recallAnarchy);
     }
 
+    /** Следующая анархия фермы по кругу: нулевой в списке стоит склад, поэтому его пропускаем. */
+    private int nextFarmIndex() {
+        if (anarchies.size() <= 1) return 1;
+        return farmIndex + 1 >= anarchies.size() ? 1 : farmIndex + 1;
+    }
+
     private int indexOfAnarchy(int anarchy) {
         if (anarchy < 0) return -1;
 
@@ -2193,8 +2166,6 @@ public class AutoWarden extends Module {
 
     /** Запомненный сундук на другой анархии, чей таймер уже дошёл до порога ожидания. */
     private Recall soonestRecall(long threshold) {
-        if (!smart.getValue()) return null;
-
         int current = ServerUtil.anarchy;
         long now = System.currentTimeMillis();
         Recall best = null;
@@ -2309,6 +2280,17 @@ public class AutoWarden extends Module {
                 + (reach == null ? "нет" : String.valueOf(reach)) + " §7| ближайший приёмник §f"
                 + (far == null ? "не найден в радиусе 16" : far + " (" + (int) Math.sqrt(mc.player.squaredDistanceTo(Vec3d.ofCenter(far))) + " бл.)")
                 + " §7| экран §f" + (mc.currentScreen == null ? "нет" : mc.currentScreen.getClass().getSimpleName()));
+
+        String chest = "нет";
+        if (currentChest != null) {
+            long left = chestRemaining(currentChest);
+            chest = currentChest.toShortString() + " (" + (left < 0 ? "готов" : left / 1000L + "с")
+                    + ", ждать всего " + chestCost(currentChest) / 1000L + "с)";
+        }
+
+        ChatUtils.addChatMessage("§7[AW] выбранный сундук §f" + chest
+                + " §7| порог ожидания §f" + waitLimit.getValue().intValue() + "с"
+                + " §7| в пороге сундуков §f" + helper().getChests().stream().filter(this::chestUsable).count());
 
         ChatUtils.addChatMessage("§7[AW] сундук с зельями §f" + (supplyChest == null ? "не найден" : supplyChest.toShortString())
                 + " §7| приёмник §f" + (depositChest == null ? "не найден" : depositChest.toShortString())
@@ -2466,7 +2448,7 @@ public class AutoWarden extends Module {
                 + "/stats — вскрытые сундуки и лут за сессию" + NL
                 + "/storage — сводка по складу" + NL
                 + "/loot — полный список лута на складе" + NL
-                + "/anarchy — анархии с оценками, /anarchy 305 — идти на неё" + NL
+                + "/anarchy — список анархий и что про них известно, /anarchy 305 — идти на неё" + NL
                 + "/where — где я, состояние, хп" + NL
                 + "/inv — что лежит в инвентаре" + NL
                 + "/on, /off — включить или выключить фарм" + NL
@@ -2481,11 +2463,9 @@ public class AutoWarden extends Module {
 
             for (int index = 1; index < anarchies.size(); index++) {
                 int anarchy = anarchies.at(index);
-                double score = anarchyScore(anarchy);
 
                 text.append(NL).append(index == farmIndex ? "> " : "  ").append(anarchy)
-                        .append(" — оценка ").append(Double.isInfinite(score) ? "нет данных" : String.format("%.1f", score))
-                        .append(", стеков за визит ").append(String.format("%.1f", stacksPerVisit(anarchy)))
+                        .append(" — стеков за визит ").append(String.format("%.1f", stacksPerVisit(anarchy)))
                         .append(", сундуков в памяти ").append(knownChests(anarchy))
                         .append(waitText(soonestOn(anarchy)));
             }
