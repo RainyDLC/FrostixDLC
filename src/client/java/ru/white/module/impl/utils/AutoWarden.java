@@ -96,7 +96,7 @@ public class AutoWarden extends Module {
     public final BooleanSetting camp = new BooleanSetting(this, "Караулить сундук", true);
     public final SliderSetting campWait = new SliderSetting(this, "Караулить за, с", 10, 2, 60, 1).setVisible(camp::getValue);
     public final BooleanSetting smart = new BooleanSetting(this, "Умный выбор анархии", true);
-    public final SliderSetting waitLimit = new SliderSetting(this, "Ждать сундук, с", 30, 5, 180, 5).setVisible(smart::getValue);
+    public final SliderSetting waitLimit = new SliderSetting(this, "Ждать сундук, с", 30, 5, 180, 5);
     public final BooleanSetting telegram = new BooleanSetting(this, "Телеграм", false);
     public final StringSetting tgToken = new StringSetting(this, "Токен бота", "").setVisible(telegram::getValue);
     public final StringSetting tgChat = new StringSetting(this, "ID чата", "", true).setVisible(telegram::getValue);
@@ -143,12 +143,20 @@ public class AutoWarden extends Module {
     private int homeTick;
     private int supplySlot = -1;
     private int containerTick;
+    private int swapSource = -1;
+    private int swapTarget = -1;
+    private int swapTick;
+    private int swapTries;
+    private int swapBlocked;
+    private ItemStack swapStack = ItemStack.EMPTY;
     private final Map<BlockPos, Long> badChests = new HashMap<>();
 
     private boolean useHeld;
     private boolean useRequested;
     private boolean eating;
     private int eatTick;
+    private int eatFood;
+    private int eatBlocked;
     private boolean aiming;
     private boolean lootCounted;
     private long period;
@@ -188,6 +196,13 @@ public class AutoWarden extends Module {
         homeSpot = atHome ? mc.player.getBlockPos().toImmutable() : null;
         homeTick = 0;
         supplySlot = -1;
+        swapSource = -1;
+        swapTarget = -1;
+        swapTick = 0;
+        swapTries = 0;
+        swapBlocked = 0;
+        swapStack = ItemStack.EMPTY;
+        eatBlocked = 0;
         died = false;
         lootCounted = false;
         looted = 0;
@@ -779,8 +794,7 @@ public class AutoWarden extends Module {
         }
 
         BlockPos near = pickChest();
-        if (mc.currentScreen instanceof GenericContainerScreen
-                || (near != null && chestRemaining(near) < 0 && mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(near)) <= 16.0)) {
+        if (mc.currentScreen instanceof GenericContainerScreen || nearOpening(near) || nearOpening(currentChest)) {
             routine();
             return;
         }
@@ -939,6 +953,8 @@ public class AutoWarden extends Module {
                 hopAnarchy();
                 return;
             }
+            // без умного выбора просто идём на следующую анархию: столько ждать мы не подписывались
+            if (hopNext()) return;
         }
 
         if (!ready && remaining > Math.max(6000L, campMs)) {
@@ -1067,6 +1083,20 @@ public class AutoWarden extends Module {
 
     private long campMs() {
         return camp.getValue() ? (long) (campWait.getValue() * 1000.0F) : 0L;
+    }
+
+    /** Стоим вплотную к сундуку, который откроется через секунды: уходить на склад рано. */
+    private boolean nearOpening(BlockPos chest) {
+        if (chest == null || mc.player == null) return false;
+        if (mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(chest)) > 36.0) return false;
+        if (!reachable(chest) || unreachable.containsKey(chest) || armoredNear(chest)) return false;
+        if (openAttempts.getOrDefault(chest, 0) >= 3) return false;
+
+        long remaining = chestRemaining(chest);
+        if (remaining < 0) return true;
+        if (wardenAggro() || wardenNear(chest) || playerNear(14.0)) return false;
+
+        return inventoryCount() < 34 && remaining <= Math.max(campMs(), 8000L);
     }
 
     /** Пока караулим сундук — не бросаем его из-за соседнего, иначе бот пляшет между ними. */
@@ -1468,11 +1498,7 @@ public class AutoWarden extends Module {
         if (slot < 0 || mc.currentScreen != null) return;
 
         if (slot >= 9) {
-            if (isMoving()) walkTarget = null;
-            if (mc.player.age % 4 == 0) {
-                mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, slot,
-                        mc.player.getInventory().getSelectedSlot(), SlotActionType.SWAP, mc.player);
-            }
+            swapToHotbar(slot, true);
             return;
         }
 
@@ -1498,19 +1524,20 @@ public class AutoWarden extends Module {
         mc.options.useKey.setPressed(false);
     }
 
-    /** Уже жуём (или use-key вот-вот сработает) — прерывать нельзя. */
+    /** Морковь в руке или уже во рту — трогать слоты и шагать нельзя, укус сорвётся. */
     private boolean busyEating() {
         if (!eating || mc.player == null) return false;
         if (mc.player.isUsingItem()) return mc.player.getActiveItem().isOf(Items.GOLDEN_CARROT);
-        return eatTick > 0 && mc.player.age - eatTick <= 4;
+        return mc.player.getMainHandStack().isOf(Items.GOLDEN_CARROT);
     }
 
     private void eatIfNeeded() {
         // начатый укус доводим до конца: прерванный морковь не тратит, но и голод не лечит
         boolean chewing = busyEating();
+        int food = mc.player.getHungerManager().getFoodLevel();
 
-        if (mc.currentScreen != null || isDrinking()
-                || (!chewing && (nearCurrentChest(5.0) || mc.player.getHungerManager().getFoodLevel() >= 17))) {
+        if (mc.currentScreen != null || isDrinking() || (!chewing && mc.player.age < eatBlocked)
+                || (!chewing && (nearCurrentChest(5.0) || food >= 17))) {
             eating = false;
             eatTick = 0;
             return;
@@ -1523,17 +1550,26 @@ public class AutoWarden extends Module {
             return;
         }
 
+        if (eatTick == 0 || food != eatFood) {
+            eatTick = mc.player.age;
+            eatFood = food;
+        } else if (mc.player.age - eatTick > 140) {
+            // семь секунд возимся без единицы сытости — сервер укус не проводит, не тормозим фарм
+            eating = false;
+            eatTick = 0;
+            eatBlocked = mc.player.age + 200;
+            return;
+        }
+
         eating = true;
         walkTarget = null;
 
         // морковь уже в руке — только держим кнопку, переключение слота сорвало бы укус
         if (mc.player.getMainHandStack().isOf(Items.GOLDEN_CARROT)) {
-            if (eatTick == 0) eatTick = mc.player.age;
             holdUse();
             return;
         }
 
-        eatTick = 0;
         useSlot(slot);
     }
 
@@ -1551,14 +1587,13 @@ public class AutoWarden extends Module {
             return;
         }
 
+        // весь хотбар занят: убираем предмет в инвентарь, но только стоя — на бегу клик откатится
         for (int slot = 9; slot < 36; slot++) {
             if (!mc.player.getInventory().getStack(slot).isEmpty()) continue;
+            if (isMoving() || mc.player.age % 8 != 0) return;
 
-            if (mc.player.age % 10 >= 2 && isMoving()) walkTarget = null;
-            if (mc.player.age % 10 == 4) {
-                mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, slot,
-                        mc.player.getInventory().getSelectedSlot(), SlotActionType.SWAP, mc.player);
-            }
+            mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, slot,
+                    mc.player.getInventory().getSelectedSlot(), SlotActionType.SWAP, mc.player);
             return;
         }
     }
@@ -1710,29 +1745,79 @@ public class AutoWarden extends Module {
             return;
         }
 
-        // остальное сначала поднимаем в хотбар, и только стоя: клики по слотам на бегу видно со стороны
-        if (isMoving()) return;
-
+        // остальное сначала поднимаем в хотбар — без остановки, мусор не стоит потерянного времени
         for (int slot = 9; slot < 36; slot++) {
             if (!isFloorTrash(mc.player.getInventory().getStack(slot))) continue;
 
-            mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, slot,
-                    swapSlot(), SlotActionType.SWAP, mc.player);
+            swapToHotbar(slot, false);
             return;
         }
     }
 
-    /** Слот хотбара под обмен: сначала пустой, иначе первый без зелья и моркови. */
-    private int swapSlot() {
-        for (int slot = 0; slot < 9; slot++) {
-            if (mc.player.getInventory().getStack(slot).isEmpty()) return slot;
+    /**
+     * Тащит предмет из инвентаря в хотбар. Клик по слотам проходит только когда стоим,
+     * а целевой слот перебираем после каждой неудачи: обмен с занятым слотом сервер может не принять.
+     */
+    private boolean swapToHotbar(int slot, boolean hold) {
+        if (mc.player == null || slot < 9 || slot > 35 || mc.currentScreen != null) return false;
+
+        if (slot != swapSource) {
+            swapSource = slot;
+            swapTarget = -1;
+            swapTries = 0;
         }
 
-        for (int slot = 0; slot < 9; slot++) {
-            ItemStack stack = mc.player.getInventory().getStack(slot);
-            if (!isInvisPotion(stack) && !isSpeedPotion(stack) && !stack.isOf(Items.GOLDEN_CARROT)) return slot;
+        if (mc.player.age < swapBlocked) return false;
+        if (hold) walkTarget = null;
+
+        // на бегу такие клики сервер часто откатывает назад, так что сначала останавливаемся
+        if (isMoving()) return false;
+        if (swapTick > 0 && mc.player.age - swapTick < 8) return false;
+
+        if (swapTarget >= 0) {
+            // в слоте лежит уже другое — прошлый клик прошёл, счёт неудач начинаем заново
+            boolean stuck = ItemStack.areItemsAndComponentsEqual(mc.player.getInventory().getStack(slot), swapStack);
+
+            swapTries = stuck ? swapTries + 1 : 0;
+            swapTarget = -1;
+
+            if (stuck && swapTries >= 5) {
+                if (debug.getValue()) {
+                    ChatUtils.addChatMessage("§7[AW] §cслот §f" + slot + " §cне перекладывается в хотбар");
+                }
+                swapSource = -1;
+                swapTries = 0;
+                swapBlocked = mc.player.age + 200;
+                return false;
+            }
         }
-        return mc.player.getInventory().getSelectedSlot();
+
+        swapTarget = hotbarTarget(swapTries);
+        swapTick = mc.player.age;
+        swapStack = mc.player.getInventory().getStack(slot).copy();
+        mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, slot,
+                swapTarget, SlotActionType.SWAP, mc.player);
+        return true;
+    }
+
+    /** Слот хотбара под обмен: сначала пустые, дальше по кругу без зелий и моркови. */
+    private int hotbarTarget(int attempt) {
+        int[] pool = new int[9];
+        int count = 0;
+
+        for (int slot = 0; slot < 9; slot++) {
+            if (mc.player.getInventory().getStack(slot).isEmpty()) pool[count++] = slot;
+        }
+
+        if (count == 0) {
+            for (int slot = 0; slot < 9; slot++) {
+                ItemStack stack = mc.player.getInventory().getStack(slot);
+                if (!isInvisPotion(stack) && !isSpeedPotion(stack) && !stack.isOf(Items.GOLDEN_CARROT)) pool[count++] = slot;
+            }
+        }
+
+        if (count == 0) return mc.player.getInventory().getSelectedSlot();
+        return pool[Math.floorMod(attempt, count)];
     }
 
     private boolean isFloorTrash(ItemStack stack) {
@@ -1933,6 +2018,26 @@ public class AutoWarden extends Module {
             return;
         }
         goFarm(best);
+    }
+
+    /** Простой переход на следующую анархию по списку, когда умный выбор выключен. */
+    private boolean hopNext() {
+        if (smart.getValue() || anarchies.size() <= 2) return false;
+
+        int next = farmIndex + 1 >= anarchies.size() ? 1 : farmIndex + 1;
+        if (next == farmIndex) return false;
+
+        hopTimer.reset();
+        clearRecall();
+
+        if (hasLootToStore()) {
+            died = true;
+            state = State.ESCAPE;
+            return true;
+        }
+
+        goFarm(next);
+        return true;
     }
 
     /** Идёт к запомненному сундуку на другой анархии: с лутом — сначала через склад. */
