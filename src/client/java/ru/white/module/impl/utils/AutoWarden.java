@@ -60,9 +60,9 @@ import ru.white.module.api.settings.impl.ModeSetting;
 import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.module.api.settings.impl.StringSetting;
 import ru.white.utils.math.ChatUtils;
-import ru.white.utils.math.MathUtil;
 import ru.white.utils.math.ServerUtil;
 import ru.white.utils.other.Instance;
+import ru.white.utils.other.Pathing;
 import ru.white.utils.other.TelegramBot;
 import ru.white.utils.other.TimerUtil;
 import ru.white.utils.player.MoveUtil;
@@ -121,6 +121,14 @@ public class AutoWarden extends Module {
     private final TimerUtil hopTimer = new TimerUtil();
 
     private BlockPos walkTarget;
+    private BlockPos progressTarget;
+    private double progressBest;
+    private int progressTick;
+    private int detourUntil;
+    private int detourSide;
+    private int detourTries;
+    private final Map<BlockPos, Integer> unreachable = new HashMap<>();
+
     private boolean useHeld;
     private boolean useRequested;
     private boolean eating;
@@ -173,6 +181,8 @@ public class AutoWarden extends Module {
         hopTimer.reset();
         wardenSpots.clear();
         openAttempts.clear();
+        unreachable.clear();
+        resetProgress();
         lootItems.clear();
         loadTimers();
         loadStorage();
@@ -183,7 +193,9 @@ public class AutoWarden extends Module {
         WardenHelper helper = WardenHelper.get();
         if (helper != null && !helper.isEnabled()) helper.setEnabled(true);
 
-        ChatUtils.addChatMessage("§7[AW] §fShift + Пробел §7— быстрое выключение функции");
+        Pathing.farmMode(true);
+        ChatUtils.addChatMessage("§7[AW] §fShift + Пробел §7— быстрое выключение функции"
+                + (Pathing.available() ? "" : " §7| §cпасфайндинга нет, иду напрямую"));
 
         syncTelegram();
         lastReport = System.currentTimeMillis();
@@ -197,6 +209,8 @@ public class AutoWarden extends Module {
         saveStorage();
         notifyTg("[AW] выключен. " + statsLine());
         releaseUse();
+        Pathing.cancel();
+        Pathing.farmMode(false);
         walkTarget = null;
         currentChest = null;
         eating = false;
@@ -274,9 +288,11 @@ public class AutoWarden extends Module {
             case ESCAPE -> escape();
         }
 
-        if (walkTarget != null && !aiming && mc.currentScreen == null) lookAtWalkTarget();
+        if (Pathing.available()) driveBaritone();
+        else if (walkTarget != null && !aiming && mc.currentScreen == null) lookAtWalkTarget();
+
         if (!useRequested) releaseUse();
-        if (stuck() && mc.player.age % 15 == 0) walkTarget = null;
+        updateWalkProgress();
     }
 
     @EventHandler
@@ -327,8 +343,8 @@ public class AutoWarden extends Module {
 
         if (!mc.player.isOnGround() && !mc.player.isClimbing()) event.setJumping(false);
 
-        if (walkTarget != null && mc.currentScreen == null) {
-            Vec3d relative = Vec3d.ofCenter(walkTarget).subtract(mc.player.getEntityPos());
+        if (walkTarget != null && mc.currentScreen == null && !Pathing.available()) {
+            Vec3d relative = walkVector();
             PlayerInput input = MoveUtil.getDirectionalInputForDegrees(event.getInput(),
                     MoveUtil.getDegreesRelativeToView(relative, mc.player.getYaw()), 20.0F);
 
@@ -338,14 +354,17 @@ public class AutoWarden extends Module {
                     input.jump() || needJump(relative), input.sneak(), input.sprint() || sprint));
         }
 
-        if (stuck() && mc.player.getMainHandStack().isEmpty() && !chestNear(3.0)) {
-            boolean positive = mc.player.age % 10 <= MathUtil.random(3.0, 8.0);
-            event.setDirectional(positive, !positive, positive, !positive);
+        if ((walkTarget == null || Pathing.available()) && stuck()
+                && mc.player.getMainHandStack().isEmpty() && !chestNear(3.0)) {
+            boolean side = mc.player.age % 40 < 20;
+            event.setDirectional(true, false, side, !side);
+            event.setJumping(mc.player.isOnGround());
         }
     }
 
     private boolean needJump(Vec3d relative) {
         if (!mc.player.isOnGround()) return false;
+        if (mc.world.getBlockState(mc.player.getBlockPos()).isIn(BlockTags.CANDLES)) return true;
 
         double length = relative.horizontalLength();
         if (relative.y > 0.6 && length < 2.0) return true;
@@ -373,6 +392,143 @@ public class AutoWarden extends Module {
             return;
         }
         walkTarget = new BlockPos(clampX(spot.getX()), spot.getY(), clampZ(spot.getZ()));
+    }
+
+    /**
+     * Ведёт Baritone к walkTarget. Цель переставляем не чаще раза в 10 тиков
+     * (и раз в 5, если стоим на месте), иначе он всё время пересчитывает путь.
+     */
+    private void driveBaritone() {
+        if (walkTarget == null || mc.currentScreen != null) {
+            Pathing.cancel();
+            return;
+        }
+
+        if (Pathing.hasGoal(walkTarget) && Pathing.pathing()) return;
+        if (mc.player.age % 10 == 0 || (!isMoving() && mc.player.age % 5 == 0)) Pathing.goTo(walkTarget);
+    }
+
+    /** Направление хода: обычно прямо на цель, при обходе препятствия — вбок вдоль стены. */
+    private Vec3d walkVector() {
+        Vec3d relative = Vec3d.ofCenter(walkTarget).subtract(mc.player.getEntityPos());
+        if (detourSide == 0 || mc.player.age >= detourUntil) return relative;
+
+        double length = relative.horizontalLength();
+        if (length < 0.001) return relative;
+
+        double dirX = relative.x / length;
+        double dirZ = relative.z / length;
+        return new Vec3d(-dirZ * detourSide * 3.0 + dirX, relative.y, dirX * detourSide * 3.0 + dirZ);
+    }
+
+    /**
+     * Следит за прогрессом к цели: если полторы секунды не приближаемся, значит уперлись.
+     * Вместо дрожания на месте обходим препятствие боком по свободной стороне,
+     * а после трёх неудачных попыток бросаем цель и берём другой сундук.
+     */
+    private void updateWalkProgress() {
+        unreachable.values().removeIf(expire -> mc.player.age > expire);
+
+        if (walkTarget == null || mc.currentScreen != null || wardenAggro() || isDrinking()) {
+            resetProgress();
+            return;
+        }
+
+        double distance = Math.hypot(walkTarget.getX() + 0.5 - mc.player.getX(),
+                walkTarget.getZ() + 0.5 - mc.player.getZ());
+
+        if (progressTarget == null || progressTarget.getSquaredDistance(walkTarget) > 9.0) {
+            progressTarget = walkTarget;
+            progressBest = distance;
+            progressTick = mc.player.age;
+            detourUntil = 0;
+            detourSide = 0;
+            detourTries = 0;
+            return;
+        }
+
+        if (distance < progressBest - 0.4) {
+            progressBest = distance;
+            progressTick = mc.player.age;
+            detourTries = 0;
+            return;
+        }
+
+        if (mc.player.age < detourUntil) return;
+
+        long idle = mc.player.age - progressTick;
+
+        // Baritone мог повести в обход, поэтому пока он реально идёт — терпим, но не дольше 30 секунд
+        if (Pathing.pathing()) {
+            if (idle >= 600) giveUpTarget();
+            return;
+        }
+
+        if (idle < (Pathing.available() ? 100 : 30)) return;
+
+        progressBest = distance;
+        progressTick = mc.player.age;
+        detourTries++;
+
+        if (detourTries > 3) {
+            giveUpTarget();
+            return;
+        }
+
+        detourSide = Pathing.available() ? 0 : pickDetourSide();
+        detourUntil = mc.player.age + 20 + detourTries * 10;
+
+        if (debug.getValue()) ChatUtils.addChatMessage("§7[AW] не приближаюсь к цели §7(попытка "
+                + detourTries + ")" + (detourSide == 0 ? "" : ", обхожу §f" + (detourSide > 0 ? "вправо" : "влево")));
+    }
+
+    private void resetProgress() {
+        progressTarget = null;
+        detourUntil = 0;
+        detourSide = 0;
+        detourTries = 0;
+    }
+
+    /** Цель недостижима: помечаем сундук на минуту и идём искать другой. */
+    private void giveUpTarget() {
+        if (currentChest != null) {
+            unreachable.put(currentChest, mc.player.age + 1200);
+            if (debug.getValue()) ChatUtils.addChatMessage("§7[AW] сундук недостижим, пропускаю §f"
+                    + currentChest.toShortString());
+        }
+        currentChest = null;
+        walkTarget = null;
+        resetProgress();
+    }
+
+    /** Сторона обхода: та, где вбок больше свободного места. */
+    private int pickDetourSide() {
+        Vec3d relative = Vec3d.ofCenter(walkTarget).subtract(mc.player.getEntityPos());
+        double length = relative.horizontalLength();
+        if (length < 0.001) return 1;
+
+        double dirX = relative.x / length;
+        double dirZ = relative.z / length;
+        int right = openSteps(-dirZ, dirX);
+        int left = openSteps(dirZ, -dirX);
+
+        if (right == left) return detourSide != 0 ? -detourSide : (mc.player.age % 2 == 0 ? 1 : -1);
+        return right > left ? 1 : -1;
+    }
+
+    /** Сколько шагов вбок свободно, максимум четыре. */
+    private int openSteps(double x, double z) {
+        for (int step = 1; step <= 4; step++) {
+            BlockPos pos = BlockPos.ofFloored(mc.player.getX() + x * step,
+                    mc.player.getY() + 0.1, mc.player.getZ() + z * step);
+            if (!passable(pos)) return step - 1;
+        }
+        return 4;
+    }
+
+    private boolean passable(BlockPos pos) {
+        return mc.world.getBlockState(pos).getCollisionShape(mc.world, pos).isEmpty()
+                && mc.world.getBlockState(pos.up()).getCollisionShape(mc.world, pos.up()).isEmpty();
     }
 
     private boolean stuck() {
@@ -807,7 +963,7 @@ public class AutoWarden extends Module {
         double bestSq = Double.MAX_VALUE;
 
         for (BlockPos chest : helper().getChests()) {
-            if (!reachable(chest) || armoredNear(chest)) continue;
+            if (!reachable(chest) || armoredNear(chest) || unreachable.containsKey(chest)) continue;
 
             double distSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(chest));
             long remaining = chestRemaining(chest);
@@ -843,7 +999,8 @@ public class AutoWarden extends Module {
 
         for (BlockPos chest : helper().getChests()) {
             long remaining = chestRemaining(chest);
-            if (remaining >= 0 && remaining < bestMs && reachable(chest) && !wardenNear(chest) && !armoredNear(chest)) {
+            if (remaining >= 0 && remaining < bestMs && reachable(chest) && !wardenNear(chest)
+                    && !armoredNear(chest) && !unreachable.containsKey(chest)) {
                 bestMs = remaining;
                 best = chest;
             }
@@ -1477,6 +1634,7 @@ public class AutoWarden extends Module {
 
         if (!inZoneBox(recallChest.getX(), recallChest.getZ())
                 || mc.player.squaredDistanceTo(Vec3d.ofCenter(recallChest)) <= 400.0
+                || unreachable.containsKey(recallChest)
                 || helper().getChests().contains(recallChest)) {
             clearRecall();
             return false;
@@ -1609,11 +1767,13 @@ public class AutoWarden extends Module {
                 + "§7, нужна §f" + (anarchies.isEmpty() ? "нет" : String.valueOf(anarchies.at(farmIndex)))
                 + " §7(список: §f" + anarchies.size() + "§7) | в зоне фермы §f" + inFarmZone()
                 + " §7| сундуков у ESP §f" + helper().getChests().size() + " §7| варден §f" + wardenAggro()
-                + " §7| пвп §f" + ServerUtil.isPvp() + " §7| цель §f" + (walkTarget == null ? "нет" : String.valueOf(walkTarget)));
+                + " §7| пвп §f" + ServerUtil.isPvp() + " §7| цель §f" + (walkTarget == null ? "нет" : String.valueOf(walkTarget))
+                + " §7| baritone: §f" + Pathing.status());
 
         ChatUtils.addChatMessage("§7[AW] застрял §c" + stuck() + " §7| двигаюсь §f" + isMoving() + " §7| в блоке §f" + insideBlock()
                 + " §7| свечи §f" + (mc.world.getBlockState(mc.player.getBlockPos()).isIn(BlockTags.CANDLES)
-                || mc.world.getBlockState(mc.player.getBlockPos().down()).isIn(BlockTags.CANDLES)));
+                || mc.world.getBlockState(mc.player.getBlockPos().down()).isIn(BlockTags.CANDLES))
+                + " §7| обход §f" + detourTries + "/3 §7| недоступных §f" + unreachable.size());
 
         BlockPos reach = findNearbyChest(true);
         BlockPos far = hopperChestFar();
