@@ -92,9 +92,6 @@ public class AutoWarden extends Module {
     public final ModeSetting loot = new ModeSetting(this, "Приоритеты лута", "Низкий", "Средний", "Высокий");
     public final BooleanSetting trash = new BooleanSetting(this, "Выкидывать мусор с пола", true);
     public final SliderSetting lootSpeed = new SliderSetting(this, "Стаков за тик", 4, 1, 27, 1);
-    public final BooleanSetting homeAnchor = new BooleanSetting(this, "Не уходить со склада", true);
-    public final BooleanSetting camp = new BooleanSetting(this, "Караулить сундук", true);
-    public final SliderSetting campWait = new SliderSetting(this, "Караулить за, с", 10, 2, 60, 1).setVisible(camp::getValue);
     public final BooleanSetting smart = new BooleanSetting(this, "Умный выбор анархии", true);
     public final SliderSetting waitLimit = new SliderSetting(this, "Ждать сундук, с", 30, 5, 180, 5);
     public final BooleanSetting telegram = new BooleanSetting(this, "Телеграм", false);
@@ -628,10 +625,6 @@ public class AutoWarden extends Module {
      * и Baritone уводит бота от «своих» сундуков к соседним.
      */
     private boolean holdHome() {
-        if (!homeAnchor.getValue()) {
-            return false;
-        }
-
         if (homeSpot == null) {
             homeSpot = mc.player.getBlockPos().toImmutable();
             if (debug.getValue()) ChatUtils.addChatMessage("§7[AW] точка склада §f" + homeSpot.toShortString());
@@ -928,20 +921,9 @@ public class AutoWarden extends Module {
         }
 
         long remaining = chestRemaining(target);
-        long campMs = campMs();
+        long threshold = waitMs();
 
         boolean ready = chestReady(target);
-
-        if (!ready && remaining > Math.max(1000L, campMs) && playerNearPos(target, 7.0)) {
-            BlockPos spot = sideSpot(target);
-            if (spot != null) {
-                if (mc.player.squaredDistanceTo(Vec3d.ofCenter(spot)) > 2.0) walkTo(spot);
-                else walkTarget = null;
-            }
-            return;
-        }
-
-        long threshold = (long) (waitLimit.getValue() * 1000.0F);
 
         if (!ready && remaining > threshold && mc.player.age % 20 == 0 && hopTimer.hasTimeElapsed(12000)) {
             Recall recall = soonestRecall(threshold);
@@ -957,7 +939,8 @@ public class AutoWarden extends Module {
             if (hopNext()) return;
         }
 
-        if (!ready && remaining > Math.max(6000L, campMs)) {
+        // ждать столько не готовы, а уйти некуда — крутимся рядом, пока остаток не влезет в порог
+        if (!ready && remaining > Math.max(6000L, threshold)) {
             if (!travelToRecall()) walkTo(orbitSpot(target));
             return;
         }
@@ -1081,8 +1064,9 @@ public class AutoWarden extends Module {
         return remaining < 0 || (remaining <= 2500 && !helper().hasHologram(chest));
     }
 
-    private long campMs() {
-        return camp.getValue() ? (long) (campWait.getValue() * 1000.0F) : 0L;
+    /** Сколько готовы ждать сундук: и караулим, и уходим с анархии по этому порогу. */
+    private long waitMs() {
+        return (long) (waitLimit.getValue() * 1000.0F);
     }
 
     /** Стоим вплотную к сундуку, который откроется через секунды: уходить на склад рано. */
@@ -1096,18 +1080,18 @@ public class AutoWarden extends Module {
         if (remaining < 0) return true;
         if (wardenAggro() || wardenNear(chest) || playerNear(14.0)) return false;
 
-        return inventoryCount() < 34 && remaining <= Math.max(campMs(), 8000L);
+        return inventoryCount() < 34 && remaining <= Math.max(8000L, Math.min(waitMs(), 15000L));
     }
 
     /** Пока караулим сундук — не бросаем его из-за соседнего, иначе бот пляшет между ними. */
     private boolean holdCurrent(BlockPos pick) {
-        if (!camp.getValue() || currentChest == null || pick == null || pick.equals(currentChest)) return false;
+        if (currentChest == null || pick == null || pick.equals(currentChest)) return false;
         if (!nearCurrentChest(5.0) || !reachable(currentChest)) return false;
         if (wardenNear(currentChest) || armoredNear(currentChest) || unreachable.containsKey(currentChest)) return false;
         if (openAttempts.getOrDefault(currentChest, 0) >= 3) return false;
 
         long remaining = chestRemaining(currentChest);
-        return remaining < 0 || remaining <= campMs();
+        return remaining < 0 || remaining <= waitMs();
     }
 
     private BlockPos pickChest() {
@@ -1188,14 +1172,6 @@ public class AutoWarden extends Module {
         for (Entity entity : mc.world.getEntities()) {
             if (!(entity instanceof PlayerEntity player) || player == mc.player) continue;
             if (mc.player.squaredDistanceTo(player) < range * range) return true;
-        }
-        return false;
-    }
-
-    private boolean playerNearPos(BlockPos pos, double range) {
-        for (Entity entity : mc.world.getEntities()) {
-            if (!(entity instanceof PlayerEntity player) || player == mc.player) continue;
-            if (player.getEntityPos().squaredDistanceTo(Vec3d.ofCenter(pos)) < range * range) return true;
         }
         return false;
     }
