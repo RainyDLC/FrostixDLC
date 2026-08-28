@@ -151,6 +151,16 @@ public class AutoWarden extends Module {
     private int swapBlocked;
     private ItemStack swapStack = ItemStack.EMPTY;
     private final Map<BlockPos, Long> badChests = new HashMap<>();
+    private int noChestTick;
+    private int invisWait;
+    private int screenTick;
+    private long reportAt;
+
+    // сторож зависаний: когда бот последний раз делал что-то полезное и сколько раз его расшевеливали
+    private Vec3d aliveSpot;
+    private int aliveTick;
+    private int idleFixTick;
+    private int idleFixes;
 
     private boolean useHeld;
     private boolean useRequested;
@@ -227,7 +237,15 @@ public class AutoWarden extends Module {
         openClick = null;
         openTick = 0;
         lootTick = 0;
+        screenTick = 0;
         containerTick = 0;
+        noChestTick = 0;
+        invisWait = 0;
+        reportAt = 0L;
+        aliveSpot = null;
+        aliveTick = mc.player == null ? 0 : mc.player.age;
+        idleFixTick = 0;
+        idleFixes = 0;
         resetProgress();
         lootItems.clear();
         loadTimers();
@@ -292,8 +310,10 @@ public class AutoWarden extends Module {
         }
         wardenSpots.values().removeIf(expire -> mc.player.age > expire);
 
+        // репорт отправляем сразу после возрождения: мёртвым сервер его не принимает. Но ждём это
+        // окно не вечно — упущенное оставляло модуль стоять с целью репорта и не делать больше ничего
         if (reportTarget != null) {
-            if (mc.player.age >= 20 && mc.player.age < 30) {
+            if (mc.player.age >= 20 && (mc.player.age < 30 || System.currentTimeMillis() - reportAt > 5000L)) {
                 mc.player.networkHandler.sendChatMessage("/report " + reportTarget + " чит");
                 reportTarget = null;
             }
@@ -329,10 +349,15 @@ public class AutoWarden extends Module {
         if (mc.currentScreen == null) {
             lootCounted = false;
             lootTick = 0;
+            screenTick = 0;
+        } else if (screenTick == 0) {
+            screenTick = mc.player.age;
         }
 
         // через минуту прощаем сундуки, которые не открылись: помеха могла уйти
         if (mc.player.age % 1200 == 0) openAttempts.clear();
+
+        watchdog();
 
         switch (state) {
             case SAVE -> save();
@@ -379,6 +404,7 @@ public class AutoWarden extends Module {
 
         if (!mc.player.hasStatusEffect(StatusEffects.GLOWING) && !chestNear(2.0)) {
             reportTarget = text.split("Вас убил ")[1].split(",")[0].trim();
+            reportAt = System.currentTimeMillis();
         }
     }
 
@@ -599,6 +625,116 @@ public class AutoWarden extends Module {
         resetProgress();
     }
 
+    /**
+     * Общий сторож от зависаний. Работой считаем всё, где бот и правда что-то делает: идёт, лутает
+     * в открытом сундуке, пьёт, ест, уходит от вардена, караулит сундук с идущим таймером.
+     * Двенадцать секунд без работы — и мы сами делаем то, ради чего иначе пришлось бы перезапускать
+     * модуль. Не помогло — уходим на склад, совсем упрямое зависание лечим сменой анархии.
+     */
+    private void watchdog() {
+        // без настроенного списка анархий модуль и должен стоять и ругаться в чат — лечить нечего
+        if (anarchies.home() < 0 || anarchies.size() <= 1) return;
+
+        Vec3d pos = mc.player.getEntityPos();
+
+        // после возрождения и смены мира отсчёт тиков начинается заново, и разница уходит в минус
+        if (aliveTick > mc.player.age) aliveTick = mc.player.age;
+
+        if (aliveSpot == null || aliveSpot.squaredDistanceTo(pos) > 1.0 || working()) {
+            aliveSpot = pos;
+            aliveTick = mc.player.age;
+        }
+
+        // минуту бот работал сам — прошлые попытки не в счёт, в следующий раз начинаем с мягкой
+        if (idleFixes > 0 && mc.player.age - idleFixTick > 1200) idleFixes = 0;
+        if (mc.player.age - aliveTick < 240) return;
+
+        aliveSpot = pos;
+        aliveTick = mc.player.age;
+        idleFixTick = mc.player.age;
+        idleFixes++;
+        unjam();
+    }
+
+    /** Делает ли бот прямо сейчас что-то осмысленное. Ход считается по смещению, а не по скорости:
+     * дрожать на месте, упираясь в стену, — это и есть зависание, которое мы ловим. */
+    private boolean working() {
+        if (mc.currentScreen != null || isDrinking() || busyEating()) return true;
+        if (wardenAggro() || mc.player.age < 60) return true;
+
+        // караулить сундук с идущим таймером — работа, а стоять у готового и не открывать его — нет.
+        // дистанцию берём ту же, на какой routine встаёт в караул, иначе сторож ловил бы сам караул
+        return state == State.COLLECTING && currentChest != null
+                && mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(currentChest)) <= 20.0
+                && chestRemaining(currentChest) > 0L;
+    }
+
+    /** Расшевеливает бота: чем больше зависаний подряд, тем крупнее средства. */
+    private void unjam() {
+        if (debug.getValue()) {
+            ChatUtils.addChatMessage("§7[AW] §cничего не происходит 12 секунд§7, расшевеливаю (шаг §f"
+                    + idleFixes + "§7)");
+        }
+
+        // шаг первый: то же, что даёт перезапуск модуля — снимаем зависшие клики, путь и цель
+        releaseUse();
+        closeContainer();
+        swapSource = -1;
+        swapTarget = -1;
+        swapTries = 0;
+        swapTick = 0;
+        swapBlocked = 0;
+        swapStack = ItemStack.EMPTY;
+        eating = false;
+        eatTick = 0;
+        eatBlocked = 0;
+        invisWait = 0;
+        containerTick = 0;
+        noChestTick = 0;
+        supplySlot = -1;
+        openTarget = null;
+        openClick = null;
+        openTick = 0;
+        badChests.clear();
+        Pathing.cancel();
+        giveUpTarget();
+
+        if (idleFixes < 2) return;
+
+        // шаг второй: пометки сундуков могли соврать, а точка склада — оказаться не у сундуков
+        unreachable.clear();
+        openAttempts.clear();
+        clearRecall();
+        homeSpot = null;
+        homeTick = 0;
+
+        if (onHomeAnarchy()) {
+            state = hasLootToStore() || needSupplies() ? State.SAVE : State.COLLECTING;
+        } else {
+            died = true;
+            state = State.ESCAPE;
+            if (homeTimer.every(5000L)) mc.player.networkHandler.sendChatCommand("home");
+        }
+
+        if (idleFixes < 3) return;
+
+        // шаг третий: с места нас не сдвинуть — меняем сервер, после перехода всё начнётся заново
+        int next = nextFarmIndex();
+
+        if (next == farmIndex && !onHomeAnarchy()) {
+            // фермовая анархия одна: тогда сервер меняем через склад
+            died = true;
+            state = State.SAVE;
+            notifyTg("[AW] завис на анархии " + ServerUtil.anarchy + ", ухожу на склад");
+            return;
+        }
+
+        farmIndex = next;
+        state = State.COLLECTING;
+        notifyTg("[AW] завис на анархии " + ServerUtil.anarchy + ", ухожу на анархию " + anarchies.at(next));
+        switchAnarchy(anarchies.at(next));
+    }
+
     /** Сторона обхода: та, где вбок больше свободного места. */
     private int pickDetourSide() {
         Vec3d relative = Vec3d.ofCenter(walkTarget).subtract(mc.player.getEntityPos());
@@ -681,13 +817,17 @@ public class AutoWarden extends Module {
             return;
         }
 
-        if (ServerUtil.anarchy != home && !ServerUtil.isPvp()) switchAnarchy(home);
-
-        if (onHomeAnarchy()) {
-            if (holdHome()) return;
-            freeHand();
-            container(hasLootToStore(), true, State.TAKE);
+        // в пвп сервер не сменить, а стоять до конца пвп нечего: возвращаемся к фарму,
+        // escape сам решит, бежать или лутать, и уведёт на склад, как только пвп кончится
+        if (!onHomeAnarchy()) {
+            if (ServerUtil.isPvp()) state = State.ESCAPE;
+            else switchAnarchy(home);
+            return;
         }
+
+        if (holdHome()) return;
+        freeHand();
+        container(hasLootToStore(), true, State.TAKE);
     }
 
     /**
@@ -748,10 +888,13 @@ public class AutoWarden extends Module {
             }
         }
 
-        if (onHomeAnarchy()) {
-            if (holdHome()) return;
-            container(needSupplies() || cursorBusy(), false, State.COLLECTING);
+        if (!onHomeAnarchy()) {
+            state = State.SAVE;
+            return;
         }
+
+        if (holdHome()) return;
+        container(needSupplies() || cursorBusy(), false, State.COLLECTING);
     }
 
     private void collect() {
@@ -806,16 +949,26 @@ public class AutoWarden extends Module {
         // на телепорт домой стоим смирно: шаг в этот момент сервер считает попыткой сбежать и отменяет его
         if (!inFarmZone()) {
             walkTarget = null;
+            invisWait = 0;
             if (mc.player.age > 40 && homeTimer.every(5000L)) mc.player.networkHandler.sendChatCommand("home");
             return;
         }
 
-        // зелье не переложить в хотбар — не стоим столбом десять секунд, фармим и пробуем позже
-        if (!ready && mc.player.age >= swapBlocked) return;
+        // стоим за невидимость не дольше пяти секунд: столько нужно, чтобы достать зелье из инвентаря
+        // и выпить. Дальше это уже не подготовка, а стойка столбом — лучше фармить как есть.
+        // Зелья может не быть вовсе (в пвп за ним не уйти), обмен слотов может не проходить —
+        // и раньше в обоих случаях бот просто стоял, пока его не перезапустят
+        if (ready) invisWait = 0;
+        else {
+            if (invisWait == 0) invisWait = mc.player.age;
+            if (mc.player.age - invisWait < 100 && mc.player.age >= swapBlocked) return;
+        }
 
+        // скорость — роскошь: не вышло взять зелье в руку, значит идём фармить без неё
         int speedSlot = useSpeed.getValue() && mc.player.getStatusEffect(StatusEffects.SPEED) == null ? findSlot(this::isSpeedPotion) : -1;
-        if (speedSlot < 0) routine();
-        else useSlot(speedSlot);
+        if (speedSlot >= 0 && useSlot(speedSlot)) return;
+
+        routine();
     }
 
     private int scaled(int base) {
@@ -1351,18 +1504,35 @@ public class AutoWarden extends Module {
         containerTick = 0;
         openTarget = findNearbyChest(hopper);
 
-        // все сундуки в округе помечены как «не те» — снимаем метки и пробуем заново
         if (openTarget == null) {
+            // все сундуки в округе помечены как «не те» — снимаем метки и пробуем заново
             if (!badChests.isEmpty() && mc.player.age % 100 == 0) badChests.clear();
+
+            // сундука рядом нет совсем: стоять у пустого места незачем, идём к ближайшему в радиусе 16
+            if (noChestTick == 0) noChestTick = mc.player.age;
+            else if (mc.player.age - noChestTick > 60) {
+                noChestTick = mc.player.age;
+                BlockPos far = chestFar(hopper);
+
+                if (far != null && far.getSquaredDistance(mc.player.getBlockPos()) > 16.0) {
+                    homeSpot = far;
+                    homeTick = 0;
+                    if (debug.getValue()) {
+                        ChatUtils.addChatMessage("§7[AW] сундука рядом нет, иду к §f" + far.toShortString());
+                    }
+                }
+            }
             return;
         }
 
+        noChestTick = 0;
         openChest(openTarget, 10);
     }
 
     private void lootChest(GenericContainerScreen screen) {
-        // после отмены пути игрока ещё тащит по инерции — ждём только реальный разгон, а не любой сдвиг
-        if (mc.player.getVelocity().horizontalLengthSquared() > 0.02) {
+        // после отмены пути игрока ещё тащит по инерции — ждём только реальный разгон, а не любой сдвиг.
+        // но не дольше двух секунд: в толкучке скорость может не осесть никогда, а сундук уже открыт
+        if (mc.player.getVelocity().horizontalLengthSquared() > 0.02 && mc.player.age - screenTick < 40) {
             walkTarget = null;
             return;
         }
@@ -1470,6 +1640,11 @@ public class AutoWarden extends Module {
             else {
                 ItemStack moving = stack.copy();
                 click(screen, slot, 0, SlotActionType.QUICK_MOVE);
+
+                // сундук полон: стак остался на месте, и убранным его считать нельзя, иначе бот
+                // вечно «складывает» в забитый сундук и никуда с него не уходит
+                if (!slot.getStack().isEmpty()) continue;
+
                 moved++;
                 storedStacks++;
                 tripStacks++;
@@ -1599,13 +1774,11 @@ public class AutoWarden extends Module {
         return false;
     }
 
-    private void useSlot(int slot) {
-        if (slot < 0 || mc.currentScreen != null) return;
+    /** true — предмет в руке или обмен пошёл, false — сейчас не вышло, и стоять ради этого нечего. */
+    private boolean useSlot(int slot) {
+        if (slot < 0 || mc.currentScreen != null) return false;
 
-        if (slot >= 9) {
-            swapToHotbar(slot, true);
-            return;
-        }
+        if (slot >= 9) return swapToHotbar(slot, true);
 
         if (mc.player.getInventory().getSelectedSlot() != slot) {
             mc.player.getInventory().setSelectedSlot(slot);
@@ -1613,6 +1786,7 @@ public class AutoWarden extends Module {
         }
 
         holdUse();
+        return true;
     }
 
     private void holdUse() {
@@ -1809,7 +1983,8 @@ public class AutoWarden extends Module {
         return false;
     }
 
-    private BlockPos hopperChestFar() {
+    /** Ближайший сундук нужного вида в радиусе шестнадцати блоков: к нему идём, когда рядом ничего нет. */
+    private BlockPos chestFar(boolean hopper) {
         BlockPos origin = mc.player.getBlockPos();
         BlockPos.Mutable pos = new BlockPos.Mutable();
         BlockPos best = null;
@@ -1819,7 +1994,7 @@ public class AutoWarden extends Module {
             for (int dy = -6; dy <= 6; dy++) {
                 for (int dz = -16; dz <= 16; dz++) {
                     pos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
-                    if (!mc.world.getBlockState(pos).isOf(Blocks.CHEST) || !isHopperChest(pos)) continue;
+                    if (!mc.world.getBlockState(pos).isOf(Blocks.CHEST) || isHopperChest(pos) != hopper) continue;
 
                     double dist = mc.player.squaredDistanceTo(Vec3d.ofCenter(pos));
                     if (dist < bestDist) {
@@ -1894,7 +2069,18 @@ public class AutoWarden extends Module {
      * и в следующий раз пробуем другой слот хотбара. Пять неудач — слот не трогаем десять секунд.
      */
     private void settleSwap() {
-        if (mc.player == null || swapSource < 0 || swapTarget < 0) return;
+        if (mc.player == null || swapSource < 0) return;
+
+        // клик уже разобран, а слот всё ещё числится в обмене: такой хвост запирал все остальные
+        // обмены насовсем — бот не мог достать зелье из инвентаря и стоял столбом до перезапуска
+        if (swapTarget < 0) {
+            if (mc.player.age - swapTick > 40) {
+                swapSource = -1;
+                swapTries = 0;
+            }
+            return;
+        }
+
         if (mc.player.age - swapTick < 8) return;
 
         swapTarget = -1;
@@ -2272,10 +2458,11 @@ public class AutoWarden extends Module {
         ChatUtils.addChatMessage("§7[AW] застрял §c" + stuck() + " §7| двигаюсь §f" + isMoving() + " §7| в блоке §f" + insideBlock()
                 + " §7| свечи §f" + (mc.world.getBlockState(mc.player.getBlockPos()).isIn(BlockTags.CANDLES)
                 || mc.world.getBlockState(mc.player.getBlockPos().down()).isIn(BlockTags.CANDLES))
-                + " §7| обход §f" + detourTries + "/3 §7| недоступных §f" + unreachable.size());
+                + " §7| обход §f" + detourTries + "/3 §7| недоступных §f" + unreachable.size()
+                + " §7| без дела §f" + Math.max(0, mc.player.age - aliveTick) / 20 + "с §7| расшевеливаний §f" + idleFixes);
 
         BlockPos reach = findNearbyChest(true);
-        BlockPos far = hopperChestFar();
+        BlockPos far = chestFar(true);
         ChatUtils.addChatMessage("§7[AW] лут в инвентаре §f" + hasLootToStore() + " §7| приёмник в руке §f"
                 + (reach == null ? "нет" : String.valueOf(reach)) + " §7| ближайший приёмник §f"
                 + (far == null ? "не найден в радиусе 16" : far + " (" + (int) Math.sqrt(mc.player.squaredDistanceTo(Vec3d.ofCenter(far))) + " бл.)")
