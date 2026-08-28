@@ -118,7 +118,6 @@ public class AutoWarden extends Module {
     private final Map<String, Long> timers = new HashMap<>();
     private final Map<String, Long> emptied = new HashMap<>();
     private final Map<String, Integer> lootItems = new LinkedHashMap<>();
-    private final TimerUtil chestSwitch = new TimerUtil();
 
     private BlockPos recallChest;
     private int recallAnarchy = -1;
@@ -136,6 +135,9 @@ public class AutoWarden extends Module {
     private BlockPos supplyChest;
     private BlockPos depositChest;
     private BlockPos openTarget;
+    private BlockPos openClick;
+    private int openTick;
+    private int lootTick;
     private BlockPos homeSpot;
     private int homeTick;
     private int supplySlot = -1;
@@ -217,6 +219,9 @@ public class AutoWarden extends Module {
         unreachable.clear();
         badChests.clear();
         openTarget = null;
+        openClick = null;
+        openTick = 0;
+        lootTick = 0;
         containerTick = 0;
         resetProgress();
         lootItems.clear();
@@ -313,10 +318,17 @@ public class AutoWarden extends Module {
             return;
         }
 
+        settleSwap();
         if (trash.getValue()) dropFloorTrash();
         if (mc.player.age % 20 == 0) updateChestMemory();
         if (mc.player.age % 6000 == 0 && mc.player.age > 100) saveTimers();
-        if (mc.currentScreen == null) lootCounted = false;
+        if (mc.currentScreen == null) {
+            lootCounted = false;
+            lootTick = 0;
+        }
+
+        // через минуту прощаем сундуки, которые не открылись: помеха могла уйти
+        if (mc.player.age % 1200 == 0) openAttempts.clear();
 
         switch (state) {
             case SAVE -> save();
@@ -391,8 +403,7 @@ public class AutoWarden extends Module {
                     input.jump() || needJump(relative), input.sneak(), input.sprint() || sprint));
         }
 
-        if ((walkTarget == null || Pathing.available()) && stuck()
-                && mc.player.getMainHandStack().isEmpty() && !chestNear(3.0)) {
+        if (stuck() && mc.player.getMainHandStack().isEmpty() && !chestNear(3.0)) {
             boolean side = mc.player.age % 40 < 20;
             event.setDirectional(true, false, side, !side);
             event.setJumping(mc.player.isOnGround());
@@ -574,11 +585,16 @@ public class AutoWarden extends Module {
                 && mc.world.getBlockState(pos.up()).getCollisionShape(mc.world, pos.up()).isEmpty();
     }
 
+    /**
+     * Расталкивание имеет смысл, только если идём куда-то и не можем сдвинуться уже секунду.
+     * Стоять у сундука и ждать таймер — это не «застрял», и дёргаться там нечего.
+     */
     private boolean stuck() {
         if (mc.world.getBlockState(mc.player.getBlockPos()).isIn(BlockTags.CANDLES)
                 || mc.world.getBlockState(mc.player.getBlockPos().down()).isIn(BlockTags.CANDLES)) return true;
 
-        return !wardenAggro() && state == State.COLLECTING && inFarmZone() && mc.currentScreen == null
+        return walkTarget != null && mc.player.age - progressTick > 20
+                && !wardenAggro() && state == State.COLLECTING && inFarmZone() && mc.currentScreen == null
                 && !isMoving() && !isDrinking() && insideBlock();
     }
 
@@ -738,7 +754,8 @@ public class AutoWarden extends Module {
             return;
         }
 
-        if (!ready) return;
+        // зелье не переложить в хотбар — не стоим столбом десять секунд, фармим и пробуем позже
+        if (!ready && mc.player.age >= swapBlocked) return;
 
         int speedSlot = useSpeed.getValue() && mc.player.getStatusEffect(StatusEffects.SPEED) == null ? findSlot(this::isSpeedPotion) : -1;
         if (speedSlot < 0) routine();
@@ -897,6 +914,8 @@ public class AutoWarden extends Module {
         }
 
         if (mc.currentScreen instanceof GenericContainerScreen screen) {
+            // сундук открылся — значит попытки были не напрасны, счёт обнуляем
+            if (openClick != null) openAttempts.remove(openClick);
             lootChest(screen);
             return;
         }
@@ -905,9 +924,7 @@ public class AutoWarden extends Module {
         if (pick == null) pick = pickSoonest();
         if (holdCurrent(pick)) pick = currentChest;
 
-        boolean stay = pick != null && currentChest != null && !pick.equals(currentChest) && chestRemaining(currentChest) > 25000;
-        if (!stay) chestSwitch.reset();
-        if (!stay || chestSwitch.hasTimeElapsed(1000)) currentChest = pick;
+        currentChest = chooseChest(pick);
 
         BlockPos target = currentChest;
         if (target == null) {
@@ -939,13 +956,15 @@ public class AutoWarden extends Module {
             if (hopNext()) return;
         }
 
-        // ждать столько не готовы, а уйти некуда — крутимся рядом, пока остаток не влезет в порог
-        if (!ready && remaining > Math.max(6000L, threshold)) {
+        double distSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(target));
+
+        // ждать столько не готовы, а уйти некуда — крутимся рядом, пока остаток не влезет в порог.
+        // вплотную не крутимся: бегать от сундука и обратно — это и есть то самое топтание на месте
+        if (!ready && remaining > Math.max(6000L, threshold) && distSq > 64.0) {
             if (!travelToRecall()) walkTo(orbitSpot(target));
             return;
         }
 
-        double distSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(target));
         if (distSq <= 20.0) {
             walkTarget = null;
 
@@ -955,7 +974,7 @@ public class AutoWarden extends Module {
                 return;
             }
 
-            if (openAttempts.getOrDefault(target, 0) < 3 && openChest(target, 1)) {
+            if (openAttempts.getOrDefault(target, 0) < 3 && openChest(target, 12)) {
                 openAttempts.merge(target, 1, Integer::sum);
             }
             return;
@@ -1042,17 +1061,27 @@ public class AutoWarden extends Module {
         return new Rotation(mc.player).getDelta(swayed) > 4.0F ? null : aim;
     }
 
-    private boolean openChest(BlockPos chest, int rate) {
+    /** Тыкает в сундук. delay — сколько тиков ждём ответа сервера, прежде чем повторить клик. */
+    private boolean openChest(BlockPos chest, int delay) {
         if (chest == null || mc.currentScreen instanceof GenericContainerScreen) return false;
 
         Vec3d aim = aimChest(chest);
-        if (aim == null || mc.player.age % rate != 0) return false;
+        if (aim == null) return false;
+
+        if (!chest.equals(openClick)) {
+            openClick = chest.toImmutable();
+            openTick = 0;
+        }
+
+        // GUI приходит не в тот же тик: пока сервер молчит, повторный клик только жжёт попытки
+        if (openTick > 0 && mc.player.age - openTick < delay) return false;
 
         Vec3d eye = mc.player.getEyePos();
         BlockHitResult hit = mc.world.raycast(new RaycastContext(eye, aim,
                 RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
         if (!hit.getBlockPos().equals(chest)) return false;
 
+        openTick = mc.player.age;
         mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
         mc.player.swingHand(Hand.MAIN_HAND);
         return true;
@@ -1100,26 +1129,10 @@ public class AutoWarden extends Module {
         double bestSq = Double.MAX_VALUE;
 
         for (BlockPos chest : helper().getChests()) {
-            if (!reachable(chest) || armoredNear(chest) || unreachable.containsKey(chest)) continue;
+            int tier = chestTier(chest);
+            if (tier >= 99) continue;
 
-            double distSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(chest));
-            long remaining = chestRemaining(chest);
-
-            if (wardenNear(chest) && !(remaining < 0 && distSq <= 16.0)) continue;
-            if (remaining < 0 && openAttempts.getOrDefault(chest, 0) >= 3) continue;
-
-            int tier = -1;
-            if (remaining < 0 && distSq <= 25.0) tier = 0;
-            else if (remaining >= 0 && remaining <= 5000 && distSq <= 144.0) tier = 1;
-            else if (remaining < 0 && distSq <= 144.0) tier = 2;
-            else if (remaining >= 0 && remaining <= 15000 && distSq <= 625.0) tier = 3;
-            else if (remaining < 0) tier = 4;
-            if (tier < 0) continue;
-
-            double up = Vec3d.ofCenter(chest).y - mc.player.getEyeY();
-            double dx = chest.getX() + 0.5 - mc.player.getX();
-            double dz = chest.getZ() + 0.5 - mc.player.getZ();
-            double weightedSq = dx * dx + dz * dz + (up > 0.0 ? 2 : 1) * up * up;
+            double weightedSq = chestWeight(chest);
 
             if (tier < bestTier || (tier == bestTier && weightedSq < bestSq)) {
                 bestTier = tier;
@@ -1128,6 +1141,50 @@ public class AutoWarden extends Module {
             }
         }
         return best;
+    }
+
+    /** Приоритет сундука: 0 — готов и рядом, дальше по убыванию, 99 — не годится. */
+    private int chestTier(BlockPos chest) {
+        if (chest == null || !reachable(chest) || armoredNear(chest) || unreachable.containsKey(chest)) return 99;
+        if (openAttempts.getOrDefault(chest, 0) >= 3) return 99;
+
+        double distSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(chest));
+        long remaining = chestRemaining(chest);
+
+        if (wardenNear(chest) && !(remaining < 0 && distSq <= 16.0)) return 99;
+
+        if (remaining < 0 && distSq <= 25.0) return 0;
+        if (remaining >= 0 && remaining <= 5000 && distSq <= 144.0) return 1;
+        if (remaining < 0 && distSq <= 144.0) return 2;
+        if (remaining >= 0 && remaining <= 15000 && distSq <= 625.0) return 3;
+        if (remaining < 0) return 4;
+        return 99;
+    }
+
+    /** Дистанция для выбора: лезть наверх дороже, чем пройти по прямой. */
+    private double chestWeight(BlockPos chest) {
+        double up = Vec3d.ofCenter(chest).y - mc.player.getEyeY();
+        double dx = chest.getX() + 0.5 - mc.player.getX();
+        double dz = chest.getZ() + 0.5 - mc.player.getZ();
+        return dx * dx + dz * dz + (up > 0.0 ? 2 : 1) * up * up;
+    }
+
+    /**
+     * Держимся выбранной цели, пока она не хуже новой: на равных дистанциях выбор прыгал
+     * каждый тик, Baritone пересчитывал путь, и бот топтался между двумя сундуками.
+     */
+    private BlockPos chooseChest(BlockPos pick) {
+        if (pick == null || currentChest == null || pick.equals(currentChest)) return pick;
+
+        int current = chestTier(currentChest);
+        if (current >= 99) return pick;
+
+        int next = chestTier(pick);
+        if (next < current) return pick;
+        if (next > current) return currentChest;
+
+        // приоритет тот же — цель меняем только ради заметно более близкого сундука
+        return chestWeight(pick) + 16.0 < chestWeight(currentChest) ? pick : currentChest;
     }
 
     private BlockPos pickSoonest() {
@@ -1244,7 +1301,7 @@ public class AutoWarden extends Module {
             return;
         }
 
-        openChest(openTarget, 2);
+        openChest(openTarget, 10);
     }
 
     private void lootChest(GenericContainerScreen screen) {
@@ -1254,11 +1311,19 @@ public class AutoWarden extends Module {
             return;
         }
 
+        if (lootTick == 0) lootTick = mc.player.age;
+
         int batch = Math.max(1, lootSpeed.getValue().intValue());
 
         for (int index = 0; index < batch; index++) {
             Slot slot = bestLootSlot(screen);
             if (slot == null) {
+                // содержимое приходит отдельным пакетом, а на плагинных сундуках ещё и с задержкой:
+                // пустой сундук в первую секунду значит «сервер ещё не прислал», а не «пусто»
+                if (containerEmpty(screen) && mc.player.age - lootTick < 20) return;
+
+                // брать нечего — сундук уже выгребли: вешаем таймер, иначе будем открывать его по кругу
+                markEmptied();
                 closeContainer();
                 return;
             }
@@ -1273,8 +1338,8 @@ public class AutoWarden extends Module {
                 lootCounted = true;
                 looted++;
                 storedChests++;
+                markEmptied();
             }
-            markEmptied();
 
             // стак не ушёл — в инвентаре нет места, дальше долбить бессмысленно
             if (!slot.getStack().isEmpty()) {
@@ -1282,6 +1347,14 @@ public class AutoWarden extends Module {
                 return;
             }
         }
+    }
+
+    /** Сундук пуст целиком: либо и правда пустой, либо содержимое ещё в пути. */
+    private boolean containerEmpty(GenericContainerScreen screen) {
+        for (Slot slot : screen.getScreenHandler().slots) {
+            if (!isPlayerSlot(screen, slot) && !slot.getStack().isEmpty()) return false;
+        }
+        return true;
     }
 
     /** Сначала дорогое: соседние автовардены выгребают сундук за пару секунд. */
@@ -1736,36 +1809,20 @@ public class AutoWarden extends Module {
      */
     private boolean swapToHotbar(int slot, boolean hold) {
         if (mc.player == null || slot < 9 || slot > 35 || mc.currentScreen != null) return false;
-
-        if (slot != swapSource) {
-            swapSource = slot;
-            swapTarget = -1;
-            swapTries = 0;
-        }
-
         if (mc.player.age < swapBlocked) return false;
+
+        // чужой обмен ещё не разрешился: одного клика в работе достаточно
+        if (swapSource >= 0 && swapSource != slot) return false;
         if (hold) walkTarget = null;
 
         // на бегу такие клики сервер часто откатывает назад, так что сначала останавливаемся
         if (isMoving()) return false;
+        if (swapTarget >= 0) return false;
         if (swapTick > 0 && mc.player.age - swapTick < 8) return false;
 
-        if (swapTarget >= 0) {
-            // в слоте лежит уже другое — прошлый клик прошёл, счёт неудач начинаем заново
-            boolean stuck = ItemStack.areItemsAndComponentsEqual(mc.player.getInventory().getStack(slot), swapStack);
-
-            swapTries = stuck ? swapTries + 1 : 0;
-            swapTarget = -1;
-
-            if (stuck && swapTries >= 5) {
-                if (debug.getValue()) {
-                    ChatUtils.addChatMessage("§7[AW] §cслот §f" + slot + " §cне перекладывается в хотбар");
-                }
-                swapSource = -1;
-                swapTries = 0;
-                swapBlocked = mc.player.age + 200;
-                return false;
-            }
+        if (swapSource != slot) {
+            swapSource = slot;
+            swapTries = 0;
         }
 
         swapTarget = hotbarTarget(swapTries);
@@ -1774,6 +1831,33 @@ public class AutoWarden extends Module {
         mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, slot,
                 swapTarget, SlotActionType.SWAP, mc.player);
         return true;
+    }
+
+    /**
+     * Разбирает прошлый обмен: предмет ушёл — забываем о нём, застрял — считаем неудачу
+     * и в следующий раз пробуем другой слот хотбара. Пять неудач — слот не трогаем десять секунд.
+     */
+    private void settleSwap() {
+        if (mc.player == null || swapSource < 0 || swapTarget < 0) return;
+        if (mc.player.age - swapTick < 8) return;
+
+        swapTarget = -1;
+
+        if (!ItemStack.areItemsAndComponentsEqual(mc.player.getInventory().getStack(swapSource), swapStack)) {
+            swapSource = -1;
+            swapTries = 0;
+            return;
+        }
+
+        if (++swapTries < 5) return;
+
+        if (debug.getValue()) {
+            ChatUtils.addChatMessage("§7[AW] §cслот §f" + swapSource + " §cне перекладывается в хотбар");
+        }
+
+        swapSource = -1;
+        swapTries = 0;
+        swapBlocked = mc.player.age + 200;
     }
 
     /** Слот хотбара под обмен: сначала пустые, дальше по кругу без зелий и моркови. */
@@ -1855,12 +1939,21 @@ public class AutoWarden extends Module {
 
     private void markEmptied() {
         int anarchy = ServerUtil.anarchy;
-        if (anarchy < 0 || currentChest == null) return;
+        BlockPos chest = openedChest();
+        if (anarchy < 0 || chest == null) return;
 
-        String key = chestKey(anarchy, currentChest);
+        String key = chestKey(anarchy, chest);
         long now = System.currentTimeMillis();
         emptied.put(key, now);
         if (period > 60000L) timers.put(key, now + period);
+    }
+
+    /** Пока сервер открывал GUI, цель могла сменить: таймер ставим тому сундуку, в который тыкали. */
+    private BlockPos openedChest() {
+        if (openClick != null && mc.player.squaredDistanceTo(Vec3d.ofCenter(openClick)) < 36.0
+                && helper().getChests().contains(openClick)) return openClick;
+
+        return currentChest;
     }
 
     private Path timersFile() {
