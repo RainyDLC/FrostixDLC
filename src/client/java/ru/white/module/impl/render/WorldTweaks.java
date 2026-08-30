@@ -44,6 +44,16 @@ public class WorldTweaks extends Module {
     public BooleanSetting splashes = new BooleanSetting(this,"Брызги",true).setVisible(() -> rains.getValue());
     public BooleanSetting mists = new BooleanSetting(this,"Дымка",true).setVisible(() -> rains.getValue());
 
+    public BooleanSetting wetGround = new BooleanSetting(this, "Мокрая земля", false);
+    public SliderSetting wetRadius = new SliderSetting(this, "Радиус земли", 20F, 6F, 40F, 1F).setVisible(() -> wetGround.getValue());
+    public SliderSetting wetness = new SliderSetting(this, "Влажность", 55F, 0F, 100F, 5F).setVisible(() -> wetGround.getValue());
+    public SliderSetting wetGloss = new SliderSetting(this, "Глянец", 65F, 0F, 100F, 5F).setVisible(() -> wetGround.getValue());
+    public SliderSetting wetPuddles = new SliderSetting(this, "Лужи", 45F, 0F, 100F, 5F).setVisible(() -> wetGround.getValue());
+    public BooleanSetting wetRipples = new BooleanSetting(this, "Рябь", true).setVisible(() -> wetGround.getValue());
+    public BooleanSetting wetObjects = new BooleanSetting(this, "Отражения", true).setVisible(() -> wetGround.getValue());
+    public BooleanSetting wetSkyOnly = new BooleanSetting(this, "Только под небом", false).setVisible(() -> wetGround.getValue());
+    public BooleanSetting wetSkyTint = new BooleanSetting(this, "Цвет неба", true).setVisible(() -> wetGround.getValue());
+
     public BooleanSetting worldOnly = new BooleanSetting(this,"Только в непогоду",false);
 
     public ColorSetting tintColor = new ColorSetting(this, "Цвет", 0xFF00FFFF).setVisible(() -> typeColor.is("Свой"));
@@ -82,17 +92,45 @@ public class WorldTweaks extends Module {
                 rainRadius.getValue(),
                 winds.getValue(), windStrength.getValue(),
                 splashes.getValue(), mists.getValue());
+        if (wetGround.getValue() && stormNow) {
+            WetGroundRenderer.configure(
+                    wetness.getValue(),
+                    wetGloss.getValue(),
+                    5F,
+                    8F,
+                    wetRipples.getValue(),
+                    wetObjects.getValue(),
+                    wetSkyTint.getValue(),
+                    getColor()
+            );
+        }
+        WetGroundRenderer.update(
+                wetGround.getValue() && stormNow,
+                wetRadius.getValue().intValue(),
+                wetSkyOnly.getValue(),
+                wetPuddles.getValue()
+        );
     }
 
     @EventHandler
     public void onRender3D(EventRender3D e) {
         boolean stormNow = weatherActive();
+        if (wetGround.getValue() && stormNow) {
+            WetGroundRenderer.render(e);
+        }
         if (lightnings.getValue() && stormNow) {
             SkyLightningRenderer.render(e);
         }
         if (rains.getValue() && stormNow) {
             SkyRainRenderer.render(e);
         }
+    }
+
+    @Override
+    protected void onDisable() {
+        SkyLightningRenderer.clear();
+        SkyRainRenderer.clear();
+        WetGroundRenderer.clear();
     }
 
     public boolean weatherActive() {
