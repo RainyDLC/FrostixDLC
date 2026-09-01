@@ -16,8 +16,10 @@ import ru.white.utils.animation.satoshi.EaseInOutQuad;
 import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.render.ItemRender;
 import ru.white.utils.render.RenderUtil;
+import ru.white.utils.other.UseCooldowns;
 import ru.white.utils.render.font.Fonts;
 import ru.white.utils.taskript.StopWatch;
+import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.render.entity.EntityRenderer;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
@@ -26,6 +28,7 @@ import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.scoreboard.ReadableScoreboardScore;
 import net.minecraft.scoreboard.ScoreboardDisplaySlot;
 import net.minecraft.scoreboard.ScoreboardObjective;
@@ -48,7 +51,7 @@ public class TargetHud implements element {
     private static float ARMOR_X = 10F * S;
     private static float ARMOR_Y = 12F * S;
 
-    private static float W_BASE = 114F * S;
+    private static float W_BASE = 148F * S;
     private static float H_BASE = 34F * S;
     private static float RADIUS = 6F * S;
     private static float ANIM_OFFSET = 8F * S;
@@ -71,6 +74,21 @@ public class TargetHud implements element {
     private static float GLOW_RADIUS = 12F * S;
     private static float BLUR_RADIUS = 20F * S;
     private static float FACE_SIZE = 22F * S;
+
+    // Правая панель статистики: ХП цели + сколько раз съела зачарованное яблоко
+    private static float STATS_W = 34F * S;
+    private static float STATS_ICON = 8.5F * S;
+    private static float STATS_GAP = 2.5F * S;
+    private static float STATS_TEXT = 6.5F * S;
+
+    private static final Identifier HEART_ICON = Identifier.ofVanilla("hud/heart/full");
+
+    private static ItemStack notchIcon;
+
+    private static ItemStack notchIcon() {
+        if (notchIcon == null) notchIcon = new ItemStack(Items.ENCHANTED_GOLDEN_APPLE);
+        return notchIcon;
+    }
 
     private final ru.white.utils.animation.satoshi.Animation openAnimation = new EaseInOutQuad(200, 1);
     private final Animation settingsAnimation = new Animation();
@@ -115,6 +133,10 @@ public class TargetHud implements element {
         GLOW_RADIUS = 12F * S;
         BLUR_RADIUS = 20F * S;
         FACE_SIZE = 22F * S;
+        STATS_W = 34F * S;
+        STATS_ICON = 8.5F * S;
+        STATS_GAP = 2.5F * S;
+        STATS_TEXT = 6.5F * S;
 
         if (mc.player == null || mc.world == null) return;
 
@@ -144,7 +166,11 @@ public class TargetHud implements element {
         }
 
         drag.active = true;
-        drag.size.set(W_BASE, H_BASE);
+
+        boolean showStats = interFace.targetStats.getValue();
+        float statsW = showStats ? STATS_W : 0F;
+
+        drag.size.set(W_BASE - STATS_W + statsW, H_BASE);
 
         float x = drag.position.x;
         float y = drag.position.y;
@@ -164,6 +190,8 @@ public class TargetHud implements element {
 
         float px = x + addALL;
 
+        float mainW = w - statsW;
+
         RenderUtil.Render2D.hudPlate(px, y, w, h, alpha, rad, hudOpacity);
 
         RenderUtil.Render2D.rect(px + HEAD_CONTAINER_W, y + HEAD_OFFSET_Y,
@@ -171,9 +199,14 @@ public class TargetHud implements element {
 
         drawFace(target, eventDisplay.getPartialTicks(), px + HEAD_OFFSET_X, y + HEAD_OFFSET_Y, alpha);
 
+        if (showStats) {
+            RenderUtil.Render2D.rect(px + mainW, y + HEAD_OFFSET_Y,
+                    0.5F * S, h - HEAD_OFFSET_Y * 2, ColorUtil.getColor(255, 0.07F * alpha), 0.25F);
+        }
+
         float contentX = px + CONTENT_OFFSET_X + BAR_OFFSET_X;
         float ringR = 8.5F * S;
-        float ringCx = px + w - ringR - 6F * S;
+        float ringCx = px + mainW - ringR - 6F * S;
         float ringCy = y + h / 2F;
 
         float hpNow = getHealth(target);
@@ -243,6 +276,58 @@ public class TargetHud implements element {
                 shown++;
             }
         }
+
+        if (showStats) {
+            float panelX = px + mainW;
+            float hpRowCy = y + h * 0.31F;
+            float appleRowCy = y + h * 0.71F;
+
+            drawStatRow(eventDisplay, panelX, statsW, hpRowCy, HEART_ICON, null,
+                    String.format("%.0f", animHpText.get()), getHealthColor(target), alpha);
+
+            int notchCount = target instanceof PlayerEntity
+                    ? UseCooldowns.count(target.getUuid(), UseCooldowns.Item.NOTCH)
+                    : 0;
+
+            int notchColor = notchCount > 0
+                    ? ColorUtil.getColor(255, 205, 90)
+                    : ColorUtil.getColor(150, 150, 160);
+
+            drawStatRow(eventDisplay, panelX, statsW, appleRowCy, null, notchIcon(),
+                    String.valueOf(notchCount), notchColor, alpha);
+        }
+    }
+
+    /**
+     * Строка правой панели: иконка + значение, отцентрованные по ширине панели.
+     */
+    private void drawStatRow(EventDisplay eventDisplay, float panelX, float panelW, float rowCy,
+                             Identifier sprite, ItemStack icon, String text, int color, float alpha) {
+        float textW = Fonts.sf_medium.getWidth(text, STATS_TEXT);
+        float contentW = STATS_ICON + STATS_GAP + textW;
+        float startX = panelX + (panelW - contentW) / 2F;
+
+        if (sprite != null) {
+            eventDisplay.getDrawContext().drawGuiTexture(RenderPipelines.GUI_TEXTURED, sprite,
+                    (int) startX, (int) (rowCy - STATS_ICON / 2F),
+                    (int) STATS_ICON, (int) STATS_ICON,
+                    ColorUtil.getColor(255, (int) (255F * alpha)));
+        } else if (icon != null && !icon.isEmpty()) {
+            DrawContext ctx = eventDisplay.getDrawContext();
+
+            float scaleFix = 2F / Math.max(1F, (float) mc.getWindow().getScaleFactor());
+            float scale = STATS_ICON / 16F;
+
+            Matrix3x2fStack matrices = ctx.getMatrices();
+            matrices.pushMatrix();
+            matrices.translate((startX + STATS_ICON / 2F) * scaleFix, rowCy * scaleFix);
+            matrices.scale(scaleFix * scale, scaleFix * scale);
+            ctx.drawItem(icon, -8, -8);
+            matrices.popMatrix();
+        }
+
+        Fonts.sf_medium.draw(text, startX + STATS_ICON + STATS_GAP,
+                rowCy - STATS_TEXT / 2F, STATS_TEXT, ColorUtil.replAlpha(color, alpha));
     }
 
     private int getHealthColor(LivingEntity entity) {

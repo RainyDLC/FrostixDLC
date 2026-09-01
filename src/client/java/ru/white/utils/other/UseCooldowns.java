@@ -71,6 +71,13 @@ public final class UseCooldowns implements IMinecraft {
 
     private static final Map<UUID, Map<Item, Long>> COOLDOWNS = new HashMap<>();
 
+    /**
+     * Общее количество использований предмета игроком. В отличие от COOLDOWNS
+     * не сбрасывается по времени — нужно для HUD-а, чтобы показывать, сколько
+     * раз цель съела чарку (зачарованное золотое яблоко).
+     */
+    private static final Map<UUID, Map<Item, Integer>> COUNTERS = new HashMap<>();
+
     private static final Map<UUID, Use> USING = new HashMap<>();
 
     private static final List<BiConsumer<PlayerEntity, Item>> LISTENERS = new ArrayList<>();
@@ -169,6 +176,9 @@ public final class UseCooldowns implements IMinecraft {
         COOLDOWNS.computeIfAbsent(player.getUuid(), u -> new EnumMap<>(Item.class))
                 .put(item, System.currentTimeMillis() + item.seconds * 1000L);
 
+        COUNTERS.computeIfAbsent(player.getUuid(), u -> new EnumMap<>(Item.class))
+                .merge(item, 1, Integer::sum);
+
         for (BiConsumer<PlayerEntity, Item> listener : LISTENERS) listener.accept(player, item);
     }
 
@@ -190,6 +200,18 @@ public final class UseCooldowns implements IMinecraft {
         return map == null ? Map.of() : map;
     }
 
+    /**
+     * Сколько раз игрок использовал предмет за всё время (не по кулдауну).
+     */
+    public static int count(UUID uuid, Item item) {
+        if (uuid == null) return 0;
+
+        Map<Item, Integer> map = COUNTERS.get(uuid);
+        if (map == null) return 0;
+
+        return map.getOrDefault(item, 0);
+    }
+
     public static int players() {
         return COOLDOWNS.size();
     }
@@ -207,6 +229,7 @@ public final class UseCooldowns implements IMinecraft {
 
     public static void clear() {
         COOLDOWNS.clear();
+        COUNTERS.clear();
         USING.clear();
     }
 }
