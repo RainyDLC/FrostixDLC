@@ -26,7 +26,7 @@ import ru.white.utils.math.ChatUtils;
 import java.util.ArrayList;
 import java.util.List;
 
-@ModuleInfo(name = "Apple Farmer", category = Category.OTHER)
+@ModuleInfo(name = "Apple Farmer", desc = "Автоматизированная посадка дубовых саженцев, ускорение роста костной мукой и сбор яблок", category = Category.OTHER)
 public class AppleFarmer extends Module {
     public final SliderSetting range = new SliderSetting(this,"Дистанция",
             4.5f, 3f, 4.5f, 0.1f);

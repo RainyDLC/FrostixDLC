@@ -9,7 +9,7 @@ import ru.white.utils.other.Instance;
 
 @ModuleInfo(
         name = "Item Scroller",
-        desc = "Помогает скролить предметы",
+        desc = "Быстрое перемещение предметов в открытых контейнерах прокруткой колеса мыши",
         category = Category.OTHER
 )
 public class ItemScroller extends Module {

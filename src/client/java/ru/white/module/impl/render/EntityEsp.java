@@ -42,7 +42,7 @@ import java.util.List;
 @ModuleInfo(
         name = "Entity Esp",
         category = Category.RENDER,
-        desc = "Боксы сущностей через стены"
+        desc = "Отображение маркеров и боксов вокруг игроков, мобов и предметов сквозь стены"
 )
 public class EntityEsp extends Module {
     public static EntityEsp get() {

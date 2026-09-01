@@ -20,7 +20,7 @@ import ru.white.utils.other.Instance;
 @ModuleInfo(
         name = "Air Stuck",
         category = Category.MOVEMENT,
-        desc = "Заморозка персонажа в воздухе"
+        desc = "Фиксация позиции персонажа в воздухе с блокировкой вертикального падения"
 )
 public class AirStuck extends Module {
     public static AirStuck getInstance() {

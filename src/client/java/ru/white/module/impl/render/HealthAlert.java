@@ -15,7 +15,7 @@ import org.joml.Matrix3x2fStack;
 @ModuleInfo(
         name = "Health Alert",
         category = Category.RENDER,
-        desc = "Визуальный эффект когда мало здоровья"
+        desc = "Экранная пульсирующая индикация при критическом снижении уровня здоровья"
 )
 public class HealthAlert extends Module {
     public SliderSetting heath = new SliderSetting(this,"Кол в хп",5,1,15,1);

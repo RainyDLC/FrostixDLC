@@ -19,7 +19,7 @@ import net.minecraft.util.Hand;
 
 @ModuleInfo(
         name = "SP Joiner",
-        desc = "Автоматические заходит на дуэли SpookyTime",
+        desc = "Автоматический выбор компаса и подключение к режиму дуэлей на сервере SpookyTime",
         category = Category.OTHER
 )
 public class SPJoiner extends Module {

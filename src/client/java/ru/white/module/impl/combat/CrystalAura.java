@@ -24,7 +24,7 @@ import net.minecraft.util.math.Vec3d;
 
 @ModuleInfo(
         name = "Crystal Aura",
-        desc = "Автоматическая аура под кристалы",
+        desc = "Автоматическая установка и подрыв кристаллов Энда для нанесения взрывного урона",
         category = Category.COMBAT
 )
 public class CrystalAura extends Module {

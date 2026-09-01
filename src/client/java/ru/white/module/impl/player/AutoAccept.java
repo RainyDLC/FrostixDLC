@@ -17,7 +17,7 @@ import net.minecraft.text.Text;
 import java.util.Arrays;
 import java.util.List;
 
-@ModuleInfo(name = "Auto Accept", category = Category.PLAYER, desc = "Автоматически принимает запросы на телепортацию и в клан")
+@ModuleInfo(name = "Auto Accept", category = Category.PLAYER, desc = "Автоматическое принятие входящих запросов на телепортацию и приглашений в клан")
 public class AutoAccept extends Module {
     public final MultiBooleanSetting type = new MultiBooleanSetting(this,"Принимать", new BooleanSetting("Запрос на ТП", true), new BooleanSetting("Запрос в клан", true));
     public final ModeSetting mode = new ModeSetting(this,"Принимать ТП от", "Друзей", "Всех").setVisible(() -> type.get("Запрос на ТП").getValue());

@@ -17,7 +17,7 @@ import ru.white.utils.other.Instance;
 
 @ModuleInfo(
         name = "World Tweaks",
-        desc = "Мелкие настройки отображения мира",
+        desc = "Настройки погодных эффектов, времени суток, плотности тумана и освещения",
         category = Category.RENDER
 )
 public class WorldTweaks extends Module {

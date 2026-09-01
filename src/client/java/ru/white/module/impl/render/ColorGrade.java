@@ -16,7 +16,7 @@ import java.awt.*;
 
 @ModuleInfo(
         name = "Color Grade",
-        desc = "Цветовая гамма мира (руки не затрагивает)",
+        desc = "Цветокоррекция и постобработка визуального пространства с наложением виньетки",
         category = Category.RENDER
 )
 public class ColorGrade extends Module {

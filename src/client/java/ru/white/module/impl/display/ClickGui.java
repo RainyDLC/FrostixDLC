@@ -16,7 +16,7 @@ import ru.white.module.api.settings.impl.SliderSetting;
         name = "Click Gui",
         category = Category.RENDER,
         key = GLFW.GLFW_KEY_RIGHT_SHIFT,
-        desc = "Позволяет настроить вид GUI клиента",
+        desc = "Графический интерфейс для управления всеми функциями и визуальными эффектами клиента",
         autoEnabled = true,
         allowDisable = false
 )

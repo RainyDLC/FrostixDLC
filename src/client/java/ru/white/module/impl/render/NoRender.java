@@ -8,7 +8,7 @@ import ru.white.utils.other.Instance;
 
 @ModuleInfo(
         name = "No Render",
-        desc = "Убирает всякую хуйню на твоем ебале.",
+        desc = "Отключение нежелательных оверлеев экрана, тряски камеры, частиц и эффектов",
         category = Category.RENDER
 )
 public class NoRender extends Module {
@@ -19,9 +19,9 @@ public class NoRender extends Module {
     public BooleanSetting ignoreFire = new BooleanSetting(this,"Убирать огонь",true);
     public BooleanSetting ignoreLava = new BooleanSetting(this,"Убирать туман лавы",true);
     public BooleanSetting ignoreZalupa = new BooleanSetting(this,"Убирать плохие эффекты",true);
-    public BooleanSetting ignoreScoreboard = new BooleanSetting(this,"Убирать Скорборт",false);
-    public BooleanSetting ignoreBossBar = new BooleanSetting(this,"Убирать Босс бар",false);
+    public BooleanSetting ignoreScoreboard = new BooleanSetting(this,"Убирать скорборд",false);
+    public BooleanSetting ignoreBossBar = new BooleanSetting(this,"Убирать боссбар",false);
     public BooleanSetting noCameraClip = new BooleanSetting(this,"Камера сквозь блоки",false);
     public BooleanSetting ignoreTotemPop = new BooleanSetting(this,"Убирать тотем на экране",true);
-    public BooleanSetting removeCamreZalupa = new BooleanSetting(this,"Убирать дерганее камеры",true);
+    public BooleanSetting removeCamreZalupa = new BooleanSetting(this,"Убирать тряску камеры",true);
 }

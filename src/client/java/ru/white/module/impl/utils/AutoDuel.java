@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 
 @ModuleInfo(
         name = "Auto Duel",
-        desc = "Автоматически отправляет вызовы на дуэли (ReallyWorld)",
+        desc = "Автоматическая рассылка приглашений игрокам на выбранный режим дуэли",
         category = Category.OTHER
 )
 public class AutoDuel extends Module {

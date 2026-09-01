@@ -18,7 +18,7 @@ import ru.white.module.api.ModuleInfo;
 import ru.white.module.api.settings.impl.BindSetting;
 
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ModuleInfo(name = "Emotions", desc = "Emote wheel (bind in MC controls or here)", category = Category.OTHER)
+@ModuleInfo(name = "Emotions", desc = "Интерактивное колесо выбора и воспроизведения анимаций и эмоций", category = Category.OTHER)
 public class Emotions extends Module {
     public static KeyBinding vanillaKey;
 

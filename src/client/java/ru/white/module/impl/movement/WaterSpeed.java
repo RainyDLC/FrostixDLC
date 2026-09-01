@@ -11,7 +11,7 @@ import ru.white.utils.player.MoveUtil;
 
 @ModuleInfo(
         name = "WaterSpeed",
-        desc = "Увеличивает скорость движения в воде",
+        desc = "Увеличение скорости плавания и горизонтального перемещения в воде",
         category = Category.MOVEMENT
 )
 public class WaterSpeed extends Module {

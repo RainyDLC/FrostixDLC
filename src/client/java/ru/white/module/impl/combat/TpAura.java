@@ -19,7 +19,7 @@ import ru.white.module.api.settings.impl.SliderSetting;
 import ru.white.utils.aura.UAttack;
 
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ModuleInfo(name = "TpAura", desc = "Teleport strike at any range via hops, always crit", category = Category.COMBAT)
+@ModuleInfo(name = "TpAura", desc = "Дистанционная телепортационная атака по целям с гарантированным критическим уроном", category = Category.COMBAT)
 public class TpAura extends Module {
     public SliderSetting tpRadius = new SliderSetting(this, "Радиус телепорта", 15.0F, 3.0F, 50.0F, 0.5F);
     public SliderSetting standOff = new SliderSetting(this, "Дистанция удара", 2.2F, 1.5F, 3.0F, 0.1F);

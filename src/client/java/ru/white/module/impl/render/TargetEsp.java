@@ -44,7 +44,7 @@ import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_
 
 @ModuleInfo(
         name = "Target Esp",
-        desc = "Отображения таргета",
+        desc = "Визуальное выделение текущей цели атаки анимированными эффектами и маркерами",
         category = Category.RENDER
 )
 public class TargetEsp extends Module implements ModulePreview {

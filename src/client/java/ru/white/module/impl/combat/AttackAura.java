@@ -69,7 +69,7 @@ import static net.minecraft.util.Hand.MAIN_HAND;
 
 @ModuleInfo(
         name = "Attack Aura",
-        desc = "Автоматический наводится и атакует цель",
+        desc = "Автоматическое наведение и атака выбранных целей в заданном радиусе",
         category = Category.COMBAT,
         key = GLFW.GLFW_KEY_R
 )

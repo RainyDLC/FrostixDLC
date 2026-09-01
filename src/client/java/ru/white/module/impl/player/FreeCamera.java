@@ -16,7 +16,7 @@ import ru.white.utils.math.MathUtil;
 
 @ModuleInfo(
         name = "Free Camera",
-        desc = "Камера свободного полёта",
+        desc = "Режим свободной камеры для беспрепятственного осмотра окружения сквозь блоки",
         category = Category.PLAYER
 )
 public class FreeCamera extends Module {

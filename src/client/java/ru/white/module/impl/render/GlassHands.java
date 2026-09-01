@@ -15,7 +15,7 @@ import ru.white.utils.render.GlassHandsRenderer;
 import lombok.Getter;
 
 @Getter
-@ModuleInfo(name = "Glass Hands", category = Category.RENDER, desc = "Делает руки и предметы стеклянными")
+@ModuleInfo(name = "Glass Hands", category = Category.RENDER, desc = "Шейдерный эффект стеклянной прозрачности рук и удерживаемых предметов")
 public class GlassHands extends Module {
     private static GlassHands instance;
 

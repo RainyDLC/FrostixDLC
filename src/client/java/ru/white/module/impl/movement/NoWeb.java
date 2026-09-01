@@ -9,7 +9,7 @@ import ru.white.utils.aura.AuraUtil;
 
 @ModuleInfo(
         name = "No Web",
-        desc = "Позволяет быстро передвигаться в паутине",
+        desc = "Снятие замедления при передвижении внутри блоков паутины",
         category = Category.MOVEMENT
 )
 public class NoWeb extends Module {

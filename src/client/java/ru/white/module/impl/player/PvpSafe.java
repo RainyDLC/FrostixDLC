@@ -12,7 +12,7 @@ import net.minecraft.network.packet.c2s.play.ChatMessageC2SPacket;
 import net.minecraft.network.packet.c2s.play.CommandExecutionC2SPacket;
 
 @ModuleInfo(name = "Pvp Safe", category = Category.PLAYER,
-        desc = "Во время ПВП блокирует выход с сервера и команды выхода (/hub /limbo /an /anarchy)")
+        desc = "Предотвращение случайного выхода с сервера и отправки команд телепортации во время PvP")
 public class PvpSafe extends Module {
     public static PvpSafe get() {
         return Instance.get(PvpSafe.class);

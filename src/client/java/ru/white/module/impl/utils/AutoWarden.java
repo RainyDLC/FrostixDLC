@@ -78,7 +78,7 @@ import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@ModuleInfo(name = "Auto Warden", desc = "Автофарм сундуков в Варден зоне. Анархии и пресеты настраиваются в этом меню", category = Category.OTHER)
+@ModuleInfo(name = "Auto Warden", desc = "Комплексный автоматический фарм сундуков в зоне Вардена с навигацией и логистикой", category = Category.OTHER)
 public class AutoWarden extends Module {
     private static final Pattern CLOCK = Pattern.compile("([0-9]{1,2}):([0-9]{2})");
     private static final Pattern NUMBER = Pattern.compile("[0-9]+");

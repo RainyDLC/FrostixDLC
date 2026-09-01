@@ -33,7 +33,7 @@ import java.util.UUID;
 
 @ModuleInfo(
         name = "Aim Bot",
-        desc = "Автоприцел для лука и трезубца с предиктом позиции цели и компенсацией гравитации",
+        desc = "Упреждающий прицел для дальнобойного оружия с компенсацией баллистики и движения цели",
         category = Category.COMBAT
 )
 public class ProjectileAimBot extends Module {

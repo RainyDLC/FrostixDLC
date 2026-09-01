@@ -54,7 +54,7 @@ import java.util.function.Function;
 
 @ModuleInfo(
         name = "Particles",
-        desc = "Кастомные частицы вокруг игрока",
+        desc = "Генерация декоративных частиц при атаках, движении и срабатывании тотемов",
         category = Category.RENDER
 )
 public class Particles extends Module implements ModulePreview {

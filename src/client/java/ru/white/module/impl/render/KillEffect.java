@@ -43,7 +43,7 @@ import java.util.List;
 
 @ModuleInfo(
         name = "Kill Effect",
-        desc = "Soft beam on killed target",
+        desc = "Эффект ниспадающего светового луча на месте ликвидации противника",
         category = Category.RENDER
 )
 public class KillEffect extends Module implements ModulePreview {

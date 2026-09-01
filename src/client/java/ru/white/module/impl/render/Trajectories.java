@@ -55,7 +55,7 @@ import java.util.Map;
 
 @ModuleInfo(
         name = "Trajectories",
-        desc = "Показывает траекторию, иконку и точку падения жемчуга, стрелы и трезубца",
+        desc = "Расчет и отображение баллистической траектории полета метательных снарядов и жемчуга",
         category = Category.RENDER
 )
 public class Trajectories extends Module {

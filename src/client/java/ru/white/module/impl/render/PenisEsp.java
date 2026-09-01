@@ -25,7 +25,7 @@ import ru.white.utils.annotation.IMinecraft;
 
 @ModuleInfo(
         name = "PenisESP",
-        desc = "Каркасный орган на игроках с настройкой размеров",
+        desc = "Шуточная трехмерная каркасная модель на персонажах с возможностью кастомизации",
         category = Category.RENDER
 )
 public class PenisEsp extends Module implements IMinecraft {

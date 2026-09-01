@@ -11,7 +11,7 @@ import ru.white.module.api.settings.impl.SliderSetting;
 
 @ModuleInfo(
         name = "Spider",
-        desc = "Позволяет лазить по стенам",
+        desc = "Возможность вертикального подъема по любым отвесным стенам и препятствиям",
         category = Category.MOVEMENT
 )
 public class Spider extends Module {

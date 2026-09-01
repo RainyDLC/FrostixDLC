@@ -14,7 +14,7 @@ import ru.white.utils.other.Instance;
 
 @ModuleInfo(
         name = "No Push",
-        desc = "Не даёт другим игрокам и воде толкать вас",
+        desc = "Защита от отталкивания сущностями, блоками и водными потоками",
         category = Category.PLAYER
 )
 public class NoPush extends Module {

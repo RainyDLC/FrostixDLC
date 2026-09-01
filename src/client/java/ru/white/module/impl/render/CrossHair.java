@@ -22,7 +22,7 @@ import ru.white.utils.render.RenderUtil;
 
 @ModuleInfo(
         name = "Cross Hair",
-        desc = "Кастомный прицел",
+        desc = "Пользовательский прицел с возможностью точечного редактирования формы и цвета",
         category = Category.RENDER
 )
 public class CrossHair extends Module {

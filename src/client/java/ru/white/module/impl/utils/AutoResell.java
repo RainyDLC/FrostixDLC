@@ -15,7 +15,7 @@ import ru.white.module.api.ModuleInfo;
 
 @ModuleInfo(
         name = "Auto Resell",
-        desc = "МОДУЛЬ ПИСАЛ АКАР МОЖЕТ РОБОТАТЬ ЧЕРЕЗ ОЧКО И ЧУДА АЛЛАХА",
+        desc = "Автоматическое повторное выставление просроченных предметов из хранилища на аукцион",
         category = Category.OTHER
 )
 public class AutoResell extends Module {

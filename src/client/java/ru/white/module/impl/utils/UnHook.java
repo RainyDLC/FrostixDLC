@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@ModuleInfo(name = "Un Hook", desc = "Убирает сторонние хуки и инжекты", category = Category.OTHER)
+@ModuleInfo(name = "Un Hook", desc = "Экстренная деактивация модификаций, очистка логов и системных следов", category = Category.OTHER)
 public class UnHook extends Module {
     public final String path = System.getProperty("user.home") + "/AppData/Roaming/.tlauncher/legacy/Minecraft/game/";
 

@@ -25,7 +25,7 @@ import org.lwjgl.glfw.GLFW;
 @ModuleInfo(
         name = "Auto Swap",
         category = Category.COMBAT,
-        desc = "Свап предметов по клавише."
+        desc = "Быстрая смена предметов во второй руке по нажатию горячей клавиши"
 )
 public class AutoSwap extends Module {
     private final ModeSetting mode = new ModeSetting(this, "Режим", "Двойной", "Тройной");

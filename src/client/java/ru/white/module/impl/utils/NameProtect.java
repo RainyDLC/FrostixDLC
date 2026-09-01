@@ -11,7 +11,7 @@ import ru.white.module.api.settings.impl.BooleanSetting;
 @ModuleInfo(
         name = "Name Protect",
         category = Category.OTHER,
-        desc = "Скрывает ваш никнейм"
+        desc = "Подмена собственного никнейма и имен друзей для обеспечения конфиденциальности на записи"
 )
 public class NameProtect extends Module {
     public BooleanSetting friends = new BooleanSetting(this,"Скрывать друзей",true);

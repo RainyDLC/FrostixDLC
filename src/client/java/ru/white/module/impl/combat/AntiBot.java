@@ -18,7 +18,7 @@ import java.util.List;
 
 @ModuleInfo(
         name = "Anti Bot",
-        desc = "Не дает Attack Aura ударить бота",
+        desc = "Предотвращает наведение и атаки по серверным ботам и фантомным сущностям",
         category = Category.COMBAT
 )
 public class AntiBot extends Module {

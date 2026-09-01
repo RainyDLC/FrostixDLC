@@ -36,7 +36,7 @@ import java.util.regex.Pattern;
 
 @ModuleInfo(
         name = "DanjHelper",
-        desc = "Отслеживание бочек в данже: таймеры открытия и градиентный ESP",
+        desc = "Мониторинг бочек в данже: отображение таймеров перезарядки и визуальный ESP",
         category = Category.OTHER
 )
 public class DanjHelper extends Module {

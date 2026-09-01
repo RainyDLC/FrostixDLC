@@ -18,7 +18,7 @@ import net.minecraft.screen.GenericContainerScreenHandler;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 
-@ModuleInfo(name = "Auto Leave",desc = "Данный модуль был сделан акарачком поэтому может работать через жопу", category = Category.PLAYER)
+@ModuleInfo(name = "Auto Leave", desc = "Автоматический выход из опасной зоны при приближении противников или окончании PvP", category = Category.PLAYER)
 public class AutoLeave extends Module {
     public static AutoLeave get() {
         return Instance.get(AutoLeave.class);

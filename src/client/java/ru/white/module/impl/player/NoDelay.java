@@ -13,7 +13,7 @@ import net.minecraft.registry.Registries;
 @ModuleInfo(
         name = "No Delay",
         category = Category.PLAYER,
-        desc = "Убирает задержки"
+        desc = "Устранение встроенных задержек на прыжки и использование пузырьков опыта"
 )
 public class NoDelay extends Module {
     public static NoDelay get() {

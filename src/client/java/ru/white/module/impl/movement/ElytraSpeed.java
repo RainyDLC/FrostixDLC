@@ -12,7 +12,7 @@ import ru.white.module.api.ModuleInfo;
 
 @ModuleInfo(
         name = "Elytra Speed",
-        desc = "Автоматический взлёт на элитре и пикирование для максимальной скорости",
+        desc = "Автоматический разгон на элитрах с оптимизацией угла тангажа для максимальной скорости",
         category = Category.MOVEMENT
 )
 public class ElytraSpeed extends Module {

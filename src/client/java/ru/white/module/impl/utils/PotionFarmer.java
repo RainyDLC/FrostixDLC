@@ -29,7 +29,7 @@ import java.util.List;
 
 @ModuleInfo(
         name = "Potion Farmer",
-        desc = "Автоматически варит зелье [не роботает временно]",
+        desc = "Автоматизированное зельеварение: сбор компонентов из сундуков и варка в стойке",
         category = Category.OTHER
 )
 public class PotionFarmer extends Module {

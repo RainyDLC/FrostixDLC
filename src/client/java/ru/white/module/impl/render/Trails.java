@@ -43,7 +43,7 @@ import static java.lang.Math.sin;
 
 @ModuleInfo(
         name = "Trails",
-        desc = "Красивый эффект заде игрока при движении",
+        desc = "Отображение анимированного шлейфа и следа из частиц за движущимся персонажем",
         category = Category.RENDER
 )
 public class Trails extends Module implements ModulePreview {

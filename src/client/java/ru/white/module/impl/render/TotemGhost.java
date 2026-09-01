@@ -38,7 +38,7 @@ import java.util.List;
 
 @ModuleInfo(
         name = "Totem Ghost",
-        desc = "Призрак модельки при лопании тотема",
+        desc = "Плавное восхождение призрачной проекции игрока в момент срабатывания тотема бессмертия",
         category = Category.RENDER
 )
 public class TotemGhost extends Module implements ModulePreview {

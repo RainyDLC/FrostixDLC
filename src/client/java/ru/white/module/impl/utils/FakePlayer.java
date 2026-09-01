@@ -38,7 +38,7 @@ import java.util.UUID;
 
 @ModuleInfo(
         name = "Fake Player",
-        desc = "Создает фейк игрока [Бан на SP / HW]",
+        desc = "Спавн тестового NPC для проверки боевых модулей, хитбоксов и расчета урона",
         category = Category.OTHER
 )
 public class FakePlayer extends Module {

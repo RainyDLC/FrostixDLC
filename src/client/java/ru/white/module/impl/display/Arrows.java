@@ -22,7 +22,7 @@ import net.minecraft.util.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 
-@ModuleInfo(name = "Arrows", category = Category.RENDER, desc = "Стрелки на игроков")
+@ModuleInfo(name = "Arrows", category = Category.RENDER, desc = "Указатели направления на экране в сторону ближайших игроков")
 public class Arrows extends Module {
     public BooleanSetting onlyArmored = new BooleanSetting(this, "Игнорировать голых", false);
     public SliderSetting size = new SliderSetting(this,"Размер",30,12,80,1);

@@ -51,7 +51,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @ModuleInfo(
         name = "Click Helper",
-        desc = "Помогает кликать по клавише (автокликер)",
+        desc = "Быстрое применение предметов и расходников анархии по назначенным горячим клавишам",
         category = Category.PLAYER
 )
 public class ClickHelper extends Module {

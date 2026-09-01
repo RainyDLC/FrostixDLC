@@ -30,7 +30,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @ModuleInfo(
         name = "Aim Assist",
-        desc = "Автоматически наводит прицел на врагов с симуляцией движений человека",
+        desc = "Плавная доводка прицела на противников с симуляцией естественных движений мыши",
         category = Category.COMBAT
 )
 public class AimBot extends Module {

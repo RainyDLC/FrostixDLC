@@ -17,7 +17,7 @@ import ru.white.utils.other.UseCooldowns;
 
 @ModuleInfo(
         name = "Inter Face",
-        desc = "Настройка интерфейса (HUD) клиента",
+        desc = "Комплексная панель управления графическим интерфейсом и визуальными виджетами",
         category = Category.RENDER
 )
 public class InterFace extends Module {

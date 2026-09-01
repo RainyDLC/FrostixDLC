@@ -17,7 +17,7 @@ import net.minecraft.util.hit.BlockHitResult;
 
 @ModuleInfo(
         name = "Auto Tool",
-        desc = "Автоматически выбирает лучший инструмент",
+        desc = "Автоматический выбор наиболее эффективного инструмента из хотбара под добываемый блок",
         category = Category.PLAYER
 )
 public class AutoTool extends Module {

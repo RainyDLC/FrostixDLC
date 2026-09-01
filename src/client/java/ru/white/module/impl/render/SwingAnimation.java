@@ -27,7 +27,7 @@ import net.minecraft.util.math.RotationAxis;
 @ModuleInfo(
         name = "Swing Animation",
         category = Category.RENDER,
-        desc = "Анимации взмаха руки"
+        desc = "Кастомизация стилей и скорости анимации удара и взмаха руки"
 )
 public class SwingAnimation extends Module {
     public static SwingAnimation get() {

@@ -9,7 +9,7 @@ import ru.white.module.api.ModuleInfo;
 
 @ModuleInfo(
         name = "No Friend Damage",
-        desc = "Убирает удары по друзьям",
+        desc = "Блокирует нанесение урона игрокам, добавленным в список друзей",
         category = Category.COMBAT
 )
 public class NoFriendDamage extends Module {

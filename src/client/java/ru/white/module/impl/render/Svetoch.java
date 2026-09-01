@@ -35,7 +35,7 @@ import java.util.List;
 
 @ModuleInfo(
         name = "Svetoch",
-        desc = "Летающие светящиеся кубы с физикой",
+        desc = "Парящие светящиеся светочи с физической симуляцией падения и отскока",
         category = Category.RENDER
 )
 public class Svetoch extends Module {

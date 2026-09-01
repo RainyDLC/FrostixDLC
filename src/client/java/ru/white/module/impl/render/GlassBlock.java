@@ -38,7 +38,7 @@ import java.util.Collections;
 import java.util.List;
 
 @Getter
-@ModuleInfo(name = "Glass Block", category = Category.RENDER, desc = "Делает наведенный блок стеклянным")
+@ModuleInfo(name = "Glass Block", category = Category.RENDER, desc = "Шейдерный эффект стеклянной полупрозрачности для выделенного блока")
 public class GlassBlock extends Module {
     private static GlassBlock instance;
 

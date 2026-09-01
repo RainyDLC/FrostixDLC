@@ -10,7 +10,7 @@ import ru.white.utils.other.Instance;
 
 @ModuleInfo(
         name = "Criticals",
-        desc = "Криты с земли",
+        desc = "Нанесение критических ударов с земли за счет микро-прыжков",
         category = Category.COMBAT
 )
 public class Criticals extends Module {

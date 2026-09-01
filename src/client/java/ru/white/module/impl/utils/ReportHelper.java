@@ -61,7 +61,7 @@ import java.util.regex.Pattern;
 
 @ModuleInfo(
         name = "Report Helper",
-        desc = "Очередь репортов и подсветка игроков",
+        desc = "Менеджер автоматической отправки репортов с визуальной подсветкой нарушителей",
         category = Category.OTHER
 )
 public class ReportHelper extends Module {

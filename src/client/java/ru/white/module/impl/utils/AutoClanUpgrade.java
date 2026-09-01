@@ -19,7 +19,7 @@ import net.minecraft.util.math.Direction;
 
 @ModuleInfo(
         name = "Auto Clan Upgrade",
-        desc = "Автоматическая прокачка клана через факела",
+        desc = "Автоматическое повышение уровня клана посредством быстрой установки и разрушения факелов",
         category = Category.OTHER
 )
 public class AutoClanUpgrade extends Module {

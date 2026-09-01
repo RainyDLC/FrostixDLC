@@ -27,7 +27,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 
-@ModuleInfo(name = "Elytra Helper", desc = "Помощник элитры: авто-свап и полёт", category = Category.PLAYER)
+@ModuleInfo(name = "Elytra Helper", desc = "Быстрая смена нагрудника на элитры, запуск фейерверков и стабилизация полета", category = Category.PLAYER)
 public class ElytraHelper extends Module {
     public final BindSetting swapChestKey = new BindSetting(this, "Свап");
     public final BindSetting use = new BindSetting(this, "Исп. фейерверк");

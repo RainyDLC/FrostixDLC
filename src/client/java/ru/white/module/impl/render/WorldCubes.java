@@ -33,7 +33,7 @@ import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_
 
 @ModuleInfo(
         name = "World Cubes",
-        desc = "Сетка по миру со свечением",
+        desc = "Геометрическая неоновая сетка на поверхностях блоков окружающего мира",
         category = Category.RENDER
 )
 public class WorldCubes extends Module {

@@ -17,7 +17,7 @@ import java.util.*;
 
 @ModuleInfo(
         name = "Hud",
-        desc = "Настройка интерфейса (HUD) клиента",
+        desc = "Настройка и отображение информационных элементов на экране",
         category = Category.RENDER
 )
 public class Hud extends Module {

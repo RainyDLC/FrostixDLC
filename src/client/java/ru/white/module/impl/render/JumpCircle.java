@@ -37,7 +37,7 @@ import java.util.function.Function;
 
 @ModuleInfo(
         name = "Jump Circle",
-        desc = "Кружочек под тобой при прижке",
+        desc = "Анимированное расходящееся кольцо на поверхности земли при совершении прыжка",
         category = Category.RENDER
 )
 public class JumpCircle extends Module implements ModulePreview {

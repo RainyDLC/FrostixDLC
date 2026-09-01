@@ -17,7 +17,7 @@ import net.minecraft.item.Items;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 
-@ModuleInfo(name = "Auto Storage",desc = "Данный модуль был сделан акарачком поэтому может работать через жопу", category = Category.OTHER)
+@ModuleInfo(name = "Auto Storage", desc = "Быстрое открытие кланового хранилища и автоматическая выгрузка ценных предметов", category = Category.OTHER)
 public class AutoStorage extends Module {
     public final BindSetting bind = new BindSetting(this, "Бинд", -1);
     public final ModeSetting mode = new ModeSetting(this, "Режим", "Только ценные", "Все предметы");

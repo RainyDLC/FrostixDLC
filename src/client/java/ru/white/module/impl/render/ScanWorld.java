@@ -25,7 +25,7 @@ import java.awt.*;
 @ModuleInfo(
         name = "Scan World",
         category = Category.RENDER,
-        desc = "Сканирующая волна по миру"
+        desc = "Визуальный эффект радиальной сканирующей волны по рельефу местности"
 )
 public class ScanWorld extends Module {
     public ModeSetting typeColor = new ModeSetting(this, "Режим цвета", "Тема", "Свой");

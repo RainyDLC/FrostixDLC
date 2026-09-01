@@ -24,7 +24,7 @@ import net.minecraft.util.math.Vec3d;
 
 @ModuleInfo(
         name = "Hit Boxes",
-        desc = "Увеличивает хит бокс игрока",
+        desc = "Расширение области попадания (хитбокса) противников для облегчения атак",
         category = Category.COMBAT
 )
 public class HitBoxes extends Module {

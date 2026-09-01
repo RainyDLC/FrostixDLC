@@ -29,7 +29,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @ModuleInfo(
         name = "Fly",
-        desc = "Полёт на табличках (обход Polar / FunTime)",
+        desc = "Режим свободного перемещения по воздуху с поддержкой обхода античитов",
         category = Category.MOVEMENT
 )
 public class Fly extends Module {

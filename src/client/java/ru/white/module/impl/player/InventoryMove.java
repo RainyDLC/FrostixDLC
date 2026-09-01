@@ -28,7 +28,7 @@ import java.util.*;
 
 @ModuleInfo(
         name = "Inventory Move",
-        desc = "Позволяет двигаться с открытым инвентарём",
+        desc = "Сохранение возможности полноценного передвижения персонажа при открытом инвентаре",
         category = Category.MOVEMENT
 )
 public class InventoryMove extends Module {

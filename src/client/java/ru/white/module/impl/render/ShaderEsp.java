@@ -29,7 +29,7 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.WeakHashMap;
 
-@ModuleInfo(name = "Shader ESP", category = Category.RENDER, desc = "Шейдерный ESP с ореолом свечения для сущностей")
+@ModuleInfo(name = "Shader ESP", category = Category.RENDER, desc = "Высококачественная шейдерная обводка и подсветка силуэтов сущностей с ореолом свечения")
 public class ShaderEsp extends Module implements ModulePreview {
     private static ShaderEsp instance;
 

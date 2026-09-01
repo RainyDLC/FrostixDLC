@@ -33,7 +33,7 @@ import java.util.stream.IntStream;
 
 @ModuleInfo(
         name = "Auto Totem",
-        desc = "Автоматически держит тотем в руке",
+        desc = "Автоматическое перемещение тотема бессмертия во вторую руку при угрозе здоровью",
         category = Category.COMBAT
 )
 public class AutoTotem extends Module {

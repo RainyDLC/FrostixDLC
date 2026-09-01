@@ -34,7 +34,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-@ModuleInfo(name = "Chest Stealer",desc = "Данный модуль был сделан акарачком поэтому может работать через жопу", category = Category.OTHER)
+@ModuleInfo(name = "Chest Stealer", desc = "Автоматический сбор предметов из контейнеров с интеллектуальной фильтрацией ценного лута", category = Category.OTHER)
 public class ChestStealer extends Module {
     public final ModeSetting mode = new ModeSetting(this, "Режим", "Normal", "Warden", "Danj");
     public final BooleanSetting autoClan = new BooleanSetting(this, "AutoClanStorage", false);

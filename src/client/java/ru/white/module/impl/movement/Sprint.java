@@ -15,7 +15,7 @@ import ru.white.utils.other.Instance;
 
 @ModuleInfo(
         name = "Sprint",
-        desc = "Автоматический спринт",
+        desc = "Автоматическое поддержание режима бега при любом перемещении вперед",
         category = Category.MOVEMENT
 )
 public class Sprint extends Module {

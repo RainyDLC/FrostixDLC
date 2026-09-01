@@ -52,7 +52,7 @@ import java.util.Optional;
 @ModuleInfo(
         name = "Name Tag",
         category = Category.RENDER,
-        desc = "Отображает ники, хп и броню сущностей"
+        desc = "Детализированные таблички с никами, здоровьем и экипировкой сущностей"
 )
 public class NameTag extends Module {
     private static final char[] HEX = "0123456789ABCDEF".toCharArray();

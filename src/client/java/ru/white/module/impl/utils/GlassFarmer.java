@@ -17,7 +17,7 @@ import net.minecraft.util.math.Vec3d;
 
 @ModuleInfo(
         name = "Glass Farmer",
-        desc = "Легитный фарм стекла: сначала наводится, затем с задержкой строит/ломает центр",
+        desc = "Автоматизированная добыча стекла с имитацией естественных движений и задержек",
         category = Category.OTHER
 )
 public class GlassFarmer extends Module {

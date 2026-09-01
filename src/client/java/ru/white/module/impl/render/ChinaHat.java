@@ -7,7 +7,7 @@ import ru.white.utils.other.Instance;
 
 @ModuleInfo(
         name = "China Hat",
-        desc = "Китайская шляпа",
+        desc = "Конусообразный головной убор с градиентной подсветкой над моделью персонажа",
         category = Category.RENDER
 )
 public class ChinaHat extends Module {

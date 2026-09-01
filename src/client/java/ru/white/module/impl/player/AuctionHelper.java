@@ -32,7 +32,7 @@ import java.util.List;
 @ModuleInfo(
         name = "Auction Helper",
         category = Category.PLAYER,
-        desc = "Подсвечивает 3 самых дешёвых лота. Поиск и автопродажа по биндам."
+        desc = "Помощник торговли на аукционе: поиск выгодных предложений, подсветка и быстрая продажа"
 )
 public class AuctionHelper extends Module {
     public static AuctionHelper get() {

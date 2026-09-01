@@ -23,7 +23,7 @@ import java.util.List;
 
 @ModuleInfo(
         name = "Use World Tracker",
-        desc = "Кулдауны хилок всех игроков в мире прямо над ником",
+        desc = "Отображение индикаторов перезарядки лечебных предметов над видимыми игроками",
         category = Category.PLAYER
 )
 public class WorldTracker extends Module {

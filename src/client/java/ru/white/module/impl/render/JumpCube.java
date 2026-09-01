@@ -38,7 +38,7 @@ import java.util.Random;
 
 @ModuleInfo(
         name = "Jump Cube",
-        desc = "Кубики вокруг игрока - прыгают и крутятся",
+        desc = "Трехмерные вращающиеся кубы с эффектом свечения, реагирующие на прыжки",
         category = Category.RENDER
 )
 public class JumpCube extends Module implements ModulePreview {

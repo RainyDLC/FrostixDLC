@@ -21,7 +21,7 @@ import ru.white.module.api.settings.impl.ModeSetting;
 @ModuleInfo(
         name = "No Slow",
         category = Category.MOVEMENT,
-        desc = "Позволяет использавать придметы без замедления"
+        desc = "Устранение замедления при использовании предметов, еды и стрельбе из лука"
 )
 public class NoSlow extends Module {
     public ModeSetting type = new ModeSetting(this, "Режим", "ФанТайм", "Тики", "Обычный");

@@ -36,7 +36,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @ModuleInfo(
         name = "Fire Flies",
-        desc = "Светлячки вокруг игрока",
+        desc = "Атмосферный визуальный эффект парящих светлячков вокруг персонажа",
         category = Category.RENDER
 )
 public class FireFlies extends Module {

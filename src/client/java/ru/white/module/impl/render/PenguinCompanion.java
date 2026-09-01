@@ -42,7 +42,7 @@ import java.util.Optional;
 
 @ModuleInfo(
         name = "Penguin Companion",
-        desc = "Renders the gugu gaga penguin model near the player",
+        desc = "Декоративная 3D-модель пингвина-компаньона, сопровождающего персонажа",
         category = Category.RENDER
 )
 public class PenguinCompanion extends Module {

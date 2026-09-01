@@ -19,7 +19,7 @@ import ru.white.utils.notification.NotificationManager;
 
 @ModuleInfo(
         name = "Auto Invest",
-        desc = "Автоматический инвестиции в клан по бинду или авто-порогу",
+        desc = "Инвестирование средств в клановую казну по нажатию клавиши или пороговому балансу",
         category = Category.OTHER
 )
 public class AutoInvest extends Module {

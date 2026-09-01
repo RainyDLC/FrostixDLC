@@ -60,7 +60,7 @@ import org.joml.Vector2f;
 @ModuleInfo(
         name = "Aura Crafter",
         category = Category.OTHER,
-        desc = "Крафт Божьей ауры, простая закупка и простая продажа по биндам."
+        desc = "Автоматизированный цикл крафта, закупки ресурсов и реализации Божьей ауры"
 )
 public class AuraCrafter extends Module {
     private static final String AURA_NAME = "Божья аура";

@@ -25,7 +25,7 @@ import static net.minecraft.util.Hand.MAIN_HAND;
 
 @ModuleInfo(
         name = "TriggerBot",
-        desc = "Автоматический атакует цель на которую вы навились",
+        desc = "Автоматическое нанесение удара при наведении перекрестия прицела на цель",
         category = Category.COMBAT
 )
 public class TriggerBot extends Module {

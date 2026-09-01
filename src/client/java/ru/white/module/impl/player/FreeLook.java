@@ -15,7 +15,7 @@ import org.lwjgl.glfw.GLFW;
 
 @ModuleInfo(
         name = "Free Look",
-        desc = "Позволяет крутить свободно камерой.",
+        desc = "Свободный круговой обзор камерой без изменения направления движения персонажа",
         category = Category.PLAYER
 )
 public class FreeLook extends Module {

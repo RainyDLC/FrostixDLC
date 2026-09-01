@@ -9,7 +9,7 @@ import net.minecraft.entity.effect.StatusEffects;
 
 @ModuleInfo(
         name = "Gamma",
-        desc = "Полная яркость (фуллбрайт)",
+        desc = "Максимальное осветление темных зон и пещер для идеальной видимости",
         category = Category.RENDER
 )
 public class Gamma extends Module {

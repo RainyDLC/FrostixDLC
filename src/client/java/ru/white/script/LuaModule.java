@@ -24,7 +24,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-@ModuleInfo(name = "Lua", desc = "Пользовательский скрипт", category = Category.OTHER)
+@ModuleInfo(name = "Lua", desc = "Выполнение пользовательского скрипта на языке Lua", category = Category.OTHER)
 public class LuaModule extends Module {
     private final Path file;
     private final Category scriptCategory;

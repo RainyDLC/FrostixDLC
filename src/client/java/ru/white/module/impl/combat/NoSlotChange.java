@@ -9,7 +9,7 @@ import net.minecraft.network.packet.s2c.play.UpdateSelectedSlotS2CPacket;
 
 @ModuleInfo(
         name = "No Slot Change",
-        desc = "Запрещает серверу свапать предметы",
+        desc = "Блокирует серверные пакеты принудительной смены активного слота хотбара",
         category = Category.COMBAT
 )
 public class NoSlotChange extends Module {

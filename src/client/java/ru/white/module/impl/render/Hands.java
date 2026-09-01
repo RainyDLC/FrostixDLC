@@ -13,7 +13,7 @@ import net.minecraft.util.Arm;
 
 @ModuleInfo(
         name = "Hands",
-        desc = "Положение и размер рук от первого лица",
+        desc = "Точная настройка трехмерного положения, смещения и масштаба рук от первого лица",
         category = Category.RENDER
 )
 public class Hands extends Module {

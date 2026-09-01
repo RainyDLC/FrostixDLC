@@ -29,7 +29,7 @@ import java.util.Set;
 
 @ModuleInfo(
         name = "Auto Potion",
-        desc = "Смотрит вниз и кидает все нужные зелья сразу (Сила, Скорость, Огнестойкость), когда эффекта нет",
+        desc = "Автоматическое применение взрывных зелий под ноги при окончании действия баффов",
         category = Category.OTHER
 )
 public class AutoPotion extends Module {

@@ -30,7 +30,7 @@ import java.util.Arrays;
 
 @ModuleInfo(
         name = "Speed",
-        desc = "Увеличивает скорость игрока",
+        desc = "Модификация физики перемещения для существенного увеличения скорости бега",
         category = Category.MOVEMENT
 )
 public class Speed extends Module {

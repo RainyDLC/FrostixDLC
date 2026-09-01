@@ -25,7 +25,7 @@ import ru.white.utils.aura.UAttack;
 
 @ModuleInfo(
         name = "Mace Helper",
-        desc = "Автоматический удар булавой при падении на цель",
+        desc = "Автоматическое переключение на булаву и нанесение сокрушительного удара при падении",
         category = Category.COMBAT
 )
 public class MaceHelper extends Module {

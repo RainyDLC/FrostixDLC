@@ -45,7 +45,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@ModuleInfo(name = "Warden Helper", desc = "Сундуки в Варден зоне: 2D таймеры над сундуками и ESP готовых", category = Category.OTHER)
+@ModuleInfo(name = "Warden Helper", desc = "Визуальный помощник в зоне Вардена: 2D-таймеры над сундуками и ESP доступного лута", category = Category.OTHER)
 public class WardenHelper extends Module {
     private static final Pattern TIME_PATTERN = Pattern.compile("(\\d{1,2}):(\\d{2})(?::(\\d{2}))?");
     private static final Pattern SECONDS_PATTERN = Pattern.compile("(\\d+)\\s*(с|s|сек|sec)");

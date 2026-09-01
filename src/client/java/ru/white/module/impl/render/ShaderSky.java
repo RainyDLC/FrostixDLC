@@ -14,7 +14,7 @@ import ru.white.utils.colors.ColorUtil;
 import ru.white.utils.render.ShaderSkyRenderer;
 
 @Getter
-@ModuleInfo(name = "Shader Sky", category = Category.RENDER, desc = "Шейдерное небо")
+@ModuleInfo(name = "Shader Sky", category = Category.RENDER, desc = "Кастомный рендеринг небесного свода с анимированными шейдерными эффектами")
 public class ShaderSky extends Module {
     private static ShaderSky instance;
 

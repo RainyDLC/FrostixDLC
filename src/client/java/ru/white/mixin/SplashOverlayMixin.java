@@ -46,16 +46,22 @@ public abstract class SplashOverlayMixin {
     @Unique private static final long TIP_PERIOD_MS = 4200L;
 
     @Unique private static final String[][] TIPS = {
-            {"Нажми Right Shift, чтобы открыть меню клиента",
-             "Press Right Shift to open the client menu"},
-            {"Дождь на этом экране — фирменный стиль RainyDLC",
-             "The rain on this screen is the RainyDLC signature"},
-            {"Зажми Alt, чтобы свободно перетаскивать элементы худа",
-             "Hold Alt to freely drag HUD elements"},
-            {"Каждая функция гибко настраивается под тебя",
-             "Every feature is finely customizable"},
-            {"Приятной игры в дождливую погоду",
-             "Enjoy your stay, whatever the weather"}
+            {"Нажмите Right Shift, чтобы открыть главное меню конфигурации клиента",
+             "Press Right Shift to open the main client configuration menu"},
+            {"Удерживайте клавишу Alt для свободного перемещения элементов HUD-интерфейса",
+             "Hold the Alt key to freely reposition HUD interface elements"},
+            {"Привязать горячую клавишу к любому модулю можно нажатием по полю бинда в меню",
+             "Assign a hotkey to any module by clicking the bind button in the menu"},
+            {"Используйте модуль Name Protect для скрытия никнеймов во время стримов и записи видео",
+             "Use the Name Protect module to conceal player nicknames during recording or streaming"},
+            {"Параметры и раскладки интерфейса автоматически сохраняются в активную конфигурацию",
+             "Interface settings and presets are automatically saved to your active configuration"},
+            {"Модуль Free Camera позволяет безопасно исследовать территорию и постройки сквозь препятствия",
+             "The Free Camera module enables safe area reconnaissance and structure inspection through obstacles"},
+            {"Настройте цветовые акценты и индивидуальные темы оформления во вкладке Themes",
+             "Customize color schemes and visual aesthetics in the Themes menu tab"},
+            {"Модуль Auto Totem своевременно перемещает тотем в руку при снижении запаса здоровья",
+             "Auto Totem automatically equips a Totem of Undying when your health drops to a critical level"}
     };
 
     @Unique private long rainydlcStart = -1L;

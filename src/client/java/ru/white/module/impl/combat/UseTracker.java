@@ -21,7 +21,7 @@ import java.util.UUID;
 
 @ModuleInfo(
         name = "Use Tracker",
-        desc = "Кулдауны хилок цели и её баффы",
+        desc = "Отслеживание времени перезарядки лечебных предметов и активных эффектов противника",
         category = Category.COMBAT
 )
 public class UseTracker extends Module {

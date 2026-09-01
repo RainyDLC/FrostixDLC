@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-@ModuleInfo(name = "Block ESP", category = Category.RENDER, desc = "Подсвечивает блоки в радиусе")
+@ModuleInfo(name = "Block ESP", category = Category.RENDER, desc = "Контурная подсветка и поиск заданных типов блоков в окружающем пространстве")
 public class BlockEsp extends Module {
     public SliderSetting radius = new SliderSetting(this, "Радиус", 30, 5, 60, 5);
 
