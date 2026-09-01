@@ -114,7 +114,7 @@ public class TargetHud implements element {
         ARMOR_PAD = 2.5F * S;
         ARMOR_X = 10F * S;
         ARMOR_Y = 12F * S;
-        W_BASE = 114F * S;
+        W_BASE = 148F * S;
         H_BASE = 34F * S;
         RADIUS = 6F * S;
         ANIM_OFFSET = 8F * S;
@@ -167,7 +167,14 @@ public class TargetHud implements element {
 
         drag.active = true;
 
-        boolean showStats = interFace.targetStats.getValue();
+        String mode = interFace.targetHudMode.getValue();
+
+        if (mode.equals("Компактный")) {
+            renderCompact(drag, interFace, eventDisplay, target);
+            return;
+        }
+
+        boolean showStats = mode.equals("Полный");
         float statsW = showStats ? STATS_W : 0F;
 
         drag.size.set(W_BASE - STATS_W + statsW, H_BASE);
@@ -197,7 +204,7 @@ public class TargetHud implements element {
         RenderUtil.Render2D.rect(px + HEAD_CONTAINER_W, y + HEAD_OFFSET_Y,
                 0.5F * S, h - HEAD_OFFSET_Y * 2, ColorUtil.getColor(255, 0.07F * alpha), 0.25F);
 
-        drawFace(target, eventDisplay.getPartialTicks(), px + HEAD_OFFSET_X, y + HEAD_OFFSET_Y, alpha);
+        drawFace(target, eventDisplay.getPartialTicks(), px + HEAD_OFFSET_X, y + HEAD_OFFSET_Y, FACE_SIZE, alpha);
 
         if (showStats) {
             RenderUtil.Render2D.rect(px + mainW, y + HEAD_OFFSET_Y,
@@ -299,6 +306,92 @@ public class TargetHud implements element {
     }
 
     /**
+     * Компактный режим: голова + ник + ХП/чарка справа, без кольца и эффектов.
+     */
+    private void renderCompact(DragSetting drag, InterFace interFace, EventDisplay eventDisplay, LivingEntity target) {
+        float compactW = 100F * S;
+        float compactH = 22F * S;
+
+        float x = drag.position.x;
+        float y = drag.position.y;
+        float w = compactW;
+        float h = compactH;
+        float alpha = openAnimation.getOutput();
+        lastX = x;
+        lastY = y;
+        lastW = w;
+        lastH = h;
+
+        float rad = RADIUS;
+        float addALL = ANIM_OFFSET - ANIM_OFFSET * alpha;
+        float hudOpacity = InterFace.getInstance().alphaHUD.getValue();
+        float px = x + addALL;
+
+        drag.size.set(w, h);
+
+        RenderUtil.Render2D.hudPlate(px, y, w, h, alpha, rad, hudOpacity);
+
+        // Голова
+        float headSize = 16F * S;
+        float headX = px + 3F * S;
+        float headY = y + (h - headSize) / 2F;
+        drawFace(target, eventDisplay.getPartialTicks(), headX, headY, headSize, alpha);
+
+        // Разделитель
+        RenderUtil.Render2D.rect(px + 22F * S, y + 3F * S,
+                0.5F * S, h - 6F * S, ColorUtil.getColor(255, 0.07F * alpha), 0.25F);
+
+        // Имя цели
+        String name = target.getName().getString().replace(mc.player.getName().getString(),
+                Client.get().moduleManager().get(NameProtect.class).isEnabled()
+                        ? "rainydlc.fun"
+                        : mc.player.getName().getString());
+
+        float nameX = px + 25F * S;
+        float nameMaxW = w - 25F * S - 40F * S;
+        Fonts.sf_regular.drawFadingText(name, nameX, y + h / 2F - NAME_SIZE / 2F,
+                nameMaxW, ColorUtil.getColor(255, alpha), NAME_SIZE);
+
+        // Правая колонка статов: ХП сверху, чарка снизу
+        float statsX = px + w - 36F * S;
+        float iconSize = 7F * S;
+        float gap = 2F * S;
+        float textSize = 6F * S;
+
+        // ХП
+        String hpText = String.format("%.0f", animHpText.get());
+        eventDisplay.getDrawContext().drawGuiTexture(RenderPipelines.GUI_TEXTURED, HEART_ICON,
+                (int) statsX, (int) (y + 3F * S), (int) iconSize, (int) iconSize,
+                ColorUtil.getColor(255, (int) (255F * alpha)));
+        Fonts.sf_medium.draw(hpText, statsX + iconSize + gap,
+                y + 3F * S + iconSize / 2F - textSize / 2F,
+                textSize, ColorUtil.replAlpha(getHealthColor(target), alpha));
+
+        // Чарка
+        int notchCount = target instanceof PlayerEntity
+                ? UseCooldowns.count(target.getUuid(), UseCooldowns.Item.NOTCH)
+                : 0;
+        int notchColor = notchCount > 0
+                ? ColorUtil.getColor(255, 205, 90)
+                : ColorUtil.getColor(150, 150, 160);
+
+        float appleY = y + h - iconSize - 3F * S;
+        DrawContext ctx = eventDisplay.getDrawContext();
+        float scaleFix = 2F / Math.max(1F, (float) mc.getWindow().getScaleFactor());
+        float scale = iconSize / 16F;
+        Matrix3x2fStack matrices = ctx.getMatrices();
+        matrices.pushMatrix();
+        matrices.translate((statsX + iconSize / 2F) * scaleFix, (appleY + iconSize / 2F) * scaleFix);
+        matrices.scale(scaleFix * scale, scaleFix * scale);
+        ctx.drawItem(notchIcon(), -8, -8);
+        matrices.popMatrix();
+
+        Fonts.sf_medium.draw(String.valueOf(notchCount), statsX + iconSize + gap,
+                appleY + iconSize / 2F - textSize / 2F,
+                textSize, ColorUtil.replAlpha(notchColor, alpha));
+    }
+
+    /**
      * Строка правой панели: иконка + значение, отцентрованные по ширине панели.
      */
     private void drawStatRow(EventDisplay eventDisplay, float panelX, float panelW, float rowCy,
@@ -358,7 +451,7 @@ public class TargetHud implements element {
         return MathHelper.clamp(hp, 0, entity.getMaxHealth() + entity.getAbsorptionAmount());
     }
 
-    private void drawFace(LivingEntity lastTarget, float lastTickDelta, float x, float y, float alpha) {
+    private void drawFace(LivingEntity lastTarget, float lastTickDelta, float x, float y, float size, float alpha) {
         try {
             EntityRenderer<? super LivingEntity, ?> baseRenderer = mc.getEntityRenderDispatcher().getRenderer(lastTarget);
             if (!(baseRenderer instanceof LivingEntityRenderer<?, ?, ?>)) return;
@@ -375,7 +468,7 @@ public class TargetHud implements element {
             int b = (int) (255 * (1.0f - hurtPercent));
             int color = new Color(r, g, b, (int) (255 * alpha)).getRGB();
 
-            RenderUtil.Images.texture(textureLocation, x, y, FACE_SIZE, FACE_SIZE,
+            RenderUtil.Images.texture(textureLocation, x, y, size, size,
                     8f / 64f, 8f / 64f, 16f / 64f, 16f / 64f, color, 0, 4);
         } catch (Exception ignored) {
         }

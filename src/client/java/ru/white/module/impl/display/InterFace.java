@@ -46,7 +46,8 @@ public class InterFace extends Module {
     public SliderSetting sizeHud = new SliderSetting(this,"Размер интерфейса",1.0F,0.5F,1.5F,0.05F);
     public SliderSetting alphaHUD = new SliderSetting(this,"Прозрачность худа",0.6F,0.0F,0.9F,0.1F);
 
-    public BooleanSetting targetStats = new BooleanSetting(this, "Статы цели", true);
+    public ModeSetting targetHudMode = new ModeSetting(this, "Тип Target Hud",
+            "Полный", "Классический", "Компактный");
 
     public BooleanSetting notifyEffects = new BooleanSetting(this, "эффектах", true);
     public BooleanSetting notifyModules = new BooleanSetting(this, "модулях", true);
