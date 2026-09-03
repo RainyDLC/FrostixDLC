@@ -17,10 +17,10 @@
   "environment": "client",
   "entrypoints": {
     "preLaunch": [
-      "ru.white.NightixPreLaunch"
+      "fun.newrar.RainyDlcPreLaunch"
     ],
     "client": [
-      "ru.white.Client"
+      "fun.newrar.Client"
     ]
   },
   "mixins": [

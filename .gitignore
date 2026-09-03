@@ -23,3 +23,11 @@ decoded_tmp/
 .cookies.txt
 .t1.json
 .t2.json
+# --- аудит защиты (PoC, не коммитить!) ---
+.audit/
+audit/
+
+# --- защита: секреты сборки ---
+protection/keystore.jks
+protection/signing.properties
+*.jks

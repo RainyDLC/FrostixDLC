@@ -1,13 +1,8 @@
 #version 150
 
-// Текстурированные осколки: элемент uniform-массива - 7 vec4:
-//  0..5: по вершине (x, y, u, v)
-//  6: цвет (r, g, b, a)
-// Координаты - пиксели фиксированного 2x-GUI, NDC считается тут.
-
 layout(std140) uniform ShardTexData {
-    vec4 screen;       // (width, height, guiScale, unused)
-    vec4 items[896];   // 128 * 7
+    vec4 screen;
+    vec4 items[896];
 };
 
 out vec4 shardColor;

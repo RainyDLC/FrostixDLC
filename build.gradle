@@ -28,7 +28,6 @@ fabricApi {
 }
 
 repositories {
-    // Сначала плоские jar из libs/, потом Maven Central
     ivy {
         name = 'localLibs'
         url = uri('libs')
@@ -40,7 +39,6 @@ repositories {
         }
     }
     mavenCentral()
-    // Baritone (сборка Meteor под 1.21.11) и нативная либа для его нижнего мира
     maven { url = "https://maven.meteordev.org/snapshots" }
     maven { url = "https://babbaj.github.io/maven/" }
 }
@@ -51,7 +49,6 @@ def bundleLibsInJar = true
 def mediaPlayerInfo = "dev.redstones.mediaplayerinfo:media-player-info:${media_player_info_version}"
 def kotlinStdlib = "org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}"
 def kotlinxSerialization = "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:${kotlinx_serialization_version}"
-// Lua для пользовательских скриптов-модулей
 def luaj = "org.luaj:luaj-jse:3.0.1"
 
 dependencies {
@@ -60,7 +57,6 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-    // Пасфайндинг для AutoWarden: кладём внутрь jar, чтобы отдельно ставить не пришлось
     modImplementation include("meteordevelopment:baritone:${project.baritone_version}")
     runtimeOnly "dev.babbaj:nether-pathfinder:1.4.1"
 
@@ -136,7 +132,9 @@ java {
     if (JavaVersion.current() < javaVersion) {
         toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
     }
-    withSourcesJar()
+    if (project.findProperty('rainydlcSources') == 'true') {
+        withSourcesJar()
+    }
 }
 
 jar {
@@ -156,5 +154,4 @@ publishing {
     }
 }
 
-// Защита: ProGuard (опция) -> AES-шифрование ядра -> подпись (опция)
 apply from: 'protect.gradle'
