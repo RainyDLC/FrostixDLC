@@ -57,8 +57,24 @@ public class RotationBuilderScreen extends Screen implements IMinecraft {
     private float[] closeRect, resetRect;
     private float panelX, panelY, panelW, panelH;
 
+    private final Screen parentScreen;
+
     public RotationBuilderScreen() {
+        this(mc != null ? mc.currentScreen : null);
+    }
+
+    public RotationBuilderScreen(Screen parentScreen) {
         super(Text.literal("RotationBuilder"));
+        this.parentScreen = parentScreen;
+    }
+
+    @Override
+    public void close() {
+        if (parentScreen != null && mc != null) {
+            mc.setScreen(parentScreen);
+        } else {
+            super.close();
+        }
     }
 
     private AttackAura aura() {

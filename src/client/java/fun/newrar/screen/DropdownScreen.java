@@ -557,6 +557,27 @@ public class DropdownScreen extends Screen implements IMinecraft {
                         regular.draw(text.isEmpty() ? "..." : text, cx + 12F * S, currentY + 3F * S, 5.5F * S, ColorUtil.getColor(220, 220, 225, 0.85F * globalAnim));
 
                         currentY += 16F * S;
+                    } else if (setting instanceof ButtonSetting bs) {
+                        float bx = cx + 8F * S;
+                        float by = currentY + 1.5F * S;
+                        float bw = cw - 16F * S;
+                        float bh = 14F * S;
+
+                        boolean hovBtn = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, bx, by, bw, bh);
+                        bs.pressAnim.update();
+                        float press = bs.pressAnim.get();
+
+                        int btnBg = ColorUtil.overCol(ColorUtil.getColor(32, 35, 42, 0.85F * globalAnim), ColorUtil.getColor(145, 60, 245, 0.4F * globalAnim), Math.max(hovBtn ? 0.35F : 0F, press));
+                        RenderUtil.Render2D.rect(bx, by, bw, bh, btnBg, 3.5F * S);
+                        int borderCol = ColorUtil.overCol(ColorUtil.getColor(255, 255, 255, 0.08F * globalAnim), ColorUtil.getColor(145, 60, 245, 0.9F * globalAnim), Math.max(hovBtn ? 0.6F : 0F, press));
+                        RenderUtil.Render2D.outline(bx, by, bw, bh, 0.5F * S, borderCol, 3.5F * S);
+                        int txtCol = hovBtn ? ColorUtil.getColor(255, 255, 255, 0.98F * globalAnim) : ColorUtil.getColor(220, 225, 235, 0.85F * globalAnim);
+                        regular.drawCentered(bs.getName(), bx + bw / 2F, by + 3.5F * S, 6F * S, txtCol);
+
+                        currentY += 18F * S;
+                    } else if (setting instanceof DelimiterSetting) {
+                        RenderUtil.Render2D.rect(cx + 10F * S, currentY + 4F * S, cw - 20F * S, 0.5F * S, ColorUtil.getColor(255, 255, 255, 0.08F * globalAnim));
+                        currentY += 9F * S;
                     }
                 }
 
@@ -817,6 +838,20 @@ public class DropdownScreen extends Screen implements IMinecraft {
                                 return true;
                             }
                             currentY += 27F * S;
+                        } else if (setting instanceof ButtonSetting bs) {
+                            float bx = cx + 8F * S;
+                            float by = currentY + 1.5F * S;
+                            float bw = cw - 16F * S;
+                            float bh = 14F * S;
+                            boolean hovBtn = MathUtil.isHovered(mouseX, mouseY, bx, by, bw, bh);
+                            if (hovBtn && button == 0) {
+                                bs.press();
+                                GuiSounds.button();
+                                return true;
+                            }
+                            currentY += 18F * S;
+                        } else if (setting instanceof DelimiterSetting) {
+                            currentY += 9F * S;
                         }
                     }
                     return true;
