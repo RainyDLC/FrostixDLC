@@ -139,10 +139,6 @@ public class DropdownScreen extends Screen implements IMinecraft {
         public float scroll = 0F;
         public float scrollTarget = 0F;
         public float maxScroll = 0F;
-        public Module drilledModule = null;
-        public float settingsScroll = 0F;
-        public float settingsScrollTarget = 0F;
-        public float maxSettingsScroll = 0F;
         public Module errorModule = null;
         public long errorTime = 0L;
 
@@ -164,6 +160,8 @@ public class DropdownScreen extends Screen implements IMinecraft {
     };
 
     private final List<Column> columns = new ArrayList<>();
+    private final Set<Module> expandedModules = new HashSet<>();
+    private final Map<Module, fun.newrar.utils.animation.satoshi.Animation> moduleExpandAnims = new IdentityHashMap<>();
     private final Map<Module, fun.newrar.utils.animation.satoshi.Animation> moduleToggleAnims = new IdentityHashMap<>();
     private final Map<String, fun.newrar.utils.animation.satoshi.Animation> chipAnims = new HashMap<>();
 
@@ -280,9 +278,38 @@ public class DropdownScreen extends Screen implements IMinecraft {
     private boolean hasVisibleSettings(Module m) {
         if (m == null || m.getSettings() == null || m.getSettings().isEmpty()) return false;
         for (Setting<?> s : m.getSettings()) {
+            if (s instanceof DelimiterSetting) continue;
             if (s.getVisible() == null || s.getVisible().get()) return true;
         }
         return false;
+    }
+
+    private float getSettingsHeight(Module m) {
+        if (m == null || m.getSettings() == null) return 0F;
+        float h = 0F;
+        for (Setting<?> setting : m.getSettings()) {
+            if (setting.getVisible() != null && !setting.getVisible().get()) continue;
+            if (setting instanceof ModeSetting ms) {
+                h += 13F * S + ms.values.size() * 13.5F * S + 4F * S;
+            } else if (setting instanceof BooleanSetting) {
+                h += 17F * S;
+            } else if (setting instanceof SliderSetting) {
+                h += 22F * S;
+            } else if (setting instanceof ColorSetting) {
+                h += 17F * S;
+            } else if (setting instanceof BindSetting) {
+                h += 17F * S;
+            } else if (setting instanceof MultiBooleanSetting mbs) {
+                h += 13F * S + mbs.getValues().size() * 13.5F * S + 4F * S;
+            } else if (setting instanceof StringSetting) {
+                h += 27F * S;
+            } else if (setting instanceof ButtonSetting) {
+                h += 18F * S;
+            } else if (setting instanceof DelimiterSetting) {
+                h += 9F * S;
+            }
+        }
+        return h;
     }
 
     private List<Module> getCategoryModules(Category cat) {
@@ -370,12 +397,10 @@ public class DropdownScreen extends Screen implements IMinecraft {
 
         Font regular = Fonts.sf_regular;
         Font bold = Fonts.sf_bold;
-        Font medium = Fonts.sf_medium;
         Font iconFont = Fonts.rainydlc_2;
 
         float headerH = 24F * S;
         float colCardRadius = 10F * S;
-
         float bottomColsY = 0F;
 
         for (Column col : columns) {
@@ -396,249 +421,254 @@ public class DropdownScreen extends Screen implements IMinecraft {
             RenderUtil.Render2D.rect(cx, cy, cw, ch, ColorUtil.getColor(18, 20, 24, 0.78F * globalAnim), colCardRadius);
             RenderUtil.Render2D.outline(cx, cy, cw, ch, 0.5F * S, ColorUtil.getColor(255, 255, 255, 0.08F * globalAnim), colCardRadius);
 
-            boolean isDrilled = col.drilledModule != null;
-
-            if (isDrilled) {
-                boolean hovBack = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 4F * S, cy + 3F * S, cw - 8F * S, headerH - 6F * S);
-                int backColor = hovBack ? ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim) : ColorUtil.getColor(210, 215, 225, 0.8F * globalAnim);
-
-                medium.draw("<", cx + 11F * S, cy + 8.5F * S, 7.5F * S, backColor);
-                bold.draw(col.drilledModule.getName(), cx + 22F * S, cy + 8F * S, 7.5F * S, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim));
-            } else {
-                String catDisplayName = getCategoryDisplayName(col.category);
-                bold.draw(catDisplayName, cx + 11F * S, cy + 8F * S, 7.5F * S, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim));
-                iconFont.drawCentered(col.category.getIcon(), cx + cw - 14F * S, cy + 12F * S, 7.5F * S, ColorUtil.getColor(210, 215, 225, 0.75F * globalAnim));
-            }
+            String catDisplayName = getCategoryDisplayName(col.category);
+            bold.draw(catDisplayName, cx + 11F * S, cy + 8F * S, 7.5F * S, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim));
+            iconFont.drawCentered(col.category.getIcon(), cx + cw - 14F * S, cy + 12F * S, 7.5F * S, ColorUtil.getColor(210, 215, 225, 0.75F * globalAnim));
 
             float bodyY = cy + headerH;
             float bodyH = ch - headerH - 8F * S;
 
+            col.scroll += (col.scrollTarget - col.scroll) * 0.25F;
+
+            List<Module> list = getCategoryModules(col.category);
+
+            float rowH = 16.5F * S;
+            float totalListH = 0F;
+            for (Module m : list) {
+                totalListH += rowH;
+                fun.newrar.utils.animation.satoshi.Animation expAnim = moduleExpandAnims.computeIfAbsent(m, k -> new EaseInOutQuad(220, 1, Direction.BACKWARDS));
+                expAnim.setDirection(expandedModules.contains(m) ? Direction.FORWARDS : Direction.BACKWARDS);
+                float exp = expAnim.getOutput();
+                if (exp > 0.001F) {
+                    totalListH += getSettingsHeight(m) * exp;
+                }
+            }
+
+            col.maxScroll = Math.max(0F, totalListH - bodyH + 10F * S);
+            col.scrollTarget = MathUtil.clamp(col.scrollTarget, 0F, col.maxScroll);
+
             Scissor.enable(cx, bodyY, cw, bodyH, 2);
 
-            if (isDrilled) {
-                col.settingsScroll += (col.settingsScrollTarget - col.settingsScroll) * 0.25F;
-                float currentY = bodyY + 3F * S - col.settingsScroll;
-                Module mod = col.drilledModule;
+            float modY = bodyY + 2F * S - col.scroll;
+            for (Module m : list) {
+                boolean onScreen = modY + rowH >= bodyY && modY <= bodyY + bodyH;
+                boolean isHovered = onScreen && MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 4F * S, modY, cw - 8F * S, rowH);
 
-                for (Setting<?> setting : mod.getSettings()) {
-                    if (setting.getVisible() != null && !setting.getVisible().get()) continue;
+                fun.newrar.utils.animation.satoshi.Animation togAnim = moduleToggleAnims.computeIfAbsent(m, k -> new EaseInOutQuad(200, 1, Direction.BACKWARDS));
+                togAnim.setDirection(m.isEnabled() ? Direction.FORWARDS : Direction.BACKWARDS);
+                float tog = togAnim.getOutput();
 
-                    if (setting instanceof ModeSetting ms) {
-                        regular.draw(ms.getName(), cx + 10F * S, currentY + 2F * S, 6F * S, ColorUtil.getColor(155, 160, 170, 0.65F * globalAnim));
-                        currentY += 13F * S;
+                fun.newrar.utils.animation.satoshi.Animation expAnim = moduleExpandAnims.computeIfAbsent(m, k -> new EaseInOutQuad(220, 1, Direction.BACKWARDS));
+                expAnim.setDirection(expandedModules.contains(m) ? Direction.FORWARDS : Direction.BACKWARDS);
+                float exp = expAnim.getOutput();
 
-                        for (String val : ms.values) {
-                            boolean isSel = val.equalsIgnoreCase(ms.getValue());
-                            boolean hovOpt = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 6F * S, currentY - 1F * S, cw - 12F * S, 12.5F * S);
-
-                            if (hovOpt) {
-                                RenderUtil.Render2D.rect(cx + 6F * S, currentY - 1F * S, cw - 12F * S, 12.5F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim), 3F * S);
-                            }
-
-                            int optColor = isSel ? ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim) : ColorUtil.getColor(165, 170, 180, 0.6F * globalAnim);
-                            regular.draw(val, cx + 12F * S, currentY + 2.5F * S, 6F * S, optColor);
-
-                            if (isSel) {
-                                drawCheckmark(cx + cw - 14F * S, currentY + 5.5F * S, 0.9F, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim));
-                            }
-                            currentY += 13.5F * S;
-                        }
-                        currentY += 4F * S;
-                    } else if (setting instanceof BooleanSetting bs) {
-                        boolean hovBool = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 6F * S, currentY, cw - 12F * S, 16F * S);
-                        if (hovBool) {
-                            RenderUtil.Render2D.rect(cx + 6F * S, currentY, cw - 12F * S, 16F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim), 3F * S);
-                        }
-
-                        regular.draw(bs.getName(), cx + 10F * S, currentY + 4.5F * S, 6.5F * S, ColorUtil.getColor(235, 235, 240, 0.9F * globalAnim));
-
-                        fun.newrar.utils.animation.satoshi.Animation switchAnim = chipAnim("bool:" + mod.getName() + ":" + bs.getName());
-                        switchAnim.setDirection(bs.getValue() ? Direction.FORWARDS : Direction.BACKWARDS);
-                        float sp = switchAnim.getOutput();
-
-                        float trackW = 17F * S;
-                        float trackH = 9F * S;
-                        float trackX = cx + cw - 27F * S;
-                        float trackY = currentY + 3.5F * S;
-
-                        int offTrack = ColorUtil.getColor(36, 38, 46, 0.8F * globalAnim);
-                        int onTrack = ColorUtil.getColor(145, 60, 245, 0.95F * globalAnim);
-                        RenderUtil.Render2D.rect(trackX, trackY, trackW, trackH, ColorUtil.overCol(offTrack, onTrack, sp), 4.5F * S);
-
-                        float knobR = 3.2F * S;
-                        float knobX = trackX + 4.5F * S + (trackW - 9F * S) * sp;
-                        float knobY = trackY + 4.5F * S;
-                        RenderUtil.Render2D.rect(knobX - knobR, knobY - knobR, knobR * 2F, knobR * 2F, ColorUtil.getColor(255, 255, 255, 0.98F * globalAnim), knobR);
-
-                        currentY += 17F * S;
-                    } else if (setting instanceof SliderSetting ss) {
-                        boolean hovSlide = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 6F * S, currentY, cw - 12F * S, 21F * S);
-                        if (hovSlide) {
-                            RenderUtil.Render2D.rect(cx + 6F * S, currentY, cw - 12F * S, 21F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim), 3F * S);
-                        }
-
-                        regular.draw(ss.getName(), cx + 10F * S, currentY + 2F * S, 6F * S, ColorUtil.getColor(235, 235, 240, 0.9F * globalAnim));
-                        String valStr = String.format(Locale.US, ss.increment >= 1F ? "%.0f" : "%.1f", ss.getValue());
-                        regular.draw(valStr, cx + cw - 12F * S - regular.getWidth(valStr, 6F * S), currentY + 2F * S, 6F * S, ColorUtil.getColor(160, 165, 175, 0.7F * globalAnim));
-
-                        float trackX = cx + 10F * S;
-                        float trackY = currentY + 13F * S;
-                        float trackW = cw - 20F * S;
-                        float trackH = 3F * S;
-
-                        float pct = MathHelper.clamp((ss.getValue() - ss.min) / (ss.max - ss.min), 0F, 1F);
-                        RenderUtil.Render2D.rect(trackX, trackY, trackW, trackH, ColorUtil.getColor(36, 38, 46, 0.75F * globalAnim), 1.5F * S);
-                        if (pct > 0.01F) {
-                            RenderUtil.Render2D.rect(trackX, trackY, trackW * pct, trackH, ColorUtil.getColor(145, 60, 245, 0.95F * globalAnim), 1.5F * S);
-                        }
-                        float thumbR = 2.5F * S;
-                        RenderUtil.Render2D.rect(trackX + trackW * pct - thumbR, trackY + trackH / 2F - thumbR, thumbR * 2F, thumbR * 2F, ColorUtil.getColor(255, 255, 255, 0.98F * globalAnim), thumbR);
-
-                        if (draggingSlider == ss) {
-                            float newPct = MathHelper.clamp(((float) lastMouseX - trackX) / trackW, 0F, 1F);
-                            float rawVal = ss.min + newPct * (ss.max - ss.min);
-                            float stepped = Math.round(rawVal / ss.increment) * ss.increment;
-                            ss.set(MathHelper.clamp(stepped, ss.min, ss.max));
-                            GuiSounds.sliderTick(newPct);
-                        }
-
-                        currentY += 22F * S;
-                    } else if (setting instanceof ColorSetting cs) {
-                        boolean hovCol = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 6F * S, currentY, cw - 12F * S, 16F * S);
-                        if (hovCol) {
-                            RenderUtil.Render2D.rect(cx + 6F * S, currentY, cw - 12F * S, 16F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim), 3F * S);
-                        }
-
-                        regular.draw(cs.getName(), cx + 10F * S, currentY + 4F * S, 6F * S, ColorUtil.getColor(235, 235, 240, 0.9F * globalAnim));
-                        RenderUtil.Render2D.rect(cx + cw - 24F * S, currentY + 3.5F * S, 14F * S, 8.5F * S, ColorUtil.multAlpha(cs.getValue(), globalAnim), 2.5F * S);
-                        RenderUtil.Render2D.outline(cx + cw - 24F * S, currentY + 3.5F * S, 14F * S, 8.5F * S, 0.5F * S, ColorUtil.getColor(255, 255, 255, 0.25F * globalAnim), 2.5F * S);
-
-                        currentY += 17F * S;
-                    } else if (setting instanceof BindSetting bs) {
-                        boolean hovBind = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 6F * S, currentY, cw - 12F * S, 16F * S);
-                        if (hovBind) {
-                            RenderUtil.Render2D.rect(cx + 6F * S, currentY, cw - 12F * S, 16F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim), 3F * S);
-                        }
-
-                        regular.draw(bs.getName(), cx + 10F * S, currentY + 4F * S, 6F * S, ColorUtil.getColor(235, 235, 240, 0.9F * globalAnim));
-                        String keyText = activeBind == bs ? "..." : (bs.getValue() == -1 ? "NONE" : Keyboard.keyName(bs.getValue()));
-                        float kw = regular.getWidth(keyText, 5.5F * S) + 6F * S;
-                        RenderUtil.Render2D.rect(cx + cw - 10F * S - kw, currentY + 3F * S, kw, 9F * S, ColorUtil.getColor(36, 38, 46, 0.8F * globalAnim), 2F * S);
-                        regular.draw(keyText, cx + cw - 10F * S - kw + 3F * S, currentY + 4.5F * S, 5.5F * S, ColorUtil.getColor(220, 220, 225, 0.85F * globalAnim));
-
-                        currentY += 17F * S;
-                    } else if (setting instanceof MultiBooleanSetting mbs) {
-                        regular.draw(mbs.getName(), cx + 10F * S, currentY + 2F * S, 6F * S, ColorUtil.getColor(155, 160, 170, 0.65F * globalAnim));
-                        currentY += 13F * S;
-
-                        for (BooleanSetting sub : mbs.getValues()) {
-                            boolean isSubSel = sub.getValue();
-                            boolean hovSub = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 6F * S, currentY - 1F * S, cw - 12F * S, 12.5F * S);
-
-                            if (hovSub) {
-                                RenderUtil.Render2D.rect(cx + 6F * S, currentY - 1F * S, cw - 12F * S, 12.5F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim), 3F * S);
-                            }
-
-                            int optColor = isSubSel ? ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim) : ColorUtil.getColor(165, 170, 180, 0.6F * globalAnim);
-                            regular.draw(sub.getName(), cx + 12F * S, currentY + 2.5F * S, 6F * S, optColor);
-
-                            if (isSubSel) {
-                                drawCheckmark(cx + cw - 14F * S, currentY + 5.5F * S, 0.9F, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim));
-                            }
-                            currentY += 13.5F * S;
-                        }
-                        currentY += 4F * S;
-                    } else if (setting instanceof StringSetting strSet) {
-                        regular.draw(strSet.getName(), cx + 10F * S, currentY + 2F * S, 6F * S, ColorUtil.getColor(155, 160, 170, 0.65F * globalAnim));
-                        currentY += 11F * S;
-
-                        String text = activeString == strSet ? stringBuffer : strSet.getValue();
-                        RenderUtil.Render2D.rect(cx + 8F * S, currentY, cw - 16F * S, 12F * S, ColorUtil.getColor(30, 32, 38, 0.75F * globalAnim), 2.5F * S);
-                        regular.draw(text.isEmpty() ? "..." : text, cx + 12F * S, currentY + 3F * S, 5.5F * S, ColorUtil.getColor(220, 220, 225, 0.85F * globalAnim));
-
-                        currentY += 16F * S;
-                    } else if (setting instanceof ButtonSetting bs) {
-                        float bx = cx + 8F * S;
-                        float by = currentY + 1.5F * S;
-                        float bw = cw - 16F * S;
-                        float bh = 14F * S;
-
-                        boolean hovBtn = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, bx, by, bw, bh);
-                        bs.pressAnim.update();
-                        float press = bs.pressAnim.get();
-
-                        int btnBg = ColorUtil.overCol(ColorUtil.getColor(32, 35, 42, 0.85F * globalAnim), ColorUtil.getColor(145, 60, 245, 0.4F * globalAnim), Math.max(hovBtn ? 0.35F : 0F, press));
-                        RenderUtil.Render2D.rect(bx, by, bw, bh, btnBg, 3.5F * S);
-                        int borderCol = ColorUtil.overCol(ColorUtil.getColor(255, 255, 255, 0.08F * globalAnim), ColorUtil.getColor(145, 60, 245, 0.9F * globalAnim), Math.max(hovBtn ? 0.6F : 0F, press));
-                        RenderUtil.Render2D.outline(bx, by, bw, bh, 0.5F * S, borderCol, 3.5F * S);
-                        int txtCol = hovBtn ? ColorUtil.getColor(255, 255, 255, 0.98F * globalAnim) : ColorUtil.getColor(220, 225, 235, 0.85F * globalAnim);
-                        regular.drawCentered(bs.getName(), bx + bw / 2F, by + 3.5F * S, 6F * S, txtCol);
-
-                        currentY += 18F * S;
-                    } else if (setting instanceof DelimiterSetting) {
-                        RenderUtil.Render2D.rect(cx + 10F * S, currentY + 4F * S, cw - 20F * S, 0.5F * S, ColorUtil.getColor(255, 255, 255, 0.08F * globalAnim));
-                        currentY += 9F * S;
+                float flash = 0F;
+                if (col.errorModule == m) {
+                    long elapsed = System.currentTimeMillis() - col.errorTime;
+                    if (elapsed < 420) {
+                        flash = 1F - (float) elapsed / 420F;
+                    } else {
+                        col.errorModule = null;
                     }
                 }
 
-                float totalSettingsH = (currentY + col.settingsScroll) - (bodyY + 3F * S);
-                col.maxSettingsScroll = Math.max(0F, totalSettingsH - bodyH + 10F * S);
-                col.settingsScrollTarget = MathUtil.clamp(col.settingsScrollTarget, 0F, col.maxSettingsScroll);
-            } else {
-                col.scroll += (col.scrollTarget - col.scroll) * 0.25F;
+                if (onScreen) {
+                    if (isHovered && flash <= 0.01F) {
+                        RenderUtil.Render2D.rect(cx + 4F * S, modY, cw - 8F * S, rowH - 1.5F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim), 3.5F * S);
+                    }
 
-                List<Module> list = getCategoryModules(col.category);
+                    if (flash > 0.01F) {
+                        RenderUtil.Render2D.rect(cx + 4F * S, modY, cw - 8F * S, rowH - 1.5F * S, ColorUtil.getColor(235, 45, 45, 0.28F * flash * globalAnim), 3.5F * S);
+                        RenderUtil.Render2D.outline(cx + 4F * S, modY, cw - 8F * S, rowH - 1.5F * S, 0.5F * S, ColorUtil.getColor(255, 60, 60, 0.65F * flash * globalAnim), 3.5F * S);
+                    }
 
-                float rowH = 16.5F * S;
-                float totalListH = list.size() * rowH;
-                col.maxScroll = Math.max(0F, totalListH - bodyH + 10F * S);
-                col.scrollTarget = MathUtil.clamp(col.scrollTarget, 0F, col.maxScroll);
+                    int disCol = ColorUtil.getColor(170, 175, 185, 0.6F * globalAnim);
+                    int enCol = ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim);
+                    int nameCol = ColorUtil.overCol(disCol, enCol, tog);
 
-                float modY = bodyY + 2F * S - col.scroll;
-                for (Module m : list) {
-                    boolean onScreen = modY + rowH >= bodyY && modY <= bodyY + bodyH;
-                    boolean isHovered = onScreen && MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 4F * S, modY, cw - 8F * S, rowH);
+                    if (flash > 0.01F) {
+                        nameCol = ColorUtil.overCol(nameCol, ColorUtil.getColor(255, 80, 80, globalAnim), flash);
+                    }
 
-                    fun.newrar.utils.animation.satoshi.Animation togAnim = moduleToggleAnims.computeIfAbsent(m, k -> new EaseInOutQuad(200, 1, Direction.BACKWARDS));
-                    togAnim.setDirection(m.isEnabled() ? Direction.FORWARDS : Direction.BACKWARDS);
-                    float tog = togAnim.getOutput();
+                    regular.draw(m.getName(), cx + 10F * S, modY + 4F * S, 6.5F * S, nameCol);
 
-                    float flash = 0F;
-                    if (col.errorModule == m) {
-                        long elapsed = System.currentTimeMillis() - col.errorTime;
-                        if (elapsed < 420) {
-                            flash = 1F - (float) elapsed / 420F;
-                        } else {
-                            col.errorModule = null;
+                    if (tog > 0.01F) {
+                        drawCheckmark(cx + cw - 14F * S, modY + 7.5F * S, 1F, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim * tog));
+                    }
+                }
+
+                modY += rowH;
+
+                if (exp > 0.001F) {
+                    float setH = getSettingsHeight(m);
+                    float currentY = modY;
+
+                    Scissor.enable(cx, Math.max(bodyY, modY), cw, Math.min(bodyH - (Math.max(bodyY, modY) - bodyY), setH * exp), 2);
+
+                    for (Setting<?> setting : m.getSettings()) {
+                        if (setting.getVisible() != null && !setting.getVisible().get()) continue;
+
+                        if (setting instanceof ModeSetting ms) {
+                            regular.draw(ms.getName(), cx + 12F * S, currentY + 2F * S, 6F * S, ColorUtil.getColor(155, 160, 170, 0.65F * globalAnim * exp));
+                            currentY += 13F * S;
+
+                            for (String val : ms.values) {
+                                boolean isSel = val.equalsIgnoreCase(ms.getValue());
+                                boolean hovOpt = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 8F * S, currentY - 1F * S, cw - 16F * S, 12.5F * S);
+
+                                if (hovOpt) {
+                                    RenderUtil.Render2D.rect(cx + 8F * S, currentY - 1F * S, cw - 16F * S, 12.5F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim * exp), 3F * S);
+                                }
+
+                                int optColor = isSel ? ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim * exp) : ColorUtil.getColor(165, 170, 180, 0.6F * globalAnim * exp);
+                                regular.draw(val, cx + 14F * S, currentY + 2.5F * S, 6F * S, optColor);
+
+                                if (isSel) {
+                                    drawCheckmark(cx + cw - 16F * S, currentY + 5.5F * S, 0.9F, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim * exp));
+                                }
+                                currentY += 13.5F * S;
+                            }
+                            currentY += 4F * S;
+                        } else if (setting instanceof BooleanSetting bs) {
+                            boolean hovBool = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 8F * S, currentY, cw - 16F * S, 16F * S);
+                            if (hovBool) {
+                                RenderUtil.Render2D.rect(cx + 8F * S, currentY, cw - 16F * S, 16F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim * exp), 3F * S);
+                            }
+
+                            regular.draw(bs.getName(), cx + 12F * S, currentY + 4.5F * S, 6.5F * S, ColorUtil.getColor(235, 235, 240, 0.9F * globalAnim * exp));
+
+                            fun.newrar.utils.animation.satoshi.Animation switchAnim = chipAnim("bool:" + m.getName() + ":" + bs.getName());
+                            switchAnim.setDirection(bs.getValue() ? Direction.FORWARDS : Direction.BACKWARDS);
+                            float sp = switchAnim.getOutput();
+
+                            float trackW = 17F * S;
+                            float trackH = 9F * S;
+                            float trackX = cx + cw - 29F * S;
+                            float trackY = currentY + 3.5F * S;
+
+                            int offTrack = ColorUtil.getColor(36, 38, 46, 0.8F * globalAnim * exp);
+                            int onTrack = ColorUtil.getColor(145, 60, 245, 0.95F * globalAnim * exp);
+                            RenderUtil.Render2D.rect(trackX, trackY, trackW, trackH, ColorUtil.overCol(offTrack, onTrack, sp), 4.5F * S);
+
+                            float knobR = 3.2F * S;
+                            float knobX = trackX + 4.5F * S + (trackW - 9F * S) * sp;
+                            float knobY = trackY + 4.5F * S;
+                            RenderUtil.Render2D.rect(knobX - knobR, knobY - knobR, knobR * 2F, knobR * 2F, ColorUtil.getColor(255, 255, 255, 0.98F * globalAnim * exp), knobR);
+
+                            currentY += 17F * S;
+                        } else if (setting instanceof SliderSetting ss) {
+                            boolean hovSlide = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 8F * S, currentY, cw - 16F * S, 21F * S);
+                            if (hovSlide) {
+                                RenderUtil.Render2D.rect(cx + 8F * S, currentY, cw - 16F * S, 21F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim * exp), 3F * S);
+                            }
+
+                            regular.draw(ss.getName(), cx + 12F * S, currentY + 2F * S, 6F * S, ColorUtil.getColor(235, 235, 240, 0.9F * globalAnim * exp));
+                            String valStr = String.format(Locale.US, ss.increment >= 1F ? "%.0f" : "%.1f", ss.getValue());
+                            regular.draw(valStr, cx + cw - 14F * S - regular.getWidth(valStr, 6F * S), currentY + 2F * S, 6F * S, ColorUtil.getColor(160, 165, 175, 0.7F * globalAnim * exp));
+
+                            float trackX = cx + 12F * S;
+                            float trackY = currentY + 13F * S;
+                            float trackW = cw - 24F * S;
+                            float trackH = 3F * S;
+
+                            float pct = MathHelper.clamp((ss.getValue() - ss.min) / (ss.max - ss.min), 0F, 1F);
+                            RenderUtil.Render2D.rect(trackX, trackY, trackW, trackH, ColorUtil.getColor(36, 38, 46, 0.75F * globalAnim * exp), 1.5F * S);
+                            if (pct > 0.01F) {
+                                RenderUtil.Render2D.rect(trackX, trackY, trackW * pct, trackH, ColorUtil.getColor(145, 60, 245, 0.95F * globalAnim * exp), 1.5F * S);
+                            }
+                            float thumbR = 2.5F * S;
+                            RenderUtil.Render2D.rect(trackX + trackW * pct - thumbR, trackY + trackH / 2F - thumbR, thumbR * 2F, thumbR * 2F, ColorUtil.getColor(255, 255, 255, 0.98F * globalAnim * exp), thumbR);
+
+                            if (draggingSlider == ss) {
+                                float newPct = MathHelper.clamp(((float) lastMouseX - trackX) / trackW, 0F, 1F);
+                                float rawVal = ss.min + newPct * (ss.max - ss.min);
+                                float stepped = Math.round(rawVal / ss.increment) * ss.increment;
+                                ss.set(MathHelper.clamp(stepped, ss.min, ss.max));
+                                GuiSounds.sliderTick(newPct);
+                            }
+
+                            currentY += 22F * S;
+                        } else if (setting instanceof ColorSetting cs) {
+                            boolean hovCol = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 8F * S, currentY, cw - 16F * S, 16F * S);
+                            if (hovCol) {
+                                RenderUtil.Render2D.rect(cx + 8F * S, currentY, cw - 16F * S, 16F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim * exp), 3F * S);
+                            }
+
+                            regular.draw(cs.getName(), cx + 12F * S, currentY + 4F * S, 6F * S, ColorUtil.getColor(235, 235, 240, 0.9F * globalAnim * exp));
+                            RenderUtil.Render2D.rect(cx + cw - 26F * S, currentY + 3.5F * S, 14F * S, 8.5F * S, ColorUtil.multAlpha(cs.getValue(), globalAnim * exp), 2.5F * S);
+                            RenderUtil.Render2D.outline(cx + cw - 26F * S, currentY + 3.5F * S, 14F * S, 8.5F * S, 0.5F * S, ColorUtil.getColor(255, 255, 255, 0.25F * globalAnim * exp), 2.5F * S);
+
+                            currentY += 17F * S;
+                        } else if (setting instanceof BindSetting bs) {
+                            boolean hovBind = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 8F * S, currentY, cw - 16F * S, 16F * S);
+                            if (hovBind) {
+                                RenderUtil.Render2D.rect(cx + 8F * S, currentY, cw - 16F * S, 16F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim * exp), 3F * S);
+                            }
+
+                            regular.draw(bs.getName(), cx + 12F * S, currentY + 4F * S, 6F * S, ColorUtil.getColor(235, 235, 240, 0.9F * globalAnim * exp));
+                            String keyText = activeBind == bs ? "..." : (bs.getValue() == -1 ? "NONE" : Keyboard.keyName(bs.getValue()));
+                            float kw = regular.getWidth(keyText, 5.5F * S) + 6F * S;
+                            RenderUtil.Render2D.rect(cx + cw - 12F * S - kw, currentY + 3F * S, kw, 9F * S, ColorUtil.getColor(36, 38, 46, 0.8F * globalAnim * exp), 2F * S);
+                            regular.draw(keyText, cx + cw - 12F * S - kw + 3F * S, currentY + 4.5F * S, 5.5F * S, ColorUtil.getColor(220, 220, 225, 0.85F * globalAnim * exp));
+
+                            currentY += 17F * S;
+                        } else if (setting instanceof MultiBooleanSetting mbs) {
+                            regular.draw(mbs.getName(), cx + 12F * S, currentY + 2F * S, 6F * S, ColorUtil.getColor(155, 160, 170, 0.65F * globalAnim * exp));
+                            currentY += 13F * S;
+
+                            for (BooleanSetting sub : mbs.getValues()) {
+                                boolean isSubSel = sub.getValue();
+                                boolean hovSub = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 8F * S, currentY - 1F * S, cw - 16F * S, 12.5F * S);
+
+                                if (hovSub) {
+                                    RenderUtil.Render2D.rect(cx + 8F * S, currentY - 1F * S, cw - 16F * S, 12.5F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim * exp), 3F * S);
+                                }
+
+                                int optColor = isSubSel ? ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim * exp) : ColorUtil.getColor(165, 170, 180, 0.6F * globalAnim * exp);
+                                regular.draw(sub.getName(), cx + 14F * S, currentY + 2.5F * S, 6F * S, optColor);
+
+                                if (isSubSel) {
+                                    drawCheckmark(cx + cw - 16F * S, currentY + 5.5F * S, 0.9F, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim * exp));
+                                }
+                                currentY += 13.5F * S;
+                            }
+                            currentY += 4F * S;
+                        } else if (setting instanceof StringSetting strSet) {
+                            regular.draw(strSet.getName(), cx + 12F * S, currentY + 2F * S, 6F * S, ColorUtil.getColor(155, 160, 170, 0.65F * globalAnim * exp));
+                            currentY += 11F * S;
+
+                            String text = activeString == strSet ? stringBuffer : strSet.getValue();
+                            RenderUtil.Render2D.rect(cx + 10F * S, currentY, cw - 20F * S, 12F * S, ColorUtil.getColor(30, 32, 38, 0.75F * globalAnim * exp), 2.5F * S);
+                            regular.draw(text.isEmpty() ? "..." : text, cx + 14F * S, currentY + 3F * S, 5.5F * S, ColorUtil.getColor(220, 220, 225, 0.85F * globalAnim * exp));
+
+                            currentY += 16F * S;
+                        } else if (setting instanceof ButtonSetting bs) {
+                            float bx = cx + 10F * S;
+                            float by = currentY + 1.5F * S;
+                            float bw = cw - 20F * S;
+                            float bh = 14F * S;
+
+                            boolean hovBtn = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, bx, by, bw, bh);
+                            bs.pressAnim.update();
+                            float press = bs.pressAnim.get();
+
+                            int btnBg = ColorUtil.overCol(ColorUtil.getColor(32, 35, 42, 0.85F * globalAnim * exp), ColorUtil.getColor(145, 60, 245, 0.4F * globalAnim * exp), Math.max(hovBtn ? 0.35F : 0F, press));
+                            RenderUtil.Render2D.rect(bx, by, bw, bh, btnBg, 3.5F * S);
+                            int borderCol = ColorUtil.overCol(ColorUtil.getColor(255, 255, 255, 0.08F * globalAnim * exp), ColorUtil.getColor(145, 60, 245, 0.9F * globalAnim * exp), Math.max(hovBtn ? 0.6F : 0F, press));
+                            RenderUtil.Render2D.outline(bx, by, bw, bh, 0.5F * S, borderCol, 3.5F * S);
+                            int txtCol = hovBtn ? ColorUtil.getColor(255, 255, 255, 0.98F * globalAnim * exp) : ColorUtil.getColor(220, 225, 235, 0.85F * globalAnim * exp);
+                            regular.drawCentered(bs.getName(), bx + bw / 2F, by + 3.5F * S, 6F * S, txtCol);
+
+                            currentY += 18F * S;
+                        } else if (setting instanceof DelimiterSetting) {
+                            RenderUtil.Render2D.rect(cx + 12F * S, currentY + 4F * S, cw - 24F * S, 0.5F * S, ColorUtil.getColor(255, 255, 255, 0.08F * globalAnim * exp));
+                            currentY += 9F * S;
                         }
                     }
 
-                    if (onScreen) {
-                        if (isHovered && flash <= 0.01F) {
-                            RenderUtil.Render2D.rect(cx + 4F * S, modY, cw - 8F * S, rowH - 1.5F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim), 3.5F * S);
-                        }
+                    Scissor.enable(cx, bodyY, cw, bodyH, 2);
 
-                        if (flash > 0.01F) {
-                            RenderUtil.Render2D.rect(cx + 4F * S, modY, cw - 8F * S, rowH - 1.5F * S, ColorUtil.getColor(235, 45, 45, 0.28F * flash * globalAnim), 3.5F * S);
-                            RenderUtil.Render2D.outline(cx + 4F * S, modY, cw - 8F * S, rowH - 1.5F * S, 0.5F * S, ColorUtil.getColor(255, 60, 60, 0.65F * flash * globalAnim), 3.5F * S);
-                        }
-
-                        int disCol = ColorUtil.getColor(170, 175, 185, 0.6F * globalAnim);
-                        int enCol = ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim);
-                        int nameCol = ColorUtil.overCol(disCol, enCol, tog);
-
-                        if (flash > 0.01F) {
-                            nameCol = ColorUtil.overCol(nameCol, ColorUtil.getColor(255, 80, 80, globalAnim), flash);
-                        }
-
-                        regular.draw(m.getName(), cx + 10F * S, modY + 4F * S, 6.5F * S, nameCol);
-
-                        if (tog > 0.01F) {
-                            drawCheckmark(cx + cw - 14F * S, modY + 7.5F * S, 1F, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim * tog));
-                        }
-                    }
-
-                    modY += rowH;
+                    modY += setH * exp;
                 }
             }
 
@@ -730,161 +760,152 @@ public class DropdownScreen extends Screen implements IMinecraft {
             boolean inHeader = MathUtil.isHovered(mouseX, mouseY, cx, cy, cw, headerH);
             boolean inBody = MathUtil.isHovered(mouseX, mouseY, cx, bodyY, cw, bodyH);
 
-            if (inHeader) {
-                if (col.drilledModule != null) {
-                    col.drilledModule = null;
-                    col.settingsScroll = 0F;
-                    col.settingsScrollTarget = 0F;
-                    GuiSounds.expand(false);
-                    return true;
-                } else if (button == 0) {
-                    col.dragging = true;
-                    col.dragX = mouseX - col.x;
-                    col.dragY = mouseY - col.y;
-                    return true;
-                }
+            if (inHeader && button == 0) {
+                col.dragging = true;
+                col.dragX = mouseX - col.x;
+                col.dragY = mouseY - col.y;
+                return true;
             }
 
             if (inBody) {
-                if (col.drilledModule != null) {
-                    if (button == 1) {
-                        col.drilledModule = null;
-                        col.settingsScroll = 0F;
-                        col.settingsScrollTarget = 0F;
-                        GuiSounds.expand(false);
-                        return true;
-                    }
+                List<Module> list = getCategoryModules(col.category);
 
-                    float currentY = bodyY + 3F * S - col.settingsScroll;
-                    Module mod = col.drilledModule;
+                float rowH = 16.5F * S;
+                float modY = bodyY + 2F * S - col.scroll;
 
-                    for (Setting<?> setting : mod.getSettings()) {
-                        if (setting.getVisible() != null && !setting.getVisible().get()) continue;
+                for (Module m : list) {
+                    boolean isHovered = MathUtil.isHovered(mouseX, mouseY, cx + 4F * S, modY, cw - 8F * S, rowH);
 
-                        if (setting instanceof ModeSetting ms) {
-                            currentY += 13F * S;
-                            for (String val : ms.values) {
-                                boolean hovOpt = MathUtil.isHovered(mouseX, mouseY, cx + 6F * S, currentY - 1F * S, cw - 12F * S, 12.5F * S);
-                                if (hovOpt && button == 0) {
-                                    ms.set(val);
-                                    GuiSounds.chip(ms.getIndex(), ms.values.size());
-                                    return true;
-                                }
-                                currentY += 13.5F * S;
-                            }
-                            currentY += 4F * S;
-                        } else if (setting instanceof BooleanSetting bs) {
-                            boolean hovBool = MathUtil.isHovered(mouseX, mouseY, cx + 6F * S, currentY, cw - 12F * S, 16F * S);
-                            if (hovBool && button == 0) {
-                                bs.set(!bs.getValue());
-                                GuiSounds.toggle(bs.getValue());
-                                return true;
-                            }
-                            currentY += 17F * S;
-                        } else if (setting instanceof SliderSetting ss) {
-                            boolean hovSlide = MathUtil.isHovered(mouseX, mouseY, cx + 6F * S, currentY, cw - 12F * S, 21F * S);
-                            if (hovSlide && button == 0) {
-                                draggingSlider = ss;
-                                float trackX = cx + 10F * S;
-                                float trackW = cw - 20F * S;
-                                float newPct = MathHelper.clamp((mouseX - trackX) / trackW, 0F, 1F);
-                                float rawVal = ss.min + newPct * (ss.max - ss.min);
-                                float stepped = Math.round(rawVal / ss.increment) * ss.increment;
-                                ss.set(MathHelper.clamp(stepped, ss.min, ss.max));
-                                GuiSounds.sliderGrab();
-                                return true;
-                            }
-                            currentY += 22F * S;
-                        } else if (setting instanceof ColorSetting cs) {
-                            boolean hovCol = MathUtil.isHovered(mouseX, mouseY, cx + 6F * S, currentY, cw - 12F * S, 16F * S);
-                            if (hovCol && button == 0) {
-                                cs.pickerOpen = !cs.pickerOpen;
-                                GuiSounds.picker(cs.pickerOpen);
-                                return true;
-                            }
-                            currentY += 17F * S;
-                        } else if (setting instanceof BindSetting bs) {
-                            boolean hovBind = MathUtil.isHovered(mouseX, mouseY, cx + 6F * S, currentY, cw - 12F * S, 16F * S);
-                            if (hovBind) {
-                                if (button == 0) {
-                                    activeBind = bs;
-                                    GuiSounds.bindStart();
-                                } else if (button == 1) {
-                                    bs.set(-1);
-                                    GuiSounds.bindReset();
-                                }
-                                return true;
-                            }
-                            currentY += 17F * S;
-                        } else if (setting instanceof MultiBooleanSetting mbs) {
-                            currentY += 13F * S;
-                            for (BooleanSetting sub : mbs.getValues()) {
-                                boolean hovSub = MathUtil.isHovered(mouseX, mouseY, cx + 6F * S, currentY - 1F * S, cw - 12F * S, 12.5F * S);
-                                if (hovSub && button == 0) {
-                                    sub.set(!sub.getValue());
-                                    GuiSounds.chipMulti(sub.getValue());
-                                    return true;
-                                }
-                                currentY += 13.5F * S;
-                            }
-                            currentY += 4F * S;
-                        } else if (setting instanceof StringSetting strSet) {
-                            boolean hovStr = MathUtil.isHovered(mouseX, mouseY, cx + 8F * S, currentY + 11F * S, cw - 16F * S, 12F * S);
-                            if (hovStr && button == 0) {
-                                activeString = strSet;
-                                stringBuffer = strSet.getValue();
-                                textActive = true;
-                                GuiSounds.editStart();
-                                return true;
-                            }
-                            currentY += 27F * S;
-                        } else if (setting instanceof ButtonSetting bs) {
-                            float bx = cx + 8F * S;
-                            float by = currentY + 1.5F * S;
-                            float bw = cw - 16F * S;
-                            float bh = 14F * S;
-                            boolean hovBtn = MathUtil.isHovered(mouseX, mouseY, bx, by, bw, bh);
-                            if (hovBtn && button == 0) {
-                                bs.press();
-                                GuiSounds.button();
-                                return true;
-                            }
-                            currentY += 18F * S;
-                        } else if (setting instanceof DelimiterSetting) {
-                            currentY += 9F * S;
-                        }
-                    }
-                    return true;
-                } else {
-                    List<Module> list = getCategoryModules(col.category);
-
-                    float rowH = 16.5F * S;
-                    float modY = bodyY + 2F * S - col.scroll;
-
-                    for (Module m : list) {
-                        boolean isHovered = MathUtil.isHovered(mouseX, mouseY, cx + 4F * S, modY, cw - 8F * S, rowH);
-
-                        if (isHovered) {
-                            if (button == 0) {
-                                m.toggle();
-                                GuiSounds.toggle(m.isEnabled());
-                                return true;
-                            } else if (button == 1) {
-                                if (hasVisibleSettings(m)) {
-                                    col.drilledModule = m;
-                                    col.settingsScroll = 0F;
-                                    col.settingsScrollTarget = 0F;
-                                    GuiSounds.expand(true);
+                    if (isHovered) {
+                        if (button == 0) {
+                            m.toggle();
+                            GuiSounds.toggle(m.isEnabled());
+                            return true;
+                        } else if (button == 1) {
+                            if (hasVisibleSettings(m)) {
+                                if (expandedModules.contains(m)) {
+                                    expandedModules.remove(m);
+                                    GuiSounds.expand(false);
                                 } else {
-                                    col.errorModule = m;
-                                    col.errorTime = System.currentTimeMillis();
-                                    GuiSounds.editCancel();
-                                    SoundUtil.playSound_wav("gui/gui_clear", 0.6F, 0.85F);
+                                    expandedModules.add(m);
+                                    GuiSounds.expand(true);
                                 }
-                                return true;
+                            } else {
+                                col.errorModule = m;
+                                col.errorTime = System.currentTimeMillis();
+                                GuiSounds.editCancel();
+                                SoundUtil.playSound_wav("gui/gui_clear", 0.6F, 0.85F);
+                            }
+                            return true;
+                        }
+                    }
+
+                    modY += rowH;
+
+                    fun.newrar.utils.animation.satoshi.Animation expAnim = moduleExpandAnims.get(m);
+                    float exp = expAnim != null ? expAnim.getOutput() : (expandedModules.contains(m) ? 1F : 0F);
+
+                    if (exp > 0.001F) {
+                        float currentY = modY;
+
+                        for (Setting<?> setting : m.getSettings()) {
+                            if (setting.getVisible() != null && !setting.getVisible().get()) continue;
+
+                            if (setting instanceof ModeSetting ms) {
+                                currentY += 13F * S;
+                                for (String val : ms.values) {
+                                    boolean hovOpt = MathUtil.isHovered(mouseX, mouseY, cx + 8F * S, currentY - 1F * S, cw - 16F * S, 12.5F * S);
+                                    if (hovOpt && button == 0) {
+                                        ms.set(val);
+                                        GuiSounds.chip(ms.getIndex(), ms.values.size());
+                                        return true;
+                                    }
+                                    currentY += 13.5F * S;
+                                }
+                                currentY += 4F * S;
+                            } else if (setting instanceof BooleanSetting bs) {
+                                boolean hovBool = MathUtil.isHovered(mouseX, mouseY, cx + 8F * S, currentY, cw - 16F * S, 16F * S);
+                                if (hovBool && button == 0) {
+                                    bs.set(!bs.getValue());
+                                    GuiSounds.toggle(bs.getValue());
+                                    return true;
+                                }
+                                currentY += 17F * S;
+                            } else if (setting instanceof SliderSetting ss) {
+                                boolean hovSlide = MathUtil.isHovered(mouseX, mouseY, cx + 8F * S, currentY, cw - 16F * S, 21F * S);
+                                if (hovSlide && button == 0) {
+                                    draggingSlider = ss;
+                                    float trackX = cx + 12F * S;
+                                    float trackW = cw - 24F * S;
+                                    float newPct = MathHelper.clamp((mouseX - trackX) / trackW, 0F, 1F);
+                                    float rawVal = ss.min + newPct * (ss.max - ss.min);
+                                    float stepped = Math.round(rawVal / ss.increment) * ss.increment;
+                                    ss.set(MathHelper.clamp(stepped, ss.min, ss.max));
+                                    GuiSounds.sliderGrab();
+                                    return true;
+                                }
+                                currentY += 22F * S;
+                            } else if (setting instanceof ColorSetting cs) {
+                                boolean hovCol = MathUtil.isHovered(mouseX, mouseY, cx + 8F * S, currentY, cw - 16F * S, 16F * S);
+                                if (hovCol && button == 0) {
+                                    cs.pickerOpen = !cs.pickerOpen;
+                                    GuiSounds.picker(cs.pickerOpen);
+                                    return true;
+                                }
+                                currentY += 17F * S;
+                            } else if (setting instanceof BindSetting bs) {
+                                boolean hovBind = MathUtil.isHovered(mouseX, mouseY, cx + 8F * S, currentY, cw - 16F * S, 16F * S);
+                                if (hovBind) {
+                                    if (button == 0) {
+                                        activeBind = bs;
+                                        GuiSounds.bindStart();
+                                    } else if (button == 1) {
+                                        bs.set(-1);
+                                        GuiSounds.bindReset();
+                                    }
+                                    return true;
+                                }
+                                currentY += 17F * S;
+                            } else if (setting instanceof MultiBooleanSetting mbs) {
+                                currentY += 13F * S;
+                                for (BooleanSetting sub : mbs.getValues()) {
+                                    boolean hovSub = MathUtil.isHovered(mouseX, mouseY, cx + 8F * S, currentY - 1F * S, cw - 16F * S, 12.5F * S);
+                                    if (hovSub && button == 0) {
+                                        sub.set(!sub.getValue());
+                                        GuiSounds.chipMulti(sub.getValue());
+                                        return true;
+                                    }
+                                    currentY += 13.5F * S;
+                                }
+                                currentY += 4F * S;
+                            } else if (setting instanceof StringSetting strSet) {
+                                boolean hovStr = MathUtil.isHovered(mouseX, mouseY, cx + 10F * S, currentY + 11F * S, cw - 20F * S, 12F * S);
+                                if (hovStr && button == 0) {
+                                    activeString = strSet;
+                                    stringBuffer = strSet.getValue();
+                                    textActive = true;
+                                    GuiSounds.editStart();
+                                    return true;
+                                }
+                                currentY += 27F * S;
+                            } else if (setting instanceof ButtonSetting bs) {
+                                float bx = cx + 10F * S;
+                                float by = currentY + 1.5F * S;
+                                float bw = cw - 20F * S;
+                                float bh = 14F * S;
+                                boolean hovBtn = MathUtil.isHovered(mouseX, mouseY, bx, by, bw, bh);
+                                if (hovBtn && button == 0) {
+                                    bs.press();
+                                    GuiSounds.button();
+                                    return true;
+                                }
+                                currentY += 18F * S;
+                            } else if (setting instanceof DelimiterSetting) {
+                                currentY += 9F * S;
                             }
                         }
-                        modY += rowH;
+
+                        modY += getSettingsHeight(m) * exp;
                     }
                 }
             }
@@ -927,15 +948,9 @@ public class DropdownScreen extends Screen implements IMinecraft {
             float ch = col.height * S;
 
             if (MathUtil.isHovered(mouseX, mouseY, cx, cy, cw, ch)) {
-                if (col.drilledModule != null) {
-                    float before = col.settingsScrollTarget;
-                    col.settingsScrollTarget = MathUtil.clamp((float) (col.settingsScrollTarget - verticalAmount * 20 * S), 0F, col.maxSettingsScroll);
-                    if (col.settingsScrollTarget != before) GuiSounds.scroll();
-                } else {
-                    float before = col.scrollTarget;
-                    col.scrollTarget = MathUtil.clamp((float) (col.scrollTarget - verticalAmount * 20 * S), 0F, col.maxScroll);
-                    if (col.scrollTarget != before) GuiSounds.scroll();
-                }
+                float before = col.scrollTarget;
+                col.scrollTarget = MathUtil.clamp((float) (col.scrollTarget - verticalAmount * 20 * S), 0F, col.maxScroll);
+                if (col.scrollTarget != before) GuiSounds.scroll();
                 return true;
             }
         }
@@ -999,19 +1014,6 @@ public class DropdownScreen extends Screen implements IMinecraft {
         }
 
         if (key == 256) {
-            boolean navigatedBack = false;
-            for (Column col : columns) {
-                if (col.drilledModule != null) {
-                    col.drilledModule = null;
-                    col.settingsScroll = 0F;
-                    col.settingsScrollTarget = 0F;
-                    navigatedBack = true;
-                }
-            }
-            if (navigatedBack) {
-                GuiSounds.expand(false);
-                return true;
-            }
             startExit();
             return true;
         }
@@ -1077,15 +1079,6 @@ public class DropdownScreen extends Screen implements IMinecraft {
         if (editor != null) {
             editor.saveAndExit();
             return false;
-        }
-        for (Column col : columns) {
-            if (col.drilledModule != null) {
-                col.drilledModule = null;
-                col.settingsScroll = 0F;
-                col.settingsScrollTarget = 0F;
-                GuiSounds.expand(false);
-                return false;
-            }
         }
         startExit();
         return false;
