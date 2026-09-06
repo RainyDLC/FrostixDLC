@@ -166,7 +166,20 @@ public class DropdownScreen extends Screen implements IMinecraft {
     private final Map<String, fun.newrar.utils.animation.satoshi.Animation> chipAnims = new HashMap<>();
 
     private fun.newrar.utils.animation.satoshi.Animation chipAnim(String key) {
-        return chipAnims.computeIfAbsent(key, k -> new EaseInOutQuad(200, 1, Direction.BACKWARDS));
+        return chipAnims.computeIfAbsent(key, k -> {
+            EaseInOutQuad a = new EaseInOutQuad(200, 1, Direction.BACKWARDS);
+            a.timerUtil.setTime(0);
+            return a;
+        });
+    }
+
+    private fun.newrar.utils.animation.satoshi.Animation getExpandAnim(Module m) {
+        return moduleExpandAnims.computeIfAbsent(m, k -> {
+            boolean exp = expandedModules.contains(m);
+            EaseInOutQuad a = new EaseInOutQuad(250, 1, exp ? Direction.FORWARDS : Direction.BACKWARDS);
+            a.timerUtil.setTime(0);
+            return a;
+        });
     }
 
     private SliderSetting draggingSlider;
@@ -262,19 +275,6 @@ public class DropdownScreen extends Screen implements IMinecraft {
         lastMouseY = mouseY;
     }
 
-    private void drawCheckmark(float cx, float cy, float scale, int color) {
-        float s = scale * S;
-        float w = 1.25F * s;
-        float r = 0.6F * s;
-        RenderUtil.Render2D.rect(cx - 3.2F * s, cy - 0.2F * s, w, w, color, r);
-        RenderUtil.Render2D.rect(cx - 2.2F * s, cy + 0.8F * s, w, w, color, r);
-        RenderUtil.Render2D.rect(cx - 1.2F * s, cy + 1.8F * s, w, w, color, r);
-        RenderUtil.Render2D.rect(cx - 0.2F * s, cy + 0.6F * s, w, w, color, r);
-        RenderUtil.Render2D.rect(cx + 0.8F * s, cy - 0.6F * s, w, w, color, r);
-        RenderUtil.Render2D.rect(cx + 1.8F * s, cy - 1.8F * s, w, w, color, r);
-        RenderUtil.Render2D.rect(cx + 2.8F * s, cy - 3.0F * s, w, w, color, r);
-    }
-
     private boolean hasVisibleSettings(Module m) {
         if (m == null || m.getSettings() == null || m.getSettings().isEmpty()) return false;
         for (Setting<?> s : m.getSettings()) {
@@ -286,7 +286,7 @@ public class DropdownScreen extends Screen implements IMinecraft {
 
     private float getSettingsHeight(Module m) {
         if (m == null || m.getSettings() == null) return 0F;
-        float h = 0F;
+        float h = 4F * S;
         for (Setting<?> setting : m.getSettings()) {
             if (setting.getVisible() != null && !setting.getVisible().get()) continue;
             if (setting instanceof ModeSetting ms) {
@@ -436,7 +436,7 @@ public class DropdownScreen extends Screen implements IMinecraft {
             float totalListH = 0F;
             for (Module m : list) {
                 totalListH += rowH;
-                fun.newrar.utils.animation.satoshi.Animation expAnim = moduleExpandAnims.computeIfAbsent(m, k -> new EaseInOutQuad(220, 1, Direction.BACKWARDS));
+                fun.newrar.utils.animation.satoshi.Animation expAnim = getExpandAnim(m);
                 expAnim.setDirection(expandedModules.contains(m) ? Direction.FORWARDS : Direction.BACKWARDS);
                 float exp = expAnim.getOutput();
                 if (exp > 0.001F) {
@@ -454,11 +454,15 @@ public class DropdownScreen extends Screen implements IMinecraft {
                 boolean onScreen = modY + rowH >= bodyY && modY <= bodyY + bodyH;
                 boolean isHovered = onScreen && MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 4F * S, modY, cw - 8F * S, rowH);
 
-                fun.newrar.utils.animation.satoshi.Animation togAnim = moduleToggleAnims.computeIfAbsent(m, k -> new EaseInOutQuad(200, 1, Direction.BACKWARDS));
+                fun.newrar.utils.animation.satoshi.Animation togAnim = moduleToggleAnims.computeIfAbsent(m, k -> {
+                    EaseInOutQuad a = new EaseInOutQuad(200, 1, m.isEnabled() ? Direction.FORWARDS : Direction.BACKWARDS);
+                    a.timerUtil.setTime(0);
+                    return a;
+                });
                 togAnim.setDirection(m.isEnabled() ? Direction.FORWARDS : Direction.BACKWARDS);
                 float tog = togAnim.getOutput();
 
-                fun.newrar.utils.animation.satoshi.Animation expAnim = moduleExpandAnims.computeIfAbsent(m, k -> new EaseInOutQuad(220, 1, Direction.BACKWARDS));
+                fun.newrar.utils.animation.satoshi.Animation expAnim = getExpandAnim(m);
                 expAnim.setDirection(expandedModules.contains(m) ? Direction.FORWARDS : Direction.BACKWARDS);
                 float exp = expAnim.getOutput();
 
@@ -491,19 +495,19 @@ public class DropdownScreen extends Screen implements IMinecraft {
                     }
 
                     regular.draw(m.getName(), cx + 10F * S, modY + 4F * S, 6.5F * S, nameCol);
-
-                    if (tog > 0.01F) {
-                        drawCheckmark(cx + cw - 14F * S, modY + 7.5F * S, 1F, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim * tog));
-                    }
                 }
 
                 modY += rowH;
 
                 if (exp > 0.001F) {
                     float setH = getSettingsHeight(m);
-                    float currentY = modY;
+                    float animH = setH * exp;
 
-                    Scissor.enable(cx, Math.max(bodyY, modY), cw, Math.min(bodyH - (Math.max(bodyY, modY) - bodyY), setH * exp), 2);
+                    Scissor.enable(cx, modY, cw, animH, 2);
+
+                    RenderUtil.Render2D.rect(cx + 6F * S, modY, cw - 12F * S, animH, ColorUtil.getColor(12, 14, 18, 0.45F * globalAnim * exp), 3.5F * S);
+
+                    float currentY = modY + 2F * S;
 
                     for (Setting<?> setting : m.getSettings()) {
                         if (setting.getVisible() != null && !setting.getVisible().get()) continue;
@@ -522,10 +526,6 @@ public class DropdownScreen extends Screen implements IMinecraft {
 
                                 int optColor = isSel ? ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim * exp) : ColorUtil.getColor(165, 170, 180, 0.6F * globalAnim * exp);
                                 regular.draw(val, cx + 14F * S, currentY + 2.5F * S, 6F * S, optColor);
-
-                                if (isSel) {
-                                    drawCheckmark(cx + cw - 16F * S, currentY + 5.5F * S, 0.9F, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim * exp));
-                                }
                                 currentY += 13.5F * S;
                             }
                             currentY += 4F * S;
@@ -626,10 +626,6 @@ public class DropdownScreen extends Screen implements IMinecraft {
 
                                 int optColor = isSubSel ? ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim * exp) : ColorUtil.getColor(165, 170, 180, 0.6F * globalAnim * exp);
                                 regular.draw(sub.getName(), cx + 14F * S, currentY + 2.5F * S, 6F * S, optColor);
-
-                                if (isSubSel) {
-                                    drawCheckmark(cx + cw - 16F * S, currentY + 5.5F * S, 0.9F, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim * exp));
-                                }
                                 currentY += 13.5F * S;
                             }
                             currentY += 4F * S;
@@ -666,13 +662,14 @@ public class DropdownScreen extends Screen implements IMinecraft {
                         }
                     }
 
-                    Scissor.enable(cx, bodyY, cw, bodyH, 2);
+                    Scissor.disable();
 
-                    modY += setH * exp;
+                    modY += animH;
                 }
             }
 
             Scissor.disable();
+            Scissor.reset();
         }
 
         float searchW = 160F * S;
@@ -779,15 +776,24 @@ public class DropdownScreen extends Screen implements IMinecraft {
                     if (isHovered) {
                         if (button == 0) {
                             m.toggle();
+                            fun.newrar.utils.animation.satoshi.Animation togAnim = moduleToggleAnims.computeIfAbsent(m, k -> {
+                                EaseInOutQuad a = new EaseInOutQuad(200, 1, Direction.BACKWARDS);
+                                a.timerUtil.setTime(0);
+                                return a;
+                            });
+                            togAnim.setDirection(m.isEnabled() ? Direction.FORWARDS : Direction.BACKWARDS);
                             GuiSounds.toggle(m.isEnabled());
                             return true;
                         } else if (button == 1) {
                             if (hasVisibleSettings(m)) {
+                                fun.newrar.utils.animation.satoshi.Animation expAnim = getExpandAnim(m);
                                 if (expandedModules.contains(m)) {
                                     expandedModules.remove(m);
+                                    expAnim.setDirection(Direction.BACKWARDS);
                                     GuiSounds.expand(false);
                                 } else {
                                     expandedModules.add(m);
+                                    expAnim.setDirection(Direction.FORWARDS);
                                     GuiSounds.expand(true);
                                 }
                             } else {
@@ -802,13 +808,18 @@ public class DropdownScreen extends Screen implements IMinecraft {
 
                     modY += rowH;
 
-                    fun.newrar.utils.animation.satoshi.Animation expAnim = moduleExpandAnims.get(m);
-                    float exp = expAnim != null ? expAnim.getOutput() : (expandedModules.contains(m) ? 1F : 0F);
+                    fun.newrar.utils.animation.satoshi.Animation expAnim = getExpandAnim(m);
+                    float exp = expAnim.getOutput();
 
                     if (exp > 0.001F) {
-                        float currentY = modY;
+                        float setH = getSettingsHeight(m);
+                        float animH = setH * exp;
+                        float currentY = modY + 2F * S;
 
-                        for (Setting<?> setting : m.getSettings()) {
+                        boolean inSettingsBounds = mouseY >= modY && mouseY <= modY + animH && mouseY >= bodyY && mouseY <= bodyY + bodyH;
+
+                        if (inSettingsBounds) {
+                            for (Setting<?> setting : m.getSettings()) {
                             if (setting.getVisible() != null && !setting.getVisible().get()) continue;
 
                             if (setting instanceof ModeSetting ms) {
@@ -904,9 +915,10 @@ public class DropdownScreen extends Screen implements IMinecraft {
                                 currentY += 9F * S;
                             }
                         }
-
-                        modY += getSettingsHeight(m) * exp;
                     }
+
+                    modY += animH;
+                }
                 }
             }
         }
