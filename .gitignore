@@ -1,4 +1,4 @@
-﻿.gradle/
+.gradle/
 build/
 run/
 
@@ -22,7 +22,8 @@ decoded_tmp/
 .dev.vars
 .cookies.txt
 .t1.json
-.t2.json
+rain/
+zzz/
 # --- аудит защиты (PoC, не коммитить!) ---
 .audit/
 audit/

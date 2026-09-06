@@ -37,6 +37,7 @@ import fun.newrar.module.api.settings.impl.ButtonSetting;
 import fun.newrar.module.api.settings.impl.ModeSetting;
 import fun.newrar.module.api.settings.impl.MultiBooleanSetting;
 import fun.newrar.module.api.settings.impl.SliderSetting;
+import fun.newrar.screen.DropdownScreen;
 import fun.newrar.screen.Menu;
 import fun.newrar.screen.RotationBuilderScreen;
 import fun.newrar.utils.aura.AttackUtil;
@@ -244,7 +245,7 @@ public class AttackAura extends Module {
     private boolean checkToAttack() {
         boolean baseCheck = mc.player.isUsingItem() && noattackto.getValue("Используешь еду");
 
-        boolean screenCheck = noattackto.getValue("Открыт контейнер") && mc.currentScreen != null  && !(mc.currentScreen instanceof Menu);
+        boolean screenCheck = noattackto.getValue("Открыт контейнер") && mc.currentScreen != null  && !(mc.currentScreen instanceof Menu || mc.currentScreen instanceof DropdownScreen);
 
         return baseCheck ||  screenCheck;
     }

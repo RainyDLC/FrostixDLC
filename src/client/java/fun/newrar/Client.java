@@ -15,6 +15,7 @@ import fun.newrar.manager.events.orbit.EventBus;
 import fun.newrar.manager.rotation.ComponentManager;
 import fun.newrar.module.api.ModuleManager;
 import fun.newrar.rpc.RPC;
+import fun.newrar.screen.DropdownScreen;
 import fun.newrar.screen.Menu;
 import fun.newrar.utils.render.Render2D;
 
@@ -39,6 +40,8 @@ public class Client implements ClientModInitializer {
     Render2D render2D;
     @Setter
     Menu clickGuiScreen;
+    @Setter
+    DropdownScreen dropdownClickGuiScreen;
     @Setter
     ComponentManager componentManager;
     @Setter

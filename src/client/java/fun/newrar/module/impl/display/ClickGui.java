@@ -21,6 +21,8 @@ import fun.newrar.module.api.settings.impl.SliderSetting;
         allowDisable = false
 )
 public class ClickGui extends Module {
+    public ModeSetting type = new ModeSetting(this, "Вид", "КС GUI", "Столбцы");
+
     public MultiBooleanSetting effect = new MultiBooleanSetting(this, "Эффекты",
             new BooleanSetting("Серый фон", false),
             new BooleanSetting("Затемнять фон", true),
@@ -40,7 +42,11 @@ public class ClickGui extends Module {
     @EventHandler
     public void onKey(EventKey event) {
         if (event.getKey() == getKey()) {
-            mc.setScreen(Client.get.clickGuiScreen());
+            if (type.is("Столбцы")) {
+                mc.setScreen(Client.get.dropdownClickGuiScreen());
+            } else {
+                mc.setScreen(Client.get.clickGuiScreen());
+            }
         }
     }
 }

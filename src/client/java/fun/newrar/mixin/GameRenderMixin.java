@@ -6,6 +6,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import fun.newrar.Client;
 import fun.newrar.module.impl.render.NoRender;
 import fun.newrar.module.impl.render.GlassHands;
+import fun.newrar.screen.DropdownScreen;
 import fun.newrar.screen.Menu;
 import fun.newrar.inventorypreset.InventoryPresetOverlay;
 import fun.newrar.screen.HandsEditor;
@@ -76,6 +77,8 @@ public abstract class GameRenderMixin {
 
         if (client.currentScreen instanceof Menu menu) {
             menu.renderOverlay(context, tickCounter);
+        } else if (client.currentScreen instanceof DropdownScreen dropdown) {
+            dropdown.renderOverlay(context, tickCounter);
         }
 
         if (client.currentScreen instanceof InventoryScreen) {
@@ -104,7 +107,7 @@ public abstract class GameRenderMixin {
     @Unique
     private boolean shouldRenderOnTop(Screen screen) {
         if (screen == null) return true;
-        if (screen instanceof Menu) return true;
+        if (screen instanceof Menu || screen instanceof DropdownScreen) return true;
 
         if (screen instanceof ChatScreen) return true;
 

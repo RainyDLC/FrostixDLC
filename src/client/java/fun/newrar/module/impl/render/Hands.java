@@ -6,6 +6,7 @@ import fun.newrar.module.api.ModuleInfo;
 import fun.newrar.module.api.settings.impl.ButtonSetting;
 import fun.newrar.module.api.settings.impl.DelimiterSetting;
 import fun.newrar.module.api.settings.impl.SliderSetting;
+import fun.newrar.screen.DropdownScreen;
 import fun.newrar.screen.Menu;
 import fun.newrar.utils.other.Instance;
 import net.minecraft.client.util.math.MatrixStack;
@@ -28,6 +29,8 @@ public class Hands extends Module {
     public ButtonSetting openEditor = new ButtonSetting(this, "Редактор рук", () -> {
         if (mc.currentScreen instanceof Menu menu) {
             menu.openHandsEditor();
+        } else if (mc.currentScreen instanceof DropdownScreen dropdown) {
+            dropdown.openHandsEditor();
         }
     });
 

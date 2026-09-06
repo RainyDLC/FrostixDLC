@@ -80,7 +80,8 @@ vec3 getViewNormal(vec2 uv, vec3 centerPos) {
 }
 
 vec2 projectFallback(vec3 pos, vec3 dir, out float valid) {
-    float dist = max(3.5, length(pos) * 0.85);
+    float posDist = length(pos);
+    float dist = clamp(posDist * 0.45, 2.5, 10.0);
     vec3 targetPos = pos + dir * dist;
     vec4 clip = uProj * vec4(targetPos, 1.0);
     if (clip.w <= 0.0001) {
@@ -95,7 +96,7 @@ vec2 projectFallback(vec3 pos, vec3 dir, out float valid) {
 }
 
 vec2 traceSSR(vec3 origin, vec3 dir, vec3 surfN, out float hitConfidence) {
-    vec3 rayPos = origin + surfN * max(0.025, length(origin) * 0.0015);
+    vec3 rayPos = origin + surfN * max(0.03, length(origin) * 0.002);
     float stepDist = max(0.08, length(origin) * 0.008);
     float stepInc = max(0.012, stepDist * 0.06);
     float traveled = 0.0;
@@ -109,7 +110,7 @@ vec2 traceSSR(vec3 origin, vec3 dir, vec3 surfN, out float hitConfidence) {
         traveled += stepDist;
         stepDist += stepInc;
 
-        if (traveled > min(40.0, uViewport.w * 0.85) || rayPos.z > -0.02) break;
+        if (traveled > min(36.0, uViewport.w * 0.80) || rayPos.z > -0.02) break;
 
         vec4 clip = uProj * vec4(rayPos, 1.0);
         if (clip.w <= 0.0001) break;
@@ -125,9 +126,9 @@ vec2 traceSSR(vec3 origin, vec3 dir, vec3 surfN, out float hitConfidence) {
             vec3 geomPos = getViewPosition(sampleUv, sampleD);
             float dz = geomPos.z - rayPos.z;
             float h = dot(geomPos - origin, surfN);
-            float thickness = 0.08 + stepDist * 1.5;
+            float thickness = 0.06 + stepDist * 1.3;
 
-            if (h > 0.035 && dz >= 0.0 && dz < thickness) {
+            if (h > 0.05 && dz >= 0.0 && dz < thickness) {
                 vec3 rA = rayPos - dir * (stepDist - stepInc);
                 vec3 rB = rayPos;
                 for (int j = 0; j < 3; j++) {
@@ -147,10 +148,17 @@ vec2 traceSSR(vec3 origin, vec3 dir, vec3 surfN, out float hitConfidence) {
                 vec4 cFinal = uProj * vec4(rB, 1.0);
                 vec2 hitUv = clamp(cFinal.xy / cFinal.w * 0.5 + 0.5, 0.001, 0.999);
 
-                float edgeX = smoothstep(0.0, 0.06, min(hitUv.x, 1.0 - hitUv.x));
-                float edgeY = smoothstep(0.0, 0.08, min(hitUv.y, 1.0 - hitUv.y));
+                float edgeX = smoothstep(0.0, 0.08, min(hitUv.x, 1.0 - hitUv.x));
+                float edgeY = smoothstep(0.0, 0.10, min(hitUv.y, 1.0 - hitUv.y));
                 float depthFade = 1.0 - smoothstep(0.0, thickness, dz) * 0.35;
-                hitConfidence = clamp(edgeX * edgeY * depthFade, 0.0, 1.0);
+
+                float maxTraveled = max(2.5, h * 2.2);
+                float radiusFade = 1.0 - smoothstep(maxTraveled * 0.65, maxTraveled, traveled);
+
+                float stretchRatio = traveled / max(0.06, h);
+                float stretchFade = 1.0 - smoothstep(4.0, 8.5, stretchRatio);
+
+                hitConfidence = clamp(edgeX * edgeY * depthFade * stretchFade * radiusFade, 0.0, 1.0);
                 return hitUv;
             }
         }
@@ -216,7 +224,10 @@ void main() {
 
     vec3 incident = normalize(viewPos);
     vec3 reflNormal = geomN;
-    vec3 reflectDir = normalize(reflect(incident, reflNormal));
+    vec3 reflectDir = reflect(incident, reflNormal);
+    float minPitch = mix(0.24, 0.36, smoothstep(4.0, 16.0, dist));
+    reflectDir.y = max(reflectDir.y, minPitch);
+    reflectDir = normalize(reflectDir);
 
     float fbValid = 0.0;
     vec2 fbUv = projectFallback(viewPos, reflectDir, fbValid);

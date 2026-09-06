@@ -13,6 +13,7 @@ import fun.newrar.module.api.settings.impl.ModeSetting;
 import fun.newrar.module.api.settings.impl.PixelGridSetting;
 import fun.newrar.module.api.settings.impl.SliderSetting;
 import fun.newrar.screen.CrosshairEditor;
+import fun.newrar.screen.DropdownScreen;
 import fun.newrar.screen.Menu;
 import fun.newrar.theme.ThemeColor;
 import fun.newrar.utils.animation.Animation;
@@ -42,12 +43,13 @@ public class CrossHair extends Module {
 
     public boolean isEditorSettingVisible() {
         if (!isDrawing()) return false;
-        boolean inNormalClickGui = (mc.currentScreen instanceof Menu) && !isEditorOpen();
+        boolean inNormalClickGui = (mc.currentScreen instanceof Menu || mc.currentScreen instanceof DropdownScreen) && !isEditorOpen();
         return !inNormalClickGui;
     }
 
     public ButtonSetting openEditor = new ButtonSetting(this, "Редактор прицела", () -> {
         if (mc.currentScreen instanceof Menu menu) menu.openCrosshairEditor();
+        else if (mc.currentScreen instanceof DropdownScreen dropdown) dropdown.openCrosshairEditor();
     }).setVisible(() -> isDrawing() && !isEditorOpen());
 
     public ModeSetting type = new ModeSetting(this, "Режим", "Кастомный", "Точка", "Кружочек");

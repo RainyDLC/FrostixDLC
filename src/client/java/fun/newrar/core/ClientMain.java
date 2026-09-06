@@ -13,6 +13,7 @@ import fun.newrar.manager.GuiManager;
 import fun.newrar.manager.rotation.ComponentManager;
 import fun.newrar.module.api.ModuleManager;
 import fun.newrar.rpc.RPC;
+import fun.newrar.screen.DropdownScreen;
 import fun.newrar.screen.Menu;
 import fun.newrar.utils.render.Render2D;
 import fun.newrar.utils.render.font.FontInitializer;
@@ -76,6 +77,9 @@ public final class ClientMain {
 
         Menu clickGuiScreen = new Menu();
         client.clickGuiScreen(clickGuiScreen);
+
+        DropdownScreen dropdownClickGuiScreen = new DropdownScreen();
+        client.dropdownClickGuiScreen(dropdownClickGuiScreen);
 
         Menu.selectedTheme = guiManager.getCurrentTheme();
         Menu.preSelectedTheme = guiManager.getCurrentTheme();

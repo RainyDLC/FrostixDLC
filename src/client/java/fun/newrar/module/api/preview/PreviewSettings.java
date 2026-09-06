@@ -4,6 +4,7 @@ import fun.newrar.module.api.Module;
 import fun.newrar.module.api.settings.impl.ButtonSetting;
 import fun.newrar.module.api.settings.impl.DelimiterSetting;
 import fun.newrar.module.api.settings.impl.SliderSetting;
+import fun.newrar.screen.DropdownScreen;
 import fun.newrar.screen.Menu;
 import fun.newrar.screen.PreviewEditor;
 import fun.newrar.utils.annotation.IMinecraft;
@@ -74,6 +75,8 @@ public final class PreviewSettings {
         return new ButtonSetting(parent, "Предпоказ", () -> {
             if (IMinecraft.mc.currentScreen instanceof Menu menu) {
                 menu.openPreviewEditor(parent);
+            } else if (IMinecraft.mc.currentScreen instanceof DropdownScreen dropdown) {
+                dropdown.openPreviewEditor(parent);
             }
         }).setVisible(() -> !isEditing(parent));
     }

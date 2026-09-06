@@ -11,6 +11,7 @@ import fun.newrar.module.api.settings.impl.ModeSetting;
 import fun.newrar.module.impl.combat.TriplePickerScreen;
 import fun.newrar.module.impl.combat.TripleWheelScreen;
 import fun.newrar.module.impl.utils.ReportHelper;
+import fun.newrar.screen.DropdownScreen;
 import fun.newrar.screen.Menu;
 import fun.newrar.utils.other.TimerUtil;
 import net.minecraft.client.gui.screen.ChatScreen;
@@ -64,7 +65,8 @@ public class InventoryMove extends Module {
 
             if (mc.currentScreen instanceof ChatScreen) {
             } else if (mc.currentScreen instanceof InventoryScreen ||
-                    mc.currentScreen instanceof TripleWheelScreen ||    mc.currentScreen instanceof Menu&& !Menu.searchActive ||
+                    mc.currentScreen instanceof TripleWheelScreen || mc.currentScreen instanceof Menu && !Menu.searchActive ||
+                    mc.currentScreen instanceof DropdownScreen && !DropdownScreen.isTextActive() ||
                     mc.currentScreen instanceof TriplePickerScreen ||
                     mc.currentScreen instanceof GenericContainerScreen) {
                 updateKeyBindingState(movementKeys);
@@ -200,7 +202,8 @@ public class InventoryMove extends Module {
 
         if (mc.currentScreen instanceof ChatScreen) {
         } else if (mc.currentScreen instanceof InventoryScreen ||
-                mc.currentScreen instanceof TripleWheelScreen ||    mc.currentScreen instanceof Menu && !Menu.searchActive||
+                mc.currentScreen instanceof TripleWheelScreen || mc.currentScreen instanceof Menu && !Menu.searchActive ||
+                mc.currentScreen instanceof DropdownScreen && !DropdownScreen.isTextActive() ||
                 mc.currentScreen instanceof TriplePickerScreen ||
                 mc.currentScreen instanceof GenericContainerScreen) {
             updateKeyBindingState(movementKeys);
