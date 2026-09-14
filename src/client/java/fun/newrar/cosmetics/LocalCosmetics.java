@@ -72,7 +72,8 @@ public final class LocalCosmetics {
       if (i == null) {
          return null;
       }
-      return texture(i);
+      int idx = entry(i).index;
+      return Identifier.of("pulse", "cosmetics/cosmetic_" + idx);
    }
 
    public static List<Integer> selectedIndices() {
