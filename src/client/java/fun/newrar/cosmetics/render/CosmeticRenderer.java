@@ -26,14 +26,24 @@ public class CosmeticRenderer {
       if (model != null && model.getTextureId() != null) {
          this.stack.update(matrices);
          this.stack.push();
-         float yOffset = this.transformToPosition(model, playerModel);
-         this.stack.rotateZDegrees(180.0F);
-         this.stack.translate(model.getX(), model.getY() + yOffset, model.getZ());
-         this.stack.rotateYDegrees(model.getYaw());
-         this.stack.rotateXDegrees(model.getPitch());
-         this.stack.rotateZDegrees(model.getRoll());
+
+         boolean isGroundPet = PetFollower.getInstance().isGroundPet(model);
+         PetFollower.PetState petState = null;
+
+         if (isGroundPet) {
+            petState = PetFollower.getInstance().updateAndGetState(player, model, tickDelta);
+            this.applyGroundPetTransform(model, petState);
+         } else {
+            float yOffset = this.transformToPosition(model, playerModel);
+            this.stack.rotateZDegrees(180.0F);
+            this.stack.translate(model.getX(), model.getY() + yOffset, model.getZ());
+            this.stack.rotateYDegrees(model.getYaw());
+            this.stack.rotateXDegrees(model.getPitch());
+            this.stack.rotateZDegrees(model.getRoll());
+         }
+
          this.stack.scale(model.getScale(), model.getScale(), model.getScale());
-         this.geckolibRenderer.renderCosmetic(model, matrices, vertexConsumers, light);
+         this.geckolibRenderer.renderCosmetic(model, matrices, vertexConsumers, light, player, petState);
          this.stack.pop();
       }
    }
@@ -42,16 +52,47 @@ public class CosmeticRenderer {
       if (cosmetic != null && cosmetic.getTextureId() != null && vertexConsumer != null) {
          this.stack.update(matrices);
          this.stack.push();
-         float yOffset = this.transformToPosition(cosmetic, playerModel);
-         this.stack.rotateZDegrees(180.0F);
-         this.stack.translate(cosmetic.getX(), cosmetic.getY() + yOffset, cosmetic.getZ());
-         this.stack.rotateYDegrees(cosmetic.getYaw());
-         this.stack.rotateXDegrees(cosmetic.getPitch());
-         this.stack.rotateZDegrees(cosmetic.getRoll());
+
+         boolean isGroundPet = PetFollower.getInstance().isGroundPet(cosmetic);
+         PetFollower.PetState petState = null;
+
+         if (isGroundPet) {
+            petState = PetFollower.getInstance().updateAndGetState(player, cosmetic, tickDelta);
+            this.applyGroundPetTransform(cosmetic, petState);
+         } else {
+            float yOffset = this.transformToPosition(cosmetic, playerModel);
+            this.stack.rotateZDegrees(180.0F);
+            this.stack.translate(cosmetic.getX(), cosmetic.getY() + yOffset, cosmetic.getZ());
+            this.stack.rotateYDegrees(cosmetic.getYaw());
+            this.stack.rotateXDegrees(cosmetic.getPitch());
+            this.stack.rotateZDegrees(cosmetic.getRoll());
+         }
+
          this.stack.scale(cosmetic.getScale(), cosmetic.getScale(), cosmetic.getScale());
-         this.geckolibRenderer.renderCosmetic(cosmetic, matrices, vertexConsumer, light);
+         this.geckolibRenderer.renderCosmetic(cosmetic, matrices, vertexConsumer, light, player, petState);
          this.stack.pop();
       }
+   }
+
+   private void applyGroundPetTransform(CosmeticModel model, PetFollower.PetState petState) {
+      this.stack.rotateZDegrees(180.0F);
+      float posX = petState != null ? petState.localX : model.getX();
+      float posY = petState != null ? petState.localY : model.getY();
+      float posZ = petState != null ? petState.localZ : model.getZ();
+      float yaw = petState != null ? petState.petYaw : model.getYaw();
+
+      // Subtle step bobbing when walking
+      float stepBob = 0.0F;
+      float stepRoll = 0.0F;
+      if (petState != null && petState.isMoving) {
+         stepBob = (float) Math.abs(Math.sin(petState.walkTimer * 8.0)) * 0.04F;
+         stepRoll = (float) Math.sin(petState.walkTimer * 8.0) * 2.5F;
+      }
+
+      this.stack.translate(posX, posY + stepBob, posZ);
+      this.stack.rotateYDegrees(yaw + model.getYaw());
+      this.stack.rotateXDegrees(model.getPitch());
+      this.stack.rotateZDegrees(model.getRoll() + stepRoll);
    }
 
    private float transformToPosition(CosmeticModel model, PlayerEntityModel playerModel) {

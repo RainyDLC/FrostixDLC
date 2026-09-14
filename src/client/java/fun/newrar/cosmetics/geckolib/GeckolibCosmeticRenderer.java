@@ -9,6 +9,8 @@ import fun.newrar.cosmetics.geo.GeoModel;
 import fun.newrar.cosmetics.geo.GeoQuad;
 import fun.newrar.cosmetics.geo.GeoVertex;
 import fun.newrar.cosmetics.model.CosmeticModel;
+import fun.newrar.cosmetics.render.PetFollower;
+import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderLayers;
@@ -33,7 +35,7 @@ public class GeckolibCosmeticRenderer {
    private static GeckolibCosmeticRenderer instance;
 
    private final Map<Integer, GeoModel> modelCache = new ConcurrentHashMap<>();
-   private final Map<Integer, CosmeticAnimationData> animationCache = new ConcurrentHashMap<>();
+   private final Map<Integer, Map<String, CosmeticAnimationData>> animationCache = new ConcurrentHashMap<>();
    private final Set<Integer> noAnimationSet = ConcurrentHashMap.newKeySet();
    private final Map<Integer, Long> animationStartTime = new ConcurrentHashMap<>();
    private final Map<Integer, Map<String, float[]>> initialBoneTransforms = new ConcurrentHashMap<>();
@@ -47,12 +49,23 @@ public class GeckolibCosmeticRenderer {
    }
 
    public void renderCosmetic(CosmeticModel cosmetic, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light) {
+      this.renderCosmetic(cosmetic, matrices, vertexConsumers, light, null, null);
+   }
+
+   public void renderCosmetic(CosmeticModel cosmetic, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, AbstractClientPlayerEntity player, PetFollower.PetState petState) {
       if (cosmetic != null && cosmetic.getTextureId() != null) {
          GeoModel model = this.getOrParseModel(cosmetic);
          if (model != null) {
-            CosmeticAnimationData anim = this.getOrParseAnimation(cosmetic);
-            if (anim != null) {
-               this.applyAnimations(model, anim, cosmetic.getId());
+            Map<String, CosmeticAnimationData> animMap = this.getOrParseAnimations(cosmetic);
+            if (animMap != null && !animMap.isEmpty()) {
+               boolean isMoving = petState != null ? petState.isMoving : (player != null && player.limbAnimator != null && player.limbAnimator.isLimbMoving());
+               boolean isSwimming = player != null && player.isInFluid();
+               boolean isElytra = player != null && player.isGliding();
+               CosmeticAnimationData anim = this.selectAnimation(animMap, isMoving, isSwimming, isElytra);
+               if (anim != null) {
+                  float animTime = this.calculateAnimTime(anim, cosmetic.getId(), petState);
+                  this.applyAnimations(model, anim, cosmetic.getId(), animTime);
+               }
             }
 
             Identifier tex = cosmetic.getTextureId();
@@ -67,12 +80,23 @@ public class GeckolibCosmeticRenderer {
    }
 
    public void renderCosmetic(CosmeticModel cosmetic, MatrixStack matrices, VertexConsumer vertexConsumer, int light) {
+      this.renderCosmetic(cosmetic, matrices, vertexConsumer, light, null, null);
+   }
+
+   public void renderCosmetic(CosmeticModel cosmetic, MatrixStack matrices, VertexConsumer vertexConsumer, int light, AbstractClientPlayerEntity player, PetFollower.PetState petState) {
       if (cosmetic != null && cosmetic.getTextureId() != null && vertexConsumer != null) {
          GeoModel geoModel = this.getOrParseModel(cosmetic);
          if (geoModel != null) {
-            CosmeticAnimationData animationData = this.getOrParseAnimation(cosmetic);
-            if (animationData != null) {
-               this.applyAnimations(geoModel, animationData, cosmetic.getId());
+            Map<String, CosmeticAnimationData> animMap = this.getOrParseAnimations(cosmetic);
+            if (animMap != null && !animMap.isEmpty()) {
+               boolean isMoving = petState != null ? petState.isMoving : (player != null && player.limbAnimator != null && player.limbAnimator.isLimbMoving());
+               boolean isSwimming = player != null && player.isInFluid();
+               boolean isElytra = player != null && player.isGliding();
+               CosmeticAnimationData anim = this.selectAnimation(animMap, isMoving, isSwimming, isElytra);
+               if (anim != null) {
+                  float animTime = this.calculateAnimTime(anim, cosmetic.getId(), petState);
+                  this.applyAnimations(geoModel, anim, cosmetic.getId(), animTime);
+               }
             }
 
             for (GeoBone bone : geoModel.topLevelBones) {
@@ -80,6 +104,62 @@ public class GeckolibCosmeticRenderer {
             }
          }
       }
+   }
+
+   private float calculateAnimTime(CosmeticAnimationData anim, int id, PetFollower.PetState petState) {
+      float length = anim.length > 0.0F ? anim.length : 1.0F;
+      if (petState != null) {
+         if (petState.isMoving) {
+            return (petState.walkTimer) % length;
+         } else {
+            return (petState.idleTimer) % length;
+         }
+      }
+      long startTime = this.animationStartTime.computeIfAbsent(id, k -> System.currentTimeMillis());
+      float elapsed = (float) (System.currentTimeMillis() - startTime) / 1000.0F;
+      return anim.loop ? (elapsed % length) : Math.min(elapsed, length);
+   }
+
+   private CosmeticAnimationData selectAnimation(Map<String, CosmeticAnimationData> anims, boolean moving, boolean swimming, boolean elytra) {
+      if (anims == null || anims.isEmpty()) {
+         return null;
+      }
+
+      if (swimming) {
+         for (Map.Entry<String, CosmeticAnimationData> entry : anims.entrySet()) {
+            String name = entry.getKey().toLowerCase();
+            if (name.contains("swim") || name.contains("water")) {
+               return entry.getValue();
+            }
+         }
+      }
+
+      if (elytra) {
+         for (Map.Entry<String, CosmeticAnimationData> entry : anims.entrySet()) {
+            String name = entry.getKey().toLowerCase();
+            if (name.contains("elytra") || name.contains("fly")) {
+               return entry.getValue();
+            }
+         }
+      }
+
+      if (moving) {
+         for (Map.Entry<String, CosmeticAnimationData> entry : anims.entrySet()) {
+            String name = entry.getKey().toLowerCase();
+            if (name.contains("run") || name.contains("walk") || name.contains("moving")) {
+               return entry.getValue();
+            }
+         }
+      }
+
+      for (Map.Entry<String, CosmeticAnimationData> entry : anims.entrySet()) {
+         String name = entry.getKey().toLowerCase();
+         if (name.contains("main") || name.contains("idle") || name.contains("afk") || name.contains("anim")) {
+            return entry.getValue();
+         }
+      }
+
+      return anims.values().iterator().next();
    }
 
    private GeoModel getOrParseModel(CosmeticModel cosmetic) {
@@ -109,18 +189,11 @@ public class GeckolibCosmeticRenderer {
       transforms.put(
          bone.name,
          new float[]{
-            bone.getRotationX(),
-            bone.getRotationY(),
-            bone.getRotationZ(),
-            bone.getPositionX(),
-            bone.getPositionY(),
-            bone.getPositionZ(),
-            bone.getScaleX(),
-            bone.getScaleY(),
-            bone.getScaleZ()
+            bone.getRotationX(), bone.getRotationY(), bone.getRotationZ(),
+            bone.getPositionX(), bone.getPositionY(), bone.getPositionZ(),
+            bone.getScaleX(), bone.getScaleY(), bone.getScaleZ()
          }
       );
-
       for (GeoBone child : bone.childBones) {
          this.saveBonesRecursive(child, transforms);
       }
@@ -153,16 +226,17 @@ public class GeckolibCosmeticRenderer {
       GeckoRenderHelper.rotate(cube, matrices);
       GeckoRenderHelper.moveBackFromPivot(cube, matrices);
 
-      Matrix4f posMat = matrices.peek().getPositionMatrix();
-      Matrix3f normMat = matrices.peek().getNormalMatrix();
+      MatrixStack.Entry entry = matrices.peek();
+      Matrix4f posMat = entry.getPositionMatrix();
+      Matrix3f normMat = entry.getNormalMatrix();
 
       for (GeoQuad quad : cube.quads) {
          if (quad != null) {
-            Vector3f normal = new Vector3f(quad.normal.getX(), quad.normal.getY(), quad.normal.getZ());
-            normMat.transform(normal);
-            float nx = normal.x();
-            float ny = normal.y();
-            float nz = normal.z();
+            Vector3f norm = new Vector3f(quad.normal.getX(), quad.normal.getY(), quad.normal.getZ());
+            norm.mul(normMat);
+            float nx = norm.x();
+            float ny = norm.y();
+            float nz = norm.z();
 
             if ((cube.size.getY() == 0.0F || cube.size.getZ() == 0.0F) && nx < 0.0F) {
                nx = -nx;
@@ -188,7 +262,7 @@ public class GeckolibCosmeticRenderer {
       matrices.pop();
    }
 
-   private CosmeticAnimationData getOrParseAnimation(CosmeticModel cosmetic) {
+   private Map<String, CosmeticAnimationData> getOrParseAnimations(CosmeticModel cosmetic) {
       int id = cosmetic.getId();
       if (this.animationCache.containsKey(id)) {
          return this.animationCache.get(id);
@@ -204,14 +278,15 @@ public class GeckolibCosmeticRenderer {
       }
 
       try {
-         CosmeticAnimationData data = this.parseAnimationData(animJson);
-         if (data != null) {
-            this.animationCache.put(id, data);
-            LOGGER.info("Cached animation for cosmetic: {}", cosmetic.getName());
+         Map<String, CosmeticAnimationData> map = this.parseAllAnimations(animJson);
+         if (map != null && !map.isEmpty()) {
+            this.animationCache.put(id, map);
+            LOGGER.info("Cached {} animation(s) for cosmetic: {}", map.size(), cosmetic.getName());
+            return map;
          } else {
             this.noAnimationSet.add(id);
+            return null;
          }
-         return data;
       } catch (Exception e) {
          LOGGER.error("Failed to parse animation for: {}", cosmetic.getName(), e);
          this.noAnimationSet.add(id);
@@ -219,88 +294,110 @@ public class GeckolibCosmeticRenderer {
       }
    }
 
-   private CosmeticAnimationData parseAnimationData(JsonObject obj) {
-      CosmeticAnimationData data = new CosmeticAnimationData();
+   private Map<String, CosmeticAnimationData> parseAllAnimations(JsonObject obj) {
       if (!obj.has("animations")) {
          return null;
       }
 
+      Map<String, CosmeticAnimationData> result = new HashMap<>();
       JsonObject animations = obj.getAsJsonObject("animations");
-      Iterator<Map.Entry<String, JsonElement>> it = animations.entrySet().iterator();
-      if (it.hasNext()) {
-         Map.Entry<String, JsonElement> entry = it.next();
+
+      for (Map.Entry<String, JsonElement> entry : animations.entrySet()) {
          String animName = entry.getKey();
-         JsonObject entryObj = entry.getValue().getAsJsonObject();
-         data.animationName = animName;
-         data.loop = entryObj.has("loop") && entryObj.get("loop").getAsBoolean();
-         data.length = entryObj.has("animation_length") ? entryObj.get("animation_length").getAsFloat() : 1.0F;
+         if (entry.getValue().isJsonObject()) {
+            JsonObject entryObj = entry.getValue().getAsJsonObject();
+            CosmeticAnimationData data = new CosmeticAnimationData();
+            data.animationName = animName;
+            data.loop = entryObj.has("loop") && entryObj.get("loop").getAsBoolean();
+            data.length = entryObj.has("animation_length") ? entryObj.get("animation_length").getAsFloat() : 1.0F;
 
-         if (entryObj.has("bones")) {
-            JsonObject bones = entryObj.getAsJsonObject("bones");
-            for (Map.Entry<String, JsonElement> boneEntry : bones.entrySet()) {
-               String boneName = boneEntry.getKey();
-               JsonObject boneAnim = boneEntry.getValue().getAsJsonObject();
-               BoneAnimationData bData = new BoneAnimationData();
+            if (entryObj.has("bones")) {
+               JsonObject bones = entryObj.getAsJsonObject("bones");
+               for (Map.Entry<String, JsonElement> boneEntry : bones.entrySet()) {
+                  String boneName = boneEntry.getKey();
+                  if (boneEntry.getValue().isJsonObject()) {
+                     JsonObject boneAnim = boneEntry.getValue().getAsJsonObject();
+                     BoneAnimationData bData = new BoneAnimationData();
 
-               if (boneAnim.has("rotation")) {
-                  bData.rotationKeyframes = this.parseKeyframes(boneAnim.get("rotation"));
-               }
-               if (boneAnim.has("position")) {
-                  bData.positionKeyframes = this.parseKeyframes(boneAnim.get("position"));
-               }
-               if (boneAnim.has("scale")) {
-                  bData.scaleKeyframes = this.parseKeyframes(boneAnim.get("scale"));
-               }
+                     if (boneAnim.has("rotation")) {
+                        bData.rotationKeyframes = this.parseKeyframes(boneAnim.get("rotation"));
+                     }
+                     if (boneAnim.has("position")) {
+                        bData.positionKeyframes = this.parseKeyframes(boneAnim.get("position"));
+                     }
+                     if (boneAnim.has("scale")) {
+                        bData.scaleKeyframes = this.parseKeyframes(boneAnim.get("scale"));
+                     }
 
-               data.boneAnimations.put(boneName, bData);
+                     data.boneAnimations.put(boneName, bData);
+                  }
+               }
             }
+            result.put(animName, data);
          }
       }
-      return data;
+      return result;
    }
 
    private Map<Float, float[]> parseKeyframes(JsonElement elem) {
       HashMap<Float, float[]> map = new HashMap<>();
+      if (elem == null || elem.isJsonNull()) {
+         return map;
+      }
+
       if (elem.isJsonObject()) {
          JsonObject obj = elem.getAsJsonObject();
          for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
             try {
                float time = Float.parseFloat(entry.getKey());
-               JsonElement val = entry.getValue();
-               float[] vec = new float[3];
-               if (val.isJsonObject()) {
-                  JsonObject valObj = val.getAsJsonObject();
-                  if (valObj.has("vector")) {
-                     JsonArray vArr = valObj.getAsJsonArray("vector");
-                     vec[0] = vArr.get(0).getAsFloat();
-                     vec[1] = vArr.get(1).getAsFloat();
-                     vec[2] = vArr.get(2).getAsFloat();
-                  }
-               } else if (val.isJsonArray()) {
-                  JsonArray vArr = val.getAsJsonArray();
-                  vec[0] = vArr.get(0).getAsFloat();
-                  vec[1] = vArr.get(1).getAsFloat();
-                  vec[2] = vArr.get(2).getAsFloat();
-               }
+               float[] vec = this.parseKeyframeVector(entry.getValue());
                map.put(time, vec);
             } catch (NumberFormatException ignored) {}
          }
+      } else if (elem.isJsonArray() || elem.isJsonPrimitive()) {
+         // Single static keyframe at 0.0
+         map.put(0.0F, this.parseKeyframeVector(elem));
       }
       return map;
    }
 
-   private void applyAnimations(GeoModel model, CosmeticAnimationData anim, int id) {
+   private float[] parseKeyframeVector(JsonElement elem) {
+      if (elem == null || elem.isJsonNull()) {
+         return new float[]{0.0F, 0.0F, 0.0F};
+      }
+      if (elem.isJsonArray()) {
+         JsonArray arr = elem.getAsJsonArray();
+         float x = arr.size() > 0 ? arr.get(0).getAsFloat() : 0.0F;
+         float y = arr.size() > 1 ? arr.get(1).getAsFloat() : 0.0F;
+         float z = arr.size() > 2 ? arr.get(2).getAsFloat() : 0.0F;
+         return new float[]{x, y, z};
+      }
+      if (elem.isJsonObject()) {
+         JsonObject obj = elem.getAsJsonObject();
+         if (obj.has("vector")) {
+            return this.parseKeyframeVector(obj.get("vector"));
+         }
+         if (obj.has("post")) {
+            return this.parseKeyframeVector(obj.get("post"));
+         }
+         if (obj.has("pre")) {
+            return this.parseKeyframeVector(obj.get("pre"));
+         }
+         float x = obj.has("x") ? obj.get("x").getAsFloat() : 0.0F;
+         float y = obj.has("y") ? obj.get("y").getAsFloat() : 0.0F;
+         float z = obj.has("z") ? obj.get("z").getAsFloat() : 0.0F;
+         return new float[]{x, y, z};
+      }
+      if (elem.isJsonPrimitive()) {
+         float v = elem.getAsFloat();
+         return new float[]{v, v, v};
+      }
+      return new float[]{0.0F, 0.0F, 0.0F};
+   }
+
+   private void applyAnimations(GeoModel model, CosmeticAnimationData anim, int id, float animTime) {
       Map<String, float[]> initial = this.initialBoneTransforms.get(id);
       if (initial != null) {
-         long startTime = this.animationStartTime.computeIfAbsent(id, k -> System.currentTimeMillis());
-         float elapsed = (float) (System.currentTimeMillis() - startTime) / 1000.0F;
-         float animTime;
-         if (anim.loop && anim.length > 0.0F) {
-            animTime = elapsed % anim.length;
-         } else {
-            animTime = Math.min(elapsed, anim.length);
-         }
-
          for (GeoBone bone : model.topLevelBones) {
             this.resetBoneRecursive(bone, initial);
          }
