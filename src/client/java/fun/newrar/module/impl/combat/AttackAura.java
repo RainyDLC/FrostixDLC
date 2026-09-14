@@ -118,7 +118,11 @@ public class AttackAura extends Module {
     public ModeSetting typeSprint = new ModeSetting(this,"Тип спринта", "Packet","Silent","Legit");
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
 
-    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Огонь","Мечи","Цепь","Не отображать");
+    public ModeSetting typeTargetESP = new ModeSetting(this,"Отображение таргета","Картинка","Духи","Кольцо","Кубики","Куб","Молнии","Кристаллы","Пентаграмма","Снег","Сердце","Огонь","Мечи","Цепь","Блум","Не отображать");
+
+    public SliderSetting bloomCount = new SliderSetting(this, "Количество", 36, 12, 64, 2).setVisible(() -> typeTargetESP.is("Блум"));
+    public SliderSetting bloomSize = new SliderSetting(this, "Размер", 0.20F, 0.08F, 0.50F, 0.02F).setVisible(() -> typeTargetESP.is("Блум"));
+    public SliderSetting bloomSpeed = new SliderSetting(this, "Скорость", 1.0F, 0.2F, 3.0F, 0.1F).setVisible(() -> typeTargetESP.is("Блум"));
 
     public SliderSetting cubeSize = new SliderSetting(this,"Размер куба",1.15F,0.6F,2.5F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));
     public SliderSetting cubeRotateSpeed = new SliderSetting(this,"Скорость вращения куба",1.2F,0.2F,4.0F,0.05F).setVisible(() -> typeTargetESP.is("Куб"));

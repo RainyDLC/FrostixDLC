@@ -1,0 +1,55 @@
+private static final int MAX_BLOOM_PARTICLES = 64;
+private static final BloomParticleSeed[] BLOOM_SEEDS = new BloomParticleSeed[MAX_BLOOM_PARTICLES];
+
+static {
+    for (int i = 0; i < MAX_BLOOM_PARTICLES; i++) {
+        long seed = (long) i * 2654435761L + 987654321L;
+        java.util.Random rnd = new java.util.Random(seed);
+        float h = (float) i / (float) MAX_BLOOM_PARTICLES + (rnd.nextFloat() - 0.5f) * 0.06f;
+        float r = 0.45f + rnd.nextFloat() * 0.55f;
+        float ang = rnd.nextFloat() * (float) (Math.PI * 2.0);
+        float dir = (i % 2 == 0) ? 1.0f : -1.0f;
+        float oSpeed = dir * (0.8f + rnd.nextFloat() * 1.2f);
+        float vSpeed = 0.25f + rnd.nextFloat() * 0.45f;
+        float pSpeed = 2.0f + rnd.nextFloat() * 3.5f;
+        float pPhase = rnd.nextFloat() * (float) (Math.PI * 2.0);
+        float sSpeed = (rnd.nextFloat() - 0.5f) * 90.0f;
+        float sSeed = rnd.nextFloat() * 360.0f;
+        float szFactor = 0.75f + rnd.nextFloat() * 0.5f;
+        float radFreq = 1.2f + rnd.nextFloat() * 2.0f;
+        float radAmp = 0.04f + rnd.nextFloat() * 0.09f;
+        BLOOM_SEEDS[i] = new BloomParticleSeed(h, r, ang, oSpeed, vSpeed, pSpeed, pPhase, sSpeed, sSeed, szFactor, radFreq, radAmp);
+    }
+}
+
+private static class BloomParticleSeed {
+    final float heightBase;
+    final float radiusFactor;
+    final float angleOffset;
+    final float orbitSpeed;
+    final float verticalSpeed;
+    final float pulseSpeed;
+    final float pulsePhase;
+    final float spinSpeed;
+    final float spinSeed;
+    final float sizeFactor;
+    final float radialFreq;
+    final float radialAmp;
+
+    BloomParticleSeed(float heightBase, float radiusFactor, float angleOffset, float orbitSpeed,
+                      float verticalSpeed, float pulseSpeed, float pulsePhase, float spinSpeed,
+                      float spinSeed, float sizeFactor, float radialFreq, float radialAmp) {
+        this.heightBase = heightBase;
+        this.radiusFactor = radiusFactor;
+        this.angleOffset = angleOffset;
+        this.orbitSpeed = orbitSpeed;
+        this.verticalSpeed = verticalSpeed;
+        this.pulseSpeed = pulseSpeed;
+        this.pulsePhase = pulsePhase;
+        this.spinSpeed = spinSpeed;
+        this.spinSeed = spinSeed;
+        this.sizeFactor = sizeFactor;
+        this.radialFreq = radialFreq;
+        this.radialAmp = radialAmp;
+    }
+}

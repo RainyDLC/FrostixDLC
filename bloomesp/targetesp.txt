@@ -1,0 +1,7 @@
+private final FloatSetting bloomCount = new FloatSetting("Количество", 36f, 12f, 64f, 2f);
+private final FloatSetting bloomSize = new FloatSetting("Размер", 0.20f, 0.08f, 0.50f, 0.02f);
+private final FloatSetting bloomSpeed = new FloatSetting("Скорость", 1.0f, 0.2f, 3.0f, 0.1f);
+
+public Identifier getBloomTexture() {
+    return Identifier.of("punch", "textures/targetesp/bloom.png");
+}

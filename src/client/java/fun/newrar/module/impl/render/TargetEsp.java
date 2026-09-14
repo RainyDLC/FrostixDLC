@@ -50,7 +50,17 @@ import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_
 public class TargetEsp extends Module implements ModulePreview {
     public ButtonSetting previewButton = PreviewSettings.button(this);
 
-    public ModeSetting type = new ModeSetting(this,"Режим","Призраки","Картинка","Кольцо","Бублик","Кубики","Молнии");
+    public ModeSetting type = new ModeSetting(this,"Режим","Призраки","Картинка","Кольцо","Бублик","Кубики","Молнии","Блум");
+
+    public SliderSetting bloomCount = new SliderSetting(this, "Количество", 36, 12, 64, 2).setVisible(() -> type.is("Блум"));
+    public SliderSetting bloomSize = new SliderSetting(this, "Размер", 0.20F, 0.08F, 0.50F, 0.02F).setVisible(() -> type.is("Блум"));
+    public SliderSetting bloomSpeed = new SliderSetting(this, "Скорость", 1.0F, 0.2F, 3.0F, 0.1F).setVisible(() -> type.is("Блум"));
+
+    public final BloomEspRenderer bloomRenderer = new BloomEspRenderer();
+
+    public Identifier getBloomTexture() {
+        return BloomEspRenderer.DEFAULT_BLOOM_TEXTURE;
+    }
 
     public ModeSetting typeGhost = new ModeSetting(this, "Тип призраков", "1", "2", "3", "4").setVisible(() -> type.is("Призраки"));
     public ModeSetting typeImages = new ModeSetting(this, "Тип картинки", "1", "2", "3", "4").setVisible(() -> type.is("Картинка"));
@@ -837,6 +847,14 @@ public class TargetEsp extends Module implements ModulePreview {
                         ColorUtil.replAlpha(color, (int)(alphaPC * 255)));
                 matrices.pop();
             }
+        }
+
+        if (alphaPC > 0.001f && target != null && type.is("Блум")) {
+            bloomRenderer.render(e, immediate, target, alphaPC,
+                    Math.round(bloomCount.getValue()),
+                    bloomSize.getValue(),
+                    bloomSpeed.getValue(),
+                    getBloomTexture());
         }
 
         immediate.draw();

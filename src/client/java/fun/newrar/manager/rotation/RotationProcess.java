@@ -23,6 +23,7 @@ import fun.newrar.manager.event_impl.WorldLoadEvent;
 import fun.newrar.manager.events.orbit.EventHandler;
 import fun.newrar.manager.events.orbit.EventPriority;
 import fun.newrar.module.impl.combat.AttackAura;
+import fun.newrar.module.impl.render.BloomEspRenderer;
 import fun.newrar.module.impl.render.LightningRenderer;
 import fun.newrar.utils.animation.Animation;
 import fun.newrar.utils.animation.Easings;
@@ -182,6 +183,7 @@ public class RotationProcess extends Component {
     public Animation alpha = new Animation();
     public Animation alpha_2 = new Animation();
     private final LightningRenderer lightningRenderer = new LightningRenderer();
+    private final BloomEspRenderer bloomRenderer = new BloomEspRenderer();
 
     public static final RenderPipeline ROMB_ESP_PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(TRANSFORMS_AND_PROJECTION_SNIPPET)
@@ -910,6 +912,13 @@ public class RotationProcess extends Component {
 
         if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Цепь")) {
             renderTargetChainRing(e, immediate, aura, target, alphaPC);
+        }
+
+        if (alphaPC > 0.001f && target != null && aura.typeTargetESP.is("Блум")) {
+            bloomRenderer.render(e, immediate, target, alphaPC,
+                    Math.round(aura.bloomCount.getValue()),
+                    aura.bloomSize.getValue(),
+                    aura.bloomSpeed.getValue());
         }
 
         immediate.draw();
