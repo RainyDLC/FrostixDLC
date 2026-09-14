@@ -1,6 +1,7 @@
 package fun.newrar.cosmetics.render;
 
 import fun.newrar.cosmetics.model.CosmeticModel;
+import fun.newrar.utils.player.MoveUtil;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.util.math.MathHelper;
 
@@ -17,16 +18,21 @@ public class PetFollower {
    private final Map<Integer, PetState> states = new ConcurrentHashMap<>();
 
    public static class PetState {
+      public double worldX;
+      public double worldY;
+      public double worldZ;
+      public float petWorldYaw;
+
       public float localX;
       public float localY;
       public float localZ;
-      public float petYaw;
+      public float localYaw;
+      public float petYaw; // compatibility alias
+
       public boolean isMoving;
       public float walkTimer;
       public float idleTimer;
-      public double lastPlayerX;
-      public double lastPlayerY;
-      public double lastPlayerZ;
+
       public long lastTimeMs;
       public boolean initialized;
    }
@@ -47,14 +53,28 @@ public class PetFollower {
       PetState state = this.states.computeIfAbsent(id, k -> new PetState());
       long now = System.currentTimeMillis();
 
-      if (!state.initialized) {
-         state.localX = model.getX() != 0.0F ? model.getX() : 0.85F;
-         state.localY = model.getY();
-         state.localZ = model.getZ() != 0.0F ? model.getZ() : 0.15F;
+      float restX = model.getX() != 0.0F ? model.getX() : 0.85F;
+      float restY = model.getY();
+      float restZ = model.getZ() != 0.0F ? model.getZ() : 0.1F;
+
+      if (!state.initialized || player == null) {
+         state.localX = restX;
+         state.localY = restY;
+         state.localZ = restZ;
+         state.localYaw = 0.0F;
          state.petYaw = 0.0F;
-         state.lastPlayerX = player != null ? player.getX() : 0.0;
-         state.lastPlayerY = player != null ? player.getY() : 0.0;
-         state.lastPlayerZ = player != null ? player.getZ() : 0.0;
+
+         if (player != null) {
+            double bodyYawRad = Math.toRadians(player.bodyYaw);
+            double cosYaw = Math.cos(bodyYawRad);
+            double sinYaw = Math.sin(bodyYawRad);
+            state.worldX = player.getX() + (restX * cosYaw + restZ * sinYaw);
+            state.worldY = player.getY();
+            state.worldZ = player.getZ() + (restX * sinYaw - restZ * cosYaw);
+            state.petWorldYaw = player.bodyYaw;
+         }
+
+         state.isMoving = false;
          state.lastTimeMs = now;
          state.initialized = true;
          return state;
@@ -66,55 +86,106 @@ public class PetFollower {
       }
       state.lastTimeMs = now;
 
-      if (player == null) {
-         state.idleTimer += dt;
+      double playerX = player.getX();
+      double playerY = player.getY();
+      double playerZ = player.getZ();
+      float playerBodyYaw = player.bodyYaw;
+      double bodyYawRad = Math.toRadians(playerBodyYaw);
+      double cosYaw = Math.cos(bodyYawRad);
+      double sinYaw = Math.sin(bodyYawRad);
+
+      // Resting position in world coordinates (at player's side)
+      double restWorldX = playerX + (restX * cosYaw + restZ * sinYaw);
+      double restWorldZ = playerZ + (restX * sinYaw - restZ * cosYaw);
+
+      // Check distance from pet to player - snap if teleported or too far
+      double distToPlayerSq = (playerX - state.worldX) * (playerX - state.worldX) + (playerZ - state.worldZ) * (playerZ - state.worldZ);
+      if (distToPlayerSq > 64.0) { // > 8 blocks away
+         state.worldX = restWorldX;
+         state.worldY = playerY;
+         state.worldZ = restWorldZ;
+         state.petWorldYaw = playerBodyYaw;
          state.isMoving = false;
+         state.localX = restX;
+         state.localY = restY;
+         state.localZ = restZ;
+         state.localYaw = 0.0F;
+         state.petYaw = 0.0F;
          return state;
       }
 
-      // Check player movement speed
-      double dx = player.getX() - state.lastPlayerX;
-      double dz = player.getZ() - state.lastPlayerZ;
-      double distSq = dx * dx + dz * dz;
-      state.lastPlayerX = player.getX();
-      state.lastPlayerY = player.getY();
-      state.lastPlayerZ = player.getZ();
+      // Check if player is actually moving (input keys or velocity)
+      boolean playerInputMoving = MoveUtil.isMoving();
+      double velX = player.getVelocity().x;
+      double velZ = player.getVelocity().z;
+      double hVelSq = velX * velX + velZ * velZ;
+      boolean playerMoving = playerInputMoving || hVelSq > 0.002;
 
-      boolean playerMoving = distSq > 0.0004 || (player.limbAnimator != null && player.limbAnimator.isLimbMoving());
-
-      // Target position in player local space
-      float baseX = model.getX() != 0.0F ? model.getX() : 0.85F;
-      float baseY = model.getY();
-      float baseZ = model.getZ() != 0.0F ? model.getZ() : 0.15F;
-
-      float targetX;
-      float targetZ;
-      float targetYaw;
+      // Calculate target world position for the ground pet
+      double targetX;
+      double targetZ;
 
       if (playerMoving) {
-         // Trail slightly behind and to the side
-         targetX = baseX * 0.85F;
-         targetZ = Math.max(baseZ + 0.65F, 0.75F);
-         // Slightly angle inward towards the player's path
-         targetYaw = -Math.signum(baseX) * 12.0F;
-         state.isMoving = true;
-         float moveSpeedMultiplier = (float) Math.min(Math.sqrt(distSq) * 35.0, 4.0);
-         state.walkTimer += dt * Math.max(moveSpeedMultiplier, 1.6F);
+         // Follow behind the player along movement path
+         double moveDist = Math.sqrt(hVelSq);
+         double dirX;
+         double dirZ;
+         if (moveDist > 0.04) {
+            dirX = velX / moveDist;
+            dirZ = velZ / moveDist;
+         } else {
+            // Derive facing direction from body yaw
+            dirX = -Math.sin(bodyYawRad);
+            dirZ = Math.cos(bodyYawRad);
+         }
+         // 1.35 blocks behind player
+         targetX = playerX - dirX * 1.35;
+         targetZ = playerZ - dirZ * 1.35;
       } else {
-         // Return to default side stance
-         targetX = baseX;
-         targetZ = baseZ;
-         targetYaw = 0.0F;
-         state.isMoving = false;
-         state.idleTimer += dt;
+         // Stand at the resting side position
+         targetX = restWorldX;
+         targetZ = restWorldZ;
       }
 
-      // Smooth lerp towards target in local space
-      float lerpSpeed = state.isMoving ? 7.5F : 4.5F;
-      state.localX = MathHelper.lerp(Math.min(1.0F, dt * lerpSpeed), state.localX, targetX);
-      state.localY = baseY;
-      state.localZ = MathHelper.lerp(Math.min(1.0F, dt * lerpSpeed), state.localZ, targetZ);
-      state.petYaw = MathHelper.lerp(Math.min(1.0F, dt * 6.0F), state.petYaw, targetYaw);
+      double toTargetX = targetX - state.worldX;
+      double toTargetZ = targetZ - state.worldZ;
+      double distToTarget = Math.sqrt(toTargetX * toTargetX + toTargetZ * toTargetZ);
+
+      if (distToTarget > 0.16) {
+         state.isMoving = true;
+         // Heading in Minecraft degrees: 0=South, 90=West, 180=North, 270=East
+         float moveHeading = (float) Math.toDegrees(Math.atan2(-toTargetX, toTargetZ));
+         state.petWorldYaw = MathHelper.lerpAngleDegrees(Math.min(1.0F, dt * 12.0F), state.petWorldYaw, moveHeading);
+
+         double runSpeed = Math.max(distToTarget * 4.2, 3.2);
+         double step = Math.min(distToTarget, runSpeed * dt);
+         state.worldX += (toTargetX / distToTarget) * step;
+         state.worldZ += (toTargetZ / distToTarget) * step;
+         state.worldY = playerY;
+
+         state.walkTimer += dt * (float) (runSpeed * 1.5);
+      } else {
+         if (!playerMoving) {
+            state.isMoving = false;
+            state.petWorldYaw = MathHelper.lerpAngleDegrees(Math.min(1.0F, dt * 8.0F), state.petWorldYaw, playerBodyYaw);
+            state.idleTimer += dt;
+         } else {
+            // Still in motion behind player
+            state.isMoving = true;
+            state.walkTimer += dt * 3.5F;
+         }
+         state.worldY = playerY;
+      }
+
+      // Convert pet world coordinates into player local matrix frame
+      double worldDx = state.worldX - playerX;
+      double worldDz = state.worldZ - playerZ;
+
+      state.localX = (float) (worldDx * cosYaw + worldDz * sinYaw);
+      state.localY = restY;
+      state.localZ = (float) (worldDx * sinYaw - worldDz * cosYaw);
+      state.localYaw = MathHelper.wrapDegrees(state.petWorldYaw - playerBodyYaw);
+      state.petYaw = state.localYaw;
 
       return state;
    }

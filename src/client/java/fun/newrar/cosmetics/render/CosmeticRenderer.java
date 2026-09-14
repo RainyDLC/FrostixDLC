@@ -79,20 +79,12 @@ public class CosmeticRenderer {
       float posX = petState != null ? petState.localX : model.getX();
       float posY = petState != null ? petState.localY : model.getY();
       float posZ = petState != null ? petState.localZ : model.getZ();
-      float yaw = petState != null ? petState.petYaw : model.getYaw();
+      float yaw = petState != null ? petState.localYaw : model.getYaw();
 
-      // Subtle step bobbing when walking
-      float stepBob = 0.0F;
-      float stepRoll = 0.0F;
-      if (petState != null && petState.isMoving) {
-         stepBob = (float) Math.abs(Math.sin(petState.walkTimer * 8.0)) * 0.04F;
-         stepRoll = (float) Math.sin(petState.walkTimer * 8.0) * 2.5F;
-      }
-
-      this.stack.translate(posX, posY + stepBob, posZ);
+      this.stack.translate(posX, posY, posZ);
       this.stack.rotateYDegrees(yaw + model.getYaw());
       this.stack.rotateXDegrees(model.getPitch());
-      this.stack.rotateZDegrees(model.getRoll() + stepRoll);
+      this.stack.rotateZDegrees(model.getRoll());
    }
 
    private float transformToPosition(CosmeticModel model, PlayerEntityModel playerModel) {
