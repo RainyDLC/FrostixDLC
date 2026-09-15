@@ -151,22 +151,38 @@ public class LagCompensation implements IMinecraft {
         Box box = raw.expand(RAY_EPSILON);
         Vec3d eye = mc.player.getEyePos();
 
-        if (box.contains(eye)) return true;
-
         Vec3d dir = rotationVector(mc.player.getYaw(), mc.player.getPitch());
         Vec3d end = eye.add(dir.multiply(range + 0.35));
 
-        var hit = box.raycast(eye, end);
-        if (hit.isEmpty()) return false;
-        if (hit.get().squaredDistanceTo(eye) > (range + 0.1) * (range + 0.1)) return false;
-        if (ignoreBlocks) return true;
+        Vec3d center = box.getCenter();
+        Vec3d toCenter = center.subtract(eye);
+        double distToCenter = toCenter.length();
 
-        BlockHitResult block = mc.world.raycast(new net.minecraft.world.RaycastContext(
-                eye, end, net.minecraft.world.RaycastContext.ShapeType.COLLIDER,
-                net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
-        if (block.getType() != HitResult.Type.MISS
-                && block.getPos().squaredDistanceTo(eye) < hit.get().squaredDistanceTo(eye)) {
-            return false;
+        if (box.contains(eye) || distToCenter < 0.6) {
+            if (distToCenter > 0.01) {
+                double dot = dir.dotProduct(toCenter.normalize());
+                if (dot < 0.35) {
+                    return false;
+                }
+            }
+            Vec3d backStart = eye.subtract(dir.multiply(0.5));
+            var hit = box.raycast(backStart, end);
+            if (hit.isEmpty()) return false;
+            if (dir.dotProduct(hit.get().subtract(eye)) < -0.1) return false;
+        } else {
+            var hit = box.raycast(eye, end);
+            if (hit.isEmpty()) return false;
+            if (hit.get().squaredDistanceTo(eye) > (range + 0.1) * (range + 0.1)) return false;
+
+            if (!ignoreBlocks) {
+                BlockHitResult block = mc.world.raycast(new net.minecraft.world.RaycastContext(
+                        eye, end, net.minecraft.world.RaycastContext.ShapeType.COLLIDER,
+                        net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+                if (block.getType() != HitResult.Type.MISS
+                        && block.getPos().squaredDistanceTo(eye) < hit.get().squaredDistanceTo(eye)) {
+                    return false;
+                }
+            }
         }
         return true;
     }

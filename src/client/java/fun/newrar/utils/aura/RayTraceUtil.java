@@ -84,7 +84,20 @@ public class RayTraceUtil implements IMinecraft {
         }
 
         Box entityBox = entity.getBoundingBox().expand(0.06);
-        return entityBox.contains(eyeVec) || entityBox.raycast(eyeVec, endVec).isPresent();
+        Vec3d center = entityBox.getCenter();
+        Vec3d toCenter = center.subtract(eyeVec);
+        double distToCenter = toCenter.length();
+
+        if (entityBox.contains(eyeVec) || distToCenter < 0.6) {
+            if (distToCenter > 0.01 && lookVec.dotProduct(toCenter.normalize()) < 0.35) {
+                return false;
+            }
+            Vec3d backStart = eyeVec.subtract(lookVec.multiply(0.5));
+            var hit = entityBox.raycast(backStart, endVec);
+            return hit.isPresent() && lookVec.dotProduct(hit.get().subtract(eyeVec)) >= -0.1;
+        }
+
+        return entityBox.raycast(eyeVec, endVec).isPresent();
     }
 
     public static Vec3d getVectorForRotation(float pitch, float yaw) {

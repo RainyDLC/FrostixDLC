@@ -85,13 +85,10 @@ public class SpookyTimeRotation implements RotationAura {
             currentSpeedYaw += (MathUtil.randomLerp(2.8F, 4.5F) - currentSpeedYaw) * 0.35F;
             currentSpeedPitch += (MathUtil.randomLerp(1.2F, 2.2F) - currentSpeedPitch) * 0.35F;
 
-            Vec3d aimPoint = getAimPoint(target, hitbox);
-            Vec3d dir = aimPoint.subtract(mc.player.getEyePos());
-            float targetYaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
-            float targetPitch = (float) MathHelper.clamp(
-                    -Math.toDegrees(Math.atan2(dir.y, Math.hypot(dir.x, dir.z))), -89.5F, 89.5F);
+            float microYaw = currentAngle.getYaw() + MathUtil.randomGaussian(-0.2F, 0.2F);
+            float microPitch = MathHelper.clamp(currentAngle.getPitch() + MathUtil.randomGaussian(-0.12F, 0.12F), -89.5F, 89.5F);
 
-            RotationProcess.update(new Rotation(targetYaw, targetPitch), currentSpeedYaw, currentSpeedPitch, 35.0F, 35.0F, 3, 1, false);
+            RotationProcess.update(new Rotation(microYaw, microPitch), currentSpeedYaw, currentSpeedPitch, 35.0F, 35.0F, 3, 1, false);
             return;
         }
 
@@ -117,16 +114,16 @@ public class SpookyTimeRotation implements RotationAura {
     }
 
     /**
-     * Точка прицеливания: в упор целимся в верхнюю часть тела / уровень глаз,
-     * чтобы предотвратить задирание или опускание головы в пол.
+     * Точка прицеливания: в упор целимся на уровне груди/глаз относительно собственной высоты,
+     * чтобы предотвратить резкое задирание или опускание головы в пол.
      */
     private static Vec3d getAimPoint(LivingEntity target, Box hitbox) {
         Vec3d eye = mc.player.getEyePos();
         double distXZ = Math.hypot(target.getX() - mc.player.getX(), target.getZ() - mc.player.getZ());
 
         if (distXZ < 1.3 || hitbox.expand(0.15).contains(eye)) {
-            double heightFraction = distXZ < 0.6 ? 0.80 : 0.72;
-            return new Vec3d(target.getX(), target.getY() + target.getHeight() * heightFraction, target.getZ());
+            double aimY = MathHelper.clamp(eye.y, hitbox.minY + 0.35, hitbox.maxY - 0.25);
+            return new Vec3d(target.getX(), aimY, target.getZ());
         }
 
         Vec3d reachable = UBoxPoints.getBestVector3dOnEntityBox(hitbox);
@@ -259,8 +256,8 @@ public class SpookyTimeRotation implements RotationAura {
         Vec3d targetVel = entity.getVelocity();
         double distXZ = Math.hypot(entity.getX() - mc.player.getX(), entity.getZ() - mc.player.getZ());
 
-        // Мягкое опережение движения цели (без овершутов)
-        double leadFactor = MathHelper.clamp(distXZ / 3.0, 0.05, 0.35);
+        // Мягкое опережение движения цели (без овершутов в упор)
+        double leadFactor = distXZ < 0.8 ? 0.0 : MathHelper.clamp(distXZ / 3.0, 0.05, 0.35);
         Vec3d predictedAim = baseAim.add(targetVel.x * leadFactor, targetVel.y * (leadFactor * 0.5), targetVel.z * leadFactor);
         Vec3d dir = predictedAim.subtract(mc.player.getEyePos());
 
@@ -368,11 +365,21 @@ public class SpookyTimeRotation implements RotationAura {
         Vec3d eye = mc.player.getEyePos();
         Box expanded = box.expand(0.12);
 
-        if (expanded.contains(eye)) {
-            return true;
+        Vec3d look = RayTraceUtil.getVectorForRotation(pitch, yaw);
+        Vec3d center = expanded.getCenter();
+        Vec3d toCenter = center.subtract(eye);
+        double distToCenter = toCenter.length();
+
+        if (expanded.contains(eye) || distToCenter < 0.6) {
+            if (distToCenter > 0.01 && look.dotProduct(toCenter.normalize()) < 0.35) {
+                return false;
+            }
+            Vec3d backStart = eye.subtract(look.multiply(0.5));
+            Vec3d end = eye.add(look.multiply(range + 0.4));
+            var hit = expanded.raycast(backStart, end);
+            return hit.isPresent() && look.dotProduct(hit.get().subtract(eye)) >= -0.1;
         }
 
-        Vec3d look = RayTraceUtil.getVectorForRotation(pitch, yaw);
         return expanded.raycast(eye, eye.add(look.multiply(range + 0.35))).isPresent();
     }
 
