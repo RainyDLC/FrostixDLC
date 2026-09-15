@@ -66,6 +66,7 @@ public class SpookyTimeRotation implements RotationAura {
 
         Rotation currentAngle = new Rotation(mc.player.getYaw(), mc.player.getPitch());
 
+        // Проверка: если уже смотрим на хитбокс цели (с поддержкой нахождения в упор)
         if (aimsAtBox(currentAngle.getYaw(), currentAngle.getPitch(), range, hitbox)) {
             heldPitch = currentAngle.getPitch();
             pitchHeld = true;
@@ -76,8 +77,10 @@ public class SpookyTimeRotation implements RotationAura {
             return;
         }
 
-        Vec3d aimPoint = UBoxPoints.getBestVector3dOnEntityBox(hitbox);
+        // Вычисляем оптимальную точку прицеливания с защитой от ухода под ноги при вжимании в цель
+        Vec3d aimPoint = getAimPoint(target, hitbox);
         Vec3d dir = aimPoint.subtract(mc.player.getEyePos());
+
         float targetYaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
         float targetPitch = (float) MathHelper.clamp(
                 -Math.toDegrees(Math.atan2(dir.y, Math.hypot(dir.x, dir.z))), -89.5F, 89.5F);
@@ -92,6 +95,29 @@ public class SpookyTimeRotation implements RotationAura {
         Rotation finalAngle = applyPitchHold(currentAngle, nextAngle, targetAngle, target, range, hitbox);
 
         RotationProcess.update(finalAngle, 180F, 180F, 35.0F, 35.0F, 3, 1, false);
+    }
+
+    /**
+     * Возвращает точку прицеливания.
+     * При сближении вплотную (< 1.25 блоков) смещает цель к уровню груди/глаз,
+     * предотвращая наклон головы вниз на 70-80 градусов.
+     */
+    private static Vec3d getAimPoint(LivingEntity target, Box hitbox) {
+        Vec3d eye = mc.player.getEyePos();
+        double distXZ = Math.hypot(target.getX() - mc.player.getX(), target.getZ() - mc.player.getZ());
+
+        // При сближении вплотную прицеливаемся на уровень груди/глаз
+        if (distXZ < 1.25 || hitbox.expand(0.15).contains(eye)) {
+            double heightFraction = distXZ < 0.6 ? 0.82 : 0.72;
+            return new Vec3d(target.getX(), target.getY() + target.getHeight() * heightFraction, target.getZ());
+        }
+
+        Vec3d reachable = UBoxPoints.getBestVector3dOnEntityBox(hitbox);
+        if (reachable != null && !hitbox.expand(0.05).contains(eye)) {
+            return reachable;
+        }
+
+        return new Vec3d(target.getX(), target.getY() + target.getHeight() * 0.65, target.getZ());
     }
 
     public Rotation limitAngleChange(Rotation currentAngle, Rotation targetAngle, Vec3d vec3d, Entity entity) {
@@ -185,9 +211,12 @@ public class SpookyTimeRotation implements RotationAura {
         float yawSpeed = MathUtil.random(26.0F, 32.0F) * slowYawTicks;
         float pitchSpeed = MathUtil.random(8.0F, 12.0F) * slowPitchTicks;
 
+        // Подавление волнового джиттера при сближении в упор
+        float closeDamp = MathHelper.clamp(distanceToTarget / 1.5F, 0.15F, 1.0F);
+
         long timeMs = System.currentTimeMillis();
-        yawDelta += (float) (Math.cos(timeMs / 50.0) * (2.8F * distanceFactor));
-        pitchDelta += (float) (Math.sin(timeMs / 60.0) * (4.2F * distanceFactor));
+        yawDelta += (float) (Math.cos(timeMs / 50.0) * (2.8F * distanceFactor * closeDamp));
+        pitchDelta += (float) (Math.sin(timeMs / 60.0) * (4.2F * distanceFactor * closeDamp));
 
         float clampedYaw = MathHelper.clamp(yawDelta, -yawSpeed, yawSpeed) * randomSpeedFactor;
         float clampedPitch = MathHelper.clamp(pitchDelta, -pitchSpeed, pitchSpeed) * randomSpeedFactor * (hasTrace ? 0.6F : 1.0F);
@@ -200,8 +229,24 @@ public class SpookyTimeRotation implements RotationAura {
 
     private Rotation processSpookyDuels(Rotation currentAngle, Rotation targetAngle, LivingEntity entity) {
         Vec3d vel = mc.player.getVelocity();
-        Vec3d predictedEye = mc.player.getEyePos().add(vel.x * 1.5, 0.0, vel.z * 1.5);
-        Vec3d targetCenter = entity.getBoundingBox().getCenter();
+        double distXZ = Math.hypot(entity.getX() - mc.player.getX(), entity.getZ() - mc.player.getZ());
+
+        // Защита от перелета предикта за спину цели (критическая причина разворотов на 180° и банов в дуэлях)
+        double maxLead = Math.max(0.0, distXZ - 0.45);
+        double leadX = vel.x * 1.5;
+        double leadZ = vel.z * 1.5;
+        double leadLen = Math.hypot(leadX, leadZ);
+        if (leadLen > maxLead && leadLen > 0.0001) {
+            double scale = maxLead / leadLen;
+            leadX *= scale;
+            leadZ *= scale;
+        }
+
+        Vec3d predictedEye = mc.player.getEyePos().add(leadX, 0.0, leadZ);
+
+        // Точка цели: при сближении целимся выше (грудь/голова), чтобы не смотреть в пол
+        double targetY = entity.getY() + (distXZ < 1.2 ? entity.getHeight() * 0.78 : entity.getHeight() * 0.55);
+        Vec3d targetCenter = new Vec3d(entity.getX(), targetY, entity.getZ());
         Vec3d dir = targetCenter.subtract(predictedEye);
 
         float predYaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
@@ -223,8 +268,10 @@ public class SpookyTimeRotation implements RotationAura {
         float straightLineYaw = Math.abs(deltaYaw / difference) * yawSpeed;
         float straightLinePitch = Math.abs(deltaPitch / difference) * pitchSpeed;
 
-        float jitterYaw = MathUtil.random(-0.5F, 0.5F);
-        float jitterPitch = MathUtil.random(-0.35F, 0.35F);
+        // Подавление джиттера при сближении в упор
+        float closeDamp = MathHelper.clamp((float) (distXZ / 1.5), 0.15F, 1.0F);
+        float jitterYaw = MathUtil.random(-0.5F, 0.5F) * closeDamp;
+        float jitterPitch = MathUtil.random(-0.35F, 0.35F) * closeDamp;
 
         return new Rotation(
                 currentAngle.getYaw() + MathHelper.clamp(deltaYaw, -straightLineYaw, straightLineYaw) + jitterYaw,
@@ -259,7 +306,7 @@ public class SpookyTimeRotation implements RotationAura {
     private Rotation applyPitchHold(Rotation currentAngle, Rotation nextAngle, Rotation targetAngle,
                                     Entity entity, float range, Box hitbox) {
         float distanceFactor = distanceFactor(entity);
-        float response = MathHelper.clamp(0.22F + 0.28F * distanceFactor, 0.25F, 0.85F);
+        float response = MathHelper.clamp(0.22F + 0.28F * distanceFactor, 0.25F, 0.75F);
 
         float yawTarget = MathHelper.wrapDegrees(nextAngle.getYaw() - currentAngle.getYaw());
         yawVelocity = MathHelper.lerp(response, yawVelocity, yawTarget);
@@ -290,13 +337,20 @@ public class SpookyTimeRotation implements RotationAura {
             return false;
         }
         Vec3d eye = mc.player.getEyePos();
+        Box expanded = box.expand(0.12);
+
+        // Если точка глаз находится внутри или на границе хитбокса (при вжимании в цель)
+        if (expanded.contains(eye)) {
+            return true;
+        }
+
         Vec3d look = RayTraceUtil.getVectorForRotation(pitch, yaw);
-        return box.raycast(eye, eye.add(look.multiply(range))).isPresent();
+        return expanded.raycast(eye, eye.add(look.multiply(range))).isPresent();
     }
 
     private static float distanceFactor(Entity entity) {
         float distance = mc.player.distanceTo(entity);
-        return MathHelper.clamp(3.5F / Math.max(distance, 0.75F), 0.4F, 2.2F);
+        return MathHelper.clamp(3.5F / Math.max(distance, 1.2F), 0.4F, 1.6F);
     }
 
     public Rotation processSmoothback(Rotation currentAngle) {
