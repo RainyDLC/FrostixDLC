@@ -106,13 +106,16 @@ public class RotationProcess extends Component {
         float clampedYaw = Math.min(Math.abs(yawDelta), yawSpeed);
         float clampedPitch = Math.min(Math.abs(pitchDelta), pitchSpeed);
 
-        mc.player.setYaw(
-                mc.player.headYaw += GCDUtil.getSensitivity(MathHelper.clamp(yawDelta, -clampedYaw, clampedYaw)));
+        float deltaYaw = GCDUtil.getSensitivity(MathHelper.clamp(yawDelta, -clampedYaw, clampedYaw));
+        float deltaPitch = GCDUtil.getSensitivity(MathHelper.clamp(pitchDelta, -clampedPitch, clampedPitch));
 
-        mc.player.setPitch(MathHelper.clamp(
-                mc.player.getPitch()
-                        + GCDUtil.getSensitivity(MathHelper.clamp(pitchDelta, -clampedPitch, clampedPitch)),
-                -90F, 90F));
+        float newYaw = mc.player.getYaw() + deltaYaw;
+        float newPitch = MathHelper.clamp(mc.player.getPitch() + deltaPitch, -90F, 90F);
+
+        mc.player.setYaw(newYaw);
+        mc.player.setPitch(newPitch);
+        mc.player.headYaw = newYaw;
+        mc.player.bodyYaw = newYaw;
 
         idleTicks = 0;
         return new Rotation(mc.player).getDelta(targetRotation) < 1F;

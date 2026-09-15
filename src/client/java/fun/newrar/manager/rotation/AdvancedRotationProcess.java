@@ -127,13 +127,16 @@ public class AdvancedRotationProcess extends Component {
         float clampedYaw   = Math.min(Math.abs(yawDelta),   yawSpeed);
         float clampedPitch = Math.min(Math.abs(pitchDelta), pitchSpeed);
 
-        float moveYaw   = GCDUtil.getSensitivity(MathHelper.clamp(yawDelta,   -clampedYaw,   clampedYaw))
-                          + sYaw;
-        float movePitch = GCDUtil.getSensitivity(MathHelper.clamp(pitchDelta, -clampedPitch, clampedPitch))
-                          + sPitch;
+        float deltaYaw = GCDUtil.getSensitivity(MathHelper.clamp(yawDelta, -clampedYaw, clampedYaw)) + sYaw;
+        float deltaPitch = GCDUtil.getSensitivity(MathHelper.clamp(pitchDelta, -clampedPitch, clampedPitch)) + sPitch;
 
-        mc.player.setYaw(mc.player.headYaw += moveYaw);
-        mc.player.setPitch(MathHelper.clamp(mc.player.getPitch() + movePitch, -90f, 90f));
+        float newYaw = mc.player.getYaw() + deltaYaw;
+        float newPitch = MathHelper.clamp(mc.player.getPitch() + deltaPitch, -90f, 90f);
+
+        mc.player.setYaw(newYaw);
+        mc.player.setPitch(newPitch);
+        mc.player.headYaw = newYaw;
+        mc.player.bodyYaw = newYaw;
 
         idleTicks = 0;
         return new Rotation(mc.player).getDelta(targetRot) < 1f;
