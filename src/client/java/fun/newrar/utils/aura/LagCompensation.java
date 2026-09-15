@@ -131,7 +131,7 @@ public class LagCompensation implements IMinecraft {
     }
 
     public static double attackDistance(LivingEntity target) {
-        return Math.min(distanceToLive(target), distanceToDelayed(target));
+        return distanceToLive(target);
     }
 
     public static boolean rayHits(LivingEntity target, float range) {
@@ -140,8 +140,7 @@ public class LagCompensation implements IMinecraft {
 
     public static boolean rayHits(LivingEntity target, float range, boolean ignoreBlocks) {
         if (mc.player == null || mc.world == null) return false;
-        return rayHitsBox(target.getBoundingBox(), range, ignoreBlocks)
-                || rayHitsBox(delayedBox(target), range, ignoreBlocks);
+        return rayHitsBox(target.getBoundingBox(), range, ignoreBlocks);
     }
 
     public static boolean rayHitsDelayed(LivingEntity target, float range) {
@@ -206,7 +205,7 @@ public class LagCompensation implements IMinecraft {
     }
 
     public static double safeReach(float attackRange) {
-        return attackRange - 0.01;
+        return attackRange - 0.05;
     }
 }
 

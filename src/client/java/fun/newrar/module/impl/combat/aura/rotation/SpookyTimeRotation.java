@@ -271,7 +271,8 @@ public class SpookyTimeRotation implements RotationAura {
         float deltaYaw = MathHelper.wrapDegrees(predYaw - currentAngle.getYaw());
         float deltaPitch = predPitch - currentAngle.getPitch();
 
-        boolean onTarget = aimsAtBox(currentAngle.getYaw(), currentAngle.getPitch(), 3.5F, entity.getBoundingBox());
+        float range = AttackAura.get() != null ? AttackAura.get().attackRange.getValue() : 3.0F;
+        boolean onTarget = aimsAtBox(currentAngle.getYaw(), currentAngle.getPitch(), range, entity.getBoundingBox());
 
         // Скорости для дуэлей: безопасный диапазон, не вызывающий флагов Aim / Snap
         float targetSpeedY;
