@@ -50,7 +50,7 @@ import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_
 public class TargetEsp extends Module implements ModulePreview {
     public ButtonSetting previewButton = PreviewSettings.button(this);
 
-    public ModeSetting type = new ModeSetting(this,"Режим","Призраки","Картинка","Кольцо","Бублик","Кубики","Молнии","Блум");
+    public ModeSetting type = new ModeSetting(this,"Режим","Призраки","Картинка","Кольцо","Бублик","Кубики","Молнии","Блум","Цепи");
 
     public SliderSetting bloomCount = new SliderSetting(this, "Количество", 36, 12, 64, 2).setVisible(() -> type.is("Блум"));
     public SliderSetting bloomSize = new SliderSetting(this, "Размер", 0.20F, 0.08F, 0.50F, 0.02F).setVisible(() -> type.is("Блум"));
@@ -855,6 +855,34 @@ public class TargetEsp extends Module implements ModulePreview {
                     bloomSize.getValue(),
                     bloomSpeed.getValue(),
                     getBloomTexture());
+        }
+
+        if (alphaPC > 0.001f && target != null && type.is("Цепи")) {
+            MatrixStack matrices = e.getMatrixStack();
+            Vec3d lerpedPos = target.getLerpedPos(e.getTickDelta());
+            Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+
+            matrices.push();
+            matrices.translate(lerpedPos.x - cameraPos.x, lerpedPos.y - cameraPos.y, lerpedPos.z - cameraPos.z);
+
+            int hurtTicks = target.hurtTime;
+            float hurtPC = (float) Math.sin((double) hurtTicks * (Math.PI / 20D));
+            int primaryColor = ColorUtil.fade(1);
+
+            TargetEspRenderContext context = new TargetEspRenderContext(
+                    target,
+                    alphaPC,
+                    e.getTickDelta(),
+                    System.currentTimeMillis(),
+                    primaryColor,
+                    primaryColor,
+                    MathHelper.clamp(hurtPC, 0.0F, 1.0F),
+                    0.0F
+            );
+
+            ChainTargetEspRenderer.render(matrices, immediate, context);
+            ChainTargetEspRenderer.endBatch(immediate);
+            matrices.pop();
         }
 
         immediate.draw();
