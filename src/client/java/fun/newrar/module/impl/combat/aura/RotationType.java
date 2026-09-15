@@ -13,7 +13,7 @@ public enum RotationType {
     SNAP("Snap", new SnapRotation()),
     NEURO("Neuro", new ConstructorRotation(ConstructorRotation.Profile.NEURO)),
     HVH("HvH", new HvHRotation()),
-    SPOOKY("SpookyTime 1.21", new MatrixRotation()),
+    SPOOKY("SpookyTime 1.21", new SpookyTimeRotation()),
     CUSTOM("Custom", new CustomRotation()),
     LEGIT("Legit", new LegitRotation()),
     SLOTH("Sloth", new SlothRotation()),

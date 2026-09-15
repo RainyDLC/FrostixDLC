@@ -94,6 +94,8 @@ public class AttackAura extends Module {
 
     public BooleanSetting fovRender = new BooleanSetting(this,"Отображать Fov",false).setVisible(() -> typeRotation.is("Snap") && typeSnap.is("Fov"));
 
+    public ModeSetting spookyMode = new ModeSetting(this, "Режим Spooky", "1.21", "Дуэли", "1.16").setVisible(() -> typeRotation.is("SpookyTime"));
+
     public boolean isConstructorType() {
         return typeRotation.is("Custom") || typeRotation.is("Matrix")
                 || typeRotation.is("Neuro") || typeRotation.is("Grim");
