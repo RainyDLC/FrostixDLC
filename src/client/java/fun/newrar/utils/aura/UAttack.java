@@ -13,6 +13,7 @@ import net.minecraft.item.AxeItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
@@ -105,20 +106,45 @@ public class UAttack implements IMinecraft {
         if (!enabled || mc.player == null)
             return pre$post;
 
-        if (mc.player.isSprinting() && !mc.player.isOnGround()  && !AttackUtil.hasMovementRestrictions()) {
-            pre$post[0] = () -> {
-                if (AttackAura.get().typeSprint.is("Silent")) {
-                    mc.options.sprintKey.setPressed(false);
-                } else {
-                    mc.options.sprintKey.setPressed(false);
-                    mc.player.setSprinting(false);
+        final boolean[] wasSprinting = new boolean[1];
+
+        pre$post[0] = () -> {
+            if (mc.player == null || AttackUtil.hasMovementRestrictions()) return;
+            wasSprinting[0] = mc.player.isSprinting() || sprintingOnServer;
+            if (!wasSprinting[0]) return;
+
+            if (AttackAura.get().typeSprint.is("Packet")) {
+                if (mc.getNetworkHandler() != null) {
+                    mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
                 }
-            };
-            pre$post[1] = () -> {
+                mc.player.setSprinting(false);
+                sprintingOnServer = false;
+            } else if (AttackAura.get().typeSprint.is("Silent")) {
+                mc.options.sprintKey.setPressed(false);
+                mc.player.setSprinting(false);
+                sprintingOnServer = false;
+            } else {
+                mc.options.sprintKey.setPressed(false);
+                mc.player.setSprinting(false);
+            }
+        };
+
+        pre$post[1] = () -> {
+            if (mc.player == null || !wasSprinting[0]) return;
+
+            if (AttackAura.get().typeSprint.is("Packet")) {
+                if (mc.getNetworkHandler() != null) {
+                    mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
+                }
+                mc.player.setSprinting(true);
+                sprintingOnServer = true;
+            } else if (AttackAura.get().typeSprint.is("Silent")) {
                 mc.options.sprintKey.setPressed(true);
                 mc.player.setSprinting(true);
-            };
-        }
+            } else {
+                mc.options.sprintKey.setPressed(true);
+            }
+        };
         return pre$post;
     }
 
@@ -135,15 +161,20 @@ public class UAttack implements IMinecraft {
     public static boolean isCriticalHit() {
         if (mc.player == null) return false;
 
-        if (mc.player.getAttackCooldownProgress(0.5F) <= 0.9F) return false;
+        if (mc.player.getAttackCooldownProgress(0.5F) < 0.92F) return false;
 
-        if (sprintingOnServer) return false;
+        if (AttackAura.get().typeSprint.is("Legit") && (sprintingOnServer || mc.player.isSprinting())) {
+            return false;
+        }
 
-        return mc.player.fallDistance > 0.0F
-                && !mc.player.isOnGround()
-                && !mc.player.isClimbing()
+        boolean falling = (mc.player.fallDistance > 0.0F || mc.player.getVelocity().y < -0.04)
+                && !mc.player.isOnGround();
+        if (!falling) return false;
+
+        return !mc.player.isClimbing()
                 && !mc.player.isTouchingWater()
                 && !mc.player.hasStatusEffect(StatusEffects.BLINDNESS)
+                && !mc.player.hasStatusEffect(StatusEffects.SLOW_FALLING)
                 && !mc.player.hasVehicle();
     }
 
@@ -164,7 +195,10 @@ public class UAttack implements IMinecraft {
         if (AttackAura.get().others.getValue("Умные криты")) {
             if (isCriticalHit()) return true;
 
-            return !mc.options.jumpKey.isPressed() || AttackUtil.hasMovementRestrictions();
+            if (AttackUtil.hasMovementRestrictions()) return true;
+
+            boolean jumpingOrAir = mc.options.jumpKey.isPressed() || !mc.player.isOnGround();
+            return !jumpingOrAir;
         }
 
         return true;

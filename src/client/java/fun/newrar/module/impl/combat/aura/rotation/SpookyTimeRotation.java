@@ -74,7 +74,7 @@ public class SpookyTimeRotation implements RotationAura {
         Rotation currentAngle = new Rotation(mc.player.getYaw(), mc.player.getPitch());
         boolean onTarget = aimsAtBox(currentAngle.getYaw(), currentAngle.getPitch(), range, hitbox);
 
-        // Если прицел уже стабильно на хитбоксе — удерживаем угол и замедляемся
+        // Если прицел уже стабильно на хитбоксе — плавно ведем за целью на микро-скорости
         if (onTarget) {
             heldPitch = currentAngle.getPitch() + MathUtil.randomGaussian(-0.025F, 0.025F);
             pitchHeld = true;
@@ -85,7 +85,13 @@ public class SpookyTimeRotation implements RotationAura {
             currentSpeedYaw += (MathUtil.randomLerp(2.8F, 4.5F) - currentSpeedYaw) * 0.35F;
             currentSpeedPitch += (MathUtil.randomLerp(1.2F, 2.2F) - currentSpeedPitch) * 0.35F;
 
-            RotationProcess.update(currentAngle, currentSpeedYaw, currentSpeedPitch, 35.0F, 35.0F, 3, 1, false);
+            Vec3d aimPoint = getAimPoint(target, hitbox);
+            Vec3d dir = aimPoint.subtract(mc.player.getEyePos());
+            float targetYaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
+            float targetPitch = (float) MathHelper.clamp(
+                    -Math.toDegrees(Math.atan2(dir.y, Math.hypot(dir.x, dir.z))), -89.5F, 89.5F);
+
+            RotationProcess.update(new Rotation(targetYaw, targetPitch), currentSpeedYaw, currentSpeedPitch, 35.0F, 35.0F, 3, 1, false);
             return;
         }
 

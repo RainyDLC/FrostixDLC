@@ -23,7 +23,7 @@ public class LagCompensation implements IMinecraft {
     private static final int MAX_SAMPLES = 64;
     private static final double MAX_TRACK_DIST = 12.0;
 
-    public static final double RAY_EPSILON = 0.03;
+    public static final double RAY_EPSILON = 0.10;
 
     public static void record(LivingEntity target) {
         if (target == null || mc.player == null || mc.world == null) return;
@@ -204,7 +204,7 @@ public class LagCompensation implements IMinecraft {
     }
 
     public static double safeReach(float attackRange) {
-        return attackRange - 0.06;
+        return attackRange - 0.01;
     }
 }
 

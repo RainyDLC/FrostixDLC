@@ -121,7 +121,7 @@ public class AttackAura extends Module {
     public ModeSetting typeMove = new ModeSetting(this,"Коррекция движения","Сфокусированная","Свободная");
 
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
-            new BooleanSetting("Умные криты", false),
+            new BooleanSetting("Умные криты", true),
             new BooleanSetting("Только криты", false),
             new BooleanSetting("Бить через блоки", false),
             new BooleanSetting("Ломать щит", false),
@@ -178,7 +178,7 @@ public class AttackAura extends Module {
     private boolean sprintKeyForcedOff;
 
     private void updateCritSprint() {
-        boolean hold = target != null && wantsCrit() && !typeSprint.is("Legit")
+        boolean hold = target != null && wantsCrit() && typeSprint.is("Legit")
                 && !AttackUtil.hasMovementRestrictions()
                 && UAttack.resetSprintTick(target, getRanges());
 
@@ -204,6 +204,8 @@ public class AttackAura extends Module {
     }
 
     private boolean checkToAttack() {
+        if (mc.player == null) return true;
+
         boolean baseCheck = mc.player.isUsingItem() && noattackto.getValue("Используешь еду");
 
         boolean screenCheck = noattackto.getValue("Открыт контейнер") && mc.currentScreen != null  && !(mc.currentScreen instanceof Menu || mc.currentScreen instanceof DropdownScreen);
@@ -339,6 +341,9 @@ public static int lookUpDuration = 0;
     @EventHandler
     public void onRotate(EventTick e) {
         doRotation();
+        if (!checkToAttack() && target != null) {
+            attackEntity();
+        }
     }
 
     private void doRotation() {
@@ -427,7 +432,6 @@ public static int lookUpDuration = 0;
     }
 
     @Override
-
     public void onDisable() {
         super.onDisable();
         if(mc.player != null && mc.gameRenderer.getCamera() != null && mc.world != null) {
@@ -440,6 +444,8 @@ public static int lookUpDuration = 0;
         hitCount = 0;
         pitchFlickActive = false;
         releaseCritSprint();
+        RotationProcess.resetParentTimeout();
+        LagCompensation.reset();
     }
 
     private void updateTarget() {
@@ -522,7 +528,7 @@ public static int lookUpDuration = 0;
     public boolean isValidTarget(LivingEntity entity, double maxDist) {
         if (entity instanceof ClientPlayerEntity) return false;
 
-        if (mc.player.distanceTo(entity) > maxDist) return false;
+        if (LagCompensation.attackDistance(entity) > maxDist) return false;
 
         if (!others.getValue("Бить через блоки")) {
             if (!LagCompensation.isVisibleLoose(entity)) return false;
