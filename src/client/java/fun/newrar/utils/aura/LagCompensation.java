@@ -154,10 +154,11 @@ public class LagCompensation implements IMinecraft {
         if (box.contains(eye)) return true;
 
         Vec3d dir = rotationVector(mc.player.getYaw(), mc.player.getPitch());
-        Vec3d end = eye.add(dir.multiply(range));
+        Vec3d end = eye.add(dir.multiply(range + 0.35));
 
         var hit = box.raycast(eye, end);
         if (hit.isEmpty()) return false;
+        if (hit.get().squaredDistanceTo(eye) > (range + 0.1) * (range + 0.1)) return false;
         if (ignoreBlocks) return true;
 
         BlockHitResult block = mc.world.raycast(new net.minecraft.world.RaycastContext(

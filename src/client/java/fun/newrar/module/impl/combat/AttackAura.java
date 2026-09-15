@@ -178,7 +178,7 @@ public class AttackAura extends Module {
     private boolean sprintKeyForcedOff;
 
     private void updateCritSprint() {
-        boolean hold = target != null && wantsCrit() && typeSprint.is("Legit")
+        boolean hold = target != null && wantsCrit()
                 && !AttackUtil.hasMovementRestrictions()
                 && UAttack.resetSprintTick(target, getRanges());
 
@@ -341,9 +341,6 @@ public static int lookUpDuration = 0;
     @EventHandler
     public void onRotate(EventTick e) {
         doRotation();
-        if (!checkToAttack() && target != null) {
-            attackEntity();
-        }
     }
 
     private void doRotation() {

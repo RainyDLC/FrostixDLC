@@ -372,7 +372,7 @@ public class SpookyTimeRotation implements RotationAura {
         }
 
         Vec3d look = RayTraceUtil.getVectorForRotation(pitch, yaw);
-        return expanded.raycast(eye, eye.add(look.multiply(range))).isPresent();
+        return expanded.raycast(eye, eye.add(look.multiply(range + 0.35))).isPresent();
     }
 
     private static float distanceFactor(Entity entity) {
