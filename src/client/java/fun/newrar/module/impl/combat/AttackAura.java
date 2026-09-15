@@ -123,7 +123,9 @@ public class AttackAura extends Module {
     public MultiBooleanSetting others = new MultiBooleanSetting(this, "Доп. проверки",
             new BooleanSetting("Умные криты", false),
             new BooleanSetting("Только криты", false),
-            new BooleanSetting("Бить через блоки", false));
+            new BooleanSetting("Бить через блоки", false),
+            new BooleanSetting("Ломать щит", false),
+            new BooleanSetting("Сброс щита", false));
 
     public MultiBooleanSetting noattackto = new MultiBooleanSetting(this, "Не бить если",
             new BooleanSetting("Используешь еду", false),
@@ -236,8 +238,8 @@ public class AttackAura extends Module {
         boolean canAttack = UAttack.shouldAttack(target, !typeRotation.is("HvH"), true, true, 0L, ranges);
 
         if (canAttack) {
-            final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(target, true),
-                    shieldPressBypass = UAttack.resetShieldSilentTaskForUse(true),
+            final Runnable[] shieldBreak = UAttack.hitShieldBreakTaskForUse(target, others.getValue("Ломать щит")),
+                    shieldPressBypass = UAttack.resetShieldSilentTaskForUse(others.getValue("Сброс щита")),
                     skipSilentSprint = UAttack.skipSilentSprintingTaskForUse((typeSprint.is("Packet") || typeSprint.is("Silent")));
             final Runnable preHitSendCodeSingleTick = () -> {
                 skipSilentSprint[0].run();
