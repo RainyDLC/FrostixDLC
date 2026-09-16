@@ -147,7 +147,7 @@ public class LagCompensation implements IMinecraft {
         return rayHitsBox(delayedBox(target), range, false);
     }
 
-    private static boolean rayHitsBox(Box raw, float range, boolean ignoreBlocks) {
+    public static boolean rayHitsBox(Box raw, float yaw, float pitch, float range, boolean ignoreBlocks) {
         Box box = raw.expand(RAY_EPSILON);
         Vec3d eye = mc.player.getEyePos();
 
@@ -156,7 +156,7 @@ public class LagCompensation implements IMinecraft {
             double dx = center.x - eye.x;
             double dz = center.z - eye.z;
             if (dx * dx + dz * dz > 0.04) {
-                Vec3d dir = rotationVector(mc.player.getYaw(), mc.player.getPitch());
+                Vec3d dir = rotationVector(yaw, pitch);
                 double dotXZ = (dir.x * dx + dir.z * dz) / (Math.hypot(dir.x, dir.z) * Math.hypot(dx, dz));
                 if (dotXZ < -0.2) {
                     return false;
@@ -165,7 +165,7 @@ public class LagCompensation implements IMinecraft {
             return true;
         }
 
-        Vec3d dir = rotationVector(mc.player.getYaw(), mc.player.getPitch());
+        Vec3d dir = rotationVector(yaw, pitch);
         Vec3d end = eye.add(dir.multiply(range + 0.35));
 
         var hit = box.raycast(eye, end);
@@ -182,6 +182,11 @@ public class LagCompensation implements IMinecraft {
             }
         }
         return true;
+    }
+
+    public static boolean rayHitsBox(Box raw, float range, boolean ignoreBlocks) {
+        if (mc.player == null) return false;
+        return rayHitsBox(raw, mc.player.getYaw(), mc.player.getPitch(), range, ignoreBlocks);
     }
 
     public static boolean isVisibleLoose(LivingEntity target) {
