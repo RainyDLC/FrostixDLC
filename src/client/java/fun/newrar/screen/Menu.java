@@ -573,7 +573,8 @@ public class Menu extends Screen implements IMinecraft {
         float h = 316 * S;
         float x = screenWidth / 2F - w / 2;
 
-        float slide = shatter() ? 0F : (exit ? 60 * S - 60 * S * globalAnim : -60 * S + 60 * S * globalAnim);
+        float easeGlobal = (float) Easings.BACK_OUT.ease(MathHelper.clamp(globalAnim, 0F, 1F));
+        float slide = shatter() ? 0F : (exit ? (1.0F - globalAnim) * 45F * S : (1.0F - easeGlobal) * -35F * S);
         float y = screenHeight / 2F - h / 2 + slide;
 
         panelX = x;
@@ -746,11 +747,22 @@ public class Menu extends Screen implements IMinecraft {
                     continue;
                 }
 
-                RenderUtil.Render2D.rect(xModule, yModule, 142 * S, moduleH, ColorUtil.overCol(ColorUtil.getColor(0, 0.15F * globalAnim * canim1), ColorUtil.getColor(25, 0.3F * globalAnim * canim1), hanim), 5 * S);
-                RenderUtil.Render2D.outline(xModule - 1 * S * moduleEnable + 1 * S, yModule - 1 * S * moduleEnable + 1 * S, 142 * S + 2 * S * moduleEnable - 2 * S, moduleH + 2 * S * moduleEnable - 2 * S, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * canim1 * moduleEnable * (1.0F - 0.3F * hanim)), 5 * S);
+                float hoverLift = 1.2F * S * hanim;
+                float cardY = yModule - hoverLift;
 
-                RenderUtil.Render2D.rect(xModule + 142 * S - 14 * S - 5 * S, yModule + 5F * S, 14 * S, 8 * S, ColorUtil.overCol(ColorUtil.getColor(0, 0.2F * globalAnim * canim1), ColorUtil.replAlpha(ColorUtil.client(), globalAnim * canim1 * (1.0F - 0.3F * hanim)), moduleEnable), 4 * S);
-                RenderUtil.Render2D.rect(xModule + 142 * S - 14 * S - 5 * S + 1.5F * S + 5.5F * S * moduleEnable, yModule + 5F * S + 1.25F * S, 5.5F * S, 5.5F * S, ColorUtil.getColor(255, globalAnim * (0.3F + 0.7F * moduleEnable) * canim1), 4 * S);
+                if (hanim > 0.01F) {
+                    RenderUtil.Render2D.glow(xModule, cardY, 142 * S, moduleH, ColorUtil.replAlpha(ColorUtil.client(), 0.10F * globalAnim * canim1 * hanim), 5 * S, 8, 1);
+                }
+
+                RenderUtil.Render2D.rect(xModule, cardY, 142 * S, moduleH, ColorUtil.overCol(ColorUtil.getColor(0, 0.15F * globalAnim * canim1), ColorUtil.getColor(25, 0.3F * globalAnim * canim1), hanim), 5 * S);
+                RenderUtil.Render2D.outline(xModule - 1 * S * moduleEnable + 1 * S, cardY - 1 * S * moduleEnable + 1 * S, 142 * S + 2 * S * moduleEnable - 2 * S, moduleH + 2 * S * moduleEnable - 2 * S, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * canim1 * moduleEnable * (1.0F - 0.3F * hanim)), 5 * S);
+
+                float switchKnobStretch = 1.2F * S * (float) Math.sin(moduleEnable * Math.PI);
+                float switchKnobW = 5.5F * S + switchKnobStretch;
+                float switchKnobX = xModule + 142 * S - 14 * S - 5 * S + 1.5F * S + (5.5F * S - switchKnobStretch * 0.5F) * moduleEnable;
+
+                RenderUtil.Render2D.rect(xModule + 142 * S - 14 * S - 5 * S, cardY + 5F * S, 14 * S, 8 * S, ColorUtil.overCol(ColorUtil.getColor(0, 0.2F * globalAnim * canim1), ColorUtil.replAlpha(ColorUtil.client(), globalAnim * canim1 * (1.0F - 0.3F * hanim)), moduleEnable), 4 * S);
+                RenderUtil.Render2D.rect(switchKnobX, cardY + 5F * S + 1.25F * S, switchKnobW, 5.5F * S, ColorUtil.getColor(255, globalAnim * (0.3F + 0.7F * moduleEnable) * canim1), 4 * S);
 
                 boolean bindingNow = bindingModule == f;
                 fun.newrar.utils.animation.satoshi.Animation bindAct = chipAnim(f.getName() + ":modbind");
@@ -760,7 +772,7 @@ public class Menu extends Screen implements IMinecraft {
                 String keyName = bindingNow ? "..." : (f.getKey() == -1 ? "n/a" : Keyboard.keyName(f.getKey()).replace("NONE", "n/a"));
                 float keyW = smooth(f.getName() + ":modbindw", draw.getWidth(keyName, 6 * S) + 9 * S);
                 float keyX = xModule + 142 * S - 14 * S - 5 * S - 5 * S - keyW;
-                float keyY = yModule + 4F * S;
+                float keyY = cardY + 4F * S;
 
                 boolean keyHover = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, keyX, keyY, keyW, 10 * S);
                 fun.newrar.utils.animation.satoshi.Animation bindHov = chipAnim(f.getName() + ":modbindhov");
@@ -776,10 +788,10 @@ public class Menu extends Screen implements IMinecraft {
 
                 regular.drawCentered(keyName, keyX + keyW / 2, keyY + 1.5F * S, 6 * S, ColorUtil.replAlpha(ColorUtil.overCol(ColorUtil.getColor(255), ColorUtil.client(), Math.max(bindActive, moduleEnable)), globalAnim * canim1 * (0.35F + 0.35F * moduleEnable + 0.3F * Math.max(bindHover, bindActive))));
 
-                draw.draw(f.getBigName(), xModule + 5 * S, yModule + 5 * S, 7 * S, ColorUtil.getColor(255, globalAnim * canim1 * (0.2F + 0.6F * moduleEnable + 0.2F * hanim)));
-                draw.drawWrappedText(f.getDesc(), xModule + 5 * S, yModule + 4 * S + 12 * S, 132 * S, ColorUtil.getColor(255, globalAnim * canim1 * (0.1F + 0.5F * moduleEnable + 0.2F * hanim)), 6 * S);
+                draw.draw(f.getBigName(), xModule + 5 * S, cardY + 5 * S, 7 * S, ColorUtil.getColor(255, globalAnim * canim1 * (0.2F + 0.6F * moduleEnable + 0.2F * hanim)));
+                draw.drawWrappedText(f.getDesc(), xModule + 5 * S, cardY + 4 * S + 12 * S, 132 * S, ColorUtil.getColor(255, globalAnim * canim1 * (0.1F + 0.5F * moduleEnable + 0.2F * hanim)), 6 * S);
 
-                RenderUtil.Render2D.rect(xModule, yModule, 142 * S, moduleH, ColorUtil.replAlpha(ColorUtil.client(), 0.3F * globalAnim * selectAnim * (0.2F + 0.5F * moduleEnable) * canim1), 5 * S);
+                RenderUtil.Render2D.rect(xModule, cardY, 142 * S, moduleH, ColorUtil.replAlpha(ColorUtil.client(), 0.3F * globalAnim * selectAnim * (0.2F + 0.5F * moduleEnable) * canim1), 5 * S);
 
                 yModule += (moduleH + 5 * S) * canim1;
             }
@@ -871,7 +883,7 @@ public class Menu extends Screen implements IMinecraft {
                             float sa = fa * vis;
                             float percent = MathHelper.clamp((s.getValue() - s.min) / (s.max - s.min), 0, 1);
                             s.getAnimation().update();
-                            s.getAnimation().run(percent, 0.06F, Easings.LINEAR);
+                            s.getAnimation().run(percent, 0.16F, Easings.QUAD_OUT);
 
                             boolean onScreen = yST + 25 * S >= setTop && yST <= setBottom;
                             boolean hovS = onScreen && MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, xST, yST, wST, 24 * S);
@@ -890,8 +902,9 @@ public class Menu extends Screen implements IMinecraft {
 
                                 RenderUtil.Render2D.rect(xST + 6 * S, yST + 16.5F * S, track, 3 * S, ColorUtil.getColor(0, (globalAnim * sa) * (0.15F)), 1.5F * S);
                                 RenderUtil.Render2D.rect(xST + 6 * S, yST + 16.5F * S, track * s.getAnimation().get(), 3 * S, ColorUtil.replAlpha(ColorUtil.client(), (globalAnim * sa) * (0.5F + 0.5F * hover)), 1.5F * S);
-                                RenderUtil.Render2D.rect(xST + 6 * S + track * s.getAnimation().get() - 3 * S, yST + 15 * S, 6 * S, 6 * S, ColorUtil.getColor((int) (200 + 55 * hover), (globalAnim * sa)), 6 * S);
-                                RenderUtil.Render2D.rect(xST + 6 * S + track * s.getAnimation().get() - 2 * S, yST + 16 * S, 4 * S, 4 * S, ColorUtil.replAlpha(ColorUtil.client(), (globalAnim * sa) * (0.7F + 0.3F * hover)), 6 * S);
+                                float thumbRad = 3F * S + 1F * S * hover;
+                                RenderUtil.Render2D.rect(xST + 6 * S + track * s.getAnimation().get() - thumbRad, yST + 18F * S - thumbRad, thumbRad * 2F, thumbRad * 2F, ColorUtil.getColor((int) (200 + 55 * hover), (globalAnim * sa)), thumbRad * 2F);
+                                RenderUtil.Render2D.rect(xST + 6 * S + track * s.getAnimation().get() - thumbRad * 0.65F, yST + 18F * S - thumbRad * 0.65F, thumbRad * 1.3F, thumbRad * 1.3F, ColorUtil.replAlpha(ColorUtil.client(), (globalAnim * sa) * (0.7F + 0.3F * hover)), thumbRad * 1.3F);
                             }
                             if (draggingSlider == s) {
                                 float perc = MathUtil.clamp(((float) lastMouseX - (xST + 6 * S)) / track, 0, 1);

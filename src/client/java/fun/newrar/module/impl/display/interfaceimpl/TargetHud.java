@@ -190,30 +190,38 @@ public class TargetHud implements element {
 
         float rad = RADIUS;
 
-        float addALL = ANIM_OFFSET - ANIM_OFFSET * alpha;
+        float easeAlpha = (float) Easings.BACK_OUT.ease(MathHelper.clamp(alpha, 0F, 1F));
+        float popScale = 0.88F + 0.12F * easeAlpha;
+        float actualW = w * popScale;
+        float actualH = h * popScale;
+        float px = x + (w - actualW) / 2F + (ANIM_OFFSET - ANIM_OFFSET * easeAlpha);
+        float py = y + (h - actualH) / 2F;
+
+        float mainW = actualW - statsW;
 
         float hudOpacity = InterFace.getInstance().alphaHUD.getValue();
 
-        float px = x + addALL;
+        if (target.hurtTime > 0) {
+            float hurtFrac = target.hurtTime / 10.0F;
+            RenderUtil.Render2D.glow(px, py, actualW, actualH, ColorUtil.getColor(255, 55, 55, 0.35F * alpha * hurtFrac), rad + 4F * S, 12, 1);
+        }
 
-        float mainW = w - statsW;
+        RenderUtil.Render2D.hudPlate(px, py, actualW, actualH, alpha, rad, hudOpacity);
 
-        RenderUtil.Render2D.hudPlate(px, y, w, h, alpha, rad, hudOpacity);
+        RenderUtil.Render2D.rect(px + HEAD_CONTAINER_W, py + HEAD_OFFSET_Y,
+                0.5F * S, actualH - HEAD_OFFSET_Y * 2, ColorUtil.getColor(255, 0.07F * alpha), 0.25F);
 
-        RenderUtil.Render2D.rect(px + HEAD_CONTAINER_W, y + HEAD_OFFSET_Y,
-                0.5F * S, h - HEAD_OFFSET_Y * 2, ColorUtil.getColor(255, 0.07F * alpha), 0.25F);
-
-        drawFace(target, eventDisplay.getPartialTicks(), px + HEAD_OFFSET_X, y + HEAD_OFFSET_Y, FACE_SIZE, alpha);
+        drawFace(target, eventDisplay.getPartialTicks(), px + HEAD_OFFSET_X, py + HEAD_OFFSET_Y, FACE_SIZE, alpha);
 
         if (showStats) {
-            RenderUtil.Render2D.rect(px + mainW, y + HEAD_OFFSET_Y,
-                    0.5F * S, h - HEAD_OFFSET_Y * 2, ColorUtil.getColor(255, 0.07F * alpha), 0.25F);
+            RenderUtil.Render2D.rect(px + mainW, py + HEAD_OFFSET_Y,
+                    0.5F * S, actualH - HEAD_OFFSET_Y * 2, ColorUtil.getColor(255, 0.07F * alpha), 0.25F);
         }
 
         float contentX = px + CONTENT_OFFSET_X + BAR_OFFSET_X;
         float ringR = 8.5F * S;
         float ringCx = px + mainW - ringR - 6F * S;
-        float ringCy = y + h / 2F;
+        float ringCy = py + actualH / 2F;
 
         float hpNow = getHealth(target);
         float hpMax = Math.max(1F, target.getMaxHealth() + target.getAbsorptionAmount());
@@ -221,21 +229,24 @@ public class TargetHud implements element {
 
         animHpText.update();
         animHpText.run(hpNow, 0.15F, Easings.LINEAR);
+        animHP.update();
+        animHP.run(hpFrac, 0.16F, Easings.QUAD_OUT);
+        float animatedHpFrac = animHP.get();
 
         int accent = ColorUtil.getClientColor1(1);
         int redCol = ColorUtil.getColor(255, 80, 85);
-        int ringMain = ColorUtil.overCol(accent, redCol, 1F - hpFrac);
+        int ringMain = ColorUtil.overCol(accent, redCol, 1F - animatedHpFrac);
 
         String name = target.getName().getString().replace(mc.player.getName().getString(),
                 Client.get().moduleManager().get(NameProtect.class).isEnabled()
                         ? "RainyProject"
                         : mc.player.getName().getString());
-        Fonts.sf_regular.drawFadingText(name, contentX, y + NAME_Y,
+        Fonts.sf_regular.drawFadingText(name, contentX, py + NAME_Y,
                 ringCx - 4F * S - contentX,
                 ColorUtil.getColor(255, alpha), NAME_SIZE);
 
         RenderUtil.Render2D.roundedCircleProgress(eventDisplay.getDrawContext(),
-                ringCx, ringCy, ringR, 2.1F * S, hpFrac,
+                ringCx, ringCy, ringR, 2.1F * S, animatedHpFrac,
                 ColorUtil.replAlpha(ColorUtil.getColor(255, 0.10F), alpha),
                 ColorUtil.replAlpha(ringMain, alpha), ColorUtil.replAlpha(ringMain, alpha));
         Fonts.sf_medium.drawCentered(String.format("%.0f", animHpText.get()),
@@ -319,21 +330,35 @@ public class TargetHud implements element {
         lastH = h;
 
         float rad = RADIUS;
-        float addALL = ANIM_OFFSET - ANIM_OFFSET * alpha;
-        float hudOpacity = InterFace.getInstance().alphaHUD.getValue();
-        float px = x + addALL;
+        float easeAlpha = (float) Easings.BACK_OUT.ease(MathHelper.clamp(alpha, 0F, 1F));
+        float popScale = 0.88F + 0.12F * easeAlpha;
+        float actualW = w * popScale;
+        float actualH = h * popScale;
+        float px = x + (w - actualW) / 2F + (ANIM_OFFSET - ANIM_OFFSET * easeAlpha);
+        float py = y + (h - actualH) / 2F;
+
+        float hpNow = getHealth(target);
+        animHpText.update();
+        animHpText.run(hpNow, 0.15F, Easings.LINEAR);
 
         drag.size.set(w, h);
 
-        RenderUtil.Render2D.hudPlate(px, y, w, h, alpha, rad, hudOpacity);
+        float hudOpacity = InterFace.getInstance().alphaHUD.getValue();
 
-        float headSize = 16F * S;
+        if (target.hurtTime > 0) {
+            float hurtFrac = target.hurtTime / 10.0F;
+            RenderUtil.Render2D.glow(px, py, actualW, actualH, ColorUtil.getColor(255, 55, 55, 0.35F * alpha * hurtFrac), rad + 3F * S, 10, 1);
+        }
+
+        RenderUtil.Render2D.hudPlate(px, py, actualW, actualH, alpha, rad, hudOpacity);
+
+        float headSize = 16F * S * popScale;
         float headX = px + 3F * S;
-        float headY = y + (h - headSize) / 2F;
+        float headY = py + (actualH - headSize) / 2F;
         drawFace(target, eventDisplay.getPartialTicks(), headX, headY, headSize, alpha);
 
-        RenderUtil.Render2D.rect(px + 22F * S, y + 3F * S,
-                0.5F * S, h - 6F * S, ColorUtil.getColor(255, 0.07F * alpha), 0.25F);
+        RenderUtil.Render2D.rect(px + 22F * S, py + 3F * S,
+                0.5F * S, actualH - 6F * S, ColorUtil.getColor(255, 0.07F * alpha), 0.25F);
 
         String name = target.getName().getString().replace(mc.player.getName().getString(),
                 Client.get().moduleManager().get(NameProtect.class).isEnabled()

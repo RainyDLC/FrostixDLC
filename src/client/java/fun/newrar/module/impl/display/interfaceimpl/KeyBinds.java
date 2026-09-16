@@ -11,8 +11,10 @@ import fun.newrar.utils.animation.satoshi.EaseInOutQuad;
 import fun.newrar.utils.colors.ColorUtil;
 import fun.newrar.utils.math.Keyboard;
 import fun.newrar.utils.render.RenderUtil;
+import fun.newrar.utils.animation.Easings;
 import fun.newrar.utils.render.font.Font;
 import fun.newrar.utils.render.font.Fonts;
+import net.minecraft.util.math.MathHelper;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -129,7 +131,8 @@ public class KeyBinds implements element {
             totalH += rowHeight * mAnim;
         }
 
-        RenderUtil.Render2D.hudPlate(x, y, w, totalH, alpha, radius, InterFace.getInstance().alphaHUD.getValue());
+        float popScale = 0.90F + 0.10F * (float) Easings.BACK_OUT.ease(MathHelper.clamp(alpha, 0F, 1F));
+        RenderUtil.Render2D.hudPlate(x, y, w * popScale, totalH * popScale, alpha, radius, InterFace.getInstance().alphaHUD.getValue());
 
         float offsetY = y + rowStartY;
         float offsetY2 = 0;
@@ -138,20 +141,20 @@ public class KeyBinds implements element {
             float mAnim = m.getAnimation().getOutput();
             if (mAnim <= 0) continue;
 
-            float addX = 0;
+            float addX = (1.0F - mAnim) * 8F * s;
             String name = m.getCategory().getIcon();
 
-            font.draw(m.getBigName(), x + rowPaddingX - addX, offsetY, rowText, ColorUtil.getColor(240, alpha * mAnim));
+            font.draw(m.getBigName(), x + rowPaddingX + addX, offsetY, rowText, ColorUtil.getColor(240, alpha * mAnim));
 
             String key = Keyboard.keyName(m.getKey());
             float keyWidth = font.getWidth(key, rowText);
             float iconWidth = cat.getWidth(name, rowText);
 
-            font.draw(key, x + addX - rowPaddingX + w - keyWidth - iconWidth - iconPadding, offsetY, rowText, ColorUtil.getColor(200, alpha * mAnim));
-            cat.draw(name, x + addX - rowPaddingX + w - iconWidth, offsetY + iconOffsetY, rowText, ColorUtil.replAlpha(ColorUtil.client(), alpha * mAnim));
+            font.draw(key, x - rowPaddingX + w - keyWidth - iconWidth - iconPadding - addX, offsetY, rowText, ColorUtil.getColor(200, alpha * mAnim));
+            cat.draw(name, x - rowPaddingX + w - iconWidth - addX, offsetY + iconOffsetY, rowText, ColorUtil.replAlpha(ColorUtil.client(), alpha * mAnim));
 
             if (modules.getFirst() != m) {
-                RenderUtil.Render2D.rect(x + sepPaddingX + addX, offsetY - sepOffsetY, w - (sepPaddingX * 2) - addX, 0.5F,
+                RenderUtil.Render2D.rect(x + sepPaddingX, offsetY - sepOffsetY, w - (sepPaddingX * 2), 0.5F,
                         ColorUtil.getColor(255, 0.05F * alpha * mAnim), 1);
             }
 

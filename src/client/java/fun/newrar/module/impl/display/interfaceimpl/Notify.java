@@ -204,12 +204,16 @@ public class Notify implements element {
                 float tw = Fonts.sf_regular.getWidth(e.text, FONT_MAIN);
                 float nw = ITEM_BASE_W + tw;
 
-                float nx = screenWidth / 2f - nw / 2f;
-                float actualY = ny;
+                float easeA = (float) Easings.BACK_OUT.ease(MathHelper.clamp(a, 0F, 1F));
+                float popScale = 0.88F + 0.12F * easeA;
+                float animW = nw * popScale;
+                float animH = ITEM_H * popScale;
+                float nx = screenWidth / 2f - animW / 2f;
+                float actualY = ny - (1.0F - easeA) * 10F * S + (ITEM_H - animH) / 2F;
 
-                RenderUtil.Render2D.hudPlate(nx, actualY, nw, ITEM_H, a, RADIUS, InterFace.getInstance().alphaHUD.getValue());
-                float textX = nx + nw / 2;
-                Fonts.sf_regular.drawCentered(formatText(e, a, a), textX, actualY + 3.6F * S, FONT_MAIN, ColorUtil.getColor(255, a));
+                RenderUtil.Render2D.hudPlate(nx, actualY, animW, animH, a, RADIUS, InterFace.getInstance().alphaHUD.getValue());
+                float textX = nx + animW / 2;
+                Fonts.sf_regular.drawCentered(formatText(e, a, a), textX, actualY + 3.6F * S * popScale, FONT_MAIN * popScale, ColorUtil.getColor(255, a));
 
                 ny += STEP_Y * a;
             }

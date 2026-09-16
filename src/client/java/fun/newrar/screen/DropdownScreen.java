@@ -403,7 +403,8 @@ public class DropdownScreen extends Screen implements IMinecraft {
         float colCardRadius = 10F * S;
         float bottomColsY = 0F;
 
-        for (Column col : columns) {
+        for (int i = 0; i < columns.size(); i++) {
+            Column col = columns.get(i);
             if (col.dragging) {
                 col.x = (float) lastMouseX - col.dragX;
                 col.y = (float) lastMouseY - col.dragY;
@@ -411,15 +412,20 @@ public class DropdownScreen extends Screen implements IMinecraft {
                 col.y = MathUtil.clamp(col.y, 2 * S, screenHeight - col.height * S - 2 * S);
             }
 
+            float colDelay = i * 0.04F;
+            float colProgress = MathHelper.clamp((globalAnim - colDelay) / Math.max(0.01F, 1.0F - colDelay), 0F, 1F);
+            float easeCol = (float) Easings.BACK_OUT.ease(colProgress);
+            float staggerY = (1.0F - easeCol) * 28F * S;
+            float cy = col.y - (exit ? (1.0F - globalAnim) * 25F * S : staggerY);
+
             float cx = col.x;
-            float cy = col.y;
             float cw = col.width * S;
             float ch = col.height * S;
             bottomColsY = Math.max(bottomColsY, cy + ch);
 
-            RenderUtil.Blur.blur(cx, cy, cw, ch, globalAnim, colCardRadius, ColorUtil.getColor(0, 0));
-            RenderUtil.Render2D.rect(cx, cy, cw, ch, ColorUtil.getColor(18, 20, 24, 0.78F * globalAnim), colCardRadius);
-            RenderUtil.Render2D.outline(cx, cy, cw, ch, 0.5F * S, ColorUtil.getColor(255, 255, 255, 0.08F * globalAnim), colCardRadius);
+            RenderUtil.Blur.blur(cx, cy, cw, ch, globalAnim * colProgress, colCardRadius, ColorUtil.getColor(0, 0));
+            RenderUtil.Render2D.rect(cx, cy, cw, ch, ColorUtil.getColor(18, 20, 24, 0.78F * globalAnim * colProgress), colCardRadius);
+            RenderUtil.Render2D.outline(cx, cy, cw, ch, 0.5F * S, ColorUtil.getColor(255, 255, 255, 0.08F * globalAnim * colProgress), colCardRadius);
 
             String catDisplayName = getCategoryDisplayName(col.category);
             bold.draw(catDisplayName, cx + 11F * S, cy + 8F * S, 7.5F * S, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim));
@@ -477,13 +483,21 @@ public class DropdownScreen extends Screen implements IMinecraft {
                 }
 
                 if (onScreen) {
-                    if (isHovered && flash <= 0.01F) {
-                        RenderUtil.Render2D.rect(cx + 4F * S, modY, cw - 8F * S, rowH - 1.5F * S, ColorUtil.getColor(255, 255, 255, 0.04F * globalAnim), 3.5F * S);
+                    fun.newrar.utils.animation.satoshi.Animation hovAnim = chipAnim("modhov:" + m.getName());
+                    hovAnim.setDirection(isHovered ? Direction.FORWARDS : Direction.BACKWARDS);
+                    float hov = hovAnim.getOutput();
+
+                    if (hov > 0.01F && flash <= 0.01F) {
+                        RenderUtil.Render2D.rect(cx + 4F * S, modY, cw - 8F * S, rowH - 1.5F * S, ColorUtil.getColor(255, 255, 255, 0.06F * globalAnim * hov), 3.5F * S);
                     }
 
                     if (flash > 0.01F) {
                         RenderUtil.Render2D.rect(cx + 4F * S, modY, cw - 8F * S, rowH - 1.5F * S, ColorUtil.getColor(235, 45, 45, 0.28F * flash * globalAnim), 3.5F * S);
                         RenderUtil.Render2D.outline(cx + 4F * S, modY, cw - 8F * S, rowH - 1.5F * S, 0.5F * S, ColorUtil.getColor(255, 60, 60, 0.65F * flash * globalAnim), 3.5F * S);
+                    }
+
+                    if (tog > 0.01F) {
+                        RenderUtil.Render2D.rect(cx + 4F * S, modY + 2.5F * S, 1.5F * S, (rowH - 6.5F * S) * tog, ColorUtil.replAlpha(ColorUtil.client(), 0.85F * globalAnim * tog), 1F);
                     }
 
                     int disCol = ColorUtil.getColor(170, 175, 185, 0.6F * globalAnim);
@@ -494,7 +508,7 @@ public class DropdownScreen extends Screen implements IMinecraft {
                         nameCol = ColorUtil.overCol(nameCol, ColorUtil.getColor(255, 80, 80, globalAnim), flash);
                     }
 
-                    regular.draw(m.getName(), cx + 10F * S, modY + 4F * S, 6.5F * S, nameCol);
+                    regular.draw(m.getName(), cx + (tog > 0.01F ? 11F * S : 10F * S), modY + 4F * S, 6.5F * S, nameCol);
                 }
 
                 modY += rowH;
