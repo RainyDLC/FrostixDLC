@@ -74,37 +74,43 @@ public class SpookyTimeRotation implements RotationAura {
         Rotation currentAngle = new Rotation(mc.player.getYaw(), mc.player.getPitch());
         boolean onTarget = aimsAtBox(currentAngle.getYaw(), currentAngle.getPitch(), range, hitbox);
 
-        // Если прицел уже стабильно на хитбоксе — плавно ведем за целью на микро-скорости
-        if (onTarget) {
+        // Вычисляем оптимальную точку прицеливания
+        Vec3d aimPoint = getAimPoint(target, hitbox);
+        Vec3d dir = aimPoint.subtract(mc.player.getEyePos());
+
+        double dirDistXZ = Math.hypot(dir.x, dir.z);
+        float targetYaw = dirDistXZ < 0.05 ? currentAngle.getYaw() : (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
+        float targetPitch = (float) MathHelper.clamp(
+                -Math.toDegrees(Math.atan2(dir.y, Math.max(0.15, dirDistXZ))), -89.5F, 89.5F);
+        Rotation targetAngle = new Rotation(targetYaw, targetPitch);
+
+        // Если прицел уже стабильно на хитбоксе и не требуется резкий удар — плавно сопровождаем цель на микро-скорости
+        if (onTarget && !canAttack) {
             heldPitch = currentAngle.getPitch() + MathUtil.randomGaussian(-0.025F, 0.025F);
             pitchHeld = true;
             yawVelocity = MathHelper.lerp(0.35F, yawVelocity, 0.0F);
             pitchVelocity = MathHelper.lerp(0.35F, pitchVelocity, 0.0F);
 
-            // Плавное замедление до микро-трекинга на цели
-            currentSpeedYaw += (MathUtil.randomLerp(2.8F, 4.5F) - currentSpeedYaw) * 0.35F;
-            currentSpeedPitch += (MathUtil.randomLerp(1.2F, 2.2F) - currentSpeedPitch) * 0.35F;
+            // Плавное следование за целью на микро-скорости
+            currentSpeedYaw += (MathUtil.randomLerp(3.5F, 5.5F) - currentSpeedYaw) * 0.35F;
+            currentSpeedPitch += (MathUtil.randomLerp(1.5F, 2.8F) - currentSpeedPitch) * 0.35F;
 
-            float microYaw = currentAngle.getYaw() + MathUtil.randomGaussian(-0.2F, 0.2F);
-            float microPitch = MathHelper.clamp(currentAngle.getPitch() + MathUtil.randomGaussian(-0.12F, 0.12F), -89.5F, 89.5F);
+            float deltaY = MathHelper.wrapDegrees(targetAngle.getYaw() - currentAngle.getYaw());
+            float deltaP = targetAngle.getPitch() - currentAngle.getPitch();
+
+            float microYaw = currentAngle.getYaw() + MathHelper.clamp(deltaY, -currentSpeedYaw, currentSpeedYaw)
+                    + MathUtil.randomGaussian(-0.15F, 0.15F);
+            float microPitch = MathHelper.clamp(currentAngle.getPitch() + MathHelper.clamp(deltaP, -currentSpeedPitch, currentSpeedPitch)
+                    + MathUtil.randomGaussian(-0.08F, 0.08F), -89.5F, 89.5F);
 
             RotationProcess.update(new Rotation(microYaw, microPitch), currentSpeedYaw, currentSpeedPitch, 35.0F, 35.0F, 3, 1, false);
             return;
         }
 
-        // Вычисляем оптимальную точку прицеливания
-        Vec3d aimPoint = getAimPoint(target, hitbox);
-        Vec3d dir = aimPoint.subtract(mc.player.getEyePos());
-
-        float targetYaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
-        float targetPitch = (float) MathHelper.clamp(
-                -Math.toDegrees(Math.atan2(dir.y, Math.hypot(dir.x, dir.z))), -89.5F, 89.5F);
-        Rotation targetAngle = new Rotation(targetYaw, targetPitch);
-
         Rotation nextAngle = switch (subMode) {
             case "Дуэли", "Спуки-дуэли" -> processSpookyDuels(currentAngle, targetAngle, target, aimPoint);
             case "1.16", "Спуки 1.16" -> processSpooky116(currentAngle, targetAngle, canAttack);
-            default -> processSpooky121(currentAngle, targetAngle, aura, target, hitbox);
+            default -> processSpooky121(currentAngle, targetAngle, aura, target, hitbox, canAttack);
         };
 
         Rotation finalAngle = applyPitchHold(currentAngle, nextAngle, targetAngle, target, range, hitbox);
@@ -123,6 +129,13 @@ public class SpookyTimeRotation implements RotationAura {
 
         if (distXZ < 1.3 || hitbox.expand(0.15).contains(eye)) {
             double aimY = MathHelper.clamp(eye.y, hitbox.minY + 0.35, hitbox.maxY - 0.25);
+            if (distXZ < 0.45 || hitbox.expand(0.12).contains(eye)) {
+                Rotation cur = new Rotation(mc.player.getYaw(), mc.player.getPitch());
+                if (aimsAtBox(cur.getYaw(), cur.getPitch(), 3.5F, hitbox)) {
+                    Vec3d look = RayTraceUtil.getVectorForRotation(cur.getPitch(), cur.getYaw());
+                    return eye.add(look.multiply(0.8));
+                }
+            }
             return new Vec3d(target.getX(), aimY, target.getZ());
         }
 
