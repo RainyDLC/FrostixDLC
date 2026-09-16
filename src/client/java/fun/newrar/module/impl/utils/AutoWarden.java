@@ -40,11 +40,13 @@ import net.minecraft.state.property.Properties;
 import net.minecraft.util.Hand;
 import net.minecraft.util.PlayerInput;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.RaycastContext;
 import fun.newrar.Client;
 import fun.newrar.manager.event_impl.EventPacket;
@@ -71,8 +73,12 @@ import fun.newrar.utils.player.MoveUtil;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -151,6 +157,7 @@ public class AutoWarden extends Module {
     private int swapBlocked;
     private ItemStack swapStack = ItemStack.EMPTY;
     private final Map<BlockPos, Long> badChests = new HashMap<>();
+    private final Map<BlockPos, List<BlockPos>> standCandidatesCache = new HashMap<>();
     private int noChestTick;
     private int invisWait;
     private int screenTick;
@@ -230,6 +237,7 @@ public class AutoWarden extends Module {
         openAttempts.clear();
         unreachable.clear();
         badChests.clear();
+        standCandidatesCache.clear();
         openTarget = null;
         openClick = null;
         openTick = 0;
@@ -271,6 +279,7 @@ public class AutoWarden extends Module {
         Pathing.farmMode(false);
         walkTarget = null;
         currentChest = null;
+        standCandidatesCache.clear();
         eating = false;
         eatTick = 0;
         clearRecall();
@@ -410,9 +419,16 @@ public class AutoWarden extends Module {
     public void onInput(InputEvent event) {
         if (mc.player == null || mc.world == null) return;
 
+        if (busyEating() || isDrinking() || swapSource >= 0) {
+            event.inputNone();
+            return;
+        }
+
+        if (Pathing.available()) return;
+
         if (!mc.player.isOnGround() && !mc.player.isClimbing()) event.setJumping(false);
 
-        if (walkTarget != null && mc.currentScreen == null && !Pathing.available()) {
+        if (walkTarget != null && mc.currentScreen == null) {
             Vec3d relative = walkVector();
             PlayerInput input = MoveUtil.getDirectionalInputForDegrees(event.getInput(),
                     MoveUtil.getDegreesRelativeToView(relative, mc.player.getYaw()), 20.0F);
@@ -471,13 +487,17 @@ public class AutoWarden extends Module {
     }
 
     private void driveBaritone() {
-        if (walkTarget == null || mc.currentScreen != null) {
+        if (walkTarget == null || mc.currentScreen != null || busyEating() || isDrinking() || swapSource >= 0) {
             Pathing.cancel();
             return;
         }
 
+        if (!aiming) {
+            RotationProcess.resetParentTimeout();
+        }
+
         if (Pathing.hasGoal(walkTarget, walkRange) && Pathing.busy()) return;
-        if (mc.player.age % 10 == 0 || (!isMoving() && mc.player.age % 5 == 0)) Pathing.goTo(walkTarget, walkRange);
+        Pathing.goTo(walkTarget, walkRange);
     }
 
     private Vec3d walkVector() {
@@ -494,6 +514,7 @@ public class AutoWarden extends Module {
 
     private void updateWalkProgress() {
         unreachable.values().removeIf(expire -> mc.player.age > expire);
+        if (standCandidatesCache.size() > 200 || mc.player.age % 1200 == 0) standCandidatesCache.clear();
 
         if (walkTarget == null || mc.currentScreen != null || wardenAggro() || isDrinking()) {
             resetProgress();
@@ -573,6 +594,7 @@ public class AutoWarden extends Module {
             progressTick = mc.player.age;
             unreachable.clear();
             openAttempts.clear();
+            standCandidatesCache.clear();
             updateZone();
 
             if (debug.getValue()) ChatUtils.addChatMessage("§7[AW] телепорт, сбрасываю путь и пометки");
@@ -648,6 +670,7 @@ public class AutoWarden extends Module {
         openClick = null;
         openTick = 0;
         badChests.clear();
+        standCandidatesCache.clear();
         Pathing.cancel();
         giveUpTarget();
 
@@ -738,7 +761,9 @@ public class AutoWarden extends Module {
     }
 
     private boolean isDrinking() {
-        return mc.player.isUsingItem() && mc.player.getActiveItem().isOf(Items.POTION);
+        if (mc.player == null) return false;
+        if (mc.player.isUsingItem() && mc.player.getActiveItem().isOf(Items.POTION)) return true;
+        return useHeld && mc.player.getMainHandStack().isOf(Items.POTION);
     }
 
     private boolean switchAnarchy(int number) {
@@ -833,8 +858,6 @@ public class AutoWarden extends Module {
     }
 
     private void collect() {
-        if (checkEscape()) return;
-
         eatIfNeeded();
 
         if (busyEating()) {
@@ -847,6 +870,8 @@ public class AutoWarden extends Module {
             useRequested = true;
             return;
         }
+
+        if (checkEscape()) return;
 
         if (anarchies.size() <= 1) {
             if (mc.player.age % 60 == 0) {
@@ -870,14 +895,23 @@ public class AutoWarden extends Module {
         StatusEffectInstance invisibility = mc.player.getStatusEffect(StatusEffects.INVISIBILITY);
         boolean ready = mc.player.hasStatusEffect(StatusEffects.GLOWING) || (invisibility != null && invisibility.getDuration() >= 400);
 
-        if (!ready && invisibility == null && invisCount() < 1 && mc.player.age % 5 == 0 && !ServerUtil.isPvp()) {
+        int invisSlot = findSlot(this::isInvisPotion);
+
+        if (!ready && invisibility == null && invisSlot < 0 && !ServerUtil.isPvp()) {
             state = State.ESCAPE;
             return;
         }
 
         if (!ready) {
-            int slot = findSlot(this::isInvisPotion);
-            if (slot >= 0 && mc.player.age > 20) useSlot(slot);
+            walkTarget = null;
+            if (invisSlot >= 0) {
+                if (invisSlot >= 9) {
+                    swapToHotbar(invisSlot, true);
+                } else {
+                    useSlot(invisSlot);
+                }
+            }
+            return;
         }
 
         if (!inFarmZone()) {
@@ -887,14 +921,20 @@ public class AutoWarden extends Module {
             return;
         }
 
-        if (ready) invisWait = 0;
-        else {
-            if (invisWait == 0) invisWait = mc.player.age;
-            if (mc.player.age - invisWait < 100 && mc.player.age >= swapBlocked) return;
-        }
+        invisWait = 0;
 
-        int speedSlot = useSpeed.getValue() && mc.player.getStatusEffect(StatusEffects.SPEED) == null ? findSlot(this::isSpeedPotion) : -1;
-        if (speedSlot >= 0 && useSlot(speedSlot)) return;
+        if (useSpeed.getValue() && mc.player.getStatusEffect(StatusEffects.SPEED) == null) {
+            int speedSlot = findSlot(this::isSpeedPotion);
+            if (speedSlot >= 0) {
+                walkTarget = null;
+                if (speedSlot >= 9) {
+                    swapToHotbar(speedSlot, true);
+                } else {
+                    useSlot(speedSlot);
+                }
+                return;
+            }
+        }
 
         routine();
     }
@@ -909,7 +949,7 @@ public class AutoWarden extends Module {
         boolean aggro = wardenAggro();
         long blocked = openAttempts.values().stream().filter(count -> count >= 2).count();
 
-        if ((aggro || inventoryCount() > scaled(20) || mc.player.getHungerManager().getFoodLevel() < 8
+        if ((aggro || inventoryCount() > scaled(20) || (mc.player.getHungerManager().getFoodLevel() < 8 && findFoodSlot() < 0)
                 || (blocked >= 3 && mc.player.age % 30 == 0)) && mc.player.age > 100) {
             if (aggro) died = true;
             state = State.ESCAPE;
@@ -1103,7 +1143,11 @@ public class AutoWarden extends Module {
             return;
         }
 
-        if (distSq <= 20.0) {
+        Vec3d eye = mc.player.getEyePos();
+        Vec3d visibleAim = visiblePoint(eye, target);
+        boolean canInteract = visibleAim != null && eye.squaredDistanceTo(visibleAim) <= 19.0;
+
+        if (canInteract) {
             walkTarget = null;
 
             if (!ready) {
@@ -1118,7 +1162,12 @@ public class AutoWarden extends Module {
         }
 
         if (distSq > 10.0) freeHand();
-        walkTo(sideSpot(target), 1);
+        BlockPos stand = sideSpot(target);
+        if (stand != null) {
+            walkTo(stand, 0);
+        } else {
+            walkTo(target, 1);
+        }
     }
 
     private BlockPos orbitSpot(BlockPos chest) {
@@ -1126,42 +1175,163 @@ public class AutoWarden extends Module {
         return new BlockPos(chest.getX() + (int) (Math.cos(angle) * 10.0), chest.getY(), chest.getZ() + (int) (Math.sin(angle) * 10.0));
     }
 
-    private BlockPos sideSpot(BlockPos chest) {
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                if (dx == 0 && dz == 0) continue;
+    private BlockPos chestPartner(BlockPos pos) {
+        if (mc.world == null || pos == null) return null;
+        BlockState state = mc.world.getBlockState(pos);
+        if (!state.contains(Properties.CHEST_TYPE) || state.get(Properties.CHEST_TYPE) == ChestType.SINGLE) return null;
 
-                BlockPos side = chest.add(dx, 0, dz);
-                if (mc.world.getBlockState(side).isAir() && mc.world.getBlockState(side.up()).isAir()
-                        && !mc.world.getBlockState(side.down()).isAir() && visibleFrom(side, chest)) return side;
+        for (Direction direction : Direction.Type.HORIZONTAL) {
+            BlockPos partner = pos.offset(direction);
+            BlockState other = mc.world.getBlockState(partner);
+            if (other.isOf(state.getBlock()) && other.contains(Properties.CHEST_TYPE)
+                    && other.get(Properties.CHEST_TYPE) != ChestType.SINGLE
+                    && other.get(Properties.CHEST_TYPE) != state.get(Properties.CHEST_TYPE)
+                    && other.get(Properties.HORIZONTAL_FACING) == state.get(Properties.HORIZONTAL_FACING)) {
+                return partner;
             }
         }
-
-        BlockPos up = chest.up();
-        if (mc.world.getBlockState(up).isAir() && mc.world.getBlockState(up.up()).isAir() && visibleFrom(up, chest)) return up;
         return null;
     }
 
+    private boolean isTopBlocked(BlockPos pos) {
+        if (mc.world == null || pos == null) return true;
+        BlockPos up = pos.up();
+        return mc.world.getBlockState(up).isSolidBlock(mc.world, up);
+    }
+
+    private boolean isStandable(BlockPos pos) {
+        if (mc.world == null || pos == null) return false;
+        BlockState feet = mc.world.getBlockState(pos);
+        BlockState head = mc.world.getBlockState(pos.up());
+        BlockState ground = mc.world.getBlockState(pos.down());
+
+        VoxelShape feetShape = feet.getCollisionShape(mc.world, pos);
+        if (!feetShape.isEmpty() && feetShape.getMax(Direction.Axis.Y) > 0.25) return false;
+
+        VoxelShape headShape = head.getCollisionShape(mc.world, pos.up());
+        if (!headShape.isEmpty()) return false;
+
+        VoxelShape groundShape = ground.getCollisionShape(mc.world, pos.down());
+        if (groundShape.isEmpty() && feetShape.isEmpty()) return false;
+
+        if (feet.isOf(Blocks.LAVA) || feet.isOf(Blocks.FIRE) || feet.isOf(Blocks.SOUL_FIRE) || feet.isOf(Blocks.POWDER_SNOW)) return false;
+        return !ground.isOf(Blocks.LAVA) && !ground.isOf(Blocks.FIRE);
+    }
+
+    private List<BlockPos> getStandCandidates(BlockPos chest) {
+        if (chest == null) return Collections.emptyList();
+        List<BlockPos> cached = standCandidatesCache.get(chest);
+        if (cached != null) return cached;
+
+        List<BlockPos> candidates = new ArrayList<>();
+        BlockPos partner = chestPartner(chest);
+
+        collectStandCandidates(chest, candidates);
+        if (partner != null) {
+            collectStandCandidates(partner, candidates);
+        }
+
+        if (candidates.isEmpty()) {
+            BlockPos up = chest.up();
+            if (isStandable(up) && visibleFrom(up, chest)) {
+                candidates.add(up);
+            }
+        }
+
+        standCandidatesCache.put(chest.toImmutable(), candidates);
+        return candidates;
+    }
+
+    private BlockPos sideSpot(BlockPos chest) {
+        if (mc.world == null || mc.player == null || chest == null) return null;
+
+        List<BlockPos> candidates = getStandCandidates(chest);
+        if (candidates.isEmpty()) return null;
+
+        if (walkTarget != null && candidates.contains(walkTarget)) {
+            double currentDistSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(walkTarget));
+            double bestDistSq = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(candidates.get(0)));
+            if (currentDistSq <= bestDistSq + 4.0) {
+                return walkTarget;
+            }
+        }
+
+        BlockPos best = candidates.get(0);
+        double bestDist = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(best));
+        for (int i = 1; i < candidates.size(); i++) {
+            BlockPos p = candidates.get(i);
+            double dist = mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(p));
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = p;
+            }
+        }
+        return best;
+    }
+
+    private void collectStandCandidates(BlockPos chest, List<BlockPos> candidates) {
+        if (isTopBlocked(chest)) return;
+
+        for (int dy = -2; dy <= 2; dy++) {
+            for (int dx = -3; dx <= 3; dx++) {
+                for (int dz = -3; dz <= 3; dz++) {
+                    if (dx == 0 && dz == 0 && dy == 0) continue;
+
+                    BlockPos pos = chest.add(dx, dy, dz);
+                    if (pos.getSquaredDistance(chest) > 16.0) continue;
+                    if (candidates.contains(pos)) continue;
+
+                    if (isStandable(pos) && visibleFrom(pos, chest)) {
+                        candidates.add(pos);
+                    }
+                }
+            }
+        }
+    }
+
     private boolean visibleFrom(BlockPos from, BlockPos chest) {
-        Vec3d eye = Vec3d.ofCenter(from).add(0.0, mc.player.getEyeHeight(mc.player.getPose()) - 0.5, 0.0);
+        if (mc.world == null) return false;
+        float eyeH = mc.player != null ? mc.player.getEyeHeight(mc.player.getPose()) : 1.62F;
+        Vec3d eye = Vec3d.ofCenter(from).add(0.0, eyeH - 0.5, 0.0);
         return visiblePoint(eye, chest) != null;
     }
 
     private Vec3d visiblePoint(Vec3d eye, BlockPos chest) {
-        Vec3d center = Vec3d.ofCenter(chest);
+        if (mc.world == null || chest == null) return null;
+        if (!isTopBlocked(chest)) {
+            Vec3d point = checkChestVisible(eye, chest);
+            if (point != null) return point;
+        }
+
+        BlockPos partner = chestPartner(chest);
+        if (partner != null && !isTopBlocked(partner)) {
+            return checkChestVisible(eye, partner);
+        }
+        return null;
+    }
+
+    private Vec3d checkChestVisible(Vec3d eye, BlockPos chest) {
+        Vec3d center = Vec3d.ofCenter(chest).add(0.0, -0.0625, 0.0);
         Vec3d best = null;
         double bestSq = Double.MAX_VALUE;
 
-        for (double dx = -0.4; dx <= 0.41; dx += 0.4) {
-            for (double dy = -0.4; dy <= 0.41; dy += 0.4) {
-                for (double dz = -0.4; dz <= 0.41; dz += 0.4) {
+        BlockHitResult hit = mc.world.raycast(new RaycastContext(eye, center,
+                RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, mc.player));
+        if (hit != null && chest.equals(hit.getBlockPos())) {
+            return center;
+        }
+
+        for (double dy : new double[]{-0.3, 0.0, 0.25}) {
+            for (double dx : new double[]{-0.35, 0.0, 0.35}) {
+                for (double dz : new double[]{-0.35, 0.0, 0.35}) {
+                    if (dx == 0.0 && dy == 0.0 && dz == 0.0) continue;
                     Vec3d point = center.add(dx, dy, dz);
                     double sq = point.squaredDistanceTo(center);
                     if (sq >= bestSq) continue;
 
-                    BlockHitResult hit = mc.world.raycast(new RaycastContext(eye, point,
-                            RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
-                    if (hit.getBlockPos().equals(chest)) {
+                    hit = mc.world.raycast(new RaycastContext(eye, point,
+                            RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, mc.player));
+                    if (hit != null && chest.equals(hit.getBlockPos())) {
                         bestSq = sq;
                         best = point;
                     }
@@ -1179,28 +1349,24 @@ public class AutoWarden extends Module {
     }
 
     private Vec3d aimChest(BlockPos chest) {
-        if (chest == null) return null;
+        if (chest == null || mc.player == null) return null;
 
         Vec3d eye = mc.player.getEyePos();
         Vec3d aim = visiblePoint(eye, chest);
         if (aim == null) return null;
 
         Rotation target = rotationTo(eye, aim);
-        float time = mc.player.age + mc.getRenderTickCounter().getTickProgress(false);
-        float sway = (float) ((Math.sin(time * 0.31F) * 0.5 + Math.sin(time * 0.73F + 1.1F) * 0.3 + Math.sin(time * 1.7F + 2.6F) * 0.2) * 3.0);
-        Rotation swayed = new Rotation(target.getYaw() + sway, MathHelper.clamp(target.getPitch() + sway / 4.0F, -90.0F, 90.0F));
 
         aiming = true;
-        RotationProcess.update(swayed, 120.0F, 120.0F, 1, 1);
+        RotationProcess.update(target, 22.0F, 22.0F, 22.0F, 22.0F, 1, 1, true);
 
-        return new Rotation(mc.player).getDelta(swayed) > 4.0F ? null : aim;
+        return aim;
     }
 
     private boolean openChest(BlockPos chest, int delay) {
-        if (chest == null || mc.currentScreen instanceof GenericContainerScreen) return false;
+        if (chest == null || mc.player == null || mc.world == null || mc.currentScreen instanceof GenericContainerScreen) return false;
 
-        Vec3d aim = aimChest(chest);
-        if (aim == null) return false;
+        aimChest(chest);
 
         if (!chest.equals(openClick)) {
             openClick = chest.toImmutable();
@@ -1210,9 +1376,20 @@ public class AutoWarden extends Module {
         if (openTick > 0 && mc.player.age - openTick < delay) return false;
 
         Vec3d eye = mc.player.getEyePos();
-        BlockHitResult hit = mc.world.raycast(new RaycastContext(eye, aim,
-                RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player));
-        if (!hit.getBlockPos().equals(chest)) return false;
+        Vec3d look = mc.player.getRotationVec(1.0F).multiply(4.5);
+        BlockHitResult hit = mc.world.raycast(new RaycastContext(eye, eye.add(look),
+                RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, mc.player));
+        BlockPos partner = chestPartner(chest);
+        boolean canOpenChest = !isTopBlocked(chest);
+        boolean canOpenPartner = partner != null && !isTopBlocked(partner);
+        if (!canOpenChest && !canOpenPartner) return false;
+
+        boolean matchesChest = hit != null && hit.getType() == HitResult.Type.BLOCK
+                && ((canOpenChest && chest.equals(hit.getBlockPos()))
+                    || (canOpenPartner && partner.equals(hit.getBlockPos())));
+        if (!matchesChest) {
+            return false;
+        }
 
         openTick = mc.player.age;
         mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit);
@@ -1321,7 +1498,7 @@ public class AutoWarden extends Module {
     }
 
     private boolean reachable(BlockPos chest) {
-        return sideSpot(chest) != null;
+        return !getStandCandidates(chest).isEmpty();
     }
 
     private boolean wardenNear(BlockPos pos) {
@@ -1686,28 +1863,63 @@ public class AutoWarden extends Module {
         mc.options.useKey.setPressed(false);
     }
 
+    private boolean isFood(ItemStack stack) {
+        if (stack.isEmpty()) return false;
+        if (!stack.contains(DataComponentTypes.FOOD)) return false;
+        if (stack.isOf(Items.ROTTEN_FLESH) || stack.isOf(Items.PUFFERFISH) || stack.isOf(Items.POISONOUS_POTATO)
+                || stack.isOf(Items.CHORUS_FRUIT) || stack.isOf(Items.SPIDER_EYE)) return false;
+        return true;
+    }
+
+    private int findFoodSlot() {
+        int carrot = findSlot(stack -> stack.isOf(Items.GOLDEN_CARROT));
+        if (carrot >= 0) return carrot;
+        return findSlot(this::isFood);
+    }
+
     private boolean busyEating() {
         if (!eating || mc.player == null) return false;
-        if (mc.player.isUsingItem()) return mc.player.getActiveItem().isOf(Items.GOLDEN_CARROT);
-        return mc.player.getMainHandStack().isOf(Items.GOLDEN_CARROT);
+        if (mc.player.isUsingItem()) return isFood(mc.player.getActiveItem());
+        return eatTick > 0 && mc.player.age - eatTick <= 4 && isFood(mc.player.getMainHandStack());
+    }
+
+    private void stopEating() {
+        eating = false;
+        eatTick = 0;
+        releaseUse();
+        freeHand();
     }
 
     private void eatIfNeeded() {
-
-        boolean chewing = busyEating();
-        int food = mc.player.getHungerManager().getFoodLevel();
-
-        if (mc.currentScreen != null || isDrinking() || (!chewing && mc.player.age < eatBlocked)
-                || (!chewing && (nearCurrentChest(5.0) || food >= 17))) {
-            eating = false;
-            eatTick = 0;
+        if (mc.player == null || mc.currentScreen != null || isDrinking()) {
+            if (eating) stopEating();
             return;
         }
 
-        int slot = findSlot(stack -> stack.isOf(Items.GOLDEN_CARROT));
+        int food = mc.player.getHungerManager().getFoodLevel();
+
+        if (food >= 20 || (food >= 19 && !mc.player.isUsingItem())) {
+            if (eating) stopEating();
+            return;
+        }
+
+        boolean chewing = busyEating();
+
+        if (!chewing && mc.player.age < eatBlocked) return;
+
+        if (!chewing && currentChest != null && chestReady(currentChest) && nearCurrentChest(4.0) && food >= 14) {
+            return;
+        }
+
+        int slot = findFoodSlot();
         if (slot < 0) {
-            eating = false;
-            eatTick = 0;
+            if (eating) stopEating();
+            return;
+        }
+
+        if (slot >= 9) {
+            walkTarget = null;
+            swapToHotbar(slot, true);
             return;
         }
 
@@ -1715,17 +1927,15 @@ public class AutoWarden extends Module {
             eatTick = mc.player.age;
             eatFood = food;
         } else if (mc.player.age - eatTick > 140) {
-
-            eating = false;
-            eatTick = 0;
-            eatBlocked = mc.player.age + 200;
+            stopEating();
+            eatBlocked = mc.player.age + 100;
             return;
         }
 
         eating = true;
         walkTarget = null;
 
-        if (mc.player.getMainHandStack().isOf(Items.GOLDEN_CARROT)) {
+        if (isFood(mc.player.getMainHandStack())) {
             holdUse();
             return;
         }
@@ -1734,8 +1944,10 @@ public class AutoWarden extends Module {
     }
 
     private void freeHand() {
-        if (busyEating()) return;
+        if (busyEating() || isDrinking()) return;
         if (mc.player.getMainHandStack().isEmpty()) return;
+        if (mc.player.getMainHandStack().isOf(Items.POTION)) return;
+        if (isFood(mc.player.getMainHandStack()) && eating) return;
 
         for (int slot = 0; slot < 9; slot++) {
             if (!mc.player.getInventory().getStack(slot).isEmpty()) continue;
@@ -1793,17 +2005,25 @@ public class AutoWarden extends Module {
     }
 
     private boolean isInvisPotion(ItemStack stack) {
-        RegistryEntry<Potion> potion = stack.getOrDefault(DataComponentTypes.POTION_CONTENTS, PotionContentsComponent.DEFAULT).potion().orElse(null);
-        return potion != null && (potion.equals(Potions.INVISIBILITY) || potion.equals(Potions.LONG_INVISIBILITY));
+        if (!stack.isOf(Items.POTION)) return false;
+        PotionContentsComponent contents = stack.getOrDefault(DataComponentTypes.POTION_CONTENTS, PotionContentsComponent.DEFAULT);
+        RegistryEntry<Potion> potion = contents.potion().orElse(null);
+        if (potion != null && (potion.equals(Potions.INVISIBILITY) || potion.equals(Potions.LONG_INVISIBILITY))) return true;
+        for (StatusEffectInstance effect : contents.getEffects()) {
+            if (effect.getEffectType().equals(StatusEffects.INVISIBILITY)) return true;
+        }
+        String name = stack.getName().getString().toLowerCase();
+        return name.contains("невид") || name.contains("инвиз");
     }
 
     private boolean isSpeedPotion(ItemStack stack) {
         if (!stack.isOf(Items.POTION)) return false;
-
-        for (StatusEffectInstance effect : stack.getOrDefault(DataComponentTypes.POTION_CONTENTS, PotionContentsComponent.DEFAULT).getEffects()) {
+        PotionContentsComponent contents = stack.getOrDefault(DataComponentTypes.POTION_CONTENTS, PotionContentsComponent.DEFAULT);
+        for (StatusEffectInstance effect : contents.getEffects()) {
             if (effect.getEffectType().equals(StatusEffects.SPEED)) return true;
         }
-        return false;
+        String name = stack.getName().getString().toLowerCase();
+        return name.contains("скорост") || name.contains("speed") || name.contains("swift");
     }
 
     private BlockPos findNearbyChest(boolean hopper) {
@@ -1977,7 +2197,7 @@ public class AutoWarden extends Module {
         if (count == 0) {
             for (int slot = 0; slot < 9; slot++) {
                 ItemStack stack = mc.player.getInventory().getStack(slot);
-                if (!isInvisPotion(stack) && !isSpeedPotion(stack) && !stack.isOf(Items.GOLDEN_CARROT)) pool[count++] = slot;
+                if (!isInvisPotion(stack) && !isSpeedPotion(stack) && !stack.isOf(Items.GOLDEN_CARROT) && !isFood(stack)) pool[count++] = slot;
             }
         }
 
@@ -1986,7 +2206,7 @@ public class AutoWarden extends Module {
     }
 
     private boolean isFloorTrash(ItemStack stack) {
-        return !stack.isEmpty() && isJunk(stack) && !isInvisPotion(stack) && !isSpeedPotion(stack) && !stack.isOf(Items.GOLDEN_CARROT);
+        return !stack.isEmpty() && isJunk(stack) && !isInvisPotion(stack) && !isSpeedPotion(stack) && !stack.isOf(Items.GOLDEN_CARROT) && !isFood(stack);
     }
 
     private void updateChestMemory() {
