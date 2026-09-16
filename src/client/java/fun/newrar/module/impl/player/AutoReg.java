@@ -24,7 +24,7 @@ import net.minecraft.text.Text;
         desc = "Автоматическая регистрация и авторизация на сервере с настраиваемым паролем"
 )
 public class AutoReg extends Module {
-    public final StringSetting password = new StringSetting(this, "Пароль", "Nightix123");
+    public final StringSetting password = new StringSetting(this, "Пароль", "RainyDLC123");
     public final ModeSetting mode = new ModeSetting(this, "Команда рег", "/reg", "/register");
     public final BooleanSetting repeat = new BooleanSetting("Повторять пароль", true);
     public final BooleanSetting autoLogin = new BooleanSetting("Авто-логин (/login)", true);
@@ -80,7 +80,7 @@ public class AutoReg extends Module {
         // Проверка на необходимость регистрации
         if (isRegisterPrompt(clean)) {
             String pass = password.getValue();
-            if (pass == null || pass.isEmpty()) pass = "Nightix123";
+            if (pass == null || pass.isEmpty()) pass = "RainyDLC123";
 
             String cmd = mode.getValue() + " " + pass + (repeat.getValue() ? " " + pass : "");
             queueCommand(cmd);
@@ -90,7 +90,7 @@ public class AutoReg extends Module {
         // Проверка на необходимость входа (/login)
         if (autoLogin.getValue() && isLoginPrompt(clean)) {
             String pass = password.getValue();
-            if (pass == null || pass.isEmpty()) pass = "Nightix123";
+            if (pass == null || pass.isEmpty()) pass = "RainyDLC123";
 
             String cmd = loginCmd.getValue() + " " + pass;
             queueCommand(cmd);
