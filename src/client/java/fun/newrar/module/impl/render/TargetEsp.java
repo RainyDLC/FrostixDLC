@@ -150,10 +150,15 @@ public class TargetEsp extends Module implements ModulePreview {
     public SliderSetting heartSize = new SliderSetting(this,"Размер сердца",0.9F,0.4F,1.8F,0.05F).setVisible(() -> type.is("Сердце"));
     public SliderSetting heartSpeed = new SliderSetting(this,"Множитель пульса",1.0F,0.2F,3.0F,0.05F).setVisible(() -> type.is("Сердце"));
 
-    public SliderSetting fireCount = new SliderSetting(this,"Кол-во частиц",26,8,64,1).setVisible(() -> type.is("Огонь"));
+    public ModeSetting fireColor = new ModeSetting(this, "Цвет огня", "Огонь", "Тема", "Свой").setVisible(() -> type.is("Огонь"));
+    public ColorSetting fireCustomColor = new ColorSetting(this, "Свой цвет", ColorUtil.getColor(255, 120, 20, 255)).setVisible(() -> type.is("Огонь") && fireColor.is("Свой"));
+    public SliderSetting fireCount = new SliderSetting(this,"Кол-во частиц",28,8,64,1).setVisible(() -> type.is("Огонь"));
     public SliderSetting fireSpeed = new SliderSetting(this,"Скорость вращения",1.0F,0.2F,3.0F,0.05F).setVisible(() -> type.is("Огонь"));
-    public SliderSetting fireRadius = new SliderSetting(this,"Радиус вихря",0.7F,0.3F,1.5F,0.05F).setVisible(() -> type.is("Огонь"));
+    public SliderSetting fireRadius = new SliderSetting(this,"Радиус вихря",0.75F,0.3F,1.5F,0.05F).setVisible(() -> type.is("Огонь"));
     public SliderSetting fireHeight = new SliderSetting(this,"Сила пламени",1.0F,0.5F,2.0F,0.05F).setVisible(() -> type.is("Огонь"));
+    public BooleanSetting fireSparks = new BooleanSetting(this, "Искры", true).setVisible(() -> type.is("Огонь"));
+    public BooleanSetting fireRing = new BooleanSetting(this, "Круг на земле", true).setVisible(() -> type.is("Огонь"));
+    public BooleanSetting fireVortex = new BooleanSetting(this, "Огненный смерч", true).setVisible(() -> type.is("Огонь"));
 
     public SliderSetting swordsCount = new SliderSetting(this,"Кол-во мечей",4,2,10,1).setVisible(() -> type.is("Мечи"));
     public SliderSetting swordsSpeed = new SliderSetting(this,"Скорость вращения",1.0F,0.1F,3.0F,0.05F).setVisible(() -> type.is("Мечи"));
@@ -217,9 +222,9 @@ public class TargetEsp extends Module implements ModulePreview {
             SNOW_PZ = new float[24], SNOW_SPIN = new float[24];
     private static final float[] SWORD_PX = new float[16], SWORD_PY = new float[16],
             SWORD_PZ = new float[16], SWORD_TILT = new float[16];
-    private static final float[] FIRE_OX = new float[64], FIRE_OY = new float[64], FIRE_OZ = new float[64],
-            FIRE_ALPHA = new float[64], FIRE_H = new float[64];
-    private static final int[] FIRE_RGB_OUT = new int[64], FIRE_RGB_CORE = new int[64];
+    private static final float[] FIRE_OX = new float[96], FIRE_OY = new float[96], FIRE_OZ = new float[96],
+            FIRE_ALPHA = new float[96], FIRE_H = new float[96], FIRE_W = new float[96], FIRE_TILT = new float[96];
+    private static final int[] FIRE_RGB_OUT = new int[96], FIRE_RGB_CORE = new int[96];
     private static final float[] HEART_HX = new float[48], HEART_HY = new float[48];
 
     @EventHandler
@@ -1854,8 +1859,6 @@ public class TargetEsp extends Module implements ModulePreview {
         alpha_2.update();
         alpha_2.run(hurtPC, 0.1F, Easings.SINE_OUT);
 
-        int hurtRed = ColorUtil.getColor(255, 60, 40);
-
         long currentTime = System.currentTimeMillis();
         if (currentTimeSpirits == 0) currentTimeSpirits = currentTime;
         long timeDiff = currentTime - currentTimeSpirits;
@@ -1869,15 +1872,141 @@ public class TargetEsp extends Module implements ModulePreview {
         float atts = alpha_2.get();
 
         float bodyH = target.getHeight();
-        float baseR = (target.getWidth() * 0.55f + 0.22f) * radiusMul;
-        float riseH = bodyH * 0.95f * heightMul;
+        float baseR = (target.getWidth() * 0.52f + 0.20f) * radiusMul;
+        float riseH = bodyH * 0.98f * heightMul;
         float tSec = animationNurik / 60f;
+
+        // Dynamic fire color determination
+        int fireBaseColor;
+        int fireMidColor;
+        int fireCoreColor;
+
+        if (fireColor.is("Тема")) {
+            int theme = ColorUtil.getClientColor1(1);
+            fireBaseColor = ColorUtil.multDark(theme, 0.8f);
+            fireMidColor = theme;
+            fireCoreColor = ColorUtil.overCol(theme, 0xFFFFFFFF, 0.65f);
+        } else if (fireColor.is("Свой")) {
+            int custom = fireCustomColor.getValue();
+            fireBaseColor = ColorUtil.multDark(custom, 0.75f);
+            fireMidColor = custom;
+            fireCoreColor = ColorUtil.overCol(custom, 0xFFFFFFFF, 0.6f);
+        } else {
+            fireBaseColor = 0xFFFF2A00;
+            fireMidColor  = 0xFFFF9900;
+            fireCoreColor = 0xFFFFF6B0;
+        }
+
+        if (atts > 0.01f) {
+            int bloodFlame = 0xFFFF1818;
+            int bloodCore  = 0xFFFF8080;
+            fireBaseColor = ColorUtil.overCol(fireBaseColor, bloodFlame, atts);
+            fireMidColor  = ColorUtil.overCol(fireMidColor, bloodFlame, atts);
+            fireCoreColor = ColorUtil.overCol(fireCoreColor, bloodCore, atts);
+        }
 
         MatrixStack matrices = e.getMatrixStack();
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
         var camRot = mc.gameRenderer.getCamera().getRotation();
 
+        matrices.push();
+        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
+        Matrix4f m = matrices.peek().getPositionMatrix();
+
+        // 1. Ground fiery seal & flame ring
+        if (fireRing.getValue()) {
+            VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+            float groundR = baseR * 1.18f;
+
+            int centerDiscCol = ColorUtil.replAlpha(fireMidColor, (int) (alphaPC * 90));
+            int edgeDiscCol = ColorUtil.replAlpha(fireBaseColor, 0);
+            for (int i = 0; i < 32; i++) {
+                float a0 = (float) (Math.PI * 2.0 * i / 32);
+                float a1 = (float) (Math.PI * 2.0 * (i + 1) / 32);
+                float x0 = (float) Math.cos(a0) * groundR;
+                float z0 = (float) Math.sin(a0) * groundR;
+                float x1 = (float) Math.cos(a1) * groundR;
+                float z1 = (float) Math.sin(a1) * groundR;
+                fillBuf.vertex(m, 0, 0.02f, 0).color(centerDiscCol);
+                fillBuf.vertex(m, x0, 0.02f, z0).color(edgeDiscCol);
+                fillBuf.vertex(m, x1, 0.02f, z1).color(edgeDiscCol);
+                fillBuf.vertex(m, x1, 0.02f, z1).color(edgeDiscCol);
+            }
+
+            int spikeBaseCol = ColorUtil.replAlpha(fireBaseColor, (int) (alphaPC * 175));
+            int spikeTipCol = ColorUtil.replAlpha(fireMidColor, 0);
+            for (int i = 0; i < 36; i++) {
+                float a0 = (float) (Math.PI * 2.0 * i / 36);
+                float a1 = (float) (Math.PI * 2.0 * (i + 1) / 36);
+                float x0 = (float) Math.cos(a0) * groundR;
+                float z0 = (float) Math.sin(a0) * groundR;
+                float x1 = (float) Math.cos(a1) * groundR;
+                float z1 = (float) Math.sin(a1) * groundR;
+
+                float flickerSpike = (0.07f + 0.08f * (float) Math.sin(animationNurik * 0.25f + i * 1.4f)) * heightMul;
+                fillBuf.vertex(m, x0, 0.02f, z0).color(spikeBaseCol);
+                fillBuf.vertex(m, x1, 0.02f, z1).color(spikeBaseCol);
+                fillBuf.vertex(m, x1, 0.02f + flickerSpike, z1).color(spikeTipCol);
+                fillBuf.vertex(m, x0, 0.02f + flickerSpike, z0).color(spikeTipCol);
+            }
+
+            VertexConsumer lineBuf = immediate.getBuffer(RING_LINE_LAYER);
+            int lineCol = ColorUtil.replAlpha(fireCoreColor, (int) (alphaPC * 150));
+            float innerR = groundR * 0.72f;
+            for (int i = 0; i < 32; i++) {
+                float a0 = (float) (Math.PI * 2.0 * i / 32 + animationNurik * 0.025f);
+                float a1 = (float) (Math.PI * 2.0 * (i + 1) / 32 + animationNurik * 0.025f);
+                lineBuf.vertex(m, (float) Math.cos(a0) * innerR, 0.03f, (float) Math.sin(a0) * innerR).color(lineCol);
+                lineBuf.vertex(m, (float) Math.cos(a1) * innerR, 0.03f, (float) Math.sin(a1) * innerR).color(lineCol);
+            }
+        }
+
+        // 2. Triple helical fire vortex
+        if (fireVortex.getValue()) {
+            VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
+            int numHelixes = 3;
+            int segments = 24;
+
+            for (int hIdx = 0; hIdx < numHelixes; hIdx++) {
+                float helixPhase = hIdx * (float) (Math.PI * 2.0 / numHelixes);
+
+                for (int s = 0; s < segments; s++) {
+                    float f0 = (float) s / (float) segments;
+                    float f1 = (float) (s + 1) / (float) segments;
+
+                    float y0 = f0 * riseH;
+                    float y1 = f1 * riseH;
+
+                    float r0 = baseR * (1.0f - 0.28f * f0 + 0.12f * (float) Math.sin(f0 * 4.5f + tSec * 3f));
+                    float r1 = baseR * (1.0f - 0.28f * f1 + 0.12f * (float) Math.sin(f1 * 4.5f + tSec * 3f));
+
+                    float ang0 = helixPhase + f0 * (float) Math.PI * 3.6f - tSec * 2.2f * speed;
+                    float ang1 = helixPhase + f1 * (float) Math.PI * 3.6f - tSec * 2.2f * speed;
+
+                    float x0 = (float) Math.cos(ang0) * r0;
+                    float z0 = (float) Math.sin(ang0) * r0;
+                    float x1 = (float) Math.cos(ang1) * r1;
+                    float z1 = (float) Math.sin(ang1) * r1;
+
+                    float ribW0 = (0.045f + 0.065f * (1.0f - f0)) * heightMul;
+                    float ribW1 = (0.045f + 0.065f * (1.0f - f1)) * heightMul;
+
+                    int c0 = fireLerp(fireMidColor, fireBaseColor, f0);
+                    int c1 = fireLerp(fireMidColor, fireBaseColor, f1);
+
+                    int a0 = (int) (alphaPC * (1.0f - f0 * 0.75f) * 150);
+                    int a1 = (int) (alphaPC * (1.0f - f1 * 0.75f) * 150);
+
+                    fillBuf.vertex(m, x0, y0, z0).color(ColorUtil.replAlpha(c0, a0));
+                    fillBuf.vertex(m, x1, y1, z1).color(ColorUtil.replAlpha(c1, a1));
+                    fillBuf.vertex(m, x1, y1 + ribW1, z1).color(ColorUtil.replAlpha(c1, 0));
+                    fillBuf.vertex(m, x0, y0 + ribW0, z0).color(ColorUtil.replAlpha(c0, 0));
+                }
+            }
+        }
+
+        // 3. Dynamic rising flame tongues
         float[] oxArr = FIRE_OX;
         float[] oyArr = FIRE_OY;
         float[] ozArr = FIRE_OZ;
@@ -1885,71 +2014,121 @@ public class TargetEsp extends Module implements ModulePreview {
         int[] coreRgb = FIRE_RGB_CORE;
         float[] outAlpha = FIRE_ALPHA;
         float[] outH = FIRE_H;
+        float[] outW = FIRE_W;
+        float[] outTilt = FIRE_TILT;
 
         for (int i = 0; i < count; i++) {
             float seed = (i * 0.618034f) % 1f;
-            float cyc = (tSec * 0.85f * speed + seed * 13.7f) % 1f;
+            float cyc = (tSec * 0.9f * speed + seed * 11.3f) % 1f;
 
-            float ang = seed * (float) Math.PI * 2f + tSec * 1.5f * speed + cyc * 2.6f;
-            float r = baseR * (1f - 0.45f * cyc) * (0.82f + 0.36f * (float) Math.sin(seed * 41f));
+            float ang = seed * (float) Math.PI * 2f + tSec * 1.6f * speed + cyc * 2.8f;
+            float r = baseR * (1f - 0.38f * cyc) * (0.85f + 0.28f * (float) Math.sin(seed * 37f + tSec * 2.0f));
+
             oxArr[i] = (float) Math.cos(ang) * r;
             ozArr[i] = (float) Math.sin(ang) * r;
-            oyArr[i] = 0.05f + cyc * riseH
-                    + 0.03f * (float) Math.sin(tSec * 3f + seed * 31f);
+            oyArr[i] = 0.04f + cyc * riseH + 0.03f * (float) Math.sin(tSec * 4f + seed * 23f);
 
-            float fadeIn = smooth01(cyc / 0.14f);
-            float fadeOut = 1f - smooth01((cyc - 0.7f) / 0.3f);
+            float fadeIn = smooth01(cyc / 0.12f);
+            float fadeOut = 1f - smooth01((cyc - 0.65f) / 0.35f);
             float env = Math.max(0f, fadeIn * fadeOut);
-            float flicker = 0.72f + 0.28f * (float) Math.sin(tSec * 13f + seed * 97f);
+            float flicker = 0.75f + 0.25f * (float) Math.sin(tSec * 14f + seed * 89f);
 
-            int rgb;
-            if (cyc < 0.5f) rgb = fireLerp(0xFF3C0A, 0xFF8C19, cyc * 2f);
-            else rgb = fireLerp(0xFF8C19, 0xFFE16E, (cyc - 0.5f) * 2f);
-            outRgb[i] = ColorUtil.overCol(rgb, hurtRed, atts);
-            coreRgb[i] = ColorUtil.overCol(fireLerp(rgb, 0xFFF0B4, 0.55f), hurtRed, atts);
+            int rgb = (cyc < 0.45f)
+                    ? fireLerp(fireCoreColor, fireMidColor, cyc / 0.45f)
+                    : fireLerp(fireMidColor, fireBaseColor, (cyc - 0.45f) / 0.55f);
 
+            outRgb[i] = rgb;
+            coreRgb[i] = fireLerp(rgb, fireCoreColor, 0.65f);
             outAlpha[i] = alphaPC * env * flicker;
-            outH[i] = bodyH * (0.10f + 0.13f * cyc) * heightMul * (0.85f + 0.3f * flicker);
+
+            outH[i] = bodyH * (0.16f + 0.22f * (1.0f - cyc * 0.6f)) * heightMul * (0.85f + 0.3f * flicker);
+            outW[i] = outH[i] * 0.42f;
+            outTilt[i] = (float) Math.sin(tSec * 5.0f + seed * 53f) * 12.0f;
         }
 
-        matrices.push();
-        matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
-
+        // Soft ambient heat glow
         VertexConsumer glowBuf = immediate.getBuffer(
+                ROMB_ESP.apply(Identifier.of("client", "textures/particles/glow.png")));
+        for (int i = 0; i < count; i++) {
+            if (outAlpha[i] <= 0.02f) continue;
+            float sz = outH[i] * 1.5f;
+
+            matrices.push();
+            matrices.translate(oxArr[i], oyArr[i] + outH[i] * 0.35f, ozArr[i]);
+            matrices.multiply(camRot);
+            matrices.scale(sz, sz, sz);
+            Matrix4f mm = matrices.peek().getPositionMatrix();
+            drawGradientQuad(glowBuf, mm, outRgb[i], outRgb[i], outRgb[i], outRgb[i],
+                    (int) (outAlpha[i] * 90));
+            matrices.pop();
+        }
+
+        // Pointed flame billboards
+        VertexConsumer flameBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_2.png")));
         for (int i = 0; i < count; i++) {
             if (outAlpha[i] <= 0.02f) continue;
-            float h = outH[i] * 1.6f;
+            float w = outW[i];
+            float h = outH[i];
 
             matrices.push();
             matrices.translate(oxArr[i], oyArr[i], ozArr[i]);
             matrices.multiply(camRot);
-            float s = h * 2f;
-            matrices.scale(s, s, s);
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(outTilt[i]));
             Matrix4f mm = matrices.peek().getPositionMatrix();
-            drawGradientQuad(glowBuf, mm, outRgb[i], outRgb[i], outRgb[i], outRgb[i],
-                    (int) (outAlpha[i] * 105));
+
+            drawFlameBillboard(flameBuf, mm, w, h, outRgb[i], coreRgb[i], (int) (outAlpha[i] * 210));
             matrices.pop();
         }
 
-        VertexConsumer coreBuf = immediate.getBuffer(
-                ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
-        for (int i = 0; i < count; i++) {
-            if (outAlpha[i] <= 0.02f) continue;
-            float h = outH[i] * 0.75f;
+        // 4. Rising burning sparks / embers
+        if (fireSparks.getValue()) {
+            VertexConsumer sparkBuf = immediate.getBuffer(
+                    ROMB_ESP.apply(Identifier.of("client", "textures/particles/sparkle.png")));
+            int sparkCount = Math.min(36, Math.max(12, count / 2 + 8));
 
-            matrices.push();
-            matrices.translate(oxArr[i], oyArr[i], ozArr[i]);
-            matrices.multiply(camRot);
-            float s = h * 2f;
-            matrices.scale(s, s, s);
-            Matrix4f mm = matrices.peek().getPositionMatrix();
-            drawGradientQuad(coreBuf, mm, coreRgb[i], coreRgb[i], coreRgb[i], coreRgb[i],
-                    (int) (outAlpha[i] * 220));
-            matrices.pop();
+            for (int j = 0; j < sparkCount; j++) {
+                float sSeed = (j * 0.754877f) % 1f;
+                float sCyc = (tSec * 1.25f * speed + sSeed * 17.1f) % 1f;
+
+                float sAng = sSeed * (float) Math.PI * 2f + tSec * 2.8f * speed + sCyc * 4.2f;
+                float sR = baseR * (0.55f + 0.75f * sCyc) + 0.06f * (float) Math.sin(tSec * 6f + sSeed * 31f);
+                float sx = (float) Math.cos(sAng) * sR;
+                float sz = (float) Math.sin(sAng) * sR;
+                float sy = 0.1f + sCyc * (riseH * 1.35f) + 0.05f * (float) Math.sin(tSec * 8f + sSeed * 73f);
+
+                float sEnv = (float) Math.sin(sCyc * Math.PI);
+                float sFlicker = 0.6f + 0.4f * (float) Math.sin(tSec * 20f + sSeed * 137f);
+                float sparkAlpha = alphaPC * sEnv * sFlicker;
+                if (sparkAlpha <= 0.03f) continue;
+
+                int sparkCol = (sCyc < 0.5f)
+                        ? fireLerp(0xFFFFFFFF, fireCoreColor, sCyc * 2f)
+                        : fireLerp(fireCoreColor, fireMidColor, (sCyc - 0.5f) * 2f);
+
+                float sparkSz = (0.07f + 0.05f * (1.0f - sCyc)) * heightMul;
+
+                matrices.push();
+                matrices.translate(sx, sy, sz);
+                matrices.multiply(camRot);
+                matrices.scale(sparkSz, sparkSz, sparkSz);
+                Matrix4f mm = matrices.peek().getPositionMatrix();
+                drawGradientQuad(sparkBuf, mm, sparkCol, sparkCol, sparkCol, sparkCol,
+                        (int) (sparkAlpha * 240));
+                matrices.pop();
+            }
         }
 
         matrices.pop();
+    }
+
+    private static void drawFlameBillboard(VertexConsumer buffer, Matrix4f matrix, float hw, float hh, int botCol, int topCol, int alpha) {
+        int cb = ColorUtil.replAlpha(botCol, alpha);
+        int ct = ColorUtil.replAlpha(topCol, (int) (alpha * 0.25f));
+        buffer.vertex(matrix, -hw, -hh * 0.2f, 0.0f).color(cb).texture(0, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+        buffer.vertex(matrix,  hw, -hh * 0.2f, 0.0f).color(cb).texture(1, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+        buffer.vertex(matrix,  hw * 0.45f, hh * 1.6f, 0.0f).color(ct).texture(1, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+        buffer.vertex(matrix, -hw * 0.45f, hh * 1.6f, 0.0f).color(ct).texture(0, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
     }
 
     private static float smooth01(float x) {
