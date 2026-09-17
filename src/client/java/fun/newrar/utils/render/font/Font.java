@@ -1,6 +1,7 @@
 package fun.newrar.utils.render.font;
 
 import fun.newrar.Client;
+import fun.newrar.module.impl.display.InterFace;
 import fun.newrar.utils.colors.ColorFormatting;
 import fun.newrar.utils.colors.ColorUtil;
 
@@ -11,12 +12,22 @@ public class Font {
         this.name = name;
     }
 
+    private String resolveName() {
+        InterFace iface = InterFace.getInstance();
+        if (iface != null && iface.fontMode != null && iface.fontMode.is("Уникальный")) {
+            if ("sf_regular".equals(name)) return "unique_regular";
+            if ("sf_medium".equals(name)) return "unique_medium";
+            if ("sf_bold".equals(name)) return "unique_bold";
+        }
+        return name;
+    }
+
     public void draw(String text, float x, float y, float size, int color) {
-        Client.get().render2D().getFontRenderer().drawText(name, text, x, y, size, color);
+        Client.get().render2D().getFontRenderer().drawText(resolveName(), text, x, y, size, color);
     }
 
     public void drawCentered(String text, float x, float y, float size, int color) {
-        Client.get().render2D().getFontRenderer().drawCenteredText(name, text, x, y, size, color);
+        Client.get().render2D().getFontRenderer().drawCenteredText(resolveName(), text, x, y, size, color);
     }
 
     public void drawCenterGradient(String text, float x, float y, float size, int color,int color2) {
@@ -102,14 +113,14 @@ public class Font {
     }
 
     public float getWidth(String text, float size) {
-        return Client.get().render2D().getFontRenderer().getTextWidth(name, text, size);
+        return Client.get().render2D().getFontRenderer().getTextWidth(resolveName(), text, size);
     }
     public void drawFadingText(String text, float x, float y, float maxWidth, int color,float size) {
-        Client.get().render2D().getFontRenderer().drawTextFading(name, text, x, y, size, maxWidth, color);
+        Client.get().render2D().getFontRenderer().drawTextFading(resolveName(), text, x, y, size, maxWidth, color);
     }
 
     public void drawFadingTextReverse(String text, float x, float y, float maxWidth, int color, float size) {
-        Client.get().render2D().getFontRenderer().drawTextFadingReverse(name, text, x, y, size, maxWidth, color);
+        Client.get().render2D().getFontRenderer().drawTextFadingReverse(resolveName(), text, x, y, size, maxWidth, color);
     }
 
     public void drawWrappedText(String text, float x, float y, float maxWidth, int color,float size) {
@@ -155,15 +166,15 @@ public class Font {
     }
 
     public void drawRightAlignFadeLeft(String text, float rightX, float y, float fadeStartX, int color, float size) {
-        Client.get().render2D().getFontRenderer().drawTextRightAlignFadeLeft(name, text, rightX, y, size, fadeStartX, color);
+        Client.get().render2D().getFontRenderer().drawTextRightAlignFadeLeft(resolveName(), text, rightX, y, size, fadeStartX, color);
     }
 
     public float getHeight(float size) {
-        return Client.get().render2D().getFontRenderer().getLineHeight(name, size);
+        return Client.get().render2D().getFontRenderer().getLineHeight(resolveName(), size);
     }
 
     public String getName() {
-        return name;
+        return resolveName();
     }
 }
 

@@ -10,6 +10,10 @@ public class Fonts {
     public static final Font sf_medium = register("sf_medium", "sf_medium");
     public static final Font sf_regular = register("sf_regular", "sf_regular");
 
+    public static final Font unique_bold = register("unique_bold", "unique_bold");
+    public static final Font unique_medium = register("unique_medium", "unique_medium");
+    public static final Font unique_regular = register("unique_regular", "unique_regular");
+
     public static final Font icon = register("rainydlc", "rainydlc");
     public static final Font category = register("category", "category");
     public static final Font gui = register("icongui", "icongui");
