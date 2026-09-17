@@ -3,10 +3,11 @@ package fun.newrar.mixin;
 import fun.newrar.interfaces.TargetScanRenderState;
 import fun.newrar.module.impl.render.TargetEsp;
 import fun.newrar.utils.render.TargetScanRenderer;
-import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
 import net.minecraft.client.render.entity.model.EntityModel;
 import net.minecraft.client.render.entity.state.LivingEntityRenderState;
+import net.minecraft.client.render.state.CameraRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.Identifier;
@@ -38,7 +39,7 @@ public abstract class LivingEntityRendererMixin<
     }
 
     @Inject(
-            method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V",
+            method = "render(Lnet/minecraft/client/render/entity/state/LivingEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/client/util/math/MatrixStack;pop()V",
@@ -46,8 +47,8 @@ public abstract class LivingEntityRendererMixin<
     private void nightix$submitTargetScan(
             S state,
             MatrixStack matrices,
-            VertexConsumerProvider vertexConsumers,
-            int light,
+            OrderedRenderCommandQueue queue,
+            CameraRenderState camera,
             CallbackInfo ci) {
         if (!((TargetScanRenderState) state).nightix$isTargetScanTarget()) {
             return;
@@ -62,7 +63,7 @@ public abstract class LivingEntityRendererMixin<
                 this.model,
                 state,
                 matrices,
-                vertexConsumers,
+                queue,
                 this.getTexture(state),
                 targetESP.scanColor(),
                 targetESP.scanSecondColor(),

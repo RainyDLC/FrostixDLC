@@ -18,6 +18,8 @@ import org.joml.Vector3f;
 
 import java.lang.reflect.Method;
 
+import net.minecraft.client.render.command.OrderedRenderCommandQueue;
+
 /** Renders a single animated scan band directly on the visible player skin or armor. */
 public final class TargetScanRenderer {
     private static final float ATTRIBUTE_SCALE = 1000.0f;
@@ -28,6 +30,63 @@ public final class TargetScanRenderer {
     private static volatile Method injectedMeshGetter;
 
     private TargetScanRenderer() {
+    }
+
+    public static <S extends LivingEntityRenderState> void submit(
+            EntityModel<? super S> model,
+            S state,
+            MatrixStack matrices,
+            OrderedRenderCommandQueue queue,
+            Identifier texture,
+            int themeColor,
+            int secondaryColor,
+            float saturation,
+            float animation,
+            float speed,
+            float glow) {
+        submitSurface(
+                model,
+                state,
+                matrices,
+                queue,
+                null,
+                texture,
+                themeColor,
+                secondaryColor,
+                saturation,
+                animation,
+                speed,
+                glow,
+                null);
+    }
+
+    public static <S extends BipedEntityRenderState> void submitArmor(
+            BipedEntityModel<S> model,
+            S state,
+            MatrixStack matrices,
+            OrderedRenderCommandQueue queue,
+            Identifier armorTexture,
+            EquipmentSlot armorSlot,
+            int themeColor,
+            int secondaryColor,
+            float saturation,
+            float animation,
+            float speed,
+            float glow) {
+        submitSurface(
+                model,
+                state,
+                matrices,
+                queue,
+                null,
+                armorTexture,
+                themeColor,
+                secondaryColor,
+                saturation,
+                animation,
+                speed,
+                glow,
+                armorSlot);
     }
 
     public static <S extends LivingEntityRenderState> void submit(
@@ -46,6 +105,7 @@ public final class TargetScanRenderer {
                 model,
                 state,
                 matrices,
+                null,
                 vertexConsumers,
                 texture,
                 themeColor,
@@ -74,6 +134,7 @@ public final class TargetScanRenderer {
                 model,
                 state,
                 matrices,
+                null,
                 vertexConsumers,
                 armorTexture,
                 themeColor,
@@ -89,6 +150,7 @@ public final class TargetScanRenderer {
             EntityModel<? super S> model,
             S state,
             MatrixStack matrices,
+            OrderedRenderCommandQueue queue,
             VertexConsumerProvider vertexConsumers,
             Identifier texture,
             int themeColor,
@@ -98,7 +160,7 @@ public final class TargetScanRenderer {
             float speed,
             float glow,
             EquipmentSlot armorSlot) {
-        if (model == null || state == null || matrices == null || vertexConsumers == null
+        if (model == null || state == null || matrices == null || (queue == null && vertexConsumers == null)
                 || texture == null || animation <= 0.001f) {
             return;
         }
@@ -115,10 +177,33 @@ public final class TargetScanRenderer {
         float glowStrength = MathHelper.clamp(glow, 0.0f, 2.0f);
         ScanMotion motion = motion(speed);
 
-        VertexConsumer buffer = vertexConsumers.getBuffer(ScanTargetEspRenderTypes.targetEspScan(texture));
+        if (queue != null) {
+            queue.submitCustom(matrices, ScanTargetEspRenderTypes.targetEspScan(texture), (entry, buffer) -> {
+                renderScan(model, state, entry, buffer, armorSlot, red, green, blue, secondRed, secondGreen, secondBlue, motion, appear, glowStrength);
+            });
+        } else {
+            VertexConsumer buffer = vertexConsumers.getBuffer(ScanTargetEspRenderTypes.targetEspScan(texture));
+            renderScan(model, state, matrices.peek(), buffer, armorSlot, red, green, blue, secondRed, secondGreen, secondBlue, motion, appear, glowStrength);
+        }
+    }
 
+    private static <S extends LivingEntityRenderState> void renderScan(
+            EntityModel<? super S> model,
+            S state,
+            MatrixStack.Entry entry,
+            VertexConsumer buffer,
+            EquipmentSlot armorSlot,
+            int red,
+            int green,
+            int blue,
+            int secondRed,
+            int secondGreen,
+            int secondBlue,
+            ScanMotion motion,
+            float appear,
+            float glowStrength) {
         MatrixStack modelPose = new MatrixStack();
-        modelPose.peek().copy(matrices.peek());
+        modelPose.peek().copy(entry);
         boolean armorSurface = armorSlot != null;
         float inflate = armorSurface ? ARMOR_INFLATE : MODEL_INFLATE;
         modelPose.scale(inflate, inflate, inflate);

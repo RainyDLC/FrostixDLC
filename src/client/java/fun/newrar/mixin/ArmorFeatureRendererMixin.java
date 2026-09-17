@@ -3,7 +3,7 @@ package fun.newrar.mixin;
 import fun.newrar.interfaces.TargetScanRenderState;
 import fun.newrar.module.impl.render.TargetEsp;
 import fun.newrar.utils.render.TargetScanRenderer;
-import net.minecraft.client.render.VertexConsumerProvider;
+import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.entity.equipment.EquipmentModel;
 import net.minecraft.client.render.entity.equipment.EquipmentModelLoader;
 import net.minecraft.client.render.entity.equipment.EquipmentRenderer;
@@ -21,7 +21,6 @@ import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -47,35 +46,9 @@ public abstract class ArmorFeatureRendererMixin<
         throw new AssertionError();
     }
 
-    @Unique
-    private S nightix$capturedState;
-
-    @Inject(
-            method = "render(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;ILnet/minecraft/client/render/entity/state/BipedEntityRenderState;FF)V",
-            at = @At("HEAD"))
-    private void nightix$captureState(
-            MatrixStack matrices,
-            VertexConsumerProvider vertexConsumers,
-            int light,
-            S state,
-            float limbAngle,
-            float limbDistance,
-            CallbackInfo ci) {
-        this.nightix$capturedState = state;
-    }
-
-    @Inject(
-            method = "render(Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;ILnet/minecraft/client/render/entity/state/BipedEntityRenderState;FF)V",
-            at = @At("RETURN"))
-    private void nightix$clearState(
-            MatrixStack matrices,
-            VertexConsumerProvider vertexConsumers,
-            int light,
-            S state,
-            float limbAngle,
-            float limbDistance,
-            CallbackInfo ci) {
-        this.nightix$capturedState = null;
+    @Shadow
+    private A getModel(S state, EquipmentSlot slot) {
+        throw new AssertionError();
     }
 
     @Inject(
@@ -83,14 +56,13 @@ public abstract class ArmorFeatureRendererMixin<
             at = @At("TAIL"))
     private void nightix$submitTargetScanOnArmor(
             MatrixStack matrices,
-            VertexConsumerProvider vertexConsumers,
+            OrderedRenderCommandQueue queue,
             ItemStack itemStack,
             EquipmentSlot slot,
             int light,
-            A model,
+            S state,
             CallbackInfo ci) {
-        S state = this.nightix$capturedState;
-        if (state == null || !((TargetScanRenderState) state).nightix$isTargetScanTarget()) {
+        if (!((TargetScanRenderState) state).nightix$isTargetScanTarget()) {
             return;
         }
 
@@ -117,11 +89,13 @@ public abstract class ArmorFeatureRendererMixin<
             return;
         }
 
+        A model = this.getModel(state, slot);
+
         TargetScanRenderer.submitArmor(
                 model,
                 state,
                 matrices,
-                vertexConsumers,
+                queue,
                 armorTexture,
                 slot,
                 targetESP.scanColor(),
