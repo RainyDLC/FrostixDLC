@@ -1,6 +1,5 @@
 package fun.newrar.mixin;
 
-import fun.newrar.cosmetics.render.CosmeticFeatureRenderer;
 import fun.newrar.module.impl.render.NameTag;
 import fun.newrar.utils.render.ChinaHatFeatureRenderer;
 import net.minecraft.client.render.entity.EntityRendererFactory;
@@ -19,7 +18,6 @@ public class MixinPlayerEntityRenderer {
     private void onInit(EntityRendererFactory.Context ctx, boolean slim, CallbackInfo ci) {
         PlayerEntityRenderer renderer = (PlayerEntityRenderer) (Object) this;
         renderer.addFeature(new ChinaHatFeatureRenderer(renderer));
-        renderer.addFeature(new CosmeticFeatureRenderer(renderer));
     }
     @Inject(method = "updateRenderState(Lnet/minecraft/entity/PlayerLikeEntity;Lnet/minecraft/client/render/entity/state/PlayerEntityRenderState;F)V", at = @At("TAIL"))
     private void onUpdateRenderState(PlayerLikeEntity player, PlayerEntityRenderState state, float tickDelta, CallbackInfo ci) {
