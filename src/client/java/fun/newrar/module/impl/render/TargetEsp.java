@@ -15,6 +15,7 @@ import fun.newrar.module.api.preview.PreviewContext;
 import fun.newrar.module.api.preview.PreviewSettings;
 import fun.newrar.module.api.settings.impl.BooleanSetting;
 import fun.newrar.module.api.settings.impl.ButtonSetting;
+import fun.newrar.module.api.settings.impl.ColorSetting;
 import fun.newrar.module.api.settings.impl.ModeSetting;
 import fun.newrar.module.api.settings.impl.SliderSetting;
 
@@ -23,6 +24,8 @@ import fun.newrar.module.impl.combat.TriggerBot;
 import fun.newrar.utils.animation.Animation;
 import fun.newrar.utils.animation.Easings;
 import fun.newrar.utils.colors.ColorUtil;
+import fun.newrar.utils.other.Instance;
+import fun.newrar.utils.render.ScanTargetEspRenderTypes;
 import fun.newrar.utils.math.MathUtil;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.*;
@@ -48,9 +51,52 @@ import static net.minecraft.client.gl.RenderPipelines.TRANSFORMS_AND_PROJECTION_
         category = Category.RENDER
 )
 public class TargetEsp extends Module implements ModulePreview {
+    public static TargetEsp getInstance() {
+        return Instance.get(TargetEsp.class);
+    }
+
     public ButtonSetting previewButton = PreviewSettings.button(this);
 
-    public ModeSetting type = new ModeSetting(this,"Режим","Призраки","Картинка","Кольцо","Бублик","Кубики","Молнии","Блум","Цепи");
+    public ModeSetting type = new ModeSetting(this,"Режим","Призраки","Картинка","Кольцо","Бублик","Кубики","Молнии","Блум","Цепи","Переливание");
+
+    public SliderSetting saturation = new SliderSetting(this, "Насыщенность", 100.0f, 0.0f, 200.0f, 5.0f).setVisible(() -> type.is("Переливание"));
+    public SliderSetting scanSpeed = new SliderSetting(this, "Скорость переливания", 1.0f, 0.25f, 3.0f, 0.05f).setVisible(() -> type.is("Переливание"));
+    public ColorSetting scanColor = new ColorSetting(this, "Цвет переливания", ColorUtil.getColor(55, 170, 255, 255)).setVisible(() -> type.is("Переливание"));
+    public BooleanSetting scanColorFlow = new BooleanSetting(this, "Переливание цветов", false).setVisible(() -> type.is("Переливание"));
+    public ColorSetting scanSecondColor = new ColorSetting(this, "Второй цвет", ColorUtil.getColor(190, 75, 255, 255)).setVisible(() -> type.is("Переливание") && scanColorFlow.getValue());
+    public SliderSetting scanGlow = new SliderSetting(this, "Яркость переливания", 100.0f, 25.0f, 200.0f, 5.0f).setVisible(() -> type.is("Переливание"));
+
+    public float saturation() {
+        return this.saturation.getValue() / 100.0f;
+    }
+
+    public float scanSpeed() {
+        return this.scanSpeed.getValue();
+    }
+
+    public int scanColor() {
+        return this.scanColor.getValue();
+    }
+
+    public int scanSecondColor() {
+        return this.scanColorFlow.getValue()
+                ? this.scanSecondColor.getValue()
+                : this.scanColor.getValue();
+    }
+
+    public float scanGlow() {
+        return this.scanGlow.getValue() / 100.0f;
+    }
+
+    public float renderAnimation() {
+        return this.alpha.get();
+    }
+
+    public boolean isRenderedTarget(LivingEntity entity) {
+        if (!isEnabled() || !type.is("Переливание")) return false;
+        LivingEntity currentTarget = previewTarget != null ? previewTarget : (AttackAura.target != null ? AttackAura.target : TriggerBot.targets);
+        return entity != null && entity == currentTarget;
+    }
 
     public SliderSetting bloomCount = new SliderSetting(this, "Количество", 36, 12, 64, 2).setVisible(() -> type.is("Блум"));
     public SliderSetting bloomSize = new SliderSetting(this, "Размер", 0.20F, 0.08F, 0.50F, 0.02F).setVisible(() -> type.is("Блум"));
@@ -883,6 +929,10 @@ public class TargetEsp extends Module implements ModulePreview {
             ChainTargetEspRenderer.render(matrices, immediate, context);
             ChainTargetEspRenderer.endBatch(immediate);
             matrices.pop();
+        }
+
+        if (alphaPC > 0.001f && target != null && type.is("Переливание")) {
+            ScanTargetEspRenderTypes.initialize();
         }
 
         immediate.draw();

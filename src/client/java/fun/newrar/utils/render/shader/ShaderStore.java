@@ -113,14 +113,24 @@ public final class ShaderStore {
     private static String readResource(Identifier id) {
         try {
             MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc == null) return null;
-            ResourceManager rm = mc.getResourceManager();
-            if (rm == null) return null;
-            Optional<Resource> res = rm.getResource(id);
-            if (res.isEmpty()) return null;
-            try (InputStream in = res.get().getInputStream()) {
-                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            if (mc != null) {
+                ResourceManager rm = mc.getResourceManager();
+                if (rm != null) {
+                    Optional<Resource> res = rm.getResource(id);
+                    if (res.isPresent()) {
+                        try (InputStream in = res.get().getInputStream()) {
+                            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                        }
+                    }
+                }
             }
+            InputStream classIn = ShaderStore.class.getResourceAsStream("/assets/" + id.getNamespace() + "/" + id.getPath());
+            if (classIn != null) {
+                try (classIn) {
+                    return new String(classIn.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            }
+            return null;
         } catch (Exception e) {
             return null;
         }

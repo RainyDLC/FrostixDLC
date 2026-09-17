@@ -48,7 +48,11 @@
     "RenderTickCounterDynamicMixin",
     "InventoryScreenMixin",
     "BiomeEffectSoundPlayerMixin",
-    "SplashOverlayMixin"
+    "SplashOverlayMixin",
+    "EntityRenderStateMixin",
+    "LivingEntityRendererMixin",
+    "ArmorFeatureRendererMixin",
+    "EquipmentRendererAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
