@@ -429,7 +429,7 @@ public class DropdownScreen extends Screen implements IMinecraft {
 
             String catDisplayName = getCategoryDisplayName(col.category);
             bold.draw(catDisplayName, cx + 11F * S, cy + 8F * S, 7.5F * S, ColorUtil.getColor(255, 255, 255, 0.95F * globalAnim));
-            iconFont.drawCentered(col.category.getIcon(), cx + cw - 14F * S, cy + 12F * S, 7.5F * S, ColorUtil.getColor(210, 215, 225, 0.75F * globalAnim));
+            iconFont.drawCentered(col.category.getIcon(), cx + cw - 14F * S, cy + 8.5F * S, 7.5F * S, ColorUtil.getColor(210, 215, 225, 0.75F * globalAnim));
 
             float bodyY = cy + headerH;
             float bodyH = ch - headerH - 8F * S;

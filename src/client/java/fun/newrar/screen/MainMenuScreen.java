@@ -360,10 +360,10 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
             if (danger) {
                 Fonts.sf_regular.drawCentered(text(), x + width / 2F + 5F, y + height / 2F - 3.5F, 6.5F, textColor);
-                Fonts.icon.drawCentered(icon, x + width / 2F - Fonts.sf_regular.getWidth(text(), 6.5F) / 2F - 6F, y + height / 2F - 0.5F, 6F, iconColor);
+                Fonts.rainydlc_2.drawCentered(icon, x + width / 2F - Fonts.sf_regular.getWidth(text(), 6.5F) / 2F - 6F, y + height / 2F - 3.2F, 6.5F, iconColor);
             } else {
                 Fonts.sf_regular.draw(text(), x + 11F, y + height / 2F - 3.5F, 6.5F, textColor);
-                Fonts.icon.drawCentered(icon, x + width - 13F, y + height / 2F - 0.5F, 6F, iconColor);
+                Fonts.rainydlc_2.drawCentered(icon, x + width - 13F, y + height / 2F - 3.2F, 6.5F, iconColor);
             }
         }
 

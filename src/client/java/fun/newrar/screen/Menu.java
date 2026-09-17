@@ -690,7 +690,7 @@ public class Menu extends Screen implements IMinecraft {
             if (act > 0.01F)
                 RenderUtil.Render2D.outline(tabX, tabY, tw, 22 * S, 0.5F * S, ColorUtil.replAlpha(ColorUtil.client(), globalAnim * act * 0.8F), 5 * S);
 
-            Fonts.rainydlc_2.drawCentered(category.getIcon(), tabX + 12 * S, tabY + 6 * S, 8 * S,
+            Fonts.rainydlc_2.drawCentered(category.getIcon(), tabX + 12 * S, tabY + 5.5F * S, 7.5F * S,
                     ColorUtil.multAlpha(ColorUtil.overCol(ColorUtil.getColor(255, 0.35F * globalAnim + 0.45F * hv), ColorUtil.client(), Math.max(act, hv * 0.6F)), globalAnim));
             if (act > 0.01F)
                 draw.draw(category.getName(), tabX + 21 * S, tabY + 7.5F * S, 7 * S, ColorUtil.getColor(220, globalAnim * act));

@@ -34,7 +34,7 @@ public class KeyBinds implements element {
     private float rowText = 6.5F;
 
     private float titleIconX = 5F;
-    private float titleIconY = 5.5F;
+    private float titleIconY = 4.0F;
     private float titleTextX = 12.5F;
     private float titleTextY = 3.4F;
 
@@ -43,7 +43,7 @@ public class KeyBinds implements element {
     private float rowPaddingX = 5F;
     private float rowStartY = 5F;
     private float iconPadding = 4F;
-    private float iconOffsetY = 0.9F;
+    private float iconOffsetY = 0.0F;
     private float sepPaddingX = 4F;
     private float sepOffsetY = 3.2F;
 
