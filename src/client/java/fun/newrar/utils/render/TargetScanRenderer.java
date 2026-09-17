@@ -24,7 +24,7 @@ import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 public final class TargetScanRenderer {
     private static final float ATTRIBUTE_SCALE = 1000.0f;
     private static final float MODEL_INFLATE = 1.008f;
-    private static final float ARMOR_INFLATE = 1.006f;
+    private static final float ARMOR_INFLATE = 1.015f;
     private static final int FULL_BRIGHT = 0x00F000F0;
     private static volatile boolean injectedMeshLookupComplete;
     private static volatile Method injectedMeshGetter;
@@ -178,7 +178,7 @@ public final class TargetScanRenderer {
         ScanMotion motion = motion(speed);
 
         if (queue != null) {
-            queue.submitCustom(matrices, ScanTargetEspRenderTypes.targetEspScan(texture), (entry, buffer) -> {
+            queue.getBatchingQueue(110).submitCustom(matrices, ScanTargetEspRenderTypes.targetEspScan(texture), (entry, buffer) -> {
                 renderScan(model, state, entry, buffer, armorSlot, red, green, blue, secondRed, secondGreen, secondBlue, motion, appear, glowStrength);
             });
         } else {
@@ -209,7 +209,7 @@ public final class TargetScanRenderer {
         modelPose.scale(inflate, inflate, inflate);
 
         model.setAngles(state);
-        BaseLayerVisibility visibility = BaseLayerVisibility.hide(model);
+        BaseLayerVisibility visibility = armorSurface ? null : BaseLayerVisibility.hide(model);
         try {
             BoundsConsumer bounds = new BoundsConsumer();
             renderSurfaceModel(model, modelPose, bounds, armorSlot);
@@ -235,7 +235,9 @@ public final class TargetScanRenderer {
                     glowStrength);
             renderSurfaceModel(model, modelPose, scan, armorSlot);
         } finally {
-            visibility.restore();
+            if (visibility != null) {
+                visibility.restore();
+            }
         }
     }
 
@@ -252,11 +254,11 @@ public final class TargetScanRenderer {
             MatrixStack poseStack,
             VertexConsumer buffer,
             EquipmentSlot armorSlot) {
+        if (armorSlot != null) {
+            model.render(poseStack, buffer, FULL_BRIGHT, OverlayTexture.DEFAULT_UV, -1);
+            return;
+        }
         if (model instanceof BipedEntityModel<?> humanoid) {
-            if (armorSlot != null) {
-                renderArmorSlot(humanoid, armorSlot, poseStack, buffer);
-                return;
-            }
             renderPart(humanoid.head, poseStack, buffer);
             renderPart(humanoid.body, poseStack, buffer);
             renderPart(humanoid.rightArm, poseStack, buffer);
@@ -418,6 +420,12 @@ public final class TargetScanRenderer {
             if (referenceMaxY - referenceMinY > 0.05f) {
                 this.minY = referenceMinY;
                 this.maxY = referenceMaxY;
+            }
+            if (!Float.isFinite(this.minX) || !Float.isFinite(this.maxX) || this.maxX - this.minX <= 0.0001f) {
+                Vector3f left = pose.getPositionMatrix().transformPosition(-0.6f, 0.0f, 0.0f, new Vector3f());
+                Vector3f right = pose.getPositionMatrix().transformPosition(0.6f, 0.0f, 0.0f, new Vector3f());
+                this.minX = Math.min(left.x, right.x);
+                this.maxX = Math.max(left.x, right.x);
             }
         }
 

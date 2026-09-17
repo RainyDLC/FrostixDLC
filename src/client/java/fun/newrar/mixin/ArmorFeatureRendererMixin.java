@@ -82,8 +82,6 @@ public abstract class ArmorFeatureRendererMixin<
             return;
         }
 
-        Identifier armorTexture = layers.getFirst().getFullTextureId(layerType);
-
         TargetEsp targetESP = TargetEsp.getInstance();
         if (targetESP == null || !targetESP.isEnabled() || !targetESP.type.is("Переливание")) {
             return;
@@ -91,18 +89,21 @@ public abstract class ArmorFeatureRendererMixin<
 
         A model = this.getModel(state, slot);
 
-        TargetScanRenderer.submitArmor(
-                model,
-                state,
-                matrices,
-                queue,
-                armorTexture,
-                slot,
-                targetESP.scanColor(),
-                targetESP.scanSecondColor(),
-                targetESP.saturation(),
-                targetESP.renderAnimation(),
-                targetESP.scanSpeed(),
-                targetESP.scanGlow());
+        for (EquipmentModel.Layer layer : layers) {
+            Identifier armorTexture = layer.getFullTextureId(layerType);
+            TargetScanRenderer.submitArmor(
+                    model,
+                    state,
+                    matrices,
+                    queue,
+                    armorTexture,
+                    slot,
+                    targetESP.scanColor(),
+                    targetESP.scanSecondColor(),
+                    targetESP.saturation(),
+                    targetESP.renderAnimation(),
+                    targetESP.scanSpeed(),
+                    targetESP.scanGlow());
+        }
     }
 }
