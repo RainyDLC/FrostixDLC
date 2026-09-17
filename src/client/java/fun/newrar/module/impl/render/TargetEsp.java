@@ -128,15 +128,9 @@ public class TargetEsp extends Module implements ModulePreview {
     public SliderSetting bublikSpeed = new SliderSetting(this,"Скорость бублика",1400,600,4000,100).setVisible(() -> type.is("Бублик"));
     public SliderSetting bublikSize = new SliderSetting(this,"Размер бублика",1,0.5F,2.5F,0.05F).setVisible(() -> type.is("Бублик"));
 
-    public ModeSetting lightningColor = new ModeSetting(this, "Цвет молний", "Электрический", "Тема", "Фиолетовый", "Золотой", "Красный", "Свой").setVisible(() -> type.is("Молнии"));
-    public ColorSetting lightningCustomColor = new ColorSetting(this, "Свой цвет", ColorUtil.getColor(35, 180, 255, 255)).setVisible(() -> type.is("Молнии") && lightningColor.is("Свой"));
     public SliderSetting lightningCount = new SliderSetting(this,"Кол-во молний",16,4,48,1).setVisible(() -> type.is("Молнии"));
     public SliderSetting lightningSpeed = new SliderSetting(this,"Скорость молний",42,10,120,1).setVisible(() -> type.is("Молнии"));
-    public SliderSetting lightningThickness = new SliderSetting(this, "Толщина молний", 1.2F, 0.4F, 2.5F, 0.1F).setVisible(() -> type.is("Молнии"));
-    public BooleanSetting lightningHit = new BooleanSetting(this,"Красный при ударе", true).setVisible(() -> type.is("Молнии"));
-    public BooleanSetting lightningStrike = new BooleanSetting(this, "Удар с неба", true).setVisible(() -> type.is("Молнии"));
-    public BooleanSetting lightningGroundRing = new BooleanSetting(this, "Круг на земле", true).setVisible(() -> type.is("Молнии"));
-    public BooleanSetting lightningSparks = new BooleanSetting(this, "Искры", true).setVisible(() -> type.is("Молнии"));
+    public BooleanSetting lightningHit = new BooleanSetting(this,"Красный при ударе", false).setVisible(() -> type.is("Молнии"));
 
     public final LightningRenderer lightningRenderer = new LightningRenderer();
 
@@ -237,14 +231,12 @@ public class TargetEsp extends Module implements ModulePreview {
     public void onWorldLoad(WorldLoadEvent e) {
         boxAllocator.clear();
         resetCubeState();
-        lightningRenderer.clear();
     }
 
     @Override
     protected void onDisable() {
         super.onDisable();
         resetCubeState();
-        lightningRenderer.clear();
     }
 
     @EventHandler
@@ -323,7 +315,6 @@ public class TargetEsp extends Module implements ModulePreview {
         previewTarget = null;
         target = null;
         resetCubeState();
-        lightningRenderer.clear();
     }
 
     @EventHandler
@@ -944,13 +935,7 @@ public class TargetEsp extends Module implements ModulePreview {
         if (alphaPC > 0.001f && target != null && type.is("Молнии")) {
             lightningRenderer.maxBolts = lightningCount.getValue().intValue();
             lightningRenderer.spawnIntervalMs = Math.max(10L, 132L - lightningSpeed.getValue().longValue());
-            lightningRenderer.thickness = lightningThickness.getValue();
             lightningRenderer.redOnHit = lightningHit.getValue();
-            lightningRenderer.skyStrike = lightningStrike.getValue();
-            lightningRenderer.groundRing = lightningGroundRing.getValue();
-            lightningRenderer.sparksEnabled = lightningSparks.getValue();
-            lightningRenderer.colorMode = lightningColor.getValue();
-            lightningRenderer.customColor = lightningCustomColor.getValue();
             lightningRenderer.render(e, immediate, target, alphaPC);
         }
 
@@ -1147,9 +1132,9 @@ public class TargetEsp extends Module implements ModulePreview {
                     .withBlend(BlendFunction.LIGHTNING)
                     .build()
     );
-    public static final RenderLayer RING_FILL_LAYER = RenderLayer.of("ring_esp_fill",
+    private static final RenderLayer RING_FILL_LAYER = RenderLayer.of("ring_esp_fill",
             RenderSetup.builder(RING_FILL_PIPELINE).expectedBufferSize(1 << 16).build());
-    public static final RenderLayer RING_LINE_LAYER = RenderLayer.of("ring_esp_line",
+    private static final RenderLayer RING_LINE_LAYER = RenderLayer.of("ring_esp_line",
             RenderSetup.builder(RING_LINE_PIPELINE).expectedBufferSize(1 << 14).build());
 
     public static final RenderPipeline ROMB_ESP_PIPELINE = RenderPipelines.register(
