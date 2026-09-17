@@ -68,7 +68,7 @@ public class KeyBinds implements element {
         rowPaddingX = 5F * s;
         rowStartY = 5F * s;
         iconPadding = 4F * s;
-        iconOffsetY = 0.9F * s;
+        iconOffsetY = 1.0F * s;
         sepPaddingX = 4F * s;
         sepOffsetY = 3.2F * s;
 

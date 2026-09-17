@@ -20,7 +20,7 @@ public class Information implements element {
     private float h = 16F;
     private float radius = 5F;
     private float iconX = 6F;
-    private float iconY = 4.4F;
+    private float iconY = 5.7F;
     private float textX = 14F;
     private float textY = 4.4F;
     private float block = 15F;
@@ -47,7 +47,7 @@ public class Information implements element {
         h = 16F * s;
         radius = 5F * s;
         iconX = 6F * s;
-        iconY = 4.4F * s;
+        iconY = 5.7F * s;
         textX = 14F * s;
         textY = 4.4F * s;
         block = 15F * s;

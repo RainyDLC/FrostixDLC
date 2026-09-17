@@ -50,7 +50,7 @@ public class WaterMark implements element {
         h = 16F * s;
         radius = 5F * s;
         iconX = 6F * s;
-        iconY = 4.4F * s;
+        iconY = 5.5F * s;
         textX = 14F * s;
         textY = 4.4F * s;
         block = 15F * s;
