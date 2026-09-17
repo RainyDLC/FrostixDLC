@@ -17,6 +17,8 @@ import net.minecraft.client.gl.GpuSampler;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gl.UniformType;
 import net.minecraft.client.render.VertexFormats;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.Identifier;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -91,7 +93,20 @@ public class BurningHandsPipeline {
     private static final Vector4f COLOR_MODULATOR = new Vector4f(1f, 1f, 1f, 1f);
     private static final Vector3f MODEL_OFFSET = new Vector3f(0, 0, 0);
     private static final Matrix4f TEXTURE_MATRIX = new Matrix4f();
-    private static final int BUFFER_SIZE = 64;
+    private static final int BUFFER_SIZE = 80;
+
+    private long lastFrameNanos;
+    private float animationTime;
+    private float lastYaw;
+    private float lastPitch;
+    private float yawVelocity;
+    private float pitchVelocity;
+
+    public void resetMotion() {
+        lastFrameNanos = 0L;
+        yawVelocity = 0.0f;
+        pitchVelocity = 0.0f;
+    }
 
     private GpuBuffer uniformBuffer;
     private GpuBuffer dummyVertexBuffer;
@@ -122,8 +137,30 @@ public class BurningHandsPipeline {
                                int fireColorRgb, float glowStrength) {
         ensureInitialized();
 
+        long now = System.nanoTime();
+        boolean reset = lastFrameNanos == 0L || now - lastFrameNanos > 250_000_000L;
+        float dt = reset ? 1.0f / 60.0f : MathHelper.clamp((now - lastFrameNanos) * 1.0e-9f, 0.0001f, 0.05f);
+        lastFrameNanos = now;
+        var camera = MinecraftClient.getInstance().gameRenderer.getCamera();
+        float yaw = camera.getYaw();
+        float pitch = camera.getPitch();
+        float smoothing = 1.0f - (float) Math.exp(-12.0f * dt);
+        if (reset) {
+            yawVelocity = 0.0f;
+            pitchVelocity = 0.0f;
+        } else {
+            float targetYaw = MathHelper.clamp(MathHelper.wrapDegrees(yaw - lastYaw) / dt, -240.0f, 240.0f);
+            float targetPitch = MathHelper.clamp((pitch - lastPitch) / dt, -180.0f, 180.0f);
+            yawVelocity += (targetYaw - yawVelocity) * smoothing;
+            pitchVelocity += (targetPitch - pitchVelocity) * smoothing;
+        }
+        lastYaw = yaw;
+        lastPitch = pitch;
+        boolean paused = MinecraftClient.getInstance().isPaused();
+        float frameScale = paused ? 0.0f : dt * 60.0f;
+        if (!paused) animationTime += dt;
         dataBuffer.clear();
-        float time = (System.currentTimeMillis() % 100000L) / 1000.0f;
+        float time = animationTime;
 
         dataBuffer.putFloat(width);
         dataBuffer.putFloat(height);
@@ -144,6 +181,12 @@ public class BurningHandsPipeline {
         dataBuffer.putFloat(((fireColorRgb >> 8) & 0xFF) / 255.0f);
         dataBuffer.putFloat((fireColorRgb & 0xFF) / 255.0f);
         dataBuffer.putFloat(glowStrength);
+
+        // UV advection of the previous trail; keep the current hand mask sharp.
+        dataBuffer.putFloat(paused ? 0.0f : yawVelocity * dt * 0.0012f);
+        dataBuffer.putFloat(paused ? 0.0f : pitchVelocity * dt * 0.0012f);
+        dataBuffer.putFloat(frameScale);
+        dataBuffer.putFloat(reset ? 1.0f : 0.0f);
 
         dataBuffer.flip();
 

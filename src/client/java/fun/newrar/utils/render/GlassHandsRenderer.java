@@ -10,6 +10,8 @@ import net.minecraft.client.gl.Framebuffer;
 
 public class GlassHandsRenderer {
     private static GlassHandsRenderer instance;
+    // Startup-only A/B diagnostic: -Dfrostix.glassHands.skipFire=true
+    private static final boolean SKIP_FIRE_PASSES = Boolean.getBoolean("frostix.glassHands.skipFire");
 
     private final MinecraftClient client;
     private KawaseBlurPipeline kawaseBlur;
@@ -124,6 +126,7 @@ public class GlassHandsRenderer {
     }
 
     public void setEnabled(boolean enabled) {
+        if (this.enabled != enabled && burningHands != null) burningHands.resetMotion();
         this.enabled = enabled;
         if (enabled) ensureInitialized();
     }
@@ -153,7 +156,10 @@ public class GlassHandsRenderer {
     public void setSmokeSpeed(float speed) { this.smokeSpeed = speed; }
     public void setSmokeReach(float reach) { this.smokeReach = reach; }
 
-    public void setFireEnabled(boolean enabled) { this.fireEnabled = enabled; }
+    public void setFireEnabled(boolean enabled) {
+        if (this.fireEnabled != enabled && burningHands != null) burningHands.resetMotion();
+        this.fireEnabled = enabled;
+    }
     public void setFireRadius(float radius) { this.fireRadius = radius; }
     public void setFireStrength(float strength) { this.fireStrength = strength; }
     public void setFireSpeed(float speed) { this.fireSpeed = speed; }
@@ -215,10 +221,14 @@ public class GlassHandsRenderer {
         );
         maskTextureView = RenderSystem.getDevice().createTextureView(maskTexture);
 
+        // Glow and trail are soft effects: half resolution cuts their pixel work by 75%.
+        // Uniforms retain full resolution so radius/height keep their screen-pixel size.
+        int burnWidth = Math.max(1, (width + 1) / 2);
+        int burnHeight = Math.max(1, (height + 1) / 2);
         burnGlowTexture = RenderSystem.getDevice().createTexture(
                 () -> "minecraft:burn_glow",
                 GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_RENDER_ATTACHMENT,
-                TextureFormat.RGBA8, width, height, 1, 1
+                TextureFormat.RGBA8, burnWidth, burnHeight, 1, 1
         );
         burnGlowTextureView = RenderSystem.getDevice().createTextureView(burnGlowTexture);
 
@@ -227,7 +237,7 @@ public class GlassHandsRenderer {
             burnTrailTextures[i] = RenderSystem.getDevice().createTexture(
                     () -> "minecraft:burn_trail_" + idx,
                     GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_RENDER_ATTACHMENT,
-                    TextureFormat.RGBA8, width, height, 1, 1
+                    TextureFormat.RGBA8, burnWidth, burnHeight, 1, 1
             );
             burnTrailTextureViews[i] = RenderSystem.getDevice().createTextureView(burnTrailTextures[i]);
 
@@ -238,6 +248,7 @@ public class GlassHandsRenderer {
             }
         }
         burnTrailIndex = 0;
+        if (burningHands != null) burningHands.resetMotion();
 
         lastWidth = width;
         lastHeight = height;
@@ -347,7 +358,7 @@ public class GlassHandsRenderer {
                     sceneAfterTextureView, outlineUseItemColor);
         }
 
-        if (fireEnabled) {
+        if (fireEnabled && !SKIP_FIRE_PASSES) {
             burningHands.updateUniforms(lastWidth, lastHeight, fireFillMode,
                     fireRadius, fireStrength, fireSpeed, fireColorMix,
                     fireDecay, fireHeight, fireSpeed, fireTrailStrength,
