@@ -1147,9 +1147,9 @@ public class TargetEsp extends Module implements ModulePreview {
                     .withBlend(BlendFunction.LIGHTNING)
                     .build()
     );
-    private static final RenderLayer RING_FILL_LAYER = RenderLayer.of("ring_esp_fill",
+    public static final RenderLayer RING_FILL_LAYER = RenderLayer.of("ring_esp_fill",
             RenderSetup.builder(RING_FILL_PIPELINE).expectedBufferSize(1 << 16).build());
-    private static final RenderLayer RING_LINE_LAYER = RenderLayer.of("ring_esp_line",
+    public static final RenderLayer RING_LINE_LAYER = RenderLayer.of("ring_esp_line",
             RenderSetup.builder(RING_LINE_PIPELINE).expectedBufferSize(1 << 14).build());
 
     public static final RenderPipeline ROMB_ESP_PIPELINE = RenderPipelines.register(
