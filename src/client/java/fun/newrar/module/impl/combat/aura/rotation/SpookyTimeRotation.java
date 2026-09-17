@@ -33,6 +33,9 @@ public class SpookyTimeRotation implements RotationAura {
     private boolean smoothbackActive;
 
     private static int heldTargetId = -1;
+    private double smoothedTargetVelX = 0.0;
+    private double smoothedTargetVelY = 0.0;
+    private double smoothedTargetVelZ = 0.0;
 
     private static final String SUB_MODE = "Спуки 1.21";
 
@@ -206,52 +209,66 @@ public class SpookyTimeRotation implements RotationAura {
 
     /**
      * Режим Дуэли:
-     * - Плавное опережение цели в безопасных лимитах SpookyAC (yaw 24-27°, pitch 7-8.5°).
-     * - Без pitch-hold'а и без искусственного зажимания pitch до 1.2°.
+     * - Исключены мгновенные скачки скорости и snap-удары, триггерящие Aim.Snap / Heuristic на SpookyAC.
+     * - Предикт движения сглажен экспоненциальным фильтром (нет резких рывков при смене стрэйфа противника).
+     * - Дрожание мыши (Gaussian jitter) накладывается на саму точку прицела, а не поверх угла.
+     * - Дельта поворота строго ограничивается безопасными пределами (yaw <= 24.0, pitch <= 6.8).
      */
     private Rotation processSpookyDuels(Rotation currentAngle, Rotation targetAngle, LivingEntity entity, Vec3d baseAim, boolean hitNow) {
-        Vec3d targetVel = entity.getVelocity();
+        Vec3d rawVel = entity.getVelocity();
         double distXZ = Math.hypot(entity.getX() - mc.player.getX(), entity.getZ() - mc.player.getZ());
 
-        // Мягкое опережение движения цели
-        double leadFactor = distXZ < 0.8 ? 0.0 : MathHelper.clamp(distXZ / 3.0, 0.05, 0.25);
-        Vec3d predictedAim = baseAim.add(targetVel.x * leadFactor, targetVel.y * (leadFactor * 0.3), targetVel.z * leadFactor);
-        Vec3d dir = predictedAim.subtract(mc.player.getEyePos());
+        // Экспоненциальное сглаживание скорости цели (устраняет мгновенные рывки при стрэйфах и получении хитбокса)
+        smoothedTargetVelX = MathHelper.lerp(0.35, smoothedTargetVelX, rawVel.x);
+        smoothedTargetVelY = MathHelper.lerp(0.30, smoothedTargetVelY, rawVel.y);
+        smoothedTargetVelZ = MathHelper.lerp(0.35, smoothedTargetVelZ, rawVel.z);
 
-        float predYaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
-        float predPitch = (float) MathHelper.clamp(
-                -Math.toDegrees(Math.atan2(dir.y, Math.hypot(dir.x, dir.z))), -89.5F, 89.5F);
+        // Мягкое и безопасное опережение: максимум 0.16 сек, затухает вблизи цели
+        double leadFactor = distXZ < 1.0 ? 0.0 : MathHelper.clamp(distXZ / 4.5, 0.03, 0.16);
+        Vec3d predictedAim = baseAim.add(
+                smoothedTargetVelX * leadFactor,
+                smoothedTargetVelY * (leadFactor * 0.2),
+                smoothedTargetVelZ * leadFactor
+        );
+
+        // Человеческий микро-джиттер руки (накладывается на точку прицела до расчета углов)
+        float closeDamp = (float) MathHelper.clamp(distXZ / 2.0, 0.15, 1.0);
+        double jitterX = MathUtil.randomGaussian(-0.03F, 0.03F) * closeDamp;
+        double jitterY = MathUtil.randomGaussian(-0.02F, 0.02F) * closeDamp;
+        double jitterZ = MathUtil.randomGaussian(-0.03F, 0.03F) * closeDamp;
+        predictedAim = predictedAim.add(jitterX, jitterY, jitterZ);
+
+        Vec3d dir = predictedAim.subtract(mc.player.getEyePos());
+        double dirDist = Math.hypot(dir.x, dir.z);
+
+        float predYaw = dirDist < 0.05 ? currentAngle.getYaw() : (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
+        float predPitch = (float) MathHelper.clamp(-Math.toDegrees(Math.atan2(dir.y, Math.max(0.05, dirDist))), -89.5F, 89.5F);
 
         float deltaYaw = MathHelper.wrapDegrees(predYaw - currentAngle.getYaw());
         float deltaPitch = predPitch - currentAngle.getPitch();
 
         float range = AttackAura.get() != null ? AttackAura.get().attackRange.getValue() : 3.0F;
         boolean onTarget = aimsAtBox(currentAngle.getYaw(), currentAngle.getPitch(), range, entity.getBoundingBox());
-        boolean isCritFalling = !mc.player.isOnGround() && mc.player.fallDistance > 0.0F;
 
+        // В дуэлях: плавные человеческие скорости без snap-скачков при ударе
         float targetSpeedY;
         float targetSpeedP;
-
-        if (hitNow || isCritFalling) {
-            targetSpeedY = MathUtil.random(24.5F, 27.0F);
-            targetSpeedP = MathUtil.random(7.2F, 8.5F);
-        } else if (onTarget) {
+        if (onTarget) {
+            // Мягкое удержание цели
             targetSpeedY = MathUtil.random(14.0F, 18.0F);
-            targetSpeedP = MathUtil.random(4.5F, 6.0F);
+            targetSpeedP = MathUtil.random(4.0F, 5.5F);
         } else {
-            targetSpeedY = MathUtil.random(21.0F, 25.0F);
-            targetSpeedP = MathUtil.random(6.0F, 7.5F);
+            // Плавная доводка до цели
+            targetSpeedY = MathUtil.random(20.0F, 24.0F);
+            targetSpeedP = MathUtil.random(5.5F, 6.8F);
         }
 
-        currentSpeedYaw += (targetSpeedY - currentSpeedYaw) * 0.35F;
-        currentSpeedPitch += (targetSpeedP - currentSpeedPitch) * 0.35F;
+        currentSpeedYaw += (targetSpeedY - currentSpeedYaw) * 0.3F;
+        currentSpeedPitch += (targetSpeedP - currentSpeedPitch) * 0.3F;
 
-        float closeDamp = MathHelper.clamp((float) (distXZ / 1.5), 0.2F, 1.0F);
-        float jitterYaw = MathUtil.randomGaussian(-0.12F, 0.12F) * closeDamp;
-        float jitterPitch = MathUtil.randomGaussian(-0.08F, 0.08F) * closeDamp;
-
-        float clampedYaw = MathHelper.clamp(deltaYaw, -currentSpeedYaw, currentSpeedYaw) + jitterYaw;
-        float clampedPitch = MathHelper.clamp(deltaPitch, -currentSpeedPitch, currentSpeedPitch) + jitterPitch;
+        // Строгий clamp: максимальный шаг за тик не превышает безопасных лимитов SpookyAC
+        float clampedYaw = MathHelper.clamp(deltaYaw, -currentSpeedYaw, currentSpeedYaw);
+        float clampedPitch = MathHelper.clamp(deltaPitch, -currentSpeedPitch, currentSpeedPitch);
 
         return new Rotation(
                 currentAngle.getYaw() + clampedYaw,
