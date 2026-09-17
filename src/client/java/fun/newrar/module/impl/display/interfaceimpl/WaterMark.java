@@ -151,7 +151,9 @@ public class WaterMark implements element {
 
         x += 18.5F * s;
 
-        String user = "User";
+        String user = (mc.player != null && mc.player.getName() != null)
+                ? mc.player.getName().getString()
+                : (mc.getSession() != null ? mc.getSession().getUsername() : "User");
         float fpsW = fpsText.width(fonts, text) + fonts.getWidth("fps", text);
         float pingW = pingText.width(fonts, text) + fonts.getWidth("ms", text);
 
