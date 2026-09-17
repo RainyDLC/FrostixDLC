@@ -36,6 +36,7 @@ import fun.newrar.module.impl.display.InterFace;
 import fun.newrar.module.impl.player.WorldTracker;
 import fun.newrar.module.impl.utils.NameProtect;
 import fun.newrar.module.impl.utils.ReportHelper;
+import fun.newrar.theme.ThemeColor;
 import fun.newrar.utils.colors.ColorUtil;
 import fun.newrar.utils.math.ServerUtil;
 import fun.newrar.utils.other.Instance;
@@ -60,13 +61,15 @@ public class NameTag extends Module {
     private static final float FONT_SIZE = 6F;
     private static final float ICON_SIZE = 8F;
     private static final float ITEM_STEP = 10F;
-    private static final float TAG_HEIGHT = 15F;
-    private static final float TAG_PADDING = 4F;
-    private static final float TAG_SPACING = 4F;
-    private static final float ROW_HEIGHT = 13F;
-    private static final float ROW_PADDING = 4F;
-    private static final float ROW_SPACING = 2F;
-    private static final float ROW_GAP = 2F;
+    private static final float TAG_HEIGHT = 15.5F;
+    private static final float TAG_PADDING = 5.5F;
+    private static final float TAG_SPACING = 4.5F;
+    private static final float TAG_RADIUS = 4.5F;
+    private static final float ROW_HEIGHT = 13.5F;
+    private static final float ROW_PADDING = 4.5F;
+    private static final float ROW_SPACING = 3F;
+    private static final float ROW_GAP = 2.5F;
+    private static final float ROW_RADIUS = 4F;
 
     public static NameTag get() {
         return Instance.get(NameTag.class);
@@ -157,22 +160,24 @@ public class NameTag extends Module {
             boolean friend = false;
             String tag = "";
 
+            float hp = entity instanceof LivingEntity living ? getHealth(living) : 0F;
+            float maxHp = entity instanceof LivingEntity living ? living.getMaxHealth() : 20F;
+            int hpColor = getHealthColor(hp, maxHp);
+
             if (entity instanceof PlayerEntity p) {
                 friend = friends.isFriend(p.getName().getString());
                 String shown = hideFriends && friends.isFriend(p.getNameForScoreboard())
                         ? "Friend"
                         : toColoredString(p.getDisplayName()).replace("⚡", "");
-                tag = shown.replace(selfName, "RainyProject") + " " + Formatting.RED
-                        + (entity.isInvisible() ? "null " : (int) getHealth(p)) + "hp";
+                tag = shown.replace(selfName, "RainyProject") + " §r " + (entity.isInvisible() ? "null" : (int) hp) + "hp";
             } else if (entity instanceof LivingEntity living) {
-                tag = living.getType().getName().getString() + Formatting.GRAY + " / " + Formatting.WHITE
-                        + (int) getHealth(living) + Formatting.GRAY + "hp";
+                tag = living.getType().getName().getString() + " §r " + (int) hp + "hp";
             } else if (entity instanceof ItemEntity item) {
                 ItemStack stack = item.getStack();
-                tag = stack.getFormattedName().getString() + Formatting.GRAY + " x" + Formatting.WHITE + stack.getCount();
+                tag = stack.getFormattedName().getString() + " §7x§f" + stack.getCount();
             }
 
-            renderTag(context, entity, tag, x, y, friend);
+            renderTag(context, entity, tag, x, y, friend, hpColor);
 
             if (showPlayers && entity instanceof PlayerEntity p) {
                 if (showHands) renderHandItems(context, p, friend, x, (float) projected.w);
@@ -181,7 +186,7 @@ public class NameTag extends Module {
         }
     }
 
-    private void renderTag(DrawContext context, Entity entity, String name, float x, float y, boolean friend) {
+    private void renderTag(DrawContext context, Entity entity, String name, float x, float y, boolean friend, int hpColor) {
         TextFactoryEvent nameEvent = new TextFactoryEvent(name);
         nameEvent.hook();
         name = nameEvent.getText();
@@ -194,21 +199,53 @@ public class NameTag extends Module {
             }
         }
 
-        float textWidth = Fonts.sf_regular.getWidth(name, FONT_SIZE);
+        // Разделяем имя и здоровье, если есть суффикс hp
+        String mainText = name;
+        String hpPart = null;
+        if (name.endsWith("hp") && name.contains(" §r ")) {
+            int sepIdx = name.lastIndexOf(" §r ");
+            mainText = name.substring(0, sepIdx);
+            hpPart = name.substring(sepIdx + 4);
+        }
+
+        float mainTextWidth = Fonts.sf_medium.getWidth(mainText, FONT_SIZE);
+        float hpWidth = hpPart != null ? Fonts.sf_medium.getWidth(hpPart, FONT_SIZE) + 4.5F : 0F;
+        float textWidth = mainTextWidth + hpWidth;
         float itemsWidth = equipment.isEmpty() ? 0 : TAG_SPACING + (equipment.size() - 1) * ITEM_STEP + ICON_SIZE;
         float wr = textWidth + itemsWidth + TAG_PADDING * 2;
 
         float bgX = x - wr / 2;
         float bgY = y - 3;
 
-        RenderUtil.Blur.blur(bgX, bgY, wr, TAG_HEIGHT, 1, 4,
-                ColorUtil.replAlpha(backgroundFor(entity, friend), bgAlpha));
+        float hudOpacity = InterFace.getInstance() != null ? InterFace.getInstance().alphaHUD.getValue() : 0.6F;
+
+        // Фирменная HUD-панель (Glassmorphism + Dynamic Blur + HUD Tint + Glass Edge)
+        RenderUtil.Render2D.hudPlate(bgX, bgY, wr, TAG_HEIGHT, 1.0F, TAG_RADIUS, hudOpacity);
+
+        // Индикатор друга / репорта (акцентная полоска слева в стиле HUD)
+        if (friend || ReportHelper.isReported(entity)) {
+            int accentColor = ReportHelper.isReported(entity)
+                    ? ReportHelper.getReportColor(neutralColor)
+                    : friendColor;
+            RenderUtil.Render2D.rect(bgX + 1.5F, bgY + 3F, 1.5F, TAG_HEIGHT - 6F, accentColor, 0.75F);
+        }
 
         Client.get().render2D().flushAll();
 
         float textX = bgX + TAG_PADDING;
-        float textY = bgY + TAG_HEIGHT / 2F - Fonts.sf_regular.getHeight(FONT_SIZE) / 2 - 0.1F;
-        Fonts.sf_regular.draw(name, textX, textY, FONT_SIZE, ColorUtil.WHITE);
+        float textY = bgY + (TAG_HEIGHT - Fonts.sf_medium.getHeight(FONT_SIZE)) / 2F - 0.2F;
+
+        // Рисуем имя
+        int nameColor = friend ? friendColor : ThemeColor.getTextColor();
+        Fonts.sf_medium.draw(mainText, textX, textY, FONT_SIZE, nameColor);
+
+        // Рисуем здоровье с аккуратной точкой-разделителем в стиле Information/Watermark
+        if (hpPart != null) {
+            float sepX = textX + mainTextWidth;
+            Fonts.sf_regular.draw(" • ", sepX, textY, FONT_SIZE, ThemeColor.getSeparatorColor());
+            float hpX = sepX + Fonts.sf_regular.getWidth(" • ", FONT_SIZE);
+            Fonts.sf_medium.draw(hpPart, hpX, textY, FONT_SIZE, hpColor);
+        }
 
         if (equipment.isEmpty()) return;
 
@@ -230,22 +267,22 @@ public class NameTag extends Module {
         ItemStack offHand = entity.getOffHandStack();
         if (mainHand.isEmpty() && offHand.isEmpty()) return;
 
-        int background = ColorUtil.replAlpha(backgroundFor(entity, friend), bgAlpha);
+        float hudOpacity = InterFace.getInstance() != null ? InterFace.getInstance().alphaHUD.getValue() : 0.6F;
         Matrix3x2fStack matrices = context.getMatrices();
 
         float y = feetY + 2;
-        if (!mainHand.isEmpty()) y = renderHandRow(context, matrices, mainHand, background, centerX, y);
-        if (!offHand.isEmpty()) renderHandRow(context, matrices, offHand, background, centerX, y);
+        if (!mainHand.isEmpty()) y = renderHandRow(context, matrices, mainHand, hudOpacity, centerX, y);
+        if (!offHand.isEmpty()) renderHandRow(context, matrices, offHand, hudOpacity, centerX, y);
     }
 
     private float renderHandRow(DrawContext context, Matrix3x2fStack matrices, ItemStack stack,
-                                int background, float centerX, float y) {
+                                float hudOpacity, float centerX, float y) {
         String name = toColoredString(stack.getFormattedName());
-        float textWidth = Fonts.sf_regular.getWidth(name, FONT_SIZE);
+        float textWidth = Fonts.sf_medium.getWidth(name, FONT_SIZE);
         float wr = ROW_PADDING * 2 + ICON_SIZE + ROW_SPACING + textWidth;
         float bgX = centerX - wr / 2f;
 
-        RenderUtil.Blur.blur(bgX, y - 0.75F, wr, ROW_HEIGHT, 1, 4, background);
+        RenderUtil.Render2D.hudPlate(bgX, y - 0.75F, wr, ROW_HEIGHT, 1.0F, ROW_RADIUS, hudOpacity);
 
         matrices.pushMatrix();
         matrices.translate((bgX + ROW_PADDING + ICON_SIZE / 2f) * scaleFix, (y + ROW_HEIGHT / 2f - 1) * scaleFix);
@@ -253,15 +290,20 @@ public class NameTag extends Module {
         ItemRender.drawItemWithContext(context, stack, -8, -8, 1F, 1.0F);
         matrices.popMatrix();
 
-        Fonts.sf_regular.draw(name, bgX + ROW_PADDING + ICON_SIZE + ROW_SPACING,
-                y + ROW_HEIGHT / 2f - 4.8F, FONT_SIZE, ColorUtil.WHITE);
+        Fonts.sf_medium.draw(name, bgX + ROW_PADDING + ICON_SIZE + ROW_SPACING,
+                y + (ROW_HEIGHT - Fonts.sf_medium.getHeight(FONT_SIZE)) / 2F - 0.2F, FONT_SIZE, ThemeColor.getTextColor());
 
         return y + ROW_HEIGHT + ROW_GAP;
     }
 
-    private int backgroundFor(Entity entity, boolean friend) {
-        int color = friend ? friendColor : neutralColor;
-        return ReportHelper.isReported(entity) ? ReportHelper.getReportColor(color) : color;
+    private int getHealthColor(float hp, float maxHp) {
+        float pct = MathHelper.clamp(hp / Math.max(1F, maxHp), 0F, 1F);
+        int red = ColorUtil.getColor(255, 80, 85);
+        int yellow = ColorUtil.getColor(255, 205, 85);
+        int green = ColorUtil.getColor(95, 225, 120);
+        return pct < 0.5F
+                ? ColorUtil.overCol(red, yellow, pct * 2F)
+                : ColorUtil.overCol(yellow, green, (pct - 0.5F) * 2F);
     }
 
     public static boolean hasArmor(PlayerEntity p) {
