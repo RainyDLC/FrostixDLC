@@ -32,6 +32,7 @@ public class FontAtlas {
     private float fontSize = 32;
     private float lineHeight = 40;
     private float distanceRange = 4;
+    private float ascender = 0.95f;
     private boolean yOriginBottom = false;
     private final AtomicBoolean loaded = new AtomicBoolean(false);
 
@@ -112,6 +113,9 @@ public class FontAtlas {
             emSize = getFloat(metrics, "emSize", 1.0f);
             float normalizedLineHeight = getFloat(metrics, "lineHeight", 1.2f);
             lineHeight = normalizedLineHeight * fontSize;
+            if (metrics.has("ascender")) {
+                ascender = getFloat(metrics, "ascender", 0.95f);
+            }
         }
 
         if (root.has("glyphs")) {
@@ -178,7 +182,6 @@ public class FontAtlas {
             float pTop = getFloat(plane, "top", 0);
 
             xOffset = pLeft * fontSize;
-            float ascender = 0.95f;
             yOffset = (ascender - pTop) * fontSize;
         } else if (g.has("xoffset") && g.has("yoffset")) {
             xOffset = getFloat(g, "xoffset", 0);
