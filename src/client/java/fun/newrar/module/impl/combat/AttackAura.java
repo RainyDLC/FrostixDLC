@@ -44,9 +44,7 @@ import fun.newrar.utils.aura.AttackUtil;
 import fun.newrar.utils.aura.AuraUtil;
 import fun.newrar.utils.aura.LagCompensation;
 import fun.newrar.utils.aura.UAttack;
-import fun.newrar.utils.aura.UBoxPoints;
 import fun.newrar.utils.colors.ColorUtil;
-import fun.newrar.utils.math.MathUtil;
 import fun.newrar.utils.math.ServerUtil;
 import fun.newrar.utils.other.Instance;
 import fun.newrar.utils.other.TimerUtil;
@@ -63,8 +61,6 @@ import net.minecraft.util.math.Vec3d;
 import org.lwjgl.glfw.GLFW;
 
 import fun.newrar.utils.render.RenderUtil;
-
-import java.util.concurrent.ThreadLocalRandom;
 
 import static net.minecraft.util.Hand.MAIN_HAND;
 
@@ -256,17 +252,6 @@ public class AttackAura extends Module {
             UAttack.useEntity(target, preHitSendCodeSingleTick, postHitSendCodeSingleTick, MAIN_HAND);
 
             justAttacked = true;
-            attackFlickAt = System.currentTimeMillis() + 250;
-
-            count = (count + 1) % 2;
-
-            hitCount++;
-            if (hitCount >= pitchFlickThreshold) {
-                hitCount = 0;
-                pitchFlickThreshold = ThreadLocalRandom.current().nextInt(15,19);
-                pitchFlickActive = true;
-                pitchFlickEndTime = System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(50, 70);
-            }
         }
     }
 
@@ -312,26 +297,12 @@ public class AttackAura extends Module {
         }
     }
 
-public static long lastLookUpTime = 0;
-public static long nextLookUpDelay = ThreadLocalRandom.current().nextLong(90000, 180000);
-public static boolean isLookingUp = false;
-public static long lookUpStartTime = 0;
-public static int lookUpDuration = 0;
     public static long lastAttackTime = 0L;
 
     public float tick = 0;
-    public static float lastYaw;
-    public static float lastPitch;
     public Vec3d targetPoint;
     public Vec3d currentPoint;
-    private int count;
     public boolean justAttacked = false;
-    public long attackFlickAt = 0;
-
-    private int hitCount = 0;
-    private int pitchFlickThreshold = ThreadLocalRandom.current().nextInt(14,19);
-    public boolean pitchFlickActive = false;
-    public long pitchFlickEndTime = 0;
 
     private int retargetClock = 0;
 
@@ -358,88 +329,22 @@ public static int lookUpDuration = 0;
                 break;
             }
         }
-        if (typeRotation.is("FunTime")) {
-            Vec3d vec3d = UBoxPoints.getBestVector3dOnEntityBox(target.getBoundingBox(), false).add(0.2F * Math.sin(System.currentTimeMillis() / 250D), (target.getHeight() / 6)  * Math.cos(System.currentTimeMillis() / 850D), 0).subtract(mc.player.getEyePos());
-
-            long currentTime = System.currentTimeMillis();
-
-            if (!isLookingUp &&
-                    currentTime - lastLookUpTime >= nextLookUpDelay) {
-                isLookingUp = true;
-                lookUpStartTime = currentTime;
-                lookUpDuration = ThreadLocalRandom.current().nextInt(300, 400);
-                lastLookUpTime = currentTime;
-                nextLookUpDelay =
-                        ThreadLocalRandom.current().nextLong(9100, 11200);
-            }
-
-            boolean fastspeed = false;
-            if (isLookingUp && currentTime - lookUpStartTime >= lookUpDuration) {
-                isLookingUp = false;
-            }
-            if(currentTime - lookUpStartTime >= lookUpDuration + 70L) {
-                fastspeed =  true;
-            }
-
-            float yaw = (float) Math.toDegrees(Math.atan2(-vec3d.x, vec3d.z));
-            float pitch = (float) MathHelper.clamp(-Math.toDegrees(Math.atan2(vec3d.y, Math.hypot(vec3d.x, vec3d.z))), -90, 90);
-
-            float speedYAW =  MathUtil.randomLerp(44,66);
-            float speedPit = !fastspeed ?  MathUtil.randomLerp(120,170) : MathUtil.randomLerp(4,7   );
-
-            if(canAttack && fastspeed) {
-                tick= MathUtil.random(0,2);
-            }
-            boolean attack = false;
-            if(tick > 0) {
-                attack = true;
-                tick --;
-            }
-            float randomAttackShift = 0;
-            float waveA = (float) Math.cos(System.currentTimeMillis() / 70D);
-            float waveB = (float) Math.sin(System.currentTimeMillis() / 110D);
-
-            if(attack) {
-                lastYaw = yaw;
-                lastPitch = pitch;
-            }
-
-            float yawJitter = waveA *  MathUtil.randomLerp(6, 15) ;
-            float pitchJitter = waveB *  MathUtil.randomLerp(6,12) ;
-
-            float finalPitch = isLookingUp ? -MathUtil.randomLerp(85,90) : (lastPitch);
-
-            RotationProcess.update(new Rotation(lastYaw + yawJitter,finalPitch + pitchJitter), speedYAW,
-                    speedPit, MathUtil.randomInt(35,45), MathUtil.randomInt(19,45), MathUtil.randomInt(0,3), 15, false);
-        }
     }
 
     @EventHandler
     private void onResetOnWorld(WorldLoadEvent event) {
-        if(mc.player != null && mc.gameRenderer.getCamera() != null && mc.world != null) {
-            lastPitch = mc.gameRenderer.getCamera().getPitch();
-            lastYaw = mc.gameRenderer.getCamera().getYaw();
-        }
         target = null;
         targetPoint = null;
         currentPoint = null;
-        hitCount = 0;
-        pitchFlickActive = false;
         LagCompensation.reset();
     }
 
     @Override
     public void onDisable() {
         super.onDisable();
-        if(mc.player != null && mc.gameRenderer.getCamera() != null && mc.world != null) {
-            lastPitch = mc.gameRenderer.getCamera().getPitch();
-            lastYaw = mc.gameRenderer.getCamera().getYaw();
-        }
         target = null;
         targetPoint = null;
         currentPoint = null;
-        hitCount = 0;
-        pitchFlickActive = false;
         releaseCritSprint();
         RotationProcess.resetParentTimeout();
         LagCompensation.reset();

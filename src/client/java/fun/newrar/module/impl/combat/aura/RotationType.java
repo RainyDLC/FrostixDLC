@@ -7,7 +7,7 @@ import fun.newrar.module.impl.combat.aura.rotation.*;
 @Getter
 @RequiredArgsConstructor
 public enum RotationType {
-    FUNTIME("FunTime_Legacy", new FunTimeRotation()),
+    FUNTIME("FunTime", new FunTimeRotation()),
     SPOOKYTIME("SpookyTime", new SpookyTimeRotation()),
     MATRIX("Default", new MatrixRotation()),
     SNAP("Snap", new SnapRotation()),
