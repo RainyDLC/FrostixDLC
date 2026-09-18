@@ -10,7 +10,7 @@ import net.minecraft.client.gl.Framebuffer;
 
 public class GlassHandsRenderer {
     private static GlassHandsRenderer instance;
-    // Startup-only A/B diagnostic: -Dfrostix.glassHands.skipFire=true
+
     private static final boolean SKIP_FIRE_PASSES = Boolean.getBoolean("frostix.glassHands.skipFire");
 
     private final MinecraftClient client;
@@ -221,8 +221,6 @@ public class GlassHandsRenderer {
         );
         maskTextureView = RenderSystem.getDevice().createTextureView(maskTexture);
 
-        // Glow and trail are soft effects: half resolution cuts their pixel work by 75%.
-        // Uniforms retain full resolution so radius/height keep their screen-pixel size.
         int burnWidth = Math.max(1, (width + 1) / 2);
         int burnHeight = Math.max(1, (height + 1) / 2);
         burnGlowTexture = RenderSystem.getDevice().createTexture(
@@ -450,4 +448,3 @@ public class GlassHandsRenderer {
         initialized = false;
     }
 }
-

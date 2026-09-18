@@ -72,12 +72,10 @@ public class AutoReg extends Module {
 
         String clean = raw.replaceAll("§.", "").toLowerCase();
 
-        // Проверяем, не является ли это сообщением об успешной авторизации
         if (clean.contains("успешно") || clean.contains("success") || clean.contains("вы вошли") || clean.contains("добро пожаловать")) {
             return;
         }
 
-        // Проверка на необходимость регистрации
         if (isRegisterPrompt(clean)) {
             String pass = password.getValue();
             if (pass == null || pass.isEmpty()) pass = "RainyDLC123";
@@ -87,7 +85,6 @@ public class AutoReg extends Module {
             return;
         }
 
-        // Проверка на необходимость входа (/login)
         if (autoLogin.getValue() && isLoginPrompt(clean)) {
             String pass = password.getValue();
             if (pass == null || pass.isEmpty()) pass = "RainyDLC123";

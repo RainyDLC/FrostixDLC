@@ -548,7 +548,6 @@ public class TargetHud implements element {
         float contentR = px + actualW - 4.5F * S;
         float contentW = contentR - contentX;
 
-        // Line 1: Name and Health
         float nameY = py + 3.5F * S;
         float hpX = contentR - hpW;
 
@@ -557,7 +556,6 @@ public class TargetHud implements element {
         font.draw(hpText, hpX, nameY, nameSize, ColorUtil.replAlpha(accentColor, alpha));
         font.drawFadingText(name, contentX, nameY, hpX - contentX - 3F * S, ColorUtil.getColor(255, alpha), nameSize);
 
-        // Line 2: Armor items
         float armorY = py + 11.2F * S;
         float itemSize = 8F * S;
         float itemSpacing = 2F * S;
@@ -581,7 +579,6 @@ public class TargetHud implements element {
             }
         }
 
-        // Line 3: Health progress bar
         float barY = py + 21.0F * S;
         float barH = 2.8F * S;
         float barRadius = 1.4F * S;
@@ -630,4 +627,3 @@ public class TargetHud implements element {
         return mouseX >= x && mouseY >= y && mouseX <= x + width && mouseY <= y + height;
     }
 }
-

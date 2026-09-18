@@ -83,12 +83,10 @@ public class AutoCaptcha extends Module {
 
         String clean = raw.replaceAll("§.", "").toLowerCase();
 
-        // Пропускаем сообщения об успехе
         if (clean.contains("успешно") || clean.contains("success") || clean.contains("пройдена") || clean.contains("добро пожаловать")) {
             return;
         }
 
-        // Проверяем, связано ли сообщение с капчей или математикой
         boolean isCaptchaPrompt = clean.contains("капч")
                 || clean.contains("captcha")
                 || clean.contains("проверк")
@@ -100,7 +98,6 @@ public class AutoCaptcha extends Module {
 
         if (!isCaptchaPrompt) return;
 
-        // 1. Проверка на математический пример: например "Решите пример: 15 + 7" или "5 * 3"
         Matcher mathMatcher = MATH_PATTERN.matcher(clean);
         if (mathMatcher.find()) {
             try {
@@ -119,7 +116,6 @@ public class AutoCaptcha extends Module {
             }
         }
 
-        // 2. Проверка на ввод команды с кодом: например "/captcha 1234"
         Matcher cmdMatcher = CODE_CMD_PATTERN.matcher(clean);
         if (cmdMatcher.find()) {
             String code = cmdMatcher.group(1);
@@ -127,7 +123,6 @@ public class AutoCaptcha extends Module {
             return;
         }
 
-        // 3. Проверка на "Код: 1234" или "Введите код: 1234"
         Matcher codeMatcher = CODE_IN_CHAT_PATTERN.matcher(clean);
         if (codeMatcher.find()) {
             String code = codeMatcher.group(1);
@@ -153,7 +148,6 @@ public class AutoCaptcha extends Module {
     public void onUpdate(EventUpdate event) {
         if (mc.player == null || mc.world == null) return;
 
-        // Обработка капчи в чате
         if (pendingChatResponse != null && System.currentTimeMillis() >= executeChatTime) {
             String resp = pendingChatResponse;
             pendingChatResponse = null;
@@ -168,7 +162,6 @@ public class AutoCaptcha extends Module {
             }
         }
 
-        // Обработка капчи в GUI-инвентаре (SpookyTime & FunTime)
         if (guiCaptcha.getValue() && mc.currentScreen instanceof GenericContainerScreen screen) {
             if (System.currentTimeMillis() < nextGuiClickTime) return;
 
@@ -208,7 +201,6 @@ public class AutoCaptcha extends Module {
         boolean wantSword = cleanTitle.contains("меч") || cleanTitle.contains("sword");
         boolean wantApple = cleanTitle.contains("яблок") || cleanTitle.contains("apple");
 
-        // 1. Поиск по явному названию/цвету из заголовка
         for (int i = 0; i < containerSlots; i++) {
             Slot slot = screen.getScreenHandler().getSlot(i);
             if (!slot.hasStack()) continue;
@@ -239,7 +231,6 @@ public class AutoCaptcha extends Module {
             }
         }
 
-        // 2. Поиск подтверждающего/зеленого предмета (SpookyTime / FunTime)
         for (int i = 0; i < containerSlots; i++) {
             Slot slot = screen.getScreenHandler().getSlot(i);
             if (!slot.hasStack()) continue;
@@ -256,7 +247,6 @@ public class AutoCaptcha extends Module {
             }
         }
 
-        // 3. Если все слоты барьеры или стекло, кроме одного уникального предмета
         int nonFillerSlot = -1;
         int nonFillerCount = 0;
         for (int i = 0; i < containerSlots; i++) {

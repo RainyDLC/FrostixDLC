@@ -182,7 +182,6 @@ public class BurningHandsPipeline {
         dataBuffer.putFloat((fireColorRgb & 0xFF) / 255.0f);
         dataBuffer.putFloat(glowStrength);
 
-        // UV advection of the previous trail; keep the current hand mask sharp.
         dataBuffer.putFloat(paused ? 0.0f : yawVelocity * dt * 0.0012f);
         dataBuffer.putFloat(paused ? 0.0f : pitchVelocity * dt * 0.0012f);
         dataBuffer.putFloat(frameScale);
@@ -281,4 +280,3 @@ public class BurningHandsPipeline {
         initialized = false;
     }
 }
-

@@ -20,7 +20,6 @@ import java.lang.reflect.Method;
 
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 
-/** Renders a single animated scan band directly on the visible player skin or armor. */
 public final class TargetScanRenderer {
     private static final float ATTRIBUTE_SCALE = 1000.0f;
     private static final float MODEL_INFLATE = 1.008f;
@@ -300,10 +299,6 @@ public final class TargetScanRenderer {
         part.render(poseStack, buffer, FULL_BRIGHT, OverlayTexture.DEFAULT_UV, -1);
     }
 
-    /**
-     * Skin Layers 3D injects its voxel mesh into the vanilla outer ModelPart.
-     * Reflection keeps the compatibility optional and avoids a hard dependency.
-     */
     private static boolean hasInjectedSkinMesh(ModelPart part) {
         if (!injectedMeshLookupComplete) {
             synchronized (TargetScanRenderer.class) {

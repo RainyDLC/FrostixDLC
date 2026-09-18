@@ -126,12 +126,10 @@ public class BloomEspRenderer implements IMinecraft {
         for (int i = 0; i < count; i++) {
             BloomParticleSeed seed = BLOOM_SEEDS[i];
 
-            // 1. Плавный подъем вдоль высоты тела с циклическим переходом
             float rawH = (float) ((seed.heightBase + time * seed.verticalSpeed * 0.22) % 1.15);
             if (rawH < 0f) rawH += 1.15f;
             double worldY = center.y + rawH * entityHeight;
 
-            // Затухание альфы в самом низу и вверху
             float hAlphaFade = 1.0f;
             if (rawH < 0.12f) {
                 hAlphaFade = rawH / 0.12f;
@@ -139,22 +137,18 @@ public class BloomEspRenderer implements IMinecraft {
                 hAlphaFade = Math.max(0.0f, (1.15f - rawH) / 0.23f);
             }
 
-            // 2. Орбитальное покачивание и спиральное вращение вокруг вертикальной оси
             double curAngle = seed.angleOffset + time * seed.orbitSpeed + Math.sin(time * seed.radialFreq + seed.pulsePhase) * 0.35;
             double baseRadius = entityWidth * 0.65f * seed.radiusFactor + Math.sin(time * seed.radialFreq * 1.4 + seed.pulsePhase) * seed.radialAmp;
             double worldX = center.x + Math.cos(curAngle) * baseRadius;
             double worldZ = center.z + Math.sin(curAngle) * baseRadius;
 
-            // 3. Анимация пульсации размера и альфы ("дыхание" / "сияние")
             float pulse = 0.78f + 0.32f * (float) Math.sin(time * seed.pulseSpeed + seed.pulsePhase);
             float currentSize = userBaseSize * seed.sizeFactor * pulse * alphaPC;
             float currentAlphaFactor = alphaPC * hAlphaFade * (0.6f + 0.4f * (float) Math.cos(time * seed.pulseSpeed + seed.pulsePhase));
             if (currentAlphaFactor <= 0.01f || currentSize <= 0.01f) continue;
 
-            // 4. Поворот билборда
             float rotation = seed.spinSeed + (float) (time * seed.spinSpeed);
 
-            // Отрисовка двух слоев: внешнее мягкое свечение + яркое компактное ядро
             ms.push();
             ms.translate(worldX - cam.x, worldY - cam.y, worldZ - cam.z);
             ms.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-camYaw));
@@ -164,7 +158,6 @@ public class BloomEspRenderer implements IMinecraft {
             }
             Matrix4f matrix = ms.peek().getPositionMatrix();
 
-            // Слой 1: Внешний ореол (Halo)
             float glowSize = currentSize * 1.55f;
             float glowHalf = glowSize * 0.5f;
             int glowAlpha = (int) (currentAlphaFactor * 110.0f);
@@ -173,7 +166,6 @@ public class BloomEspRenderer implements IMinecraft {
                 drawBloomQuad(buffer, matrix, glowHalf, glowCol);
             }
 
-            // Слой 2: Яркое ядро (Core)
             float coreHalf = currentSize * 0.5f;
             int coreAlpha = (int) (currentAlphaFactor * 220.0f);
             int coreCol = ColorUtil.replAlpha(particleThemeColor, coreAlpha);

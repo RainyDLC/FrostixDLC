@@ -7,7 +7,6 @@ import lombok.Setter;
 public class TimerUtil {
     private long startTime;
 
-    @Getter
     public long lastMS = System.currentTimeMillis();
 
     public void reset() {

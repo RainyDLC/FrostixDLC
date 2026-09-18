@@ -1876,7 +1876,6 @@ public class TargetEsp extends Module implements ModulePreview {
         float riseH = bodyH * 0.98f * heightMul;
         float tSec = animationNurik / 60f;
 
-        // Dynamic fire color determination
         int fireBaseColor;
         int fireMidColor;
         int fireCoreColor;
@@ -1914,7 +1913,6 @@ public class TargetEsp extends Module implements ModulePreview {
         matrices.translate(targetPos.x - cameraPos.x, targetPos.y - cameraPos.y, targetPos.z - cameraPos.z);
         Matrix4f m = matrices.peek().getPositionMatrix();
 
-        // 1. Ground fiery seal & flame ring
         if (fireRing.getValue()) {
             VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
             float groundR = baseR * 1.18f;
@@ -1962,7 +1960,6 @@ public class TargetEsp extends Module implements ModulePreview {
             }
         }
 
-        // 2. Triple helical fire vortex
         if (fireVortex.getValue()) {
             VertexConsumer fillBuf = immediate.getBuffer(RING_FILL_LAYER);
             int numHelixes = 3;
@@ -2006,7 +2003,6 @@ public class TargetEsp extends Module implements ModulePreview {
             }
         }
 
-        // 3. Dynamic rising flame tongues
         float[] oxArr = FIRE_OX;
         float[] oyArr = FIRE_OY;
         float[] ozArr = FIRE_OZ;
@@ -2046,7 +2042,6 @@ public class TargetEsp extends Module implements ModulePreview {
             outTilt[i] = (float) Math.sin(tSec * 5.0f + seed * 53f) * 12.0f;
         }
 
-        // Soft ambient heat glow
         VertexConsumer glowBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/particles/glow.png")));
         for (int i = 0; i < count; i++) {
@@ -2063,7 +2058,6 @@ public class TargetEsp extends Module implements ModulePreview {
             matrices.pop();
         }
 
-        // Pointed flame billboards
         VertexConsumer flameBuf = immediate.getBuffer(
                 ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_2.png")));
         for (int i = 0; i < count; i++) {
@@ -2081,7 +2075,6 @@ public class TargetEsp extends Module implements ModulePreview {
             matrices.pop();
         }
 
-        // 4. Rising burning sparks / embers
         if (fireSparks.getValue()) {
             VertexConsumer sparkBuf = immediate.getBuffer(
                     ROMB_ESP.apply(Identifier.of("client", "textures/particles/sparkle.png")));
@@ -2786,4 +2779,3 @@ public class TargetEsp extends Module implements ModulePreview {
         }
     }
 }
-

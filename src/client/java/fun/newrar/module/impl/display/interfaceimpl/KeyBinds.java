@@ -5,7 +5,6 @@ import fun.newrar.Client;
 import fun.newrar.module.api.Module;
 import fun.newrar.module.api.settings.impl.DragSetting;
 import fun.newrar.module.impl.display.InterFace;
-import fun.newrar.utils.animation.Animation;
 import fun.newrar.utils.animation.satoshi.Direction;
 import fun.newrar.utils.animation.satoshi.EaseInOutQuad;
 import fun.newrar.utils.colors.ColorUtil;

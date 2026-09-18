@@ -199,7 +199,6 @@ public class NameTag extends Module {
             }
         }
 
-        // Разделяем имя и здоровье, если есть суффикс hp
         String mainText = name;
         String hpPart = null;
         if (name.endsWith("hp") && name.contains(" §r ")) {
@@ -219,10 +218,8 @@ public class NameTag extends Module {
 
         float hudOpacity = InterFace.getInstance() != null ? InterFace.getInstance().alphaHUD.getValue() : 0.6F;
 
-        // Фирменная HUD-панель (Glassmorphism + Dynamic Blur + HUD Tint + Glass Edge)
         RenderUtil.Render2D.hudPlate(bgX, bgY, wr, TAG_HEIGHT, 1.0F, TAG_RADIUS, hudOpacity);
 
-        // Индикатор друга / репорта (акцентная полоска слева в стиле HUD)
         if (friend || ReportHelper.isReported(entity)) {
             int accentColor = ReportHelper.isReported(entity)
                     ? ReportHelper.getReportColor(neutralColor)
@@ -235,11 +232,9 @@ public class NameTag extends Module {
         float textX = bgX + TAG_PADDING;
         float textY = bgY + (TAG_HEIGHT - Fonts.sf_medium.getHeight(FONT_SIZE)) / 2F - 0.2F;
 
-        // Рисуем имя
         int nameColor = friend ? friendColor : ThemeColor.getTextColor();
         Fonts.sf_medium.draw(mainText, textX, textY, FONT_SIZE, nameColor);
 
-        // Рисуем здоровье с аккуратной точкой-разделителем в стиле Information/Watermark
         if (hpPart != null) {
             float sepX = textX + mainTextWidth;
             Fonts.sf_regular.draw(" • ", sepX, textY, FONT_SIZE, ThemeColor.getSeparatorColor());
@@ -345,4 +340,3 @@ public class NameTag extends Module {
         return colored.toString();
     }
 }
-
