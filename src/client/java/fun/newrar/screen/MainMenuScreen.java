@@ -45,6 +45,8 @@ public class MainMenuScreen extends Screen implements IMinecraft {
     private float langBtnX, langBtnY, langBtnW, langBtnH;
     private final Animation langHover = new Animation();
 
+    private MenuBackgroundCarousel bgCarousel;
+
     public MainMenuScreen() {
         super(Text.literal("MainMenuScreen"));
     }
@@ -60,6 +62,7 @@ public class MainMenuScreen extends Screen implements IMinecraft {
 
         fun.newrar.alt.AltManager.get().bootstrap();
         buildButtons();
+        if (bgCarousel == null) bgCarousel = new MenuBackgroundCarousel();
     }
 
     private void buildButtons() {
@@ -141,7 +144,10 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         float bgY = (screenHeight - bgH) / 2F + offsetY;
 
         Draw.rect(0, 0, screenWidth, screenHeight, ColorUtil.getColor(7, 12, 24, 255));
-        RenderUtil.Images.texture(MENU_BG, bgX, bgY, bgW, bgH, ColorUtil.getColor(255, 255, 255, alphaVal));
+        Identifier bgFrame = bgCarousel != null ? bgCarousel.currentBackground() : MENU_BG;
+        if (bgFrame != null) {
+            RenderUtil.Images.texture(bgFrame, bgX, bgY, bgW, bgH, ColorUtil.getColor(255, 255, 255, alphaVal));
+        }
 
         Draw.rect(0, 0, screenWidth, screenHeight, ColorUtil.getColor(7, 12, 24, alphaVal * 0.42F));
         ScreenBlur.capture(3);
@@ -169,6 +175,10 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         drawInfoBar(screenWidth, screenHeight, alphaVal, time);
         drawSignature(screenWidth, screenHeight, alphaVal);
         drawLanguageButton(screenWidth, alphaVal);
+
+        if (bgCarousel != null) {
+            bgCarousel.render(screenWidth, screenHeight, alphaVal, lastMouseX, lastMouseY);
+        }
 
         Draw.flush();
         Render2D.endOverlay();
@@ -270,6 +280,9 @@ public class MainMenuScreen extends Screen implements IMinecraft {
         int button = click.button();
 
         if (button == 0) {
+            if (bgCarousel != null && bgCarousel.mouseClicked(mouseX, mouseY, button)) {
+                return true;
+            }
             if (MathUtil.isHovered(mouseX, mouseY, langBtnX, langBtnY, langBtnW, langBtnH)) {
                 fun.newrar.lang.Lang.toggle();
                 return true;
@@ -282,6 +295,14 @@ public class MainMenuScreen extends Screen implements IMinecraft {
             }
         }
         return super.mouseClicked(click, doubled);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+        if (bgCarousel != null && bgCarousel.mouseScrolled((float) (mouseX / scaleFix), (float) (mouseY / scaleFix), vertical)) {
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
     }
 
     @Override
