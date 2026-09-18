@@ -27,18 +27,10 @@ public class GifTexture {
     private int width = 0, height = 0;
 
     public GifTexture(InputStream stream) {
-        load(stream, 0);
-    }
-
-    public GifTexture(InputStream stream, int maxWidth) {
-        load(stream, maxWidth);
+        load(stream);
     }
 
     private void load(InputStream stream) {
-        load(stream, 0);
-    }
-
-    private void load(InputStream stream, int maxWidth) {
         try {
             ImageInputStream iis = ImageIO.createImageInputStream(stream);
             Iterator<ImageReader> readers = ImageIO.getImageReadersByFormatName("gif");
@@ -101,17 +93,7 @@ public class GifTexture {
                 g.drawImage(rawFrame, fx, fy, null);
                 g.dispose();
 
-                if (maxWidth > 0 && canvasW > maxWidth) {
-                    int scaledH = Math.max(1, Math.round(canvasH * (maxWidth / (float) canvasW)));
-                    BufferedImage scaled = new BufferedImage(maxWidth, scaledH, BufferedImage.TYPE_INT_ARGB);
-                    java.awt.Graphics2D gs = scaled.createGraphics();
-                    gs.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                    gs.drawImage(canvas, 0, 0, maxWidth, scaledH, null);
-                    gs.dispose();
-                    pixelData.add(scaled.getRGB(0, 0, maxWidth, scaledH, null, 0, maxWidth));
-                } else {
-                    pixelData.add(canvas.getRGB(0, 0, canvasW, canvasH, null, 0, canvasW));
-                }
+                pixelData.add(canvas.getRGB(0, 0, canvasW, canvasH, null, 0, canvasW));
                 delays.add(readDelay(reader, i));
                 frameIds.add(Identifier.of("white", "gif/" + uid + "/" + i));
 
@@ -129,10 +111,8 @@ public class GifTexture {
             reader.dispose();
             for (int d : delays) totalDuration += d;
 
-            final int uploadW = (maxWidth > 0 && canvasW > maxWidth) ? maxWidth : canvasW;
-            final int uploadH = (maxWidth > 0 && canvasW > maxWidth)
-                    ? Math.max(1, Math.round(canvasH * (maxWidth / (float) canvasW)))
-                    : canvasH;
+            final int uploadW = canvasW;
+            final int uploadH = canvasH;
             MinecraftClient.getInstance().execute(() -> {
                 for (int i = 0; i < pixelData.size(); i++) {
                     int[] px = pixelData.get(i);
@@ -201,10 +181,6 @@ public class GifTexture {
             if (elapsed < acc) return frameIds.get(i);
         }
         return frameIds.get(frameIds.size() - 1);
-    }
-
-    public Identifier currentFrameId() {
-        return currentFrame();
     }
 
     public void draw(DrawContext ctx, int x, int y, int w, int h) {
