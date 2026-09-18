@@ -12,7 +12,11 @@ import fun.newrar.module.api.settings.impl.SliderSetting;
 import fun.newrar.utils.math.ChatUtils;
 import fun.newrar.utils.other.Instance;
 import net.minecraft.entity.Entity;
+import net.minecraft.network.packet.s2c.play.EntityPassengersSetS2CPacket;
+import net.minecraft.network.packet.s2c.play.EntityPositionS2CPacket;
+import net.minecraft.network.packet.s2c.play.EntityPositionSyncS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.Vec2f;
 import net.minecraft.util.math.Vec3d;
@@ -45,11 +49,13 @@ public class Noclip extends Module {
     private boolean warnedNoVehicle;
     private Entity lastVehicle;
     private long nextRemountAt;
+    private int remountAttempts;
 
     @Override
     protected void onEnable() {
         warnedNoVehicle = false;
         lastVehicle = null;
+        remountAttempts = 0;
         super.onEnable();
     }
 
@@ -72,12 +78,36 @@ public class Noclip extends Module {
     @EventHandler
     public void onPacket(EventPacket e) {
         if (e.isSend() || !mode.is("Grim") || !antiSetback.getValue()) return;
-        if (!(e.getPacket() instanceof PlayerPositionLookS2CPacket packet)) return;
         if (mc.player == null || !mc.player.hasVehicle()) return;
 
-        if (mc.player.getEyePos().distanceTo(packet.change().position()) < 32.0) {
-            e.cancel();
+        Entity vehicle = mc.player.getRootVehicle();
+        if (vehicle == null || vehicle == mc.player) return;
+        int vehicleId = vehicle.getId();
+
+        switch (e.getPacket()) {
+            case PlayerPositionLookS2CPacket look -> {
+                if (mc.player.getEyePos().distanceTo(look.change().position()) < 32.0) e.cancel();
+            }
+            case EntityPassengersSetS2CPacket passengers -> {
+                if (passengers.getEntityId() != vehicleId) return;
+                if (mc.options.sneakKey.isPressed()) return;
+                if (!hasPassenger(passengers.getPassengerIds(), mc.player.getId())) e.cancel();
+            }
+            case EntityPositionS2CPacket position -> {
+                if (position.entityId() == vehicleId) e.cancel();
+            }
+            case EntityPositionSyncS2CPacket sync -> {
+                if (sync.id() == vehicleId) e.cancel();
+            }
+            default -> {}
         }
+    }
+
+    private static boolean hasPassenger(int[] ids, int id) {
+        for (int candidate : ids) {
+            if (candidate == id) return true;
+        }
+        return false;
     }
 
     private void handleVehicle() {
@@ -94,6 +124,7 @@ public class Noclip extends Module {
         Vec3d delta = inputDelta(speed.getValue(), vertical.getValue());
         if (delta.lengthSquared() <= 0.0) return;
 
+        if (lastVehicle == null || lastVehicle.getId() != vehicle.getId()) remountAttempts = 0;
         lastVehicle = vehicle;
 
         vehicle.setVelocity(Vec3d.ZERO);
@@ -108,6 +139,7 @@ public class Noclip extends Module {
     public void onRemount(EventUpdate e) {
         if (mc.player == null || !mode.is("Grim") || !autoRemount.getValue()) return;
         if (mc.player.hasVehicle() || lastVehicle == null || lastVehicle.isRemoved() || mc.world == null) return;
+        if (remountAttempts >= 8) return;
 
         Entity vehicle = mc.world.getEntityById(lastVehicle.getId());
         if (vehicle == null) {
@@ -120,8 +152,11 @@ public class Noclip extends Module {
         }
         if (System.currentTimeMillis() < nextRemountAt) return;
 
-        nextRemountAt = System.currentTimeMillis() + 400L;
-        mc.interactionManager.interactEntity(mc.player, vehicle, Hand.MAIN_HAND);
+        nextRemountAt = System.currentTimeMillis() + 600L;
+        remountAttempts++;
+
+        ActionResult result = mc.interactionManager.interactEntity(mc.player, vehicle, Hand.MAIN_HAND);
+        if (result.isAccepted()) mc.player.swingHand(Hand.MAIN_HAND);
     }
 
     private void handleVanilla() {
