@@ -5,6 +5,7 @@ import fun.newrar.Client;
 import fun.newrar.manager.event_impl.*;
 import fun.newrar.manager.event_impl.*;
 import fun.newrar.module.impl.player.LockSlot;
+import fun.newrar.module.impl.movement.Noclip;
 import fun.newrar.module.impl.player.NoPush;
 import fun.newrar.utils.aura.UAttack;
 import net.minecraft.client.MinecraftClient;
@@ -89,6 +90,9 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
 
     @Inject(method = "pushOutOfBlocks", at = @At("HEAD"), cancellable = true)
     public void pushOutOfBlocks(double x, double z, CallbackInfo ci) {
+        Noclip noclip = Noclip.getInstance();
+        if (noclip != null && noclip.isEnabled() && Noclip.isPhasing()) ci.cancel();
+
         NoPush noPush = Client.get().moduleManager().get(NoPush.class);
         if (noPush.block.getValue() && noPush.isEnabled()) ci.cancel();
     }

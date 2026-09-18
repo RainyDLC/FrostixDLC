@@ -40,7 +40,8 @@ public class EntityMixin implements IMinecraft {
         if ((Object) this != mc.player) return;
 
         Noclip noclip = Noclip.getInstance();
-        if (noclip == null || !noclip.isEnabled() || !noclip.mode.is("Vanilla")) return;
+        if (noclip == null || !noclip.isEnabled()) return;
+        if (!noclip.mode.is("Vanilla") && !Noclip.isPhasing()) return;
 
         ((Entity) (Object) this).noClip = true;
     }

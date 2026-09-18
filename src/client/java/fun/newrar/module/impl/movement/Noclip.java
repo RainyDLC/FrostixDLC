@@ -18,12 +18,13 @@ import net.minecraft.network.packet.s2c.play.EntityPositionSyncS2CPacket;
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec2f;
 import net.minecraft.util.math.Vec3d;
 
 @ModuleInfo(
         name = "Noclip",
-        desc = "Прохождение сквозь блоки: Grim двигает транспорт (позиция транспорта принимается от клиента и не откатывается), Vanilla — одиночная игра",
+        desc = "Phase — проход сквозь стену только при упоре в неё (минимум флагов), Boat — свободный полёт в транспорте, Vanilla — одиночная игра",
         category = Category.MOVEMENT
 )
 public class Noclip extends Module {
@@ -31,36 +32,50 @@ public class Noclip extends Module {
         return Instance.get(Noclip.class);
     }
 
-    public ModeSetting mode = new ModeSetting(this, "Режим", "Grim", "Vanilla");
+    public ModeSetting mode = new ModeSetting(this, "Режим", "Phase", "Boat", "Vanilla");
 
-    public SliderSetting speed = new SliderSetting(this, "Скорость", 0.6F, 0.1F, 2.0F, 0.05F);
+    public SliderSetting speed = new SliderSetting(this, "Скорость", 0.42F, 0.1F, 1.0F, 0.02F);
 
-    public SliderSetting vertical = new SliderSetting(this, "Вертикаль", 0.45F, 0.1F, 1.5F, 0.05F)
-            .setVisible(() -> mode.is("Grim"));
+    public SliderSetting vertical = new SliderSetting(this, "Вертикаль", 0.3F, 0.1F, 1.0F, 0.02F)
+            .setVisible(() -> !mode.is("Vanilla"));
 
     public BooleanSetting resetFall = new BooleanSetting(this, "Сбрасывать урон от падения", true);
 
     public BooleanSetting antiSetback = new BooleanSetting(this, "Игнорировать откат", true)
-            .setVisible(() -> mode.is("Grim"));
+            .setVisible(() -> !mode.is("Vanilla"));
 
     public BooleanSetting autoRemount = new BooleanSetting(this, "Автопосадка обратно", true)
-            .setVisible(() -> mode.is("Grim"));
+            .setVisible(() -> mode.is("Boat"));
+
+    private static boolean phasing;
+    private static long lastPhaseAt;
 
     private boolean warnedNoVehicle;
     private Entity lastVehicle;
     private long nextRemountAt;
     private int remountAttempts;
 
+    public static boolean isPhasing() {
+        Noclip noclip = getInstance();
+        return noclip != null && noclip.isEnabled() && phasing;
+    }
+
+    private static boolean isPhaseWindow() {
+        return phasing || System.currentTimeMillis() - lastPhaseAt < 500L;
+    }
+
     @Override
     protected void onEnable() {
         warnedNoVehicle = false;
         lastVehicle = null;
         remountAttempts = 0;
+        phasing = false;
         super.onEnable();
     }
 
     @Override
     protected void onDisable() {
+        phasing = false;
         if (mc.player != null && mode.is("Vanilla")) {
             mc.player.noClip = false;
         }
@@ -69,17 +84,29 @@ public class Noclip extends Module {
 
     @EventHandler
     public void onUpdate(EventUpdate e) {
+        phasing = false;
         if (mc.player == null || mc.world == null) return;
 
-        if (mode.is("Grim")) handleVehicle();
+        if (mode.is("Phase")) handlePhase();
+        else if (mode.is("Boat")) handleVehicle();
         else handleVanilla();
     }
 
     @EventHandler
     public void onPacket(EventPacket e) {
-        if (e.isSend() || !mode.is("Grim") || !antiSetback.getValue()) return;
-        if (mc.player == null || !mc.player.hasVehicle()) return;
+        if (e.isSend() || mode.is("Vanilla") || !antiSetback.getValue()) return;
+        if (mc.player == null) return;
 
+        if (mode.is("Phase")) {
+            if (!isPhaseWindow()) return;
+            if (e.getPacket() instanceof PlayerPositionLookS2CPacket look
+                    && mc.player.getEyePos().distanceTo(look.change().position()) < 32.0) {
+                e.cancel();
+            }
+            return;
+        }
+
+        if (!mc.player.hasVehicle()) return;
         Entity vehicle = mc.player.getRootVehicle();
         if (vehicle == null || vehicle == mc.player) return;
         int vehicleId = vehicle.getId();
@@ -110,12 +137,27 @@ public class Noclip extends Module {
         return false;
     }
 
+    private void handlePhase() {
+        Vec3d input = inputDelta(speed.getValue(), vertical.getValue());
+        if (input.lengthSquared() <= 0.0) return;
+
+        Box path = mc.player.getBoundingBox().stretch(input.multiply(2.0, 2.0, 2.0));
+        if (!mc.world.getBlockCollisions(mc.player, path).iterator().hasNext()) return;
+
+        phasing = true;
+        lastPhaseAt = System.currentTimeMillis();
+
+        mc.player.setVelocity(input);
+        if (resetFall.getValue()) mc.player.fallDistance = 0.0;
+        mc.player.setOnGround(false);
+    }
+
     private void handleVehicle() {
         Entity vehicle = mc.player.getRootVehicle();
         if (vehicle == null || vehicle == mc.player) {
             if (!warnedNoVehicle) {
                 warnedNoVehicle = true;
-                ChatUtils.addChatMessage("§7[Noclip] §fСядь в лодку/транспорт: клиент управляет его позицией, Грим транспорт не откатывает");
+                ChatUtils.addChatMessage("§7[Noclip] §fBoat: сядь в лодку/транспорт");
             }
             return;
         }
@@ -135,9 +177,15 @@ public class Noclip extends Module {
         mc.player.setPosition(vehicle.getPassengerRidingPos(mc.player));
     }
 
+    private void handleVanilla() {
+        mc.player.setVelocity(inputDelta(speed.getValue(), vertical.getValue()));
+        mc.player.fallDistance = 0.0;
+        mc.player.setOnGround(false);
+    }
+
     @EventHandler
     public void onRemount(EventUpdate e) {
-        if (mc.player == null || !mode.is("Grim") || !autoRemount.getValue()) return;
+        if (mc.player == null || !mode.is("Boat") || !autoRemount.getValue()) return;
         if (mc.player.hasVehicle() || lastVehicle == null || lastVehicle.isRemoved() || mc.world == null) return;
         if (remountAttempts >= 8) return;
 
@@ -157,13 +205,6 @@ public class Noclip extends Module {
 
         ActionResult result = mc.interactionManager.interactEntity(mc.player, vehicle, Hand.MAIN_HAND);
         if (result.isAccepted()) mc.player.swingHand(Hand.MAIN_HAND);
-    }
-
-    private void handleVanilla() {
-        mc.player.noClip = true;
-        mc.player.setVelocity(inputDelta(speed.getValue(), vertical.getValue()));
-        mc.player.fallDistance = 0.0;
-        mc.player.setOnGround(false);
     }
 
     private Vec3d inputDelta(float speed, float vertical) {
