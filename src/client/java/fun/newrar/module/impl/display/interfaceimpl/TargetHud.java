@@ -82,6 +82,20 @@ public class TargetHud implements element {
 
     private static final Identifier HEART_ICON = Identifier.ofVanilla("hud/heart/full");
 
+    private static final Identifier[] EMPTY_ARMOR_SLOTS = new Identifier[]{
+            Identifier.ofVanilla("container/slot/helmet"),
+            Identifier.ofVanilla("container/slot/chestplate"),
+            Identifier.ofVanilla("container/slot/leggings"),
+            Identifier.ofVanilla("container/slot/boots")
+    };
+
+    private static final EquipmentSlot[] ARMOR_SLOTS = new EquipmentSlot[]{
+            EquipmentSlot.HEAD,
+            EquipmentSlot.CHEST,
+            EquipmentSlot.LEGS,
+            EquipmentSlot.FEET
+    };
+
     private static ItemStack notchIcon;
 
     private static ItemStack notchIcon() {
@@ -170,6 +184,11 @@ public class TargetHud implements element {
 
         if (mode.equals("Компактный")) {
             renderCompact(drag, interFace, eventDisplay, target);
+            return;
+        }
+
+        if (mode.equals("4") || mode.equals("Четвёртый") || mode.equals("Четвертый")) {
+            renderStyle4(drag, interFace, eventDisplay, target);
             return;
         }
 
@@ -463,7 +482,126 @@ public class TargetHud implements element {
         return MathHelper.clamp(hp, 0, entity.getMaxHealth() + entity.getAbsorptionAmount());
     }
 
+    private void renderStyle4(DragSetting drag, InterFace interFace, EventDisplay eventDisplay, LivingEntity target) {
+        float h = 28F * S;
+        float alpha = openAnimation.getOutput();
+
+        float hpNow = getHealth(target);
+        float hpMax = Math.max(1F, target.getMaxHealth() + target.getAbsorptionAmount());
+        float hpFrac = MathHelper.clamp(hpNow / hpMax, 0F, 1F);
+
+        animHpText.update();
+        animHpText.run(hpNow, 0.15F, Easings.LINEAR);
+        animHP.update();
+        animHP.run(hpFrac, 0.16F, Easings.QUAD_OUT);
+        float animatedHpFrac = MathHelper.clamp(animHP.get(), 0F, 1F);
+
+        String hpText = String.format("%.0f", animHpText.get());
+
+        String name = target.getName().getString().replace(mc.player.getName().getString(),
+                Client.get().moduleManager().get(NameProtect.class).isEnabled()
+                        ? "RainyProject"
+                        : mc.player.getName().getString());
+
+        fun.newrar.utils.render.font.Font font = interFace.fontMode.is("Уникальный") ? Fonts.unique_medium : Fonts.sf_medium;
+        float nameSize = 6.5F * S;
+        float nameW = font.getWidth(name, nameSize);
+        float hpW = font.getWidth(hpText, nameSize);
+
+        float minW = 106F * S;
+        float requiredW = (31F * S) + Math.max(42F * S, nameW + hpW + 8F * S) + 5F * S;
+        float w = MathHelper.clamp(requiredW, minW, 145F * S);
+
+        drag.size.set(w, h);
+
+        float x = drag.position.x;
+        float y = drag.position.y;
+        lastX = x;
+        lastY = y;
+        lastW = w;
+        lastH = h;
+
+        float rad = 5F * S;
+        float easeAlpha = (float) Easings.BACK_OUT.ease(MathHelper.clamp(alpha, 0F, 1F));
+        float popScale = 0.88F + 0.12F * easeAlpha;
+        float actualW = w * popScale;
+        float actualH = h * popScale;
+        float px = x + (w - actualW) / 2F + (ANIM_OFFSET - ANIM_OFFSET * easeAlpha);
+        float py = y + (h - actualH) / 2F;
+
+        float hudOpacity = InterFace.getInstance().alphaHUD.getValue();
+
+        if (target.hurtTime > 0) {
+            float hurtFrac = target.hurtTime / 10.0F;
+            RenderUtil.Render2D.glow(px, py, actualW, actualH, ColorUtil.getColor(255, 55, 55, 0.35F * alpha * hurtFrac), rad + 3F * S, 10, 1);
+        }
+
+        RenderUtil.Render2D.hudPlate(px, py, actualW, actualH, alpha, rad, hudOpacity);
+        RenderUtil.Render2D.rect(px, py, actualW, actualH, ColorUtil.getColor(18, 16, 26, (int) (140 * alpha * hudOpacity)), rad);
+
+        float headSize = 20F * S;
+        float headX = px + 4F * S;
+        float headY = py + (actualH - headSize) / 2F;
+        drawFace(target, eventDisplay.getPartialTicks(), headX, headY, headSize, 3.5F * S, alpha);
+
+        float contentX = headX + headSize + 4.5F * S;
+        float contentR = px + actualW - 4.5F * S;
+        float contentW = contentR - contentX;
+
+        // Line 1: Name and Health
+        float nameY = py + 3.5F * S;
+        float hpX = contentR - hpW;
+
+        int accentColor = ColorUtil.getClientColor1(1);
+
+        font.draw(hpText, hpX, nameY, nameSize, ColorUtil.replAlpha(accentColor, alpha));
+        font.drawFadingText(name, contentX, nameY, hpX - contentX - 3F * S, ColorUtil.getColor(255, alpha), nameSize);
+
+        // Line 2: Armor items
+        float armorY = py + 11.2F * S;
+        float itemSize = 8F * S;
+        float itemSpacing = 2F * S;
+
+        for (int i = 0; i < ARMOR_SLOTS.length; i++) {
+            float ix = contentX + i * (itemSize + itemSpacing);
+            ItemStack stack = target.getEquippedStack(ARMOR_SLOTS[i]);
+            if (stack != null && !stack.isEmpty()) {
+                ItemRender.drawItemWithContext(eventDisplay.getDrawContext(), stack, ix, armorY, itemSize / 16F, alpha);
+            } else {
+                try {
+                    eventDisplay.getDrawContext().drawGuiTexture(
+                            RenderPipelines.GUI_TEXTURED,
+                            EMPTY_ARMOR_SLOTS[i],
+                            (int) ix, (int) armorY, (int) itemSize, (int) itemSize,
+                            ColorUtil.getColor(255, (int) (60F * alpha))
+                    );
+                } catch (Exception ignored) {
+                    RenderUtil.Render2D.rect(ix, armorY, itemSize, itemSize, ColorUtil.getColor(255, 0.05F * alpha), 1.5F * S);
+                }
+            }
+        }
+
+        // Line 3: Health progress bar
+        float barY = py + 21.0F * S;
+        float barH = 2.8F * S;
+        float barRadius = 1.4F * S;
+
+        RenderUtil.Render2D.rect(contentX, barY, contentW, barH, ColorUtil.getColor(255, 0.10F * alpha), barRadius);
+
+        float fillW = contentW * animatedHpFrac;
+        if (fillW > 0.8F) {
+            int col1 = ColorUtil.replAlpha(accentColor, alpha);
+            int col2 = ColorUtil.replAlpha(ColorUtil.fade(10, 1, accentColor, ColorUtil.multBright(accentColor, 0.75F)), alpha);
+            int[] barColors = new int[]{col1, col2, col2, col1};
+            RenderUtil.Render2D.gradientRect(contentX, barY, fillW, barH, barColors, barRadius);
+        }
+    }
+
     private void drawFace(LivingEntity lastTarget, float lastTickDelta, float x, float y, float size, float alpha) {
+        drawFace(lastTarget, lastTickDelta, x, y, size, 4F, alpha);
+    }
+
+    private void drawFace(LivingEntity lastTarget, float lastTickDelta, float x, float y, float size, float radius, float alpha) {
         try {
             EntityRenderer<? super LivingEntity, ?> baseRenderer = mc.getEntityRenderDispatcher().getRenderer(lastTarget);
             if (!(baseRenderer instanceof LivingEntityRenderer<?, ?, ?>)) return;
@@ -481,7 +619,9 @@ public class TargetHud implements element {
             int color = new Color(r, g, b, (int) (255 * alpha)).getRGB();
 
             RenderUtil.Images.texture(textureLocation, x, y, size, size,
-                    8f / 64f, 8f / 64f, 16f / 64f, 16f / 64f, color, 0, 4);
+                    8f / 64f, 8f / 64f, 16f / 64f, 16f / 64f, color, 0, radius);
+            RenderUtil.Images.texture(textureLocation, x, y, size, size,
+                    40f / 64f, 8f / 64f, 48f / 64f, 16f / 64f, color, 0, radius);
         } catch (Exception ignored) {
         }
     }
