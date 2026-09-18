@@ -187,7 +187,7 @@ public class TargetHud implements element {
             return;
         }
 
-        if (mode.equals("4") || mode.equals("Четвёртый") || mode.equals("Четвертый")) {
+        if (mode.equals("Полоса") || mode.equals("4") || mode.equals("Четвёртый") || mode.equals("Четвертый")) {
             renderStyle4(drag, interFace, eventDisplay, target);
             return;
         }

@@ -471,6 +471,7 @@ final class Translations {
         m.put("Четвёртый", "Fourth");
         m.put("Пятый", "Fifth");
         m.put("Шестой", "Sixth");
+        m.put("Полоса", "Bar");
         m.put("эффектах", "Effects");
         m.put("Лого клиента", "Client logo");
         m.put("Координаты", "Coordinates");

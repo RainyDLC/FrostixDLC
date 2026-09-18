@@ -58,7 +58,7 @@ public class InterFace extends Module {
 
     public ModeSetting fontMode = new ModeSetting(this, "Шрифт", "Обычный", "Уникальный");
 
-    public ModeSetting targetHudMode = new ModeSetting(this, "Тип Target Hud", "Классический", "Полный", "Компактный", "4");
+    public ModeSetting targetHudMode = new ModeSetting(this, "Тип Target Hud", "Классический", "Полный", "Компактный", "Полоса");
 
     public BooleanSetting notifyEffects = new BooleanSetting(this, "эффектах", true);
     public BooleanSetting notifyModules = new BooleanSetting(this, "модулях", true);
