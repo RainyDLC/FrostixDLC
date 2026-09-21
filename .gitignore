@@ -24,6 +24,7 @@ decoded_tmp/
 .t1.json
 rain/
 zzz/
+main/
 # --- аудит защиты (PoC, не коммитить!) ---
 .audit/
 audit/
