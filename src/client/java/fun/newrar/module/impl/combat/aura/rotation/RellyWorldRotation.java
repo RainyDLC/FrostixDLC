@@ -10,6 +10,7 @@ import fun.newrar.manager.rotation.RotationProcess;
 import fun.newrar.module.impl.combat.AttackAura;
 import fun.newrar.module.impl.combat.aura.RotationAura;
 import fun.newrar.utils.aura.RayTraceUtil;
+import fun.newrar.utils.aura.ServerReach;
 import fun.newrar.utils.aura.UBoxPoints;
 import fun.newrar.utils.math.MathUtil;
 
@@ -47,7 +48,7 @@ public class RellyWorldRotation implements RotationAura {
             settleUntil = ms + 70L + MathUtil.randomInt(0, 70);
         }
 
-        Box box = target.getBoundingBox();
+        Box box = ServerReach.attackBox(target);
 
         if (!hasLastPos) {
             lastTX = target.getX();

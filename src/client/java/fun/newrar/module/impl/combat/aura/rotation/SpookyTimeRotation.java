@@ -11,6 +11,7 @@ import fun.newrar.manager.rotation.RotationProcess;
 import fun.newrar.module.impl.combat.AttackAura;
 import fun.newrar.module.impl.combat.aura.RotationAura;
 import fun.newrar.utils.aura.LagCompensation;
+import fun.newrar.utils.aura.ServerReach;
 import fun.newrar.utils.aura.UAttack;
 import fun.newrar.utils.aura.UBoxPoints;
 import fun.newrar.utils.math.MathUtil;
@@ -61,7 +62,7 @@ public class SpookyTimeRotation implements RotationAura {
             slowYawTicks = 1.0F;
         }
 
-        Box hitbox = target.getBoundingBox();
+        Box hitbox = ServerReach.attackBox(target);
         Rotation currentAngle = new Rotation(mc.player.getYaw(), mc.player.getPitch());
 
         Vec3d aimPoint = getAimPoint(target, hitbox);

@@ -10,6 +10,7 @@ import fun.newrar.manager.rotation.RotationProcess;
 import fun.newrar.module.impl.combat.AttackAura;
 import fun.newrar.module.impl.combat.aura.RotationAura;
 import fun.newrar.utils.aura.RayTraceUtil;
+import fun.newrar.utils.aura.ServerReach;
 import fun.newrar.utils.aura.UAttack;
 import fun.newrar.utils.aura.UBoxPoints;
 import fun.newrar.utils.math.MathUtil;
@@ -36,7 +37,7 @@ public class ConstructorRotation implements RotationAura {
     public void onRotation(AttackAura aura, LivingEntity target, float[] ranges, boolean canAttack) {
         if (mc.player == null || target == null) return;
 
-        Vec3d aimPoint = UBoxPoints.getBestVector3dOnEntityBox(target.getBoundingBox());
+        Vec3d aimPoint = UBoxPoints.getBestVector3dOnEntityBox(target);
         Vec3d vec = aimPoint.subtract(mc.player.getEyePos());
 
         float yaw = (float) Math.toDegrees(Math.atan2(-vec.x, vec.z));

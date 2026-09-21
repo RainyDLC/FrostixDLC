@@ -10,6 +10,7 @@ import fun.newrar.manager.rotation.Rotation;
 import fun.newrar.manager.rotation.RotationProcess;
 import fun.newrar.module.impl.combat.AttackAura;
 import fun.newrar.module.impl.combat.aura.RotationAura;
+import fun.newrar.utils.aura.ServerReach;
 import fun.newrar.utils.aura.UAttack;
 import fun.newrar.utils.math.MathUtil;
 
@@ -40,12 +41,13 @@ public class NeuroRotation implements RotationAura {
 
         float appliedYaw = MathHelper.wrapDegrees(cameraYaw - lastCameraYaw);
         float appliedPitch = cameraPitch - lastCameraPitch;
-        Vec3d center = target.getBoundingBox().getCenter().subtract(mc.player.getEyePos());
+        Box serverBox = ServerReach.attackBox(target);
+        Vec3d center = serverBox.getCenter().subtract(mc.player.getEyePos());
         float centerYaw = yawTo(center);
         float centerPitch = pitchTo(center);
         float yawErr = MathHelper.wrapDegrees(centerYaw - cameraYaw);
         float pitchErr = centerPitch - cameraPitch;
-        float distance = (float) mc.player.getEyePos().distanceTo(target.getBoundingBox().getCenter());
+        float distance = (float) mc.player.getEyePos().distanceTo(serverBox.getCenter());
 
         if (aura.justAttacked) {
             aura.justAttacked = false;
@@ -86,7 +88,7 @@ public class NeuroRotation implements RotationAura {
         lastSmoothness = prediction.smoothness;
         lastPeak = prediction.peak;
 
-        Vec3d aimPoint = pointFromHitbox(target.getBoundingBox(), prediction);
+        Vec3d aimPoint = pointFromHitbox(ServerReach.attackBox(target), prediction);
         Vec3d aim = aimPoint.subtract(mc.player.getEyePos());
         float baseYaw = yawTo(aim);
         float basePitch = pitchTo(aim);

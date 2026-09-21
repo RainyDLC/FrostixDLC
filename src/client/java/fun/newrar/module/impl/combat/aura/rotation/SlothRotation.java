@@ -10,6 +10,7 @@ import fun.newrar.manager.rotation.RotationProcess;
 import fun.newrar.module.impl.combat.AttackAura;
 import fun.newrar.module.impl.combat.aura.RotationAura;
 import fun.newrar.utils.aura.LagCompensation;
+import fun.newrar.utils.aura.ServerReach;
 import fun.newrar.utils.aura.UAttack;
 import fun.newrar.utils.aura.UBoxPoints;
 import fun.newrar.utils.math.MathUtil;
@@ -42,7 +43,7 @@ public class SlothRotation implements RotationAura {
         }
 
         Rotation currentAngle = new Rotation(mc.player.getYaw(), mc.player.getPitch());
-        Box hitbox = target.getBoundingBox();
+        Box hitbox = ServerReach.attackBox(target);
 
         Vec3d aimPoint = applyLead(target, resolveAimPoint(target, hitbox));
         Vec3d dir = aimPoint.subtract(mc.player.getEyePos());

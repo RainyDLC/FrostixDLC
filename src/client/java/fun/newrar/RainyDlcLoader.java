@@ -1,8 +1,5 @@
 package fun.newrar;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -26,8 +23,8 @@ public final class RainyDlcLoader {
     private static final String CORE_RES = "/assets/rainydlc/core.bin";
     private static final String MANIFEST_RES = "/assets/rainydlc/manifest.txt";
     private static final int MAGIC = 0x4E495843;
-    private static final int VERSION = 3;
-    private static final int HEADER = 4 + 2 + 16 + 12;
+    private static final int VERSION = 4;
+    private static final int HEADER = 4 + 2 + 16 + 12 + 32;
 
     private static final String KNOT_CLASS = "net.fabricmc.loader.impl.launch.knot.KnotClassLoader";
     private static final String MOD_ID = "white";
@@ -45,7 +42,9 @@ public final class RainyDlcLoader {
             "javassist.ClassPool",
             "org.hotswap.agent.HotswapAgent",
             "me.coley.recaf.agent.Agent",
-            "io.github.nickacpt.kraken.KrakenAgent"
+            "io.github.nickacpt.kraken.KrakenAgent",
+            "sun.instrument.InstrumentationImpl",
+            "org.objectweb.asm.ClassReader"
     };
 
     private static volatile boolean loaded = false;
@@ -62,10 +61,7 @@ public final class RainyDlcLoader {
 
     public static void pulseCheck() {
         if (!loaded) return;
-        if (System.currentTimeMillis() - watchdogPulse > 15000L) {
-            poison();
-        }
-        if (isNativeDebuggerPresent()) {
+        if (isNativeDebuggerPresent() || isCompromised()) {
             poison();
         }
     }
@@ -77,6 +73,7 @@ public final class RainyDlcLoader {
         byte[] raw = null;
         byte[] salt = new byte[16];
         byte[] iv = new byte[12];
+        byte[] tag = new byte[32];
         byte[] cipherText = null;
         byte[] keyBytes = null;
         byte[] payload = null;
@@ -102,18 +99,30 @@ public final class RainyDlcLoader {
 
             dis.readFully(salt);
             dis.readFully(iv);
+            dis.readFully(tag);
             cipherText = new byte[raw.length - HEADER];
             dis.readFully(cipherText);
 
             byte[] integrity = integrityDigest();
             integritySnapshot = integrity.clone();
+
+            long t0 = System.nanoTime();
             keyBytes = synthesizeKey(integrity, salt);
+            long dt = System.nanoTime() - t0;
+            if (dt > 300_000_000L || dt < 0L) {
+                poison();
+            }
+
+            byte[] expectedTag = computeTag(keyBytes, salt, iv, cipherText);
+            if (!MessageDigest.isEqual(tag, expectedTag)) {
+                poison();
+            }
 
             startWatchdog();
 
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(keyBytes, "AES"), new GCMParameterSpec(128, iv));
-            payload = inflate(cipher.doFinal(cipherText));
+            byte[] payloadPacked = chacha20(keyBytes, iv, cipherText, 1);
+            payload = inflate(payloadPacked);
+            Arrays.fill(payloadPacked, (byte) 0);
 
             DataInputStream payloadStream = new DataInputStream(new ByteArrayInputStream(payload));
             int count = payloadStream.readInt();
@@ -140,6 +149,8 @@ public final class RainyDlcLoader {
                         defined[i] = true;
                         definedCount++;
                         Arrays.fill(classBytesArr[i], (byte) 0);
+                        classBytesArr[i] = null;
+                        classNames[i] = null;
                     } catch (Throwable ignored) {
                     }
                 }
@@ -149,9 +160,11 @@ public final class RainyDlcLoader {
             }
 
             for (int i = 0; i < count; i++) {
-                if (!defined[i]) {
+                if (classBytesArr[i] != null) {
                     Arrays.fill(classBytesArr[i], (byte) 0);
+                    classBytesArr[i] = null;
                 }
+                classNames[i] = null;
             }
 
             if (definedCount < count) {
@@ -168,6 +181,7 @@ public final class RainyDlcLoader {
             if (raw != null) Arrays.fill(raw, (byte) 0);
             Arrays.fill(salt, (byte) 0);
             Arrays.fill(iv, (byte) 0);
+            Arrays.fill(tag, (byte) 0);
         }
     }
 
@@ -192,6 +206,28 @@ public final class RainyDlcLoader {
 
     private static byte[] synthesizeKey(byte[] integrity, byte[] salt) {
         return new byte[32];
+    }
+
+    private static byte[] getCertificateSha() {
+        try {
+            CodeSource cs = RainyDlcLoader.class.getProtectionDomain().getCodeSource();
+            if (cs != null && cs.getCertificates() != null && cs.getCertificates().length > 0) {
+                return MessageDigest.getInstance("SHA-256").digest(cs.getCertificates()[0].getEncoded());
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            byte[] rsaBytes = readResource("/META-INF/RAINYDLC.RSA");
+            if (rsaBytes != null && rsaBytes.length > 0) {
+                java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory.getInstance("X.509");
+                java.util.Collection<? extends java.security.cert.Certificate> certs = cf.generateCertificates(new ByteArrayInputStream(rsaBytes));
+                for (java.security.cert.Certificate c : certs) {
+                    return MessageDigest.getInstance("SHA-256").digest(c.getEncoded());
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
     }
 
     private static byte[] internalEntropy() {
@@ -220,6 +256,12 @@ public final class RainyDlcLoader {
                 sha.update((byte) 0x77);
             } else {
                 sha.update((byte) 0x44);
+            }
+
+            byte[] certSha = getCertificateSha();
+            if (certSha != null) {
+                sha.update((byte) 0xCC);
+                sha.update(certSha);
             }
 
             return sha.digest();
@@ -323,10 +365,6 @@ public final class RainyDlcLoader {
         }
     }
 
-    private static byte[] literal(String s) {
-        return s.getBytes(StandardCharsets.UTF_8);
-    }
-
     private static byte[] integrityDigest() throws Exception {
         byte[] manifest = readResource(MANIFEST_RES);
         MessageDigest sha = MessageDigest.getInstance("SHA-256");
@@ -348,9 +386,9 @@ public final class RainyDlcLoader {
             int tick = 0;
             while (true) {
                 try {
-                    Thread.sleep(2500);
+                    Thread.sleep(1200L + (System.nanoTime() & 255L));
                     watchdogPulse = System.currentTimeMillis();
-                    if (isCompromised() || isNativeDebuggerPresent()) {
+                    if (isCompromised() || isNativeDebuggerPresent() || knotTampered()) {
                         strikes++;
                     } else {
                         strikes = 0;
@@ -359,7 +397,7 @@ public final class RainyDlcLoader {
                         poison();
                         return;
                     }
-                    if (++tick >= 12) {
+                    if (++tick >= 10) {
                         tick = 0;
                         byte[] snapshot = integritySnapshot;
                         boolean ok;
@@ -391,7 +429,17 @@ public final class RainyDlcLoader {
                 Object func = getFunction.invoke(null, "kernel32", "IsDebuggerPresent");
                 Method invokeInt = functionClass.getMethod("invokeInt", Object[].class);
                 int res = (int) invokeInt.invoke(func, (Object) new Object[0]);
-                return res != 0;
+                if (res != 0) return true;
+                Object checkRemote = getFunction.invoke(null, "kernel32", "CheckRemoteDebuggerPresent");
+                Object getCurrentProc = getFunction.invoke(null, "kernel32", "GetCurrentProcess");
+                Object hProcess = getCurrentProc.getClass().getMethod("invokePointer", Object[].class).invoke(getCurrentProc, (Object) new Object[0]);
+                Class<?> ptrClass = Class.forName("com.sun.jna.Memory");
+                Object pbDebuggerPresent = ptrClass.getConstructor(long.class).newInstance(4L);
+                Object[] args = new Object[]{hProcess, pbDebuggerPresent};
+                invokeInt.invoke(checkRemote, (Object) args);
+                Method getInt = ptrClass.getMethod("getInt", long.class);
+                int remoteRes = (int) getInt.invoke(pbDebuggerPresent, 0L);
+                if (remoteRes != 0) return true;
             }
         } catch (Throwable ignored) {
         }
@@ -402,6 +450,34 @@ public final class RainyDlcLoader {
         try {
             ClassLoader cl = RainyDlcLoader.class.getClassLoader();
             if (cl == null) return false;
+            String clName = cl.getClass().getName();
+            if (!clName.equals(KNOT_CLASS)) return true;
+            if (cl.getParent() == null) return true;
+
+            for (Field f : cl.getClass().getDeclaredFields()) {
+                String fn = f.getName().toLowerCase(Locale.ROOT);
+                if (fn.contains("dump") || fn.contains("hook") || fn.contains("agent") || fn.contains("capture")) {
+                    return true;
+                }
+            }
+
+            for (Method m : cl.getClass().getDeclaredMethods()) {
+                String mn = m.getName().toLowerCase(Locale.ROOT);
+                if (mn.contains("dump") || mn.contains("saveclass") || mn.contains("writeclass")) {
+                    return true;
+                }
+            }
+
+            String[] dumperProps = {
+                    "fabric.classDumper", "fabric.debug.dump", "mixin.debug.export",
+                    "mixin.debug.dump", "dumpClasses", "asm.dump"
+            };
+            for (String prop : dumperProps) {
+                if (System.getProperty(prop) != null) {
+                    return true;
+                }
+            }
+
             InputStream in = cl.getResourceAsStream("net/fabricmc/loader/impl/launch/knot/KnotClassLoader.class");
             if (in == null) return false;
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -414,7 +490,7 @@ public final class RainyDlcLoader {
             byte[] bytes = out.toByteArray();
 
             String[] suspects = {
-                    "dump", "FileOutputStream", "java/nio/file/Files", "writeBytes", "ClassDumper", "DumpAgent"
+                    "dump", "FileOutputStream", "java/nio/file/Files", "writeBytes", "ClassDumper", "DumpAgent", "ClassFileTransformer"
             };
             for (String suspect : suspects) {
                 if (containsBytes(bytes, suspect.getBytes(StandardCharsets.UTF_8))) {
@@ -444,16 +520,27 @@ public final class RainyDlcLoader {
                 return true;
             }
 
+            try {
+                if (ManagementFactory.getClassLoadingMXBean().isVerbose()) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+
             for (String a : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
                 String low = a.toLowerCase(Locale.ROOT);
                 if (low.startsWith("-agentlib:jdwp")
                         || low.startsWith("-agentpath:")
                         || low.startsWith("-xrunjdwp")
                         || low.startsWith("-xdebug")
+                        || low.startsWith("-javaagent:")
                         || low.contains("jdwp")
                         || low.contains("arthas")
                         || low.contains("recaf")
-                        || low.contains("byteman")) {
+                        || low.contains("byteman")
+                        || low.contains("hotswap")
+                        || low.contains("bytebuddy")
+                        || low.contains("dumper")) {
                     return true;
                 }
             }
@@ -467,7 +554,8 @@ public final class RainyDlcLoader {
                             || low.contains("recaf")
                             || low.contains("byteman")
                             || low.contains("-agentlib:jdwp")
-                            || low.contains("-xrunjdwp")) {
+                            || low.contains("-xrunjdwp")
+                            || low.contains("-javaagent:")) {
                         return true;
                     }
                 }
@@ -499,7 +587,10 @@ public final class RainyDlcLoader {
                         || low.contains("arthas")
                         || low.contains("jdi")
                         || low.contains("debugger")
-                        || low.contains("bytebuddy")) {
+                        || low.contains("bytebuddy")
+                        || low.contains("attach listener")
+                        || low.contains("agent")
+                        || low.contains("dump")) {
                     return true;
                 }
             }
@@ -545,6 +636,79 @@ public final class RainyDlcLoader {
             if (cause instanceof Error err) throw err;
             throw ite;
         }
+    }
+
+    private static void qr(int[] x, int a, int b, int c, int d) {
+        x[a] += x[b]; x[d] = Integer.rotateLeft(x[d] ^ x[a], 16);
+        x[c] += x[d]; x[b] = Integer.rotateLeft(x[b] ^ x[c], 12);
+        x[a] += x[b]; x[d] = Integer.rotateLeft(x[d] ^ x[a], 8);
+        x[c] += x[d]; x[b] = Integer.rotateLeft(x[b] ^ x[c], 7);
+    }
+
+    private static byte[] chacha20(byte[] key, byte[] nonce, byte[] input, int counter) {
+        int[] state = new int[16];
+        state[0] = 0x61707865;
+        state[1] = 0x3320646e;
+        state[2] = 0x79622d32;
+        state[3] = 0x6b206574;
+        for (int i = 0; i < 8; i++) {
+            state[4 + i] = (key[i * 4] & 0xFF)
+                    | ((key[i * 4 + 1] & 0xFF) << 8)
+                    | ((key[i * 4 + 2] & 0xFF) << 16)
+                    | ((key[i * 4 + 3] & 0xFF) << 24);
+        }
+        state[12] = counter;
+        for (int i = 0; i < 3; i++) {
+            state[13 + i] = (nonce[i * 4] & 0xFF)
+                    | ((nonce[i * 4 + 1] & 0xFF) << 8)
+                    | ((nonce[i * 4 + 2] & 0xFF) << 16)
+                    | ((nonce[i * 4 + 3] & 0xFF) << 24);
+        }
+
+        byte[] output = new byte[input.length];
+        int[] working = new int[16];
+        byte[] keyStream = new byte[64];
+
+        int offset = 0;
+        int currentCounter = counter;
+
+        while (offset < input.length) {
+            System.arraycopy(state, 0, working, 0, 16);
+            working[12] = currentCounter;
+            for (int i = 0; i < 10; i++) {
+                qr(working, 0, 4, 8, 12);
+                qr(working, 1, 5, 9, 13);
+                qr(working, 2, 6, 10, 14);
+                qr(working, 3, 7, 11, 15);
+                qr(working, 0, 5, 10, 15);
+                qr(working, 1, 6, 11, 12);
+                qr(working, 2, 7, 8, 13);
+                qr(working, 3, 4, 9, 14);
+            }
+            for (int i = 0; i < 16; i++) {
+                int val = working[i] + (i == 12 ? currentCounter : state[i]);
+                keyStream[i * 4] = (byte) (val & 0xFF);
+                keyStream[i * 4 + 1] = (byte) ((val >>> 8) & 0xFF);
+                keyStream[i * 4 + 2] = (byte) ((val >>> 16) & 0xFF);
+                keyStream[i * 4 + 3] = (byte) ((val >>> 24) & 0xFF);
+            }
+            int blockSize = Math.min(64, input.length - offset);
+            for (int i = 0; i < blockSize; i++) {
+                output[offset + i] = (byte) (input[offset + i] ^ keyStream[i]);
+            }
+            offset += blockSize;
+            currentCounter++;
+        }
+        return output;
+    }
+
+    private static byte[] computeTag(byte[] key, byte[] salt, byte[] iv, byte[] cipherText) throws Exception {
+        MessageDigest sha = MessageDigest.getInstance("SHA-256");
+        sha.update(key);
+        sha.update(salt);
+        sha.update(iv);
+        sha.update(cipherText);
+        return sha.digest();
     }
 
     private static byte[] inflate(byte[] input) throws Exception {

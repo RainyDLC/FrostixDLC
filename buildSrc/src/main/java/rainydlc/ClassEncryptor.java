@@ -10,9 +10,6 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -43,7 +40,7 @@ public final class ClassEncryptor {
     private static final String MANIFEST_PATH = "assets/rainydlc/manifest.txt";
 
     private static final int MAGIC = 0x4E495843;
-    private static final int VERSION = 3;
+    private static final int VERSION = 4;
 
     private static final Set<String> PLAIN_CLASSES = Set.of(
             "fun/newrar/Client.class",
@@ -176,11 +173,10 @@ public final class ClassEncryptor {
 
         byte[] iv = new byte[12];
         random.nextBytes(iv);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
-        byte[] cipherText = cipher.doFinal(payloadPacked);
+        byte[] cipherText = chacha20(key, iv, payloadPacked, 1);
+        byte[] tag = computeTag(key, salt, iv, cipherText);
 
-        verifyRoundTrip(cipher, key, iv, cipherText, payloadPlain, coreClasses);
+        verifyRoundTrip(key, salt, iv, tag, cipherText, payloadPlain, coreClasses);
 
         java.util.Arrays.fill(master, (byte) 0);
         java.util.Arrays.fill(key, (byte) 0);
@@ -191,6 +187,7 @@ public final class ClassEncryptor {
         coreDos.writeShort(VERSION);
         coreDos.write(salt);
         coreDos.write(iv);
+        coreDos.write(tag);
         coreDos.write(cipherText);
         coreDos.flush();
         byte[] coreBin = coreBuf.toByteArray();
@@ -247,10 +244,13 @@ public final class ClassEncryptor {
         return buf.toByteArray();
     }
 
-    private void verifyRoundTrip(Cipher cipher, byte[] key, byte[] iv, byte[] cipherText,
+    private void verifyRoundTrip(byte[] key, byte[] salt, byte[] iv, byte[] tag, byte[] cipherText,
                                  byte[] expectedPlain, List<String> coreClasses) throws Exception {
-        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
-        byte[] packed = cipher.doFinal(cipherText);
+        byte[] expectedTag = computeTag(key, salt, iv, cipherText);
+        if (!MessageDigest.isEqual(tag, expectedTag)) {
+            throw new IllegalStateException("payload tag mismatch");
+        }
+        byte[] packed = chacha20(key, iv, cipherText, 1);
         byte[] plain = inflate(packed);
         if (!java.util.Arrays.equals(plain, expectedPlain)) {
             throw new IllegalStateException("payload round-trip mismatch");
@@ -282,6 +282,14 @@ public final class ClassEncryptor {
         sha.update((byte) 0x33);
         sha.update(modId.getBytes(StandardCharsets.UTF_8));
         sha.update((byte) 0x77);
+        if (certBind) {
+            Certificate[] chain = signingChain();
+            if (chain != null && chain.length > 0) {
+                byte[] certSha = MessageDigest.getInstance("SHA-256").digest(chain[0].getEncoded());
+                sha.update((byte) 0xCC);
+                sha.update(certSha);
+            }
+        }
         return sha.digest();
     }
 
@@ -348,14 +356,12 @@ public final class ClassEncryptor {
 
         Set<String> used = memberNames(header);
         String decName = uniqueName(used);
-        String seedAName = uniqueName(used);
-        String seedBName = uniqueName(used);
         String cacheName = uniqueName(used);
 
         Codec codec = Codec.random(random);
         codecName(codec);
 
-        byte[] probeBytes = buildProbeClass(owner, decName, seedAName, seedBName, cacheName, codec);
+        byte[] probeBytes = buildProbeClass(owner, decName, cacheName, codec);
         MethodNode decryptor = extractMethod(probeBytes, decName);
         runtimeCheck(owner, probeBytes, decName, codec);
 
@@ -419,8 +425,6 @@ public final class ClassEncryptor {
 
                 @Override
                 public void visitEnd() {
-                    emitIntField(cw, seedAName, codec.seedA);
-                    emitIntField(cw, seedBName, codec.seedB);
                     emitCacheField(cw, cacheName);
                     decryptor.accept(cw);
                     super.visitEnd();
@@ -524,14 +528,12 @@ public final class ClassEncryptor {
         }
     }
 
-    private byte[] buildProbeClass(String owner, String decName, String seedA, String seedB,
+    private byte[] buildProbeClass(String owner, String decName,
                                    String cacheName, Codec codec) {
         ClassWriter probe = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
         probe.visit(Opcodes.V21, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, owner, null, "java/lang/Object", null);
-        emitIntField(probe, seedA, codec.seedA);
-        emitIntField(probe, seedB, codec.seedB);
         emitCacheField(probe, cacheName);
-        emitDecryptor(probe, owner, decName, seedA, seedB, cacheName, codec);
+        emitDecryptor(probe, owner, decName, cacheName, codec);
         probe.visitEnd();
         return probe.toByteArray();
     }
@@ -620,7 +622,7 @@ public final class ClassEncryptor {
         }
     }
 
-    private void emitDecryptor(ClassWriter cw, String owner, String decName, String seedA, String seedB,
+    private void emitDecryptor(ClassWriter cw, String owner, String decName,
                                String cacheName, Codec codec) {
         MethodVisitor mv = cw.visitMethod(
                 Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
@@ -659,15 +661,15 @@ public final class ClassEncryptor {
         mv.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_BYTE);
         mv.visitVarInsn(Opcodes.ASTORE, 4);
 
-        mv.visitFieldInsn(Opcodes.GETSTATIC, owner, seedA, "I");
-        mv.visitFieldInsn(Opcodes.GETSTATIC, owner, seedB, "I");
-        mv.visitLdcInsn(codec.mul);
-        mv.visitInsn(Opcodes.IMUL);
+        int k1 = random.nextInt();
+        mv.visitLdcInsn(codec.st1() ^ k1);
+        mv.visitLdcInsn(k1);
         mv.visitInsn(Opcodes.IXOR);
         mv.visitVarInsn(Opcodes.ISTORE, 5);
 
-        mv.visitFieldInsn(Opcodes.GETSTATIC, owner, seedB, "I");
-        mv.visitLdcInsn(0x5A5A5A5A);
+        int k2 = random.nextInt();
+        mv.visitLdcInsn(codec.st2() ^ k2);
+        mv.visitLdcInsn(k2);
         mv.visitInsn(Opcodes.IXOR);
         mv.visitVarInsn(Opcodes.ISTORE, 6);
 
@@ -845,7 +847,7 @@ public final class ClassEncryptor {
         }, ClassReader.SKIP_CODE);
 
         if (!present.contains(SYNTHESIZE_KEY_METHOD + SYNTHESIZE_KEY_DESC)) {
-            throw new IllegalStateException("ru.white.RainyDlcLoader is missing "
+            throw new IllegalStateException("fun.newrar.RainyDlcLoader is missing "
                     + SYNTHESIZE_KEY_METHOD + SYNTHESIZE_KEY_DESC
                     + " — ProGuard must keep the loader members intact (see protection/proguard.rules)");
         }
@@ -871,7 +873,7 @@ public final class ClassEncryptor {
             @Override
             public void visitEnd() {
                 if (!found[0]) {
-                    throw new IllegalStateException("ru.white.RainyDlcLoader#" + SYNTHESIZE_KEY_METHOD
+                    throw new IllegalStateException("fun.newrar.RainyDlcLoader#" + SYNTHESIZE_KEY_METHOD
                             + SYNTHESIZE_KEY_DESC + " not found — ProGuard must keep the loader intact");
                 }
                 emitSynthesizeKey(cw, owner, plan);
@@ -1009,6 +1011,18 @@ public final class ClassEncryptor {
             mv.visitInsn(Opcodes.IUSHR);
             mv.visitInsn(Opcodes.IXOR);
 
+            if (j == 0) {
+                mv.visitLdcInsn(plan.kAdd & 0xFF);
+                mv.visitInsn(Opcodes.IXOR);
+            } else {
+                mv.visitVarInsn(Opcodes.ALOAD, 4);
+                mv.visitIntInsn(Opcodes.BIPUSH, j - 1);
+                mv.visitInsn(Opcodes.BALOAD);
+                mv.visitIntInsn(Opcodes.SIPUSH, 255);
+                mv.visitInsn(Opcodes.IAND);
+                mv.visitInsn(Opcodes.IXOR);
+            }
+
             mv.visitInsn(Opcodes.I2B);
             mv.visitInsn(Opcodes.BASTORE);
         }
@@ -1052,7 +1066,7 @@ public final class ClassEncryptor {
 
         mv.visitVarInsn(Opcodes.ALOAD, keySlot);
         mv.visitInsn(Opcodes.ARETURN);
-        mv.visitMaxs(6, keySlot + 1);
+        mv.visitMaxs(7, keySlot + 1);
         mv.visitEnd();
     }
 
@@ -1088,7 +1102,8 @@ public final class ClassEncryptor {
 
             int c1 = fragments[p.fa].charAt(p.pa);
             int c2 = fragments[p.fb].charAt(p.pb);
-            int low = (master[j] & 0xFF) ^ (c1 & 0xFF) ^ (c2 & 0xFF) ^ kb;
+            int prev = (j == 0) ? (kAdd & 0xFF) : (master[j - 1] & 0xFF);
+            int low = (master[j] & 0xFF) ^ (c1 & 0xFF) ^ (c2 & 0xFF) ^ kb ^ prev;
             p.mask = (random.nextInt() & ~0xFF) | low;
             pieces[j] = p;
         }
@@ -1440,6 +1455,79 @@ public final class ClassEncryptor {
         }
         inflater.end();
         return output.toByteArray();
+    }
+
+    private static void qr(int[] x, int a, int b, int c, int d) {
+        x[a] += x[b]; x[d] = Integer.rotateLeft(x[d] ^ x[a], 16);
+        x[c] += x[d]; x[b] = Integer.rotateLeft(x[b] ^ x[c], 12);
+        x[a] += x[b]; x[d] = Integer.rotateLeft(x[d] ^ x[a], 8);
+        x[c] += x[d]; x[b] = Integer.rotateLeft(x[b] ^ x[c], 7);
+    }
+
+    private static byte[] chacha20(byte[] key, byte[] nonce, byte[] input, int counter) {
+        int[] state = new int[16];
+        state[0] = 0x61707865;
+        state[1] = 0x3320646e;
+        state[2] = 0x79622d32;
+        state[3] = 0x6b206574;
+        for (int i = 0; i < 8; i++) {
+            state[4 + i] = (key[i * 4] & 0xFF)
+                    | ((key[i * 4 + 1] & 0xFF) << 8)
+                    | ((key[i * 4 + 2] & 0xFF) << 16)
+                    | ((key[i * 4 + 3] & 0xFF) << 24);
+        }
+        state[12] = counter;
+        for (int i = 0; i < 3; i++) {
+            state[13 + i] = (nonce[i * 4] & 0xFF)
+                    | ((nonce[i * 4 + 1] & 0xFF) << 8)
+                    | ((nonce[i * 4 + 2] & 0xFF) << 16)
+                    | ((nonce[i * 4 + 3] & 0xFF) << 24);
+        }
+
+        byte[] output = new byte[input.length];
+        int[] working = new int[16];
+        byte[] keyStream = new byte[64];
+
+        int offset = 0;
+        int currentCounter = counter;
+
+        while (offset < input.length) {
+            System.arraycopy(state, 0, working, 0, 16);
+            working[12] = currentCounter;
+            for (int i = 0; i < 10; i++) {
+                qr(working, 0, 4, 8, 12);
+                qr(working, 1, 5, 9, 13);
+                qr(working, 2, 6, 10, 14);
+                qr(working, 3, 7, 11, 15);
+                qr(working, 0, 5, 10, 15);
+                qr(working, 1, 6, 11, 12);
+                qr(working, 2, 7, 8, 13);
+                qr(working, 3, 4, 9, 14);
+            }
+            for (int i = 0; i < 16; i++) {
+                int val = working[i] + (i == 12 ? currentCounter : state[i]);
+                keyStream[i * 4] = (byte) (val & 0xFF);
+                keyStream[i * 4 + 1] = (byte) ((val >>> 8) & 0xFF);
+                keyStream[i * 4 + 2] = (byte) ((val >>> 16) & 0xFF);
+                keyStream[i * 4 + 3] = (byte) ((val >>> 24) & 0xFF);
+            }
+            int blockSize = Math.min(64, input.length - offset);
+            for (int i = 0; i < blockSize; i++) {
+                output[offset + i] = (byte) (input[offset + i] ^ keyStream[i]);
+            }
+            offset += blockSize;
+            currentCounter++;
+        }
+        return output;
+    }
+
+    private static byte[] computeTag(byte[] key, byte[] salt, byte[] iv, byte[] cipherText) throws Exception {
+        MessageDigest sha = MessageDigest.getInstance("SHA-256");
+        sha.update(key);
+        sha.update(salt);
+        sha.update(iv);
+        sha.update(cipherText);
+        return sha.digest();
     }
 
     private static void readJar(File jar, Map<String, byte[]> entries, List<String> order) throws Exception {

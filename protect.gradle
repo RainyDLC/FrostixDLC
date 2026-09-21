@@ -31,7 +31,7 @@ def signingPassword = { ->
     if (pw == null || pw.isEmpty()) {
         pw = new BigInteger(160, new java.security.SecureRandom()).toString(36)
         signingPropsFile.parentFile.mkdirs()
-        signingPropsFile.text = "# сгенерировано автоматически, не коммитить\nstorePassword=${pw}\n"
+        signingPropsFile.text = "storePassword=${pw}\n"
     }
     return pw
 }

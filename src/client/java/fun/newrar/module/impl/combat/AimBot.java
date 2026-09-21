@@ -13,6 +13,7 @@ import fun.newrar.module.api.settings.impl.ModeSetting;
 import fun.newrar.module.api.settings.impl.SliderSetting;
 import fun.newrar.utils.aura.GCDUtil;
 import fun.newrar.utils.aura.RayTraceUtil;
+import fun.newrar.utils.aura.ServerReach;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
@@ -112,7 +113,7 @@ public class AimBot extends Module {
         }
 
         if (target != null && mc.player != null && mc.world != null && (!onlyHelpToInput.getValue() || !RayTraceUtil.rayTraceEntity(mc.player.getYaw(), mc.player.getPitch(), 3, target))) {
-            Vec3d vec = UBoxPoints.getBestVector3dOnEntityBox(target.getBoundingBox(),false
+            Vec3d vec = UBoxPoints.getBestVector3dOnEntityBox(target,false
             ).subtract(mc.player.getEyePos()).normalize();
 
             if (useNoise.getValue()) {

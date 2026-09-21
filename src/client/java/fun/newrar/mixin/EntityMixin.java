@@ -3,7 +3,6 @@ package fun.newrar.mixin;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import fun.newrar.Client;
 import fun.newrar.module.impl.combat.HitBoxes;
-import fun.newrar.module.impl.movement.Noclip;
 import fun.newrar.module.impl.player.NoPush;
 import fun.newrar.module.impl.render.ShaderEsp;
 import fun.newrar.utils.annotation.IMinecraft;
@@ -33,17 +32,6 @@ public class EntityMixin implements IMinecraft {
         }
 
         return original;
-    }
-
-    @Inject(method = "move", at = @At("HEAD"))
-    private void noclip$forceNoClip(CallbackInfo ci) {
-        if ((Object) this != mc.player) return;
-
-        Noclip noclip = Noclip.getInstance();
-        if (noclip == null || !noclip.isEnabled()) return;
-        if (!noclip.mode.is("Vanilla") && !Noclip.isPhasing()) return;
-
-        ((Entity) (Object) this).noClip = true;
     }
 
     @Inject(method = "getTargetingMargin", at = @At("RETURN"), cancellable = true)

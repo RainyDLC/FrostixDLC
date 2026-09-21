@@ -224,7 +224,7 @@ public class UAttack implements IMinecraft {
     public static boolean anyEntityOnRay(LivingEntity livingIn, double range) {
         if (livingIn != null) {
             boolean ignoreBlocks = AttackAura.get().others.getValue("Бить через блоки");
-            return LagCompensation.rayHits(livingIn, (float) range, ignoreBlocks);
+            return LagCompensation.rayHitsBox(ServerReach.attackBox(livingIn), (float) range, ignoreBlocks);
         }
         return false;
     }

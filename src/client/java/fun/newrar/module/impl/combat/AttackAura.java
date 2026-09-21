@@ -43,6 +43,7 @@ import fun.newrar.screen.RotationBuilderScreen;
 import fun.newrar.utils.aura.AttackUtil;
 import fun.newrar.utils.aura.AuraUtil;
 import fun.newrar.utils.aura.LagCompensation;
+import fun.newrar.utils.aura.ServerReach;
 import fun.newrar.utils.aura.UAttack;
 import fun.newrar.utils.colors.ColorUtil;
 import fun.newrar.utils.math.ServerUtil;
@@ -162,9 +163,25 @@ public class AttackAura extends Module {
 
         updateCritSprint();
 
-        if (!checkToAttack() && target != null) {
+        if (!checkToAttack() && target != null && !postMotionAlive()) {
             attackEntity();
         }
+    }
+
+    /**
+     * Хвост ClientPlayerEntity#sendMovementPackets: позиция и ротация уже ушли на сервер,
+     * поэтому его проверка дистанции считает нас по текущему тику, а не по прошлому.
+     */
+    @EventHandler
+    public void onPostMotion(EventPostMotion e) {
+        lastPostMotionMs = System.currentTimeMillis();
+        if (!ServerReach.postMotion() || target == null || checkToAttack()) return;
+        attackEntity();
+    }
+
+    /** Если пакет движения в этом тике не уходил — бьём как раньше, из EventUpdate. */
+    private boolean postMotionAlive() {
+        return ServerReach.postMotion() && System.currentTimeMillis() - lastPostMotionMs < 90L;
     }
 
     private boolean wantsCrit() {
@@ -213,7 +230,7 @@ public class AttackAura extends Module {
         if (target == null || mc.player == null || checkToAttack()) {
             return false;
         }
-        if (LagCompensation.attackDistance(target) >= LagCompensation.safeReach(attackRange.getValue())) {
+        if (!ServerReach.canReach(target, attackRange.getValue())) {
             return false;
         }
         float[] ranges = getRanges();
@@ -226,7 +243,7 @@ public class AttackAura extends Module {
             return;
         }
 
-        if (LagCompensation.attackDistance(target) >= LagCompensation.safeReach(attackRange.getValue())) {
+        if (!ServerReach.canReach(target, attackRange.getValue())) {
             return;
         }
 
@@ -305,6 +322,8 @@ public class AttackAura extends Module {
     public boolean justAttacked = false;
 
     private int retargetClock = 0;
+
+    private long lastPostMotionMs = 0L;
 
     public TimerUtil timeSped1 = new TimerUtil();
     public TimerUtil timeSped2 = new TimerUtil();
@@ -388,12 +407,8 @@ public class AttackAura extends Module {
 
                     score += living.getHealth() * 0.06;
 
-                    if (living.hurtTime > 5) score -= 0.20;
-
                     if (dist <= atkRange * 1.4 && living.handSwingTicks >= 0 && living.handSwingTicks < 8)
                         score -= 0.30;
-
-                    if (living == target) score -= 0.35;
                 }
             }
 
@@ -430,7 +445,7 @@ public class AttackAura extends Module {
     public boolean isValidTarget(LivingEntity entity, double maxDist) {
         if (entity instanceof ClientPlayerEntity) return false;
 
-        if (LagCompensation.attackDistance(entity) > maxDist) return false;
+        if (ServerReach.attackDistance(entity) > maxDist) return false;
 
         if (!others.getValue("Бить через блоки")) {
             if (!LagCompensation.isVisibleLoose(entity)) return false;

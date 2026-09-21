@@ -6,6 +6,7 @@ import fun.newrar.utils.annotation.IMinecraft;
 import lombok.experimental.UtilityClass;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.EntityPose;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
@@ -116,7 +117,7 @@ public class UBoxPoints implements IMinecraft {
 
     private static double auraReach() {
         try {
-            return LagCompensation.safeReach(AttackAura.get().attackRange.getValue());
+            return ServerReach.reach(AttackAura.get().attackRange.getValue());
         } catch (Throwable ignored) {
             return 2.94D;
         }
@@ -181,6 +182,16 @@ public class UBoxPoints implements IMinecraft {
 
     public static Vec3d getBestVector3dOnEntityBox(Box aabb) {
         return getBestVector3dOnEntityBox(aabb, false);
+    }
+
+    /** Точка на серверном (лаг-компенсированном) боксе цели — то, во что целится ротация. */
+    public static Vec3d getBestVector3dOnEntityBox(LivingEntity target) {
+        return getBestVector3dOnEntityBox(target, false);
+    }
+
+    public static Vec3d getBestVector3dOnEntityBox(LivingEntity target, boolean alwaysMultipoints) {
+        if (target == null) return mc.player.getEyePos();
+        return getBestVector3dOnEntityBox(ServerReach.attackBox(target), alwaysMultipoints);
     }
 
     public static Vec3d getBestVector3dOnEntityBox(Box aabb, boolean alwaysMultipoints) {

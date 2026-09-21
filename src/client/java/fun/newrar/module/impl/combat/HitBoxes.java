@@ -11,6 +11,7 @@ import fun.newrar.module.api.Module;
 import fun.newrar.module.api.ModuleInfo;
 import fun.newrar.module.api.settings.impl.ModeSetting;
 import fun.newrar.module.api.settings.impl.SliderSetting;
+import fun.newrar.utils.aura.ServerReach;
 import fun.newrar.utils.aura.UBoxPoints;
 import fun.newrar.utils.math.MathUtil;
 import fun.newrar.utils.other.Instance;
@@ -92,7 +93,7 @@ public class HitBoxes extends Module {
 
     public void onHitBox(LivingEntity target) {
         if (typeRot.is("Постоянный")) {
-            Vec3d vec3d = UBoxPoints.getBestVector3dOnEntityBox(target.getBoundingBox(), false).subtract(mc.player.getEyePos());
+            Vec3d vec3d = UBoxPoints.getBestVector3dOnEntityBox(target, false).subtract(mc.player.getEyePos());
             float yaw = (float) Math.toDegrees(Math.atan2(-vec3d.x, vec3d.z));
             float pitch = (float) MathHelper.clamp(-Math.toDegrees(Math.atan2(vec3d.y, Math.hypot(vec3d.x, vec3d.z))), -90, 90);
 

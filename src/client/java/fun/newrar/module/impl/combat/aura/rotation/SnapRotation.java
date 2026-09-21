@@ -10,6 +10,7 @@ import fun.newrar.manager.rotation.RotationProcess;
 import fun.newrar.module.impl.combat.AttackAura;
 import fun.newrar.module.impl.combat.aura.RotationAura;
 import fun.newrar.utils.aura.AuraUtil;
+import fun.newrar.utils.aura.ServerReach;
 import fun.newrar.utils.aura.UAttack;
 import fun.newrar.utils.aura.UBoxPoints;
 import fun.newrar.utils.math.MathUtil;
@@ -63,7 +64,7 @@ public class SnapRotation implements RotationAura {
     }
 
     private void fov(AttackAura aura, LivingEntity target, boolean canAttack) {
-        Vec3d vec = UBoxPoints.getBestVector3dOnEntityBox(target.getBoundingBox(), false).add(
+        Vec3d vec = UBoxPoints.getBestVector3dOnEntityBox(target, false).add(
                 0.3F * Math.sin(System.currentTimeMillis() / 50D),
                 0.1F * Math.sin(System.currentTimeMillis() / 50D) + 0.3F * Math.cos(System.currentTimeMillis() / 50D),
                 0.3F * Math.cos(System.currentTimeMillis() / 50D)

@@ -147,7 +147,7 @@ public class AuraUtil implements IMinecraft {
     }
     public static boolean validDistance(Entity entity, float distance, boolean smart) {
         if (entity instanceof LivingEntity living) {
-            return LagCompensation.attackDistance(living) < LagCompensation.safeReach(distance);
+            return ServerReach.canReach(living, distance);
         }
         return getStrictDistance(entity) < distance;
     }

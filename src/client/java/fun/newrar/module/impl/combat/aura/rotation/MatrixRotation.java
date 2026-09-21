@@ -9,6 +9,7 @@ import fun.newrar.manager.rotation.RotationProcess;
 import fun.newrar.module.impl.combat.AttackAura;
 import fun.newrar.module.impl.combat.aura.RotationAura;
 import fun.newrar.utils.aura.RayTraceUtil;
+import fun.newrar.utils.aura.ServerReach;
 import fun.newrar.utils.aura.UBoxPoints;
 import fun.newrar.utils.math.MathUtil;
 
@@ -21,7 +22,7 @@ public class MatrixRotation implements RotationAura {
     public void onRotation(AttackAura aura, LivingEntity target, float[] ranges, boolean canAttack) {
         if (mc.player == null || target == null) return;
 
-            Vec3d vec = UBoxPoints.getBestVector3dOnEntityBox(target.getBoundingBox()).subtract(mc.player.getEyePos()).normalize();
+            Vec3d vec = UBoxPoints.getBestVector3dOnEntityBox(target).subtract(mc.player.getEyePos()).normalize();
 
             float rawYaw = (float) Math.toDegrees(Math.atan2(-vec.x, vec.z));
             float rawPitch = (float) MathHelper.clamp(-Math.toDegrees(Math.atan2(vec.y, Math.hypot(vec.x, vec.z))), -90F, 90F);
