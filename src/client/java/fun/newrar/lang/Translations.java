@@ -519,6 +519,11 @@ final class Translations {
         m.put("Морковь", "Carrots");
         m.put("Свёкла", "Beetroots");
         m.put("Адский нарост", "Nether wart");
+        m.put("Подбирать дроп", "Pick up drops");
+        m.put("Радиус подбора", "Pickup radius");
+        m.put("Складывать в сундук", "Deposit into chest");
+        m.put("Дистанция до сундука", "Chest distance");
+        m.put("Оставлять для посадки", "Keep for planting");
 
         return m;
     }
