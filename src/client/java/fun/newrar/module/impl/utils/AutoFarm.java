@@ -22,10 +22,12 @@ import net.minecraft.item.Items;
 import net.minecraft.item.PlayerHeadItem;
 import net.minecraft.item.ShovelItem;
 import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerInputC2SPacket;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
+import net.minecraft.util.PlayerInput;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -60,7 +62,7 @@ public class AutoFarm extends Module {
 
     public final BooleanSetting swapOffhand = new BooleanSetting(this, "Шар во вторую руку", true);
     public final BooleanSetting rotations = new BooleanSetting(this, "Ротации", true);
-    public final BooleanSetting anyHead = new BooleanSetting(this, "Любая голова как шар", false);
+    public final BooleanSetting anyHead = new BooleanSetting(this, "Любая голова как шар", true);
 
     public final BooleanSetting farmPotatoes = new BooleanSetting(this, "Картошка", true);
     public final BooleanSetting farmWheat = new BooleanSetting(this, "Пшеница", true);
@@ -105,7 +107,18 @@ public class AutoFarm extends Module {
         if (mc.player != null) {
             startFarmPos = mc.player.getBlockPos();
         }
-        currentState = State.HARVEST;
+
+        // Приоритет состояний при включении:
+        if (!findMatureCrops().isEmpty()) {
+            currentState = State.HARVEST;
+        } else if (hasDroppedFarmItems()) {
+            currentState = State.PICKUP;
+        } else if (autoReplant.getValue() && !findEmptyFarmland().isEmpty() && findSeedSlot() != -1) {
+            currentState = State.REPLANT;
+        } else {
+            currentState = State.GROW_ORB;
+        }
+
         targetChestPos = null;
         isSneakingForOrb = false;
         sneakTicks = 0;
@@ -124,6 +137,11 @@ public class AutoFarm extends Module {
         stopMovement();
         if (mc.player != null) {
             mc.options.sneakKey.setPressed(false);
+            mc.player.setSneaking(false);
+            if (mc.player.input != null) {
+                mc.player.input.playerInput = new PlayerInput(false, false, false, false, false, false, false);
+            }
+            sendSneakPacket(false);
         }
         isSneakingForOrb = false;
         sneakTicks = 0;
@@ -146,9 +164,27 @@ public class AutoFarm extends Module {
         if (isSneakingForOrb) {
             sneakTicks++;
             mc.options.sneakKey.setPressed(true);
+            mc.player.setSneaking(true);
+            if (mc.player.input != null) {
+                mc.player.input.playerInput = new PlayerInput(false, false, false, false, false, true, false);
+            }
+            sendSneakPacket(true);
 
-            if (sneakTicks >= 5) {
+            // На 3-м тике отправляем также клик предметом (на случай если сервер требует Shift+ПКМ)
+            if (sneakTicks == 3) {
+                Hand orbHand = getOrbHand();
+                mc.interactionManager.interactItem(mc.player, orbHand);
+                mc.player.swingHand(orbHand);
+            }
+
+            if (sneakTicks >= 12) {
                 mc.options.sneakKey.setPressed(false);
+                mc.player.setSneaking(false);
+                if (mc.player.input != null) {
+                    mc.player.input.playerInput = new PlayerInput(false, false, false, false, false, false, false);
+                }
+                sendSneakPacket(false);
+
                 isSneakingForOrb = false;
                 sneakTicks = 0;
                 lastOrbUseTime = System.currentTimeMillis();
@@ -159,11 +195,13 @@ public class AutoFarm extends Module {
             return;
         }
 
-        // Если на земле уже лежит неубранная картошка/пшеница и мы не заняты сундуком — собираем её!
+        // Если на земле уже лежит неубранная картошка/пшеница и мы не заняты сундуком или шаром — собираем её!
         if (autoPickup.getValue() && hasDroppedFarmItems() &&
+                currentState != State.GROW_ORB &&
                 currentState != State.GO_TO_CHEST &&
                 currentState != State.DEPOSITING_CHEST &&
-                currentState != State.PICKUP) {
+                currentState != State.PICKUP &&
+                !isSneakingForOrb) {
             // Если в радиусе досягаемости нет созревших культур прямо сейчас, сразу идем подбирать
             if (findMatureCrops().isEmpty()) {
                 currentState = State.PICKUP;
@@ -415,26 +453,40 @@ public class AutoFarm extends Module {
     private void handleWaitCooldown() {
         stopMovement();
 
-        // 1. Если на земле лежит неубранный дроп — идем подбирать!
+        // 1. Проверяем кулдаун Шара огородника В ПЕРВУЮ ОЧЕРЕДЬ!
+        long cooldownMs = (long) (cooldown.getValue() * 1000);
+        long elapsed = System.currentTimeMillis() - lastOrbUseTime;
+
+        if (elapsed >= cooldownMs) {
+            // Если перед использованием шара есть пустые грядки и есть семена — сначала сажаем их!
+            if (autoReplant.getValue() && !findEmptyFarmland().isEmpty() && findSeedSlot() != -1) {
+                currentState = State.REPLANT;
+                return;
+            }
+            currentState = State.GROW_ORB;
+            return;
+        }
+
+        // 2. Если на земле лежит неубранный дроп — идем подбирать!
         if (autoPickup.getValue() && hasDroppedFarmItems()) {
             currentState = State.PICKUP;
             return;
         }
 
-        // 2. Если есть созревший урожай — собираем
+        // 3. Если есть созревший урожай — собираем
         List<BlockPos> mature = findMatureCrops();
         if (!mature.isEmpty()) {
             currentState = State.HARVEST;
             return;
         }
 
-        // 3. Если есть пустые грядки — сажаем
-        if (autoReplant.getValue() && !findEmptyFarmland().isEmpty()) {
+        // 4. Если есть пустые грядки и семена — сажаем
+        if (autoReplant.getValue() && !findEmptyFarmland().isEmpty() && findSeedSlot() != -1) {
             currentState = State.REPLANT;
             return;
         }
 
-        // 4. Если в инвентаре накопился урожай для сундука — складываем
+        // 5. Если в инвентаре накопился урожай для сундука — складываем
         if (autoChest.getValue() && hasItemsToDeposit()) {
             BlockPos chest = findNearestChest();
             if (chest != null) {
@@ -443,44 +495,39 @@ public class AutoFarm extends Module {
                 return;
             }
         }
-
-        // 5. Проверяем кулдаун Шара огородника
-        long cooldownMs = (long) (cooldown.getValue() * 1000);
-        long elapsed = System.currentTimeMillis() - lastOrbUseTime;
-
-        if (elapsed >= cooldownMs) {
-            List<BlockPos> growing = findGrowingCrops();
-            if (!growing.isEmpty()) {
-                currentState = State.GROW_ORB;
-            }
-        }
     }
 
     private void handleGrowOrb() {
         stopMovement();
 
+        boolean ready = false;
         if (swapOffhand.getValue()) {
-            boolean hasOrb = ensureOrbInOffhand();
-            if (!hasOrb) {
-                if (!warnedNoOrb) {
-                    NotificationManager.send("Шар огородника не найден!", NotificationManager.Type.WARNING, 3000);
-                    warnedNoOrb = true;
+            if (ensureOrbInOffhand()) {
+                ready = true;
+            } else {
+                int hotbarSlot = ensureOrbInHotbar();
+                if (hotbarSlot != -1) {
+                    mc.player.getInventory().setSelectedSlot(hotbarSlot);
+                    ready = true;
                 }
-                currentState = State.WAIT_COOLDOWN;
-                return;
             }
         } else {
-            int hotbarOrb = findOrbInHotbar();
-            if (hotbarOrb != -1) {
-                mc.player.getInventory().setSelectedSlot(hotbarOrb);
-            } else if (!isGardenerOrb(mc.player.getOffHandStack())) {
-                if (!warnedNoOrb) {
-                    NotificationManager.send("Шар огородника не найден!", NotificationManager.Type.WARNING, 3000);
-                    warnedNoOrb = true;
-                }
-                currentState = State.WAIT_COOLDOWN;
-                return;
+            int hotbarSlot = ensureOrbInHotbar();
+            if (hotbarSlot != -1) {
+                mc.player.getInventory().setSelectedSlot(hotbarSlot);
+                ready = true;
+            } else if (isGardenerOrb(mc.player.getOffHandStack())) {
+                ready = true;
             }
+        }
+
+        if (!ready) {
+            if (!warnedNoOrb) {
+                NotificationManager.send("Шар огородника не найден в инвентаре/руке!", NotificationManager.Type.WARNING, 3000);
+                warnedNoOrb = true;
+            }
+            currentState = State.WAIT_COOLDOWN;
+            return;
         }
 
         warnedNoOrb = false;
@@ -488,6 +535,28 @@ public class AutoFarm extends Module {
         isSneakingForOrb = true;
         sneakTicks = 0;
         mc.options.sneakKey.setPressed(true);
+        mc.player.setSneaking(true);
+        if (mc.player.input != null) {
+            mc.player.input.playerInput = new PlayerInput(false, false, false, false, false, true, false);
+        }
+        sendSneakPacket(true);
+    }
+
+    private Hand getOrbHand() {
+        if (mc.player == null) return Hand.OFF_HAND;
+        if (isGardenerOrb(mc.player.getOffHandStack())) {
+            return Hand.OFF_HAND;
+        }
+        if (isGardenerOrb(mc.player.getMainHandStack())) {
+            return Hand.MAIN_HAND;
+        }
+        return Hand.OFF_HAND;
+    }
+
+    private void sendSneakPacket(boolean sneaking) {
+        if (mc.getNetworkHandler() == null || mc.player == null) return;
+        PlayerInput input = new PlayerInput(false, false, false, false, false, sneaking, false);
+        mc.getNetworkHandler().sendPacket(new PlayerInputC2SPacket(input));
     }
 
     // --- Перемещение к точке/предмету ---
@@ -561,7 +630,7 @@ public class AutoFarm extends Module {
             return true;
         }
 
-        String name = stack.getName().getString().toLowerCase();
+        String name = clean(stack.getName().getString());
         return name.contains("карто") ||
                 name.contains("пшен") ||
                 name.contains("морков") ||
@@ -675,27 +744,6 @@ public class AutoFarm extends Module {
         return list;
     }
 
-    private List<BlockPos> findGrowingCrops() {
-        List<BlockPos> list = new ArrayList<>();
-        int r = (int) Math.ceil(radius.getValue());
-        BlockPos playerPos = mc.player.getBlockPos();
-        BlockPos.Mutable mutable = new BlockPos.Mutable();
-
-        for (int x = -r; x <= r; x++) {
-            for (int y = -2; y <= 2; y++) {
-                for (int z = -r; z <= r; z++) {
-                    mutable.set(playerPos.getX() + x, playerPos.getY() + y, playerPos.getZ() + z);
-                    if (!isWithinReach(mutable)) continue;
-                    BlockState state = mc.world.getBlockState(mutable);
-                    if (isGrowingCrop(state)) {
-                        list.add(mutable.toImmutable());
-                    }
-                }
-            }
-        }
-        return list;
-    }
-
     private List<BlockPos> findEmptyFarmland() {
         List<BlockPos> list = new ArrayList<>();
         int r = (int) Math.ceil(radius.getValue());
@@ -740,29 +788,6 @@ public class AutoFarm extends Module {
         return false;
     }
 
-    private boolean isGrowingCrop(BlockState state) {
-        Block block = state.getBlock();
-        if (block == Blocks.POTATOES && farmPotatoes.getValue()) {
-            return state.get(CropBlock.AGE) < 7;
-        }
-        if (block == Blocks.WHEAT && farmWheat.getValue()) {
-            return state.get(CropBlock.AGE) < 7;
-        }
-        if (block == Blocks.CARROTS && farmCarrots.getValue()) {
-            return state.get(CropBlock.AGE) < 7;
-        }
-        if (block == Blocks.BEETROOTS && farmBeetroots.getValue()) {
-            return state.get(BeetrootsBlock.AGE) < 3;
-        }
-        if (block == Blocks.NETHER_WART && farmNetherWart.getValue()) {
-            return state.get(NetherWartBlock.AGE) < 3;
-        }
-        if (state.getBlock() instanceof CropBlock crop) {
-            return !crop.isMature(state);
-        }
-        return false;
-    }
-
     private boolean isEmptyFarmland(BlockPos pos, BlockState state) {
         Block block = state.getBlock();
         if (block == Blocks.FARMLAND) {
@@ -779,20 +804,38 @@ public class AutoFarm extends Module {
     public boolean isGardenerOrb(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return false;
 
+        // Если включена опция "любая голова" (по умолчанию true)
         if (anyHead.getValue() && stack.getItem() instanceof PlayerHeadItem) {
             return true;
         }
 
-        String name = stack.getName().getString().toLowerCase();
-        if (name.contains("огородник")) return true;
+        // Если игрок уже держит голову в руке/второй руке
+        if (stack.getItem() instanceof PlayerHeadItem && mc.player != null &&
+                (stack == mc.player.getOffHandStack() || stack == mc.player.getMainHandStack())) {
+            return true;
+        }
+
+        String name = clean(stack.getName().getString());
+        if (name.contains("огород") || name.contains("сад") || name.contains("ферм") ||
+                name.contains("рост") || name.contains("урожай") ||
+                (stack.getItem() instanceof PlayerHeadItem && (name.contains("шар") || name.contains("сфер") || name.contains("талисман")))) {
+            return true;
+        }
 
         LoreComponent lore = stack.getComponents().get(DataComponentTypes.LORE);
         if (lore != null) {
             for (Text line : lore.lines()) {
-                if (line.getString().toLowerCase().contains("огородник")) {
+                String l = clean(line.getString());
+                if (l.contains("огород") || l.contains("сад") || l.contains("ферм") ||
+                        l.contains("выращ") || l.contains("урожай") || l.contains("рост") ||
+                        l.contains("шар") || l.contains("сфер")) {
                     return true;
                 }
             }
+        }
+
+        if (stack.getItem() instanceof PlayerHeadItem) {
+            return true;
         }
 
         return false;
@@ -802,17 +845,32 @@ public class AutoFarm extends Module {
         if (stack == null || stack.isEmpty()) return false;
         if (stack.getItem() instanceof ShovelItem) return true;
 
-        String name = stack.getName().getString().toLowerCase();
+        String name = clean(stack.getName().getString());
         if (name.contains("лопата") || name.contains("крушитель") || name.contains("бур")) return true;
 
         String key = stack.getItem().getTranslationKey().toLowerCase();
         return key.contains("shovel");
     }
 
-    private int findOrbInHotbar() {
+    private int ensureOrbInHotbar() {
+        if (mc.player == null) return -1;
         for (int i = 0; i < 9; i++) {
             if (isGardenerOrb(mc.player.getInventory().getStack(i))) {
                 return i;
+            }
+        }
+
+        for (int i = 9; i < 36; i++) {
+            if (isGardenerOrb(mc.player.getInventory().getStack(i))) {
+                int targetHotbar = mc.player.getInventory().getSelectedSlot();
+                mc.interactionManager.clickSlot(
+                        mc.player.playerScreenHandler.syncId,
+                        i,
+                        targetHotbar,
+                        SlotActionType.SWAP,
+                        mc.player
+                );
+                return targetHotbar;
             }
         }
         return -1;
@@ -935,5 +993,10 @@ public class AutoFarm extends Module {
         float yaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
         float pitch = (float) -Math.toDegrees(Math.atan2(dy, dist));
         return new Rotation(yaw, pitch);
+    }
+
+    private String clean(String text) {
+        if (text == null) return "";
+        return text.replaceAll("(?i)§[0-9a-fk-or]", "").trim().toLowerCase();
     }
 }
