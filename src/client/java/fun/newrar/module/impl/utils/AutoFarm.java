@@ -11,7 +11,6 @@ import fun.newrar.module.api.ModuleInfo;
 import fun.newrar.module.api.settings.impl.BooleanSetting;
 import fun.newrar.module.api.settings.impl.SliderSetting;
 import fun.newrar.utils.notification.NotificationManager;
-import fun.newrar.utils.other.Pathing;
 import net.minecraft.block.*;
 import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
 import net.minecraft.component.DataComponentTypes;
@@ -49,16 +48,17 @@ public class AutoFarm extends Module {
     public final SliderSetting breakDelay = new SliderSetting(this, "Задержка ломания", 1.0f, 0.0f, 10.0f, 1.0f);
     public final SliderSetting plantDelay = new SliderSetting(this, "Задержка посадки", 1.0f, 0.0f, 10.0f, 1.0f);
 
+    public final BooleanSetting autoPickup = new BooleanSetting(this, "Подбирать дроп", true);
+    public final SliderSetting pickupRadius = new SliderSetting(this, "Радиус подбора", 12.0f, 2.0f, 24.0f, 1.0f);
+
     public final BooleanSetting autoReplant = new BooleanSetting(this, "Автопосадка", true);
     public final BooleanSetting autoShovel = new BooleanSetting(this, "Брать лопату", true);
-    public final BooleanSetting swapOffhand = new BooleanSetting(this, "Шар во вторую руку", true);
-    public final BooleanSetting autoPickup = new BooleanSetting(this, "Подбирать дроп", true);
-    public final SliderSetting pickupRadius = new SliderSetting(this, "Радиус подбора", 8.0f, 2.0f, 16.0f, 1.0f);
 
     public final BooleanSetting autoChest = new BooleanSetting(this, "Складывать в сундук", true);
-    public final SliderSetting chestRadius = new SliderSetting(this, "Дистанция до сундука", 10.0f, 2.0f, 20.0f, 1.0f);
+    public final SliderSetting chestRadius = new SliderSetting(this, "Дистанция до сундука", 12.0f, 2.0f, 30.0f, 1.0f);
     public final SliderSetting keepCount = new SliderSetting(this, "Оставлять для посадки", 64.0f, 0.0f, 256.0f, 16.0f);
 
+    public final BooleanSetting swapOffhand = new BooleanSetting(this, "Шар во вторую руку", true);
     public final BooleanSetting rotations = new BooleanSetting(this, "Ротации", true);
     public final BooleanSetting anyHead = new BooleanSetting(this, "Любая голова как шар", false);
 
@@ -142,7 +142,7 @@ public class AutoFarm extends Module {
             startFarmPos = mc.player.getBlockPos();
         }
 
-        // Обработка зажатия Shift при активации шара огородника
+        // Если активна фаза приседания для активации шара огородника
         if (isSneakingForOrb) {
             sneakTicks++;
             mc.options.sneakKey.setPressed(true);
@@ -157,6 +157,17 @@ public class AutoFarm extends Module {
                 currentState = State.HARVEST;
             }
             return;
+        }
+
+        // Если на земле уже лежит неубранная картошка/пшеница и мы не заняты сундуком — собираем её!
+        if (autoPickup.getValue() && hasDroppedFarmItems() &&
+                currentState != State.GO_TO_CHEST &&
+                currentState != State.DEPOSITING_CHEST &&
+                currentState != State.PICKUP) {
+            // Если в радиусе досягаемости нет созревших культур прямо сейчас, сразу идем подбирать
+            if (findMatureCrops().isEmpty()) {
+                currentState = State.PICKUP;
+            }
         }
 
         if (breakCooldownTicks > 0) {
@@ -181,6 +192,7 @@ public class AutoFarm extends Module {
     }
 
     private void handleHarvest() {
+        stopMovement();
         List<BlockPos> matureCrops = findMatureCrops();
 
         if (!matureCrops.isEmpty()) {
@@ -209,8 +221,8 @@ public class AutoFarm extends Module {
             return;
         }
 
-        // Созревшие блоки сломаны -> переходим к подбору предметов
-        if (autoPickup.getValue()) {
+        // Созревшие культуры собраны -> проверяем упавший дроп
+        if (autoPickup.getValue() && hasDroppedFarmItems()) {
             currentState = State.PICKUP;
         } else {
             currentState = State.REPLANT;
@@ -218,7 +230,7 @@ public class AutoFarm extends Module {
     }
 
     private void handlePickup() {
-        // Если инвентарь полон, сразу идем выгружаться в сундук
+        // Если инвентарь полон, идем выгружаться в сундук
         if (isInventoryFull() && autoChest.getValue() && hasItemsToDeposit()) {
             stopMovement();
             BlockPos chest = findNearestChest();
@@ -229,11 +241,7 @@ public class AutoFarm extends Module {
             }
         }
 
-        Box box = mc.player.getBoundingBox().expand(pickupRadius.getValue());
-        List<ItemEntity> droppedItems = mc.world.getEntitiesByClass(ItemEntity.class, box, item -> {
-            if (!item.isAlive()) return false;
-            return isFarmItem(item.getStack());
-        });
+        List<ItemEntity> droppedItems = getDroppedFarmItems();
 
         if (droppedItems.isEmpty()) {
             stopMovement();
@@ -241,10 +249,12 @@ public class AutoFarm extends Module {
             return;
         }
 
+        // Находим ближайший упавший предмет
         droppedItems.sort(Comparator.comparingDouble(it -> it.squaredDistanceTo(mc.player)));
         ItemEntity nearestDrop = droppedItems.get(0);
 
-        moveTo(nearestDrop.getEntityPos(), 0.4);
+        // Идем прямо к упавшему предмету
+        moveTo(nearestDrop.getEntityPos(), 0.5);
     }
 
     private void handleReplant() {
@@ -281,7 +291,13 @@ public class AutoFarm extends Module {
             }
         }
 
-        // Посадка завершена -> проверяем, нужно ли сложить картофель в сундук
+        // Если после посадки все еще лежит неубранный дроп — подбираем его
+        if (autoPickup.getValue() && hasDroppedFarmItems()) {
+            currentState = State.PICKUP;
+            return;
+        }
+
+        // Если есть урожай на выгрузку в сундук — идем к сундуку
         if (autoChest.getValue() && hasItemsToDeposit()) {
             BlockPos chest = findNearestChest();
             if (chest != null) {
@@ -310,8 +326,8 @@ public class AutoFarm extends Module {
         Vec3d chestCenter = Vec3d.ofCenter(targetChestPos);
         double distSq = mc.player.getEyePos().squaredDistanceTo(chestCenter);
 
-        if (distSq > 3.2 * 3.2) {
-            moveTo(chestCenter, 2.5);
+        if (distSq > 3.0 * 3.0) {
+            moveTo(chestCenter, 2.2);
         } else {
             stopMovement();
             if (!rotateTo(targetChestPos, Direction.UP)) {
@@ -328,6 +344,8 @@ public class AutoFarm extends Module {
     }
 
     private void handleDepositingChest() {
+        stopMovement();
+
         if (!(mc.currentScreen instanceof GenericContainerScreen screen)) {
             chestWaitTicks++;
             if (chestWaitTicks > 45) { // 2.25 сек таймаут
@@ -397,13 +415,36 @@ public class AutoFarm extends Module {
     private void handleWaitCooldown() {
         stopMovement();
 
-        // Если пока ждали, созрел урожай — сразу идем собирать
+        // 1. Если на земле лежит неубранный дроп — идем подбирать!
+        if (autoPickup.getValue() && hasDroppedFarmItems()) {
+            currentState = State.PICKUP;
+            return;
+        }
+
+        // 2. Если есть созревший урожай — собираем
         List<BlockPos> mature = findMatureCrops();
         if (!mature.isEmpty()) {
             currentState = State.HARVEST;
             return;
         }
 
+        // 3. Если есть пустые грядки — сажаем
+        if (autoReplant.getValue() && !findEmptyFarmland().isEmpty()) {
+            currentState = State.REPLANT;
+            return;
+        }
+
+        // 4. Если в инвентаре накопился урожай для сундука — складываем
+        if (autoChest.getValue() && hasItemsToDeposit()) {
+            BlockPos chest = findNearestChest();
+            if (chest != null) {
+                targetChestPos = chest;
+                currentState = State.GO_TO_CHEST;
+                return;
+            }
+        }
+
+        // 5. Проверяем кулдаун Шара огородника
         long cooldownMs = (long) (cooldown.getValue() * 1000);
         long elapsed = System.currentTimeMillis() - lastOrbUseTime;
 
@@ -449,33 +490,36 @@ public class AutoFarm extends Module {
         mc.options.sneakKey.setPressed(true);
     }
 
-    // --- Перемещение ---
+    // --- Перемещение к точке/предмету ---
     private void moveTo(Vec3d target, double stopDist) {
         if (mc.player == null) return;
 
-        double distSq = mc.player.squaredDistanceTo(target.x, mc.player.getY(), target.z);
+        double dx = target.x - mc.player.getX();
+        double dy = target.y - mc.player.getY();
+        double dz = target.z - mc.player.getZ();
+        double distSq = dx * dx + dz * dz;
+
         if (distSq <= stopDist * stopDist) {
             stopMovement();
             return;
         }
 
-        BlockPos targetBlock = BlockPos.ofFloored(target);
-        if (Pathing.available()) {
-            if (!Pathing.hasGoal(targetBlock, (int) Math.ceil(stopDist)) || !Pathing.busy()) {
-                Pathing.goTo(targetBlock, (int) Math.max(0, Math.floor(stopDist)));
-            }
-            return;
+        // Точный расчет угла поворота в системе координат Minecraft
+        float targetYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+
+        if (rotations.getValue()) {
+            Rotation targetRot = new Rotation(targetYaw, mc.player.getPitch());
+            RotationProcess.update(targetRot, 140f, 140f, 140f, 140f, 2, 20, false);
         }
+        mc.player.setYaw(targetYaw);
+        mc.player.headYaw = targetYaw;
+        mc.player.bodyYaw = targetYaw;
 
-        // Прямое перемещение к цели
-        double dx = target.x - mc.player.getX();
-        double dz = target.z - mc.player.getZ();
-        float yaw = (float) Math.toDegrees(Math.atan2(-dz, dx)) + 90.0F;
-
-        mc.player.setYaw(yaw);
         mc.options.forwardKey.setPressed(true);
+        mc.options.sprintKey.setPressed(true);
 
-        if (mc.player.horizontalCollision && mc.player.isOnGround()) {
+        // Прыжок при препятствии или перепаде высоты
+        if ((mc.player.horizontalCollision || dy > 0.4) && mc.player.isOnGround()) {
             mc.options.jumpKey.setPressed(true);
         } else {
             mc.options.jumpKey.setPressed(false);
@@ -486,9 +530,48 @@ public class AutoFarm extends Module {
         if (mc.player == null) return;
         mc.options.forwardKey.setPressed(false);
         mc.options.jumpKey.setPressed(false);
-        if (Pathing.available() && Pathing.busy()) {
-            Pathing.cancel();
+        mc.options.sprintKey.setPressed(false);
+    }
+
+    // --- Поиск дропа ---
+    private boolean hasDroppedFarmItems() {
+        return !getDroppedFarmItems().isEmpty();
+    }
+
+    private List<ItemEntity> getDroppedFarmItems() {
+        if (mc.world == null || mc.player == null) return new ArrayList<>();
+        double r = pickupRadius.getValue();
+        Box box = mc.player.getBoundingBox().expand(r, 4.0, r);
+        return mc.world.getEntitiesByClass(ItemEntity.class, box, item -> {
+            return item.isAlive() && isFarmItem(item.getStack());
+        });
+    }
+
+    public boolean isFarmItem(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        Item item = stack.getItem();
+        if (item == Items.POTATO ||
+                item == Items.POISONOUS_POTATO ||
+                item == Items.CARROT ||
+                item == Items.WHEAT ||
+                item == Items.WHEAT_SEEDS ||
+                item == Items.BEETROOT ||
+                item == Items.BEETROOT_SEEDS ||
+                item == Items.NETHER_WART) {
+            return true;
         }
+
+        String name = stack.getName().getString().toLowerCase();
+        return name.contains("карто") ||
+                name.contains("пшен") ||
+                name.contains("морков") ||
+                name.contains("свекл") ||
+                name.contains("свёкл") ||
+                name.contains("семен") ||
+                name.contains("potato") ||
+                name.contains("wheat") ||
+                name.contains("carrot") ||
+                name.contains("beetroot");
     }
 
     // --- Поиск сундука ---
@@ -568,19 +651,6 @@ public class AutoFarm extends Module {
             }
         }
         return true;
-    }
-
-    public boolean isFarmItem(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) return false;
-        Item item = stack.getItem();
-        return item == Items.POTATO ||
-                item == Items.POISONOUS_POTATO ||
-                item == Items.CARROT ||
-                item == Items.WHEAT ||
-                item == Items.WHEAT_SEEDS ||
-                item == Items.BEETROOT ||
-                item == Items.BEETROOT_SEEDS ||
-                item == Items.NETHER_WART;
     }
 
     // --- Сканирование блоков грядок ---
