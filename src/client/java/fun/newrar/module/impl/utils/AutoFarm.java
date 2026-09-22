@@ -1,5 +1,6 @@
 package fun.newrar.module.impl.utils;
 
+import fun.newrar.manager.event_impl.EventPacket;
 import fun.newrar.manager.event_impl.EventUpdate;
 import fun.newrar.manager.events.orbit.EventHandler;
 import fun.newrar.manager.rotation.FreeLookUtil;
@@ -13,6 +14,12 @@ import fun.newrar.module.api.settings.impl.SliderSetting;
 import fun.newrar.utils.notification.NotificationManager;
 import net.minecraft.block.*;
 import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
+import org.lwjgl.glfw.GLFW;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import net.minecraft.network.packet.s2c.play.GameMessageS2CPacket;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.LoreComponent;
 import net.minecraft.entity.ItemEntity;
@@ -136,12 +143,7 @@ public class AutoFarm extends Module {
     protected void onDisable() {
         stopMovement();
         if (mc.player != null) {
-            mc.options.sneakKey.setPressed(false);
-            mc.player.setSneaking(false);
-            if (mc.player.input != null) {
-                mc.player.input.playerInput = new PlayerInput(false, false, false, false, false, false, false);
-            }
-            sendSneakPacket(false);
+            applySneakState(false);
         }
         isSneakingForOrb = false;
         sneakTicks = 0;
@@ -163,28 +165,11 @@ public class AutoFarm extends Module {
         // Если активна фаза приседания для активации шара огородника
         if (isSneakingForOrb) {
             sneakTicks++;
-            mc.options.sneakKey.setPressed(true);
-            mc.player.setSneaking(true);
-            if (mc.player.input != null) {
-                mc.player.input.playerInput = new PlayerInput(false, false, false, false, false, true, false);
-            }
-            sendSneakPacket(true);
+            applySneakState(true);
 
-            // На 3-м тике отправляем также клик предметом (на случай если сервер требует Shift+ПКМ)
-            if (sneakTicks == 3) {
-                Hand orbHand = getOrbHand();
-                mc.interactionManager.interactItem(mc.player, orbHand);
-                mc.player.swingHand(orbHand);
-            }
-
-            if (sneakTicks >= 12) {
-                mc.options.sneakKey.setPressed(false);
-                mc.player.setSneaking(false);
-                if (mc.player.input != null) {
-                    mc.player.input.playerInput = new PlayerInput(false, false, false, false, false, false, false);
-                }
-                sendSneakPacket(false);
-
+            // Держим приседание 28 тиков (~1.4 секунды) для гарантированного срабатывания плагина ReallyWorld
+            if (sneakTicks >= 28) {
+                applySneakState(false);
                 isSneakingForOrb = false;
                 sneakTicks = 0;
                 lastOrbUseTime = System.currentTimeMillis();
@@ -531,32 +516,43 @@ public class AutoFarm extends Module {
         }
 
         warnedNoOrb = false;
-        // Зажимаем Shift для активации способности на ReallyWorld
         isSneakingForOrb = true;
         sneakTicks = 0;
-        mc.options.sneakKey.setPressed(true);
-        mc.player.setSneaking(true);
-        if (mc.player.input != null) {
-            mc.player.input.playerInput = new PlayerInput(false, false, false, false, false, true, false);
-        }
-        sendSneakPacket(true);
+        NotificationManager.send("Активация шара огородника...", NotificationManager.Type.INFO, 1500);
+        applySneakState(true);
     }
 
-    private Hand getOrbHand() {
-        if (mc.player == null) return Hand.OFF_HAND;
-        if (isGardenerOrb(mc.player.getOffHandStack())) {
-            return Hand.OFF_HAND;
+    private void applySneakState(boolean sneaking) {
+        if (mc.player == null) return;
+        mc.options.sneakKey.setPressed(sneaking);
+        mc.player.setSneaking(sneaking);
+        if (mc.player.input != null) {
+            mc.player.input.playerInput = new PlayerInput(false, false, false, false, false, sneaking, false);
         }
-        if (isGardenerOrb(mc.player.getMainHandStack())) {
-            return Hand.MAIN_HAND;
-        }
-        return Hand.OFF_HAND;
+        sendSneakPacket(sneaking);
     }
 
     private void sendSneakPacket(boolean sneaking) {
         if (mc.getNetworkHandler() == null || mc.player == null) return;
         PlayerInput input = new PlayerInput(false, false, false, false, false, sneaking, false);
         mc.getNetworkHandler().sendPacket(new PlayerInputC2SPacket(input));
+    }
+
+    @EventHandler
+    public void onPacket(EventPacket event) {
+        if (!event.isSend() && event.getPacket() instanceof GameMessageS2CPacket chat) {
+            String text = clean(chat.content().getString());
+            if (text.contains("огородник") && text.contains("перезаряд")) {
+                Pattern p = Pattern.compile("(\\d+)");
+                Matcher m = p.matcher(text);
+                if (m.find()) {
+                    int remainingSec = Integer.parseInt(m.group(1));
+                    long cooldownTotalMs = (long) (cooldown.getValue() * 1000);
+                    lastOrbUseTime = System.currentTimeMillis() - (cooldownTotalMs - (remainingSec * 1000L));
+                    NotificationManager.send("Шар на перезарядке: " + remainingSec + "с", NotificationManager.Type.INFO, 2000);
+                }
+            }
+        }
     }
 
     // --- Перемещение к точке/предмету ---
@@ -804,14 +800,21 @@ public class AutoFarm extends Module {
     public boolean isGardenerOrb(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return false;
 
-        // Если включена опция "любая голова" (по умолчанию true)
+        // 1. Любой предмет в левой руке (кроме щита, тотема, лопаты) безоговорочно считается Шаром огородника!
+        if (mc.player != null && stack == mc.player.getOffHandStack()) {
+            Item item = stack.getItem();
+            if (item != Items.TOTEM_OF_UNDYING && item != Items.SHIELD && !(item instanceof ShovelItem)) {
+                return true;
+            }
+        }
+
+        // 2. Если включена опция "любая голова" (по умолчанию true)
         if (anyHead.getValue() && stack.getItem() instanceof PlayerHeadItem) {
             return true;
         }
 
-        // Если игрок уже держит голову в руке/второй руке
-        if (stack.getItem() instanceof PlayerHeadItem && mc.player != null &&
-                (stack == mc.player.getOffHandStack() || stack == mc.player.getMainHandStack())) {
+        // 3. Если игрок держит голову в руке
+        if (stack.getItem() instanceof PlayerHeadItem && mc.player != null && stack == mc.player.getMainHandStack()) {
             return true;
         }
 
