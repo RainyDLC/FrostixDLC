@@ -504,6 +504,22 @@ final class Translations {
         m.put("Периодически", "Periodically");
         m.put("При убийстве", "In the event of a murder");
 
+        m.put("Auto Farm", "Auto Farm");
+        m.put("Автоматический фарм культур на ReallyWorld с Шаром огородника и лопатой", "Automatic crop farming on ReallyWorld with Gardener Orb and shovel");
+        m.put("Кулдаун шара", "Orb cooldown");
+        m.put("Задержка ломания", "Break delay");
+        m.put("Задержка посадки", "Plant delay");
+        m.put("Автопосадка", "Auto replant");
+        m.put("Брать лопату", "Equip shovel");
+        m.put("Шар во вторую руку", "Orb to offhand");
+        m.put("Ротации", "Rotations");
+        m.put("Любая голова как шар", "Any head as orb");
+        m.put("Картошка", "Potatoes");
+        m.put("Пшеница", "Wheat");
+        m.put("Морковь", "Carrots");
+        m.put("Свёкла", "Beetroots");
+        m.put("Адский нарост", "Nether wart");
+
         return m;
     }
 }

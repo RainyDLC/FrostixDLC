@@ -96,6 +96,7 @@ public final class ModuleManager extends LinkedHashMap<Class<? extends Module>, 
                 new FreeLook(),
                 new PvpSafe(),
                 new AppleFarmer(),
+                new AutoFarm(),
 
                 new UnHook(),
                 new NameProtect(),
