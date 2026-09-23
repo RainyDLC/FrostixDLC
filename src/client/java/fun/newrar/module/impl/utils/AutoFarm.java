@@ -58,7 +58,7 @@ import java.util.List;
 public class AutoFarm extends Module {
 
     public final SliderSetting radius = new SliderSetting(this, "Радиус", 4.2f, 2.0f, 6.0f, 0.1f);
-    public final SliderSetting cooldown = new SliderSetting(this, "Кулдаун шара", 30.0f, 5.0f, 60.0f, 1.0f);
+    public final SliderSetting cooldown = new SliderSetting(this, "Кулдаун шара", 0.0f, 0.0f, 60.0f, 0.5f);
     public final SliderSetting breakDelay = new SliderSetting(this, "Задержка ломания", 1.0f, 0.0f, 10.0f, 1.0f);
     public final SliderSetting plantDelay = new SliderSetting(this, "Задержка посадки", 1.0f, 0.0f, 10.0f, 1.0f);
 
@@ -98,6 +98,7 @@ public class AutoFarm extends Module {
     private BlockPos targetChestPos = null;
 
     private long lastOrbUseTime = 0L;
+    private long serverCooldownUntil = 0L;
     private boolean isSneakingForOrb = false;
     private int sneakTicks = 0;
     private int harvestWaitTicks = 0;
@@ -107,6 +108,8 @@ public class AutoFarm extends Module {
     private int plantCooldownTicks = 0;
     private int chestWaitTicks = 0;
     private int chestDepositCooldown = 0;
+    private int depositAttempts = 0;
+    private int returnFarmTicks = 0;
 
     private boolean warnedNoOrb = false;
     private boolean warnedNoShovel = false;
@@ -146,6 +149,9 @@ public class AutoFarm extends Module {
         plantCooldownTicks = 0;
         chestWaitTicks = 0;
         chestDepositCooldown = 0;
+        depositAttempts = 0;
+        returnFarmTicks = 0;
+        serverCooldownUntil = 0L;
         warnedNoOrb = false;
         warnedNoShovel = false;
         warnedNoSeeds = false;
@@ -162,6 +168,9 @@ public class AutoFarm extends Module {
         sneakTicks = 0;
         harvestWaitTicks = 0;
         pickupTimeoutTicks = 0;
+        returnFarmTicks = 0;
+        depositAttempts = 0;
+        serverCooldownUntil = 0L;
         plantFailures.clear();
         RotationProcess.currentTask = RotationProcess.RotationTask.IDLE;
         RotationProcess.currentPriority = 0;
@@ -196,19 +205,19 @@ public class AutoFarm extends Module {
                 isSneakingForOrb = false;
                 sneakTicks = 0;
                 lastOrbUseTime = System.currentTimeMillis();
-                harvestWaitTicks = 12; // даем 12 тиков на приход пакетов обновления грядок
-                NotificationManager.send("Шар огородника активирован! КД " + (int) cooldown.getValue().floatValue() + "с",
-                        NotificationManager.Type.INFO, 3000);
+                harvestWaitTicks = 16; // даем 16 тиков на появление созревших культур
+                NotificationManager.send("Шар огородника активирован!", NotificationManager.Type.INFO, 2000);
                 currentState = State.HARVEST;
             }
             return;
         }
 
-        // Если на земле уже лежит неубранная картошка/пшеница и мы не заняты сундуком или шаром — собираем её!
+        // Если на земле уже лежит неубранная картошка/пшеница и мы не заняты сундуком, возвратом или шаром — собираем её!
         if (autoPickup.getValue() && hasDroppedFarmItems() &&
                 currentState != State.GROW_ORB &&
                 currentState != State.GO_TO_CHEST &&
                 currentState != State.DEPOSITING_CHEST &&
+                currentState != State.RETURN_TO_FARM &&
                 currentState != State.PICKUP &&
                 !isSneakingForOrb) {
             // Если в радиусе досягаемости нет созревших культур прямо сейчас, сразу идем подбирать
@@ -280,6 +289,14 @@ public class AutoFarm extends Module {
             currentState = State.PICKUP;
         } else if (autoReplant.getValue() && !findEmptyFarmland().isEmpty() && findSeedSlot() != -1) {
             currentState = State.REPLANT;
+        } else if (autoChest.getValue() && hasItemsToDeposit()) {
+            BlockPos chest = findNearestChest();
+            if (chest != null) {
+                targetChestPos = chest;
+                currentState = State.GO_TO_CHEST;
+            } else {
+                currentState = isCooldownReady() ? State.GROW_ORB : State.WAIT_COOLDOWN;
+            }
         } else {
             currentState = isCooldownReady() ? State.GROW_ORB : State.WAIT_COOLDOWN;
         }
@@ -433,6 +450,7 @@ public class AutoFarm extends Module {
             if (chestWaitTicks > 45) { // 2.25 сек таймаут
                 currentState = State.RETURN_TO_FARM;
                 chestWaitTicks = 0;
+                depositAttempts = 0;
             }
             return;
         }
@@ -440,6 +458,18 @@ public class AutoFarm extends Module {
         chestWaitTicks = 0;
         if (chestDepositCooldown > 0) {
             chestDepositCooldown--;
+            return;
+        }
+
+        depositAttempts++;
+        if (depositAttempts > 35) { // Защита от зависания, если сундук полон
+            if (mc.player != null) {
+                mc.player.closeHandledScreen();
+            }
+            mc.setScreen(null);
+            depositAttempts = 0;
+            NotificationManager.send("Выгрузка завершена или сундук полон", NotificationManager.Type.INFO, 2000);
+            currentState = State.RETURN_TO_FARM;
             return;
         }
 
@@ -472,6 +502,7 @@ public class AutoFarm extends Module {
                 mc.player.closeHandledScreen();
             }
             mc.setScreen(null);
+            depositAttempts = 0;
             NotificationManager.send("Урожай выгружен в сундук!", NotificationManager.Type.INFO, 2500);
             currentState = State.RETURN_TO_FARM;
         }
@@ -479,24 +510,49 @@ public class AutoFarm extends Module {
 
     private void handleReturnToFarm() {
         if (startFarmPos == null) {
-            currentState = isCooldownReady() ? State.GROW_ORB : State.WAIT_COOLDOWN;
+            if (mc.player != null) {
+                startFarmPos = mc.player.getBlockPos();
+            }
+            proceedAfterFarmReturn();
+            return;
+        }
+
+        returnFarmTicks++;
+
+        double dx = (startFarmPos.getX() + 0.5) - mc.player.getX();
+        double dz = (startFarmPos.getZ() + 0.5) - mc.player.getZ();
+        double horizontalDistSq = dx * dx + dz * dz;
+
+        // Если вернулись на расстояние <= 2.2 блока или таймаут 35 тиков (~1.75 сек)
+        if (horizontalDistSq <= 2.2 * 2.2 || returnFarmTicks > 35) {
+            proceedAfterFarmReturn();
             return;
         }
 
         Vec3d farmCenter = Vec3d.ofCenter(startFarmPos);
-        double distSq = mc.player.getEyePos().squaredDistanceTo(farmCenter);
+        moveTo(farmCenter, 1.2);
+    }
 
-        if (distSq > 1.8 * 1.8) {
-            moveTo(farmCenter, 1.0);
+    private void proceedAfterFarmReturn() {
+        stopMovement();
+        returnFarmTicks = 0;
+        // Если есть пустые грядки и семена — сначала сажаем их
+        if (autoReplant.getValue() && !findEmptyFarmland().isEmpty() && findSeedSlot() != -1) {
+            currentState = State.REPLANT;
+        } else if (isCooldownReady()) {
+            currentState = State.GROW_ORB;
         } else {
-            stopMovement();
-            currentState = isCooldownReady() ? State.GROW_ORB : State.WAIT_COOLDOWN;
+            currentState = State.WAIT_COOLDOWN;
         }
     }
 
     public boolean isCooldownReady() {
+        if (System.currentTimeMillis() < serverCooldownUntil) {
+            return false;
+        }
         if (lastOrbUseTime == 0L) return true;
-        long cooldownMs = (long) (cooldown.getValue() * 1000);
+        if (cooldown.getValue() <= 0.0f) return true;
+        long cooldownMs = (long) (cooldown.getValue() * 1000f);
         long elapsed = System.currentTimeMillis() - lastOrbUseTime;
         return elapsed >= cooldownMs;
     }
@@ -548,25 +604,39 @@ public class AutoFarm extends Module {
     private void handleGrowOrb() {
         stopMovement();
 
-        boolean ready = false;
-
-        // 1. Сначала находим и выбираем шар в хотбаре / главной руке
-        int hotbarSlot = ensureOrbInHotbar();
-        if (hotbarSlot != -1) {
-            mc.player.getInventory().setSelectedSlot(hotbarSlot);
-            ready = true;
+        if (startFarmPos == null && mc.player != null) {
+            startFarmPos = mc.player.getBlockPos();
         }
 
-        // 2. Если включена опция "Шар во вторую руку", перемещаем шар во вторую руку
+        boolean ready = false;
+
+        // 1. Если включена опция "Шар во вторую руку"
         if (swapOffhand.getValue()) {
-            if (ensureOrbInOffhand()) {
+            if (isGardenerOrb(mc.player.getOffHandStack())) {
+                ready = true;
+            } else if (ensureOrbInOffhand()) {
+                ready = true;
+            }
+        } else {
+            // Если шар должен быть в хотбаре
+            int hotbarSlot = ensureOrbInHotbar();
+            if (hotbarSlot != -1) {
+                mc.player.getInventory().setSelectedSlot(hotbarSlot);
                 ready = true;
             }
         }
 
-        // 3. Если шар во второй руке, это тоже готово
-        if (!ready && isGardenerOrb(mc.player.getOffHandStack())) {
-            ready = true;
+        // 2. Если все еще не готов, проверяем любую руку
+        if (!ready) {
+            if (isGardenerOrb(mc.player.getOffHandStack()) || isGardenerOrb(mc.player.getMainHandStack())) {
+                ready = true;
+            } else {
+                int hotbarSlot = ensureOrbInHotbar();
+                if (hotbarSlot != -1) {
+                    mc.player.getInventory().setSelectedSlot(hotbarSlot);
+                    ready = true;
+                }
+            }
         }
 
         if (!ready) {
@@ -632,7 +702,11 @@ public class AutoFarm extends Module {
             // Проверяем, завершилась ли перезарядка
             if (text.contains("готов") || text.contains("заверш") || text.contains("оконч") || text.contains("прошл")) {
                 lastOrbUseTime = 0L;
+                serverCooldownUntil = 0L;
                 NotificationManager.send("Шар огородника готов к использованию!", NotificationManager.Type.INFO, 2000);
+                if (currentState == State.WAIT_COOLDOWN) {
+                    currentState = State.GROW_ORB;
+                }
                 return;
             }
 
@@ -642,17 +716,24 @@ public class AutoFarm extends Module {
                 int remainingSec = Integer.parseInt(m.group(1));
                 if (remainingSec == 0) {
                     lastOrbUseTime = 0L;
+                    serverCooldownUntil = 0L;
                     NotificationManager.send("Шар огородника готов к использованию!", NotificationManager.Type.INFO, 2000);
+                    if (currentState == State.WAIT_COOLDOWN) {
+                        currentState = State.GROW_ORB;
+                    }
                 } else {
-                    long cooldownTotalMs = (long) (cooldown.getValue() * 1000);
-                    lastOrbUseTime = System.currentTimeMillis() - (cooldownTotalMs - (remainingSec * 1000L));
+                    serverCooldownUntil = System.currentTimeMillis() + (remainingSec * 1000L);
                     NotificationManager.send("Шар на перезарядке: " + remainingSec + "с", NotificationManager.Type.INFO, 1500);
                 }
             }
         } else if ((text.contains("огородник") || text.contains("шар")) &&
                    (text.contains("готов") || text.contains("можно") || text.contains("активир"))) {
             lastOrbUseTime = 0L;
+            serverCooldownUntil = 0L;
             NotificationManager.send("Шар огородника готов к использованию!", NotificationManager.Type.INFO, 2000);
+            if (currentState == State.WAIT_COOLDOWN) {
+                currentState = State.GROW_ORB;
+            }
         }
     }
 
@@ -967,7 +1048,7 @@ public class AutoFarm extends Module {
             }
         }
 
-        if (isGardenerOrb(mc.player.getOffHandStack())) {
+        if (!swapOffhand.getValue() && isGardenerOrb(mc.player.getOffHandStack())) {
             int targetHotbar = mc.player.getInventory().getSelectedSlot();
             mc.interactionManager.clickSlot(
                     mc.player.playerScreenHandler.syncId,
