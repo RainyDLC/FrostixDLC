@@ -864,14 +864,14 @@ public class AutoFarm extends Module {
         if (stack == null || stack.isEmpty()) return false;
         Item item = stack.getItem();
 
-        // Складываем несажаемые культуры полностью
-        if (item == Items.POISONOUS_POTATO || item == Items.WHEAT || item == Items.BEETROOT) {
+        // Складываем несажаемые культуры, а также свёклу и семена свёклы вместе в сундук
+        if (item == Items.POISONOUS_POTATO || item == Items.WHEAT || item == Items.BEETROOT || item == Items.BEETROOT_SEEDS) {
             return true;
         }
 
-        // Для картошки, моркови и семян оставляем запас для посадки
+        // Для картошки, моркови и семян пшеницы оставляем запас для посадки
         if (item == Items.POTATO || item == Items.CARROT || item == Items.NETHER_WART ||
-                item == Items.WHEAT_SEEDS || item == Items.BEETROOT_SEEDS) {
+                item == Items.WHEAT_SEEDS) {
             return countPlantableItems() > keepCount.getValue().intValue();
         }
 

@@ -206,6 +206,7 @@ final class Translations {
         m.put("Слот 8", "Slot 8");
         m.put("Слот 9", "Slot 9");
         m.put("Клавиша добавления в друзья", "Add friend bind");
+        m.put("Игнорировать друзей", "Ignore friends");
         m.put("Клавиша кидание Эндер жемчуга", "Ender pearl bind");
         m.put("Клавиша координат", "Coordinates bind");
         m.put("Клавиша хоруса", "Chorus bind");

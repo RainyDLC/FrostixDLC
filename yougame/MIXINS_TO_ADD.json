@@ -1,6 +1,0 @@
-[
-  "accessors.EquipmentLayerRendererAccessor",
-  "mixin.EntityRenderStateMixin",
-  "mixin.HumanoidArmorLayerMixin",
-  "mixin.LivingEntityRendererMixin"
-]

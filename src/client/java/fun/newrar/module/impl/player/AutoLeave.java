@@ -1,5 +1,6 @@
 package fun.newrar.module.impl.player;
 
+import fun.newrar.Client;
 import fun.newrar.manager.event_impl.EventTick;
 import fun.newrar.manager.events.orbit.EventHandler;
 import fun.newrar.module.api.Category;
@@ -27,6 +28,7 @@ public class AutoLeave extends Module {
     public final ModeSetting leaveMode = new ModeSetting(this, "Команда", "/hub", "/spawn", "/darena");
     public final BooleanSetting onPlayerNearby = new BooleanSetting(this, "Игрок рядом", true);
     public final SliderSetting playerRange = new SliderSetting(this, "Дистанция игрока", 20, 10, 50, 1);
+    public final BooleanSetting ignoreFriends = new BooleanSetting(this, "Игнорировать друзей", true);
     public final BooleanSetting onPvpEnd = new BooleanSetting(this, "Конец PvP", false);
 
     private final StopGPT antiSpamTimer = new StopGPT();
@@ -100,6 +102,8 @@ public class AutoLeave extends Module {
                     continue;
                 if (!player.isAlive())
                     continue;
+                if (ignoreFriends.getValue() && isFriend(player))
+                    continue;
 
                 double dist = mc.player.distanceTo(player);
                 if (dist <= maxRange) {
@@ -150,6 +154,16 @@ public class AutoLeave extends Module {
                 darenaClickTicks = 0;
             }
         }
+    }
+
+    private boolean isFriend(PlayerEntity player) {
+        if (player == null || Client.get() == null || Client.get().friendManager() == null)
+            return false;
+        String name = player.getName().getString();
+        if (name != null && Client.get().friendManager().isFriend(name))
+            return true;
+        String scoreboardName = player.getNameForScoreboard();
+        return scoreboardName != null && Client.get().friendManager().isFriend(scoreboardName);
     }
 
     @Override
