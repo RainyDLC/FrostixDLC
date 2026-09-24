@@ -52,7 +52,9 @@
     "EntityRenderStateMixin",
     "LivingEntityRendererMixin",
     "ArmorFeatureRendererMixin",
-    "EquipmentRendererAccessor"
+    "EquipmentRendererAccessor",
+    "ClientWorldAccessor",
+    "CobwebBlockMixin"
   ],
   "injectors": {
     "defaultRequire": 1
