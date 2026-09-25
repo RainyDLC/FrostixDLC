@@ -260,19 +260,6 @@ public class GifTexture {
                     }
                 }
             }
-            // Vertical barriers from cuts down to bottom
-            for (int y = Math.min(leftCutY, rightCutY); y < h; y++) {
-                for (int dx = -R; dx <= R; dx++) {
-                    if (leftCutX + dx >= 0 && leftCutX + dx < w) {
-                        thickBarrier[leftCutX + dx][y] = true;
-                        cutBarrier[leftCutX + dx][y] = true;
-                    }
-                    if (rightCutX + dx >= 0 && rightCutX + dx < w) {
-                        thickBarrier[rightCutX + dx][y] = true;
-                        cutBarrier[rightCutX + dx][y] = true;
-                    }
-                }
-            }
         }
 
         // BFS: Outer background with thick barrier
@@ -285,17 +272,7 @@ public class GifTexture {
         ArrayDeque<int[]> queue = new ArrayDeque<>();
         for (int x = 0; x < w; x++) {
             if (!thickBarrier[x][0] && bgDist[x][0] == -1) { queue.add(new int[]{x, 0}); bgDist[x][0] = 0; }
-            if (hasBottomCut) {
-                if ((x < leftCutX || x > rightCutX) && !thickBarrier[x][h - 1] && bgDist[x][h - 1] == -1) {
-                    queue.add(new int[]{x, h - 1});
-                    bgDist[x][h - 1] = 0;
-                }
-            } else {
-                if (!thickBarrier[x][h - 1] && bgDist[x][h - 1] == -1) {
-                    queue.add(new int[]{x, h - 1});
-                    bgDist[x][h - 1] = 0;
-                }
-            }
+            if (!thickBarrier[x][h - 1] && bgDist[x][h - 1] == -1) { queue.add(new int[]{x, h - 1}); bgDist[x][h - 1] = 0; }
         }
         for (int y = 0; y < h; y++) {
             if (!thickBarrier[0][y] && bgDist[0][y] == -1) { queue.add(new int[]{0, y}); bgDist[0][y] = 0; }
@@ -348,10 +325,9 @@ public class GifTexture {
         }
 
         BufferedImage res = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        int maxCutY = hasBottomCut ? Math.max(leftCutY, rightCutY) : h;
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                boolean clear = (bgDist[x][y] >= 0) || (hasBottomCut && y >= maxCutY && (x < leftCutX || x > rightCutX));
+                boolean clear = (bgDist[x][y] >= 0);
                 if (clear && !isLine[x][y]) {
                     res.setRGB(x, y, 0x00000000);
                 } else {

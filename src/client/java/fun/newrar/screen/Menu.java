@@ -858,7 +858,8 @@ public class Menu extends Screen implements IMinecraft {
 
         animation2.setDirection(select != null ? Direction.FORWARDS : Direction.BACKWARDS);
         float phCenter = ySetting + hSetting / 2;
-        draw.drawCentered("Выберите модуль", xSetting + wSetting / 2, phCenter + 34 * S + 30 * S * animation2.getOutput(), 7 * S, ColorUtil.getColor(255, (globalAnim - animation2.getOutput()) * 0.8F));
+        float textY = phCenter + 34 * S + 30 * S * animation2.getOutput();
+        draw.drawCentered("Выберите модуль", xSetting + wSetting / 2, textY, 7 * S, ColorUtil.getColor(255, (globalAnim - animation2.getOutput()) * 0.8F));
 
         GifTexture renderGif = null;
         Gif gifModule = Instance.get(Gif.class);
@@ -890,7 +891,7 @@ public class Menu extends Screen implements IMinecraft {
             float gx = xSetting + wSetting / 2 - gw / 2;
             float userYOffset = (gifModule != null && gifModule.isEnabled() && gifModule.inGui.getValue())
                     ? gifModule.yOffset.getValue() * S : 0.0F;
-            float gy = phCenter - 55 * S - gh / 2 - 30 * S * animation2.getOutput() + userYOffset;
+            float gy = textY - gh - 8 * S + userYOffset;
             int alphaCol = ColorUtil.replAlpha(ColorUtil.WHITE, globalAnim - animation2.getOutput());
             renderGif.draw(context, (int) gx, (int) gy, (int) gw, (int) gh, alphaCol);
         }
