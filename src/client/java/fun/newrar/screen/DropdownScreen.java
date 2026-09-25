@@ -6,6 +6,8 @@ import fun.newrar.module.api.Module;
 import fun.newrar.module.api.settings.Setting;
 import fun.newrar.module.api.settings.impl.*;
 import fun.newrar.module.impl.display.ClickGui;
+import fun.newrar.module.impl.render.Gif;
+import fun.newrar.utils.other.Instance;
 import fun.newrar.screen.editor.OverlayEditor;
 import fun.newrar.screen.editor.OverlayEditors;
 import fun.newrar.utils.animation.Animation;
@@ -704,6 +706,11 @@ public class DropdownScreen extends Screen implements IMinecraft {
         if (searchFocused && (System.currentTimeMillis() / 500) % 2 == 0) {
             float textOffset = searchQuery.isEmpty() ? (searchW / 2F + regular.getWidth("Поиск...", 6F * S) / 2F + 2F * S) : (8F * S + regular.getWidth(searchQuery, 6F * S) + 1.5F * S);
             RenderUtil.Render2D.rect(searchX + textOffset, searchY + 5F * S, 0.6F * S, 8F * S, ColorUtil.getColor(255, 255, 255, 0.9F * globalAnim), 0.3F * S);
+        }
+
+        Gif gifModule = Instance.get(Gif.class);
+        if (gifModule != null) {
+            gifModule.renderInGui(screenWidth, screenHeight, globalAnim);
         }
 
         Render2D.endOverlay();

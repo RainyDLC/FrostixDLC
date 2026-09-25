@@ -113,7 +113,7 @@ public class GifTexture {
 
             final int uploadW = canvasW;
             final int uploadH = canvasH;
-            MinecraftClient.getInstance().execute(() -> {
+            Runnable uploadTask = () -> {
                 for (int i = 0; i < pixelData.size(); i++) {
                     int[] px = pixelData.get(i);
 
@@ -130,7 +130,12 @@ public class GifTexture {
                     MinecraftClient.getInstance().getTextureManager().registerTexture(frameIds.get(idx), tex);
                 }
                 loaded = true;
-            });
+            };
+            if (MinecraftClient.getInstance().isOnThread()) {
+                uploadTask.run();
+            } else {
+                MinecraftClient.getInstance().execute(uploadTask);
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -173,6 +178,7 @@ public class GifTexture {
         if (!loaded || frameIds.isEmpty()) return null;
         if (frameIds.size() == 1) return frameIds.get(0);
         if (startTime == -1) startTime = System.currentTimeMillis();
+        if (totalDuration <= 0) return frameIds.get(0);
 
         long elapsed = (System.currentTimeMillis() - startTime) % totalDuration;
         int acc = 0;
@@ -196,6 +202,16 @@ public class GifTexture {
         Identifier frame = currentFrame();
         if (frame == null) return;
         ctx.drawTexture(RenderPipelines.GUI_TEXTURED, frame, x, y, 0f, 0f, w, h, w, h, color);
+    }
+
+    public void render(float x, float y, float w, float h, int color) {
+        render(x, y, w, h, color, 0f);
+    }
+
+    public void render(float x, float y, float w, float h, int color, float radius) {
+        Identifier frame = currentFrame();
+        if (frame == null) return;
+        Draw.texture(frame, x, y, w, h, 0f, 0f, 1f, 1f, color, 1f, radius);
     }
 
     public void reset()           { startTime = System.currentTimeMillis(); }

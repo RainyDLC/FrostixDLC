@@ -7,6 +7,8 @@ import fun.newrar.Client;
 
 import fun.newrar.manager.Theme;
 import fun.newrar.module.impl.display.ClickGui;
+import fun.newrar.module.impl.render.Gif;
+import fun.newrar.utils.other.Instance;
 import fun.newrar.module.api.Category;
 import fun.newrar.module.api.Module;
 import fun.newrar.module.api.settings.Setting;
@@ -1305,6 +1307,12 @@ public class Menu extends Screen implements IMinecraft {
 
         renderThemePopup(draw, x + 8 * S, y + 26 * S, globalAnim);
         shards.render();
+
+        Gif gifModule = Instance.get(Gif.class);
+        if (gifModule != null) {
+            gifModule.renderInGui(screenWidth, screenHeight, globalAnim);
+        }
+
         Render2D.endOverlay();
         if (context != null) context.getMatrices().popMatrix();
 
