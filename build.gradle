@@ -60,6 +60,8 @@ dependencies {
     modImplementation include("meteordevelopment:baritone:${project.baritone_version}")
     runtimeOnly "dev.babbaj:nether-pathfinder:1.4.1"
 
+    modLocalRuntime fileTree(dir: 'run/mods', include: ['*.jar'])
+
     implementation 'org.projectlombok:lombok:1.18.34'
     annotationProcessor 'org.projectlombok:lombok:1.18.34'
 

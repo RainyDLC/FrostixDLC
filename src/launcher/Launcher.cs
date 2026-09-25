@@ -19,33 +19,125 @@ using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using SPath = System.Windows.Shapes.Path;
 
-[assembly: AssemblyTitle("RainyDLC Client Launcher")]
-[assembly: AssemblyDescription("RainyDLC Next-Gen Minecraft Client Launcher")]
+[assembly: AssemblyTitle("RainyDLC Launcher")]
+[assembly: AssemblyDescription("RainyDLC Premium Minecraft Client Launcher")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("RainyDLC Team")]
 [assembly: AssemblyProduct("RainyDLC")]
 [assembly: AssemblyCopyright("RainyDLC 2026")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("2.1.0.0")]
+[assembly: AssemblyFileVersion("2.1.0.0")]
 
 namespace RainyDLC.Launcher
 {
+    public static class AppColors
+    {
+        public static readonly Color WindowBg = Color.FromRgb(8, 10, 15);
+        public static readonly Color SurfaceBg = Color.FromRgb(13, 16, 24);
+        public static readonly Color CardBg = Color.FromArgb(215, 17, 21, 32);
+        public static readonly Color CardHover = Color.FromArgb(240, 22, 28, 42);
+        public static readonly Color BorderSubtle = Color.FromArgb(160, 36, 44, 66);
+        public static readonly Color BorderHover = Color.FromArgb(220, 60, 75, 110);
+
+        public static readonly Color AccentPrimary = Color.FromRgb(30, 64, 175);   // Dark Blue
+        public static readonly Color AccentHover   = Color.FromRgb(29, 78, 216);   // Dark Blue Hover
+        public static readonly Color AccentLight   = Color.FromRgb(37, 99, 235);   // Blue Accent
+        public static readonly Color AccentDark    = Color.FromRgb(30, 58, 138);   // Deep Navy
+        public static readonly Color AccentCyan    = Color.FromRgb(30, 64, 175);   // Dark Blue
+        public static readonly Color AccentGreen   = Color.FromRgb(16, 185, 129);  // Emerald
+        public static readonly Color AccentRed     = Color.FromRgb(185, 28, 28);   // Dark Red
+        public static readonly Color AccentAmber   = Color.FromRgb(217, 119, 6);   // Amber
+
+        public static readonly Color TextPrimary = Color.FromRgb(248, 250, 252);
+        public static readonly Color TextSecondary = Color.FromRgb(156, 163, 175);
+        public static readonly Color TextMuted = Color.FromRgb(100, 116, 139);
+
+        public static readonly Color InputBg = Color.FromRgb(11, 14, 22);
+        public static readonly Color InputBorder = Color.FromRgb(32, 40, 60);
+    }
+
+    public static class SvgIcons
+    {
+        public const string Play = "M8 5v14l11-7z";
+        public const string Stop = "M6 6h12v12H6z";
+        public const string Home = "M3 12l9-9 9 9M5 10v10a1 1 0 001 1h4a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h4a1 1 0 001-1V10";
+        public const string Mods = "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5";
+        public const string Settings = "M4 21v-7m0-4V3m8 21v-9m0-4V3m8 21v-5m0-4V3M1 14h6m2-6h6m2 8h6";
+        public const string Terminal = "M4 17l6-6-6-6m8 14h8";
+        public const string Folder = "M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z";
+        public const string Download = "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3";
+        public const string Search = "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z";
+        public const string Refresh = "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15";
+        public const string Close = "M18 6L6 18M6 6l12 12";
+        public const string Minimize = "M5 12h14";
+        public const string Check = "M20 6L9 17l-5-5";
+        public const string User = "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 3a4 4 0 100 8 4 4 0 000-8z";
+        public const string Clock = "M12 2a10 10 0 100 20 10 10 0 000-20zM12 6v6l4 2";
+        public const string Chip = "M4 4h16v16H4zM9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3";
+        public const string Copy = "M8 4v12a2 2 0 002 2h8a2 2 0 002-2V7.242a2 2 0 00-.602-1.43L16.083 2.57A2 2 0 0014.685 2H10a2 2 0 00-2 2zM16 18v2a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h2";
+        public const string Trash = "M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2";
+        public const string Rocket = "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09zM12 15l-3-3m1.5-1.5C11.5 9.5 14 7 17 4c1.5-1.5 3-1.5 3-1.5s0 1.5-1.5 3c-3 3-5.5 5.5-6.5 6.5z";
+        public const string Sparkles = "M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z";
+        public const string Cube = "M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12";
+        public const string Target = "M12 2a10 10 0 100 20 10 10 0 000-20zm0 4a6 6 0 100 12 6 6 0 000-12zm0 4a2 2 0 100 4 2 2 0 000-4z";
+    }
+
+    public static class IconHelper
+    {
+        public static SPath CreateStrokeIcon(string svgPath, double size, Brush stroke, double thickness = 1.7)
+        {
+            return new SPath
+            {
+                Data = Geometry.Parse(svgPath),
+                Stroke = stroke,
+                StrokeThickness = thickness,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
+                Fill = Brushes.Transparent,
+                Width = size,
+                Height = size,
+                Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
+
+        public static SPath CreateFillIcon(string svgPath, double size, Brush fill)
+        {
+            return new SPath
+            {
+                Data = Geometry.Parse(svgPath),
+                Fill = fill,
+                Width = size,
+                Height = size,
+                Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
+    }
+
     public class LauncherData
     {
         public string Username = "Owner";
-        public string Email = "se•••••a@gmail.com";
-        public string Role = "Owner";
+        public string Email = "";
+        public string Role = "Player";
         public int UserId = 6038;
-        public string RegDate = "2 февраля 2026 г.";
+        public string RegDate = "2026";
         public int LaunchCount = 0;
         public int PlaytimeMinutes = 0;
         public string LastLaunchTime = "";
         public int RamMb = 4096;
         public string JvmArgs = "-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200";
         public string CustomProjectPath = "";
+        public string ClientDownloadUrl = "https://github.com/RainyDLC/FrostixDLC/releases/latest/download/rainydlc.jar";
+        public string CustomGamePath = "";
+        public int LaunchMode = 0; // 0=Auto, 1=Gradlew, 2=Minecraft
         public Dictionary<string, bool> ModStates = new Dictionary<string, bool>();
 
         public static string FormatPlaytime(int totalMinutes)
@@ -89,7 +181,7 @@ namespace RainyDLC.Launcher
                         string key = line.Substring(0, idx).Trim();
                         string val = line.Substring(idx + 1).Trim();
 
-                        if (key == "Username") d.Username = (val == "vortexxxx" || val == "vortexxx") ? "Owner" : val;
+                        if (key == "Username") d.Username = string.IsNullOrEmpty(val) ? "Owner" : val;
                         else if (key == "Email") d.Email = val;
                         else if (key == "Role") d.Role = val;
                         else if (key == "LaunchCount") int.TryParse(val, out d.LaunchCount);
@@ -98,6 +190,9 @@ namespace RainyDLC.Launcher
                         else if (key == "RamMb") int.TryParse(val, out d.RamMb);
                         else if (key == "JvmArgs") d.JvmArgs = val;
                         else if (key == "CustomProjectPath") d.CustomProjectPath = val;
+                        else if (key == "ClientDownloadUrl") d.ClientDownloadUrl = val;
+                        else if (key == "CustomGamePath") d.CustomGamePath = val;
+                        else if (key == "LaunchMode") int.TryParse(val, out d.LaunchMode);
                         else if (key.StartsWith("Mod_"))
                         {
                             string mod = key.Substring(4);
@@ -109,29 +204,13 @@ namespace RainyDLC.Launcher
             }
             catch { }
 
-            if (d.Username == "vortexxxx" || d.Username == "vortexxx")
-            {
-                d.Username = "Owner";
-                d.Save();
-            }
+            if (d.RamMb < 1024) d.RamMb = 4096;
 
-            // Если запуск первый раз, проверяем реальный лог latest.log
             if (string.IsNullOrEmpty(d.LastLaunchTime))
             {
                 try
                 {
                     string runLog = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "run", "logs", "latest.log");
-                    if (!File.Exists(runLog))
-                    {
-                        string appDataDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RainyDLC");
-                        string prjFile = System.IO.Path.Combine(appDataDir, "project_path.txt");
-                        if (File.Exists(prjFile))
-                        {
-                            string p = File.ReadAllText(prjFile).Trim();
-                            runLog = System.IO.Path.Combine(p, "run", "logs", "latest.log");
-                        }
-                    }
-
                     if (File.Exists(runLog))
                     {
                         DateTime dt = File.GetLastWriteTime(runLog);
@@ -166,6 +245,9 @@ namespace RainyDLC.Launcher
                 sb.AppendLine("RamMb=" + RamMb);
                 sb.AppendLine("JvmArgs=" + JvmArgs);
                 sb.AppendLine("CustomProjectPath=" + CustomProjectPath);
+                sb.AppendLine("ClientDownloadUrl=" + ClientDownloadUrl);
+                sb.AppendLine("CustomGamePath=" + CustomGamePath);
+                sb.AppendLine("LaunchMode=" + LaunchMode);
                 foreach (KeyValuePair<string, bool> kv in ModStates)
                 {
                     sb.AppendLine("Mod_" + kv.Key + "=" + kv.Value);
@@ -219,23 +301,31 @@ namespace RainyDLC.Launcher
         public ToggleSwitch(bool initialState = true)
         {
             _isChecked = initialState;
-            Width = 46;
-            Height = 24;
-            CornerRadius = new CornerRadius(12);
+            Width = 36;
+            Height = 20;
+            CornerRadius = new CornerRadius(10);
             Cursor = Cursors.Hand;
             ClipToBounds = true;
+            BorderThickness = new Thickness(1);
 
-            Background = new SolidColorBrush(_isChecked ? Color.FromRgb(99, 102, 241) : Color.FromRgb(39, 39, 45));
+            UpdateColors();
 
             _thumb = new Border
             {
-                Width = 18,
-                Height = 18,
-                CornerRadius = new CornerRadius(9),
+                Width = 14,
+                Height = 14,
+                CornerRadius = new CornerRadius(7),
                 Background = Brushes.White,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(_isChecked ? 25 : 3, 3, 0, 0)
+                Margin = new Thickness(_isChecked ? 18 : 2, 0, 0, 0),
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    BlurRadius = 3,
+                    ShadowDepth = 1,
+                    Opacity = 0.25
+                }
             };
             Child = _thumb;
 
@@ -247,41 +337,32 @@ namespace RainyDLC.Launcher
             };
         }
 
+        private void UpdateColors()
+        {
+            Background = new SolidColorBrush(_isChecked ? AppColors.AccentPrimary : Color.FromRgb(24, 30, 44));
+            BorderBrush = new SolidColorBrush(_isChecked ? AppColors.AccentLight : Color.FromRgb(36, 44, 64));
+        }
+
         private void UpdateVisual(bool animate = false)
         {
-            Thickness targetMargin = new Thickness(_isChecked ? 25 : 3, 3, 0, 0);
-            Color targetColor = _isChecked ? Color.FromRgb(99, 102, 241) : Color.FromRgb(39, 39, 45);
+            Thickness targetMargin = new Thickness(_isChecked ? 18 : 2, 0, 0, 0);
 
             if (animate)
             {
                 ThicknessAnimation thumbAnim = new ThicknessAnimation
                 {
                     To = targetMargin,
-                    Duration = TimeSpan.FromMilliseconds(180),
+                    Duration = TimeSpan.FromMilliseconds(160),
                     EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
                 };
                 _thumb.BeginAnimation(Border.MarginProperty, thumbAnim);
-
-                SolidColorBrush bgBrush = Background as SolidColorBrush;
-                if (bgBrush != null && !bgBrush.IsFrozen)
-                {
-                    ColorAnimation colorAnim = new ColorAnimation
-                    {
-                        To = targetColor,
-                        Duration = TimeSpan.FromMilliseconds(180)
-                    };
-                    bgBrush.BeginAnimation(SolidColorBrush.ColorProperty, colorAnim);
-                }
-                else
-                {
-                    Background = new SolidColorBrush(targetColor);
-                }
+                UpdateColors();
             }
             else
             {
                 _thumb.BeginAnimation(Border.MarginProperty, null);
                 _thumb.Margin = targetMargin;
-                Background = new SolidColorBrush(targetColor);
+                UpdateColors();
             }
         }
     }
@@ -294,29 +375,64 @@ namespace RainyDLC.Launcher
         private DispatcherTimer _playtimeTimer;
         private DateTime _sessionStart;
 
-        // UI References
-        private List<Button> _navButtons = new List<Button>();
+        // Top Navigation Tabs
+        private List<Border> _navPills = new List<Border>();
+        private List<TextBlock> _navTexts = new List<TextBlock>();
+        private List<SPath> _navIcons = new List<SPath>();
         private Grid _pageHome;
         private Grid _pageMods;
-        private Grid _pageFriends;
         private Grid _pageSettings;
         private Grid _pageConsole;
+        private int _currentPageIndex = -1;
+
+        // Bottom Dock Controls
+        private Button _btnDockLaunch;
+        private TextBlock _btnDockLaunchText;
+        private SPath _btnDockLaunchIcon;
+        private TextBlock _txtDockUser;
+        private Ellipse _dockStatusDot;
+        private TextBlock _txtDockStatus;
+        private TextBlock _txtDockRamBadge;
 
         // Home View Controls
-        private TextBlock _txtLastLaunch;
-        private TextBlock _txtLaunchCount;
-        private TextBlock _txtPlaytime;
-        private Button _btnLaunch;
-        private TextBlock _btnLaunchText;
+        private TextBlock _txtHeroPlaytime;
+        private TextBlock _txtHeroLaunches;
+        private TextBlock _txtHeroLastLaunch;
+        private TextBlock _txtHeroModsCount;
+        private TextBlock _txtHeroClientStatus;
+        private Button _btnHeroDownload;
+        private TextBlock _txtHeroUsernameDisplay;
+        private TextBlock _txtHeroRamDisplay;
+        private List<Border> _homeRamPills = new List<Border>();
+        private List<TextBlock> _homeRamPillTexts = new List<TextBlock>();
 
-        // Settings View Controls
-        private TextBox _txtRamMb;
-        private TextBlock _txtPathDisplay;
-        private TextBox _txtEmail;
+        // Client Download Controls
+        private Border _downloadBanner;
+        private TextBlock _txtDownloadTitle;
+        private TextBlock _txtDownloadStatus;
+        private TextBlock _txtDownloadDetails;
+        private ProgressBar _downloadProgressBar;
+        private Button _btnCancelDownload;
+        private WebClient _activeDownloader = null;
+        private bool _isDownloading = false;
+        private bool _autoLaunchAfterDownload = false;
+        private DateTime _downloadStartTime;
+
+        // Settings View Controls (macOS / Discord grouped cards)
+        private TextBox _txtSettingsUser;
+        private TextBox _txtSettingsRamMb;
+        private TextBox _txtSettingsJvm;
+        private TextBlock _txtSettingsPath;
+        private TextBox _txtSettingsDownloadUrl;
+        private TextBlock _txtSettingsClientStatus;
+        private Button _btnSettingsDownloadClient;
+        private List<Border> _ramPillBoxes = new List<Border>();
+        private List<TextBlock> _ramPillTexts = new List<TextBlock>();
 
         // Console Log Box
         private TextBox _txtConsoleLogs;
         private ScrollViewer _scrollConsole;
+        private TextBlock _txtConsoleHeaderStatus;
 
         // Mods View References
         private Border _tabLocalBtn;
@@ -331,7 +447,6 @@ namespace RainyDLC.Launcher
         private TextBox _txtModrinthSearch;
         private TextBlock _txtModrinthStatus;
         private bool _modrinthLoadedOnce = false;
-        private int _currentPageIndex = -1;
 
         public MainWindow()
         {
@@ -340,13 +455,14 @@ namespace RainyDLC.Launcher
 
             InitializeWindow();
             BuildUI();
+            UpdateRamDisplays();
         }
 
         private void InitializeWindow()
         {
             Title = "RainyDLC";
-            Width = 1080;
-            Height = 670;
+            Width = 1040;
+            Height = 650;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
@@ -359,7 +475,7 @@ namespace RainyDLC.Launcher
                 {
                     From = 0.0,
                     To = 1.0,
-                    Duration = TimeSpan.FromMilliseconds(260),
+                    Duration = TimeSpan.FromMilliseconds(220),
                     EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
                 };
                 BeginAnimation(UIElement.OpacityProperty, winFade);
@@ -380,10 +496,10 @@ namespace RainyDLC.Launcher
         {
             Border root = new Border
             {
-                CornerRadius = new CornerRadius(16),
-                Background = new SolidColorBrush(Color.FromRgb(8, 8, 10)),
+                CornerRadius = new CornerRadius(18),
+                Background = new SolidColorBrush(AppColors.WindowBg),
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(22, 22, 28)),
+                BorderBrush = new SolidColorBrush(AppColors.BorderSubtle),
                 Effect = new DropShadowEffect
                 {
                     Color = Colors.Black,
@@ -395,210 +511,97 @@ namespace RainyDLC.Launcher
 
             Grid rootGrid = new Grid { ClipToBounds = true };
 
-            // Живой анимированный фон с аурами и неоновым дождём RainyDLC
-            Canvas bgCanvas = CreateAmbientBackground();
-            rootGrid.Children.Add(bgCanvas);
+            // 1. Subtle Atmospheric Backdrop Art
+            Image bgArt = new Image
+            {
+                Stretch = Stretch.UniformToFill,
+                Opacity = 0.65,
+                IsHitTestVisible = false
+            };
+            string bgFile = System.IO.Path.Combine(_projectDir, "launcher_bg.jpg");
+            if (!File.Exists(bgFile))
+            {
+                bgFile = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "launcher_bg.jpg");
+            }
+            if (File.Exists(bgFile))
+            {
+                try
+                {
+                    BitmapImage bmp = new BitmapImage();
+                    bmp.BeginInit();
+                    bmp.UriSource = new Uri(bgFile, UriKind.Absolute);
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    bmp.EndInit();
+                    bgArt.Source = bmp;
+                }
+                catch { }
+            }
+            rootGrid.Children.Add(bgArt);
 
+            // 2. Cinematic Atmospheric Gradient Overlay
+            LinearGradientBrush gradientOverlay = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(0, 1)
+            };
+            gradientOverlay.GradientStops.Add(new GradientStop(Color.FromArgb(170, 7, 9, 15), 0.0));
+            gradientOverlay.GradientStops.Add(new GradientStop(Color.FromArgb(50, 7, 9, 15), 0.35));
+            gradientOverlay.GradientStops.Add(new GradientStop(Color.FromArgb(95, 7, 9, 15), 0.70));
+            gradientOverlay.GradientStops.Add(new GradientStop(Color.FromArgb(235, 6, 8, 14), 1.0));
+            rootGrid.Children.Add(new Border { Background = gradientOverlay, IsHitTestVisible = false });
+
+            // 3. Main Layout
             Grid mainLayout = new Grid();
-            mainLayout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(38, GridUnitType.Pixel) });
-            mainLayout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            mainLayout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(52, GridUnitType.Pixel) }); // Header & Tabs
+            mainLayout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });   // Pages Area
+            mainLayout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                         // Bottom Dock
 
-            // Верхний заголовок
-            Border titleBar = CreateTitleBar();
-            Grid.SetRow(titleBar, 0);
-            mainLayout.Children.Add(titleBar);
+            // Top Header & Navigation Bar
+            Border headerBar = CreateTopHeader();
+            Grid.SetRow(headerBar, 0);
+            mainLayout.Children.Add(headerBar);
 
-            // Основная область
-            Grid bodyGrid = new Grid { Margin = new Thickness(16, 0, 16, 16) };
-            bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240, GridUnitType.Pixel) });
-            bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16, GridUnitType.Pixel) });
-            bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            UIElement sidebar = CreateSidebar();
-            Grid.SetColumn(sidebar, 0);
-            bodyGrid.Children.Add(sidebar);
-
-            Grid contentArea = new Grid();
+            // Pages Container
+            Grid contentArea = new Grid { Margin = new Thickness(24, 16, 24, 16) };
 
             _pageHome = CreatePageHome();
             _pageMods = CreatePageMods();
-            _pageFriends = CreatePageFriends();
             _pageSettings = CreatePageSettings();
             _pageConsole = CreatePageConsole();
 
             contentArea.Children.Add(_pageHome);
             contentArea.Children.Add(_pageMods);
-            contentArea.Children.Add(_pageFriends);
             contentArea.Children.Add(_pageSettings);
             contentArea.Children.Add(_pageConsole);
 
-            Grid.SetColumn(contentArea, 2);
-            bodyGrid.Children.Add(contentArea);
+            Grid.SetRow(contentArea, 1);
+            mainLayout.Children.Add(contentArea);
 
-            Grid.SetRow(bodyGrid, 1);
-            mainLayout.Children.Add(bodyGrid);
+            // Bottom Dock
+            Border launchDock = CreateBottomLaunchDock();
+            Grid.SetRow(launchDock, 2);
+            mainLayout.Children.Add(launchDock);
 
             rootGrid.Children.Add(mainLayout);
             root.Child = rootGrid;
             Content = root;
 
             SwitchPage(0);
+            UpdateClientStatusUI();
         }
 
-        private Canvas CreateAmbientBackground()
-        {
-            Canvas canvas = new Canvas
-            {
-                IsHitTestVisible = false,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch
-            };
+        #region Top Header & Centered Navigation
 
-            // 1. Фиолетовая аура слева
-            Ellipse orb1 = new Ellipse
-            {
-                Width = 420,
-                Height = 420,
-                IsHitTestVisible = false
-            };
-            RadialGradientBrush brush1 = new RadialGradientBrush
-            {
-                Center = new Point(0.5, 0.5),
-                GradientOrigin = new Point(0.5, 0.5),
-                RadiusX = 0.5,
-                RadiusY = 0.5
-            };
-            brush1.GradientStops.Add(new GradientStop(Color.FromArgb(50, 6, 182, 212), 0.0));
-            brush1.GradientStops.Add(new GradientStop(Color.FromArgb(14, 14, 116, 144), 0.5));
-            brush1.GradientStops.Add(new GradientStop(Colors.Transparent, 1.0));
-            orb1.Fill = brush1;
-            orb1.Effect = new BlurEffect { Radius = 90 };
-            Canvas.SetLeft(orb1, -80);
-            Canvas.SetTop(orb1, 20);
-
-            TranslateTransform ttOrb1 = new TranslateTransform();
-            orb1.RenderTransform = ttOrb1;
-
-            DoubleAnimation animOrb1X = new DoubleAnimation
-            {
-                From = -20,
-                To = 35,
-                Duration = TimeSpan.FromSeconds(7),
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever,
-                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-            };
-            DoubleAnimation animOrb1Y = new DoubleAnimation
-            {
-                From = -15,
-                To = 25,
-                Duration = TimeSpan.FromSeconds(9),
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever,
-                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-            };
-            ttOrb1.BeginAnimation(TranslateTransform.XProperty, animOrb1X);
-            ttOrb1.BeginAnimation(TranslateTransform.YProperty, animOrb1Y);
-            canvas.Children.Add(orb1);
-
-            // 2. Синяя сапфировая аура справа
-            Ellipse orb2 = new Ellipse
-            {
-                Width = 460,
-                Height = 460,
-                IsHitTestVisible = false
-            };
-            RadialGradientBrush brush2 = new RadialGradientBrush
-            {
-                Center = new Point(0.5, 0.5),
-                GradientOrigin = new Point(0.5, 0.5),
-                RadiusX = 0.5,
-                RadiusY = 0.5
-            };
-            brush2.GradientStops.Add(new GradientStop(Color.FromArgb(40, 59, 130, 246), 0.0));
-            brush2.GradientStops.Add(new GradientStop(Color.FromArgb(12, 29, 78, 216), 0.5));
-            brush2.GradientStops.Add(new GradientStop(Colors.Transparent, 1.0));
-            orb2.Fill = brush2;
-            orb2.Effect = new BlurEffect { Radius = 100 };
-            Canvas.SetLeft(orb2, 650);
-            Canvas.SetTop(orb2, 260);
-
-            TranslateTransform ttOrb2 = new TranslateTransform();
-            orb2.RenderTransform = ttOrb2;
-
-            DoubleAnimation animOrb2X = new DoubleAnimation
-            {
-                From = 25,
-                To = -30,
-                Duration = TimeSpan.FromSeconds(10),
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever,
-                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-            };
-            DoubleAnimation animOrb2Y = new DoubleAnimation
-            {
-                From = 20,
-                To = -25,
-                Duration = TimeSpan.FromSeconds(8),
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever,
-                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-            };
-            ttOrb2.BeginAnimation(TranslateTransform.XProperty, animOrb2X);
-            ttOrb2.BeginAnimation(TranslateTransform.YProperty, animOrb2Y);
-            canvas.Children.Add(orb2);
-
-            // 3. Cyber Rain Particles (RainyDLC Theme)
-            double[] xPositions = new double[] { 35, 90, 160, 230, 290, 370, 440, 520, 600, 670, 740, 810, 880, 940, 1010, 1060 };
-            double[] heights = new double[] { 22, 34, 18, 28, 38, 20, 30, 26, 32, 24, 36, 19, 27, 33, 22, 30 };
-            double[] speeds = new double[] { 3.2, 4.5, 2.8, 3.8, 4.2, 3.0, 4.8, 3.5, 4.0, 2.9, 4.4, 3.7, 4.1, 3.3, 4.6, 3.6 };
-
-            for (int i = 0; i < xPositions.Length; i++)
-            {
-                Rectangle drop = new Rectangle
-                {
-                    Width = 1.5,
-                    Height = heights[i],
-                    IsHitTestVisible = false
-                };
-
-                LinearGradientBrush dropBrush = new LinearGradientBrush
-                {
-                    StartPoint = new Point(0, 0),
-                    EndPoint = new Point(0, 1)
-                };
-                dropBrush.GradientStops.Add(new GradientStop(Color.FromArgb(0, 129, 140, 248), 0.0));
-                dropBrush.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(40 + (i % 4) * 20), 165, 180, 252), 0.6));
-                dropBrush.GradientStops.Add(new GradientStop(Color.FromArgb(0, 129, 140, 248), 1.0));
-                drop.Fill = dropBrush;
-
-                Canvas.SetLeft(drop, xPositions[i]);
-                Canvas.SetTop(drop, -60);
-
-                DoubleAnimation fallAnim = new DoubleAnimation
-                {
-                    From = -60,
-                    To = 700,
-                    Duration = TimeSpan.FromSeconds(speeds[i]),
-                    RepeatBehavior = RepeatBehavior.Forever,
-                    BeginTime = TimeSpan.FromSeconds(i * 0.28)
-                };
-
-                drop.BeginAnimation(Canvas.TopProperty, fallAnim);
-                canvas.Children.Add(drop);
-            }
-
-            return canvas;
-        }
-
-        #region Title Bar & Window Chrome
-
-        private Border CreateTitleBar()
+        private Border CreateTopHeader()
         {
             Border bar = new Border
             {
-                Background = Brushes.Transparent,
-                Padding = new Thickness(16, 4, 16, 0)
+                Height = 52,
+                Background = new SolidColorBrush(Color.FromArgb(150, 8, 11, 17)),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                Padding = new Thickness(20, 0, 12, 0),
+                CornerRadius = new CornerRadius(14, 14, 0, 0)
             };
 
             bar.MouseLeftButtonDown += (s, e) =>
@@ -607,406 +610,205 @@ namespace RainyDLC.Launcher
             };
 
             Grid g = new Grid();
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                         // Brand Logo
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });   // Center Nav Tabs
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                         // Window Controls
 
-            TextBlock txtTitle = new TextBlock
-            {
-                Text = "🌧️ RainyDLC • Owner Edition",
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(txtTitle, 1);
-            g.Children.Add(txtTitle);
-
-            StackPanel controls = new StackPanel
+            // 1. Brand Logo
+            StackPanel brand = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            Button btnMin = CreateTitleButton("—", (s, e) => WindowState = WindowState.Minimized);
-            Button btnClose = CreateTitleButton("✕", (s, e) => CloseWindow(), true);
+            Border logoPill = new Border
+            {
+                Width = 26,
+                Height = 26,
+                CornerRadius = new CornerRadius(6),
+                Background = new SolidColorBrush(AppColors.AccentPrimary)
+            };
+            logoPill.Child = IconHelper.CreateStrokeIcon(SvgIcons.Sparkles, 14, Brushes.White, 1.8);
+            brand.Children.Add(logoPill);
 
-            controls.Children.Add(btnMin);
-            controls.Children.Add(btnClose);
+            TextBlock brandTitle = new TextBlock
+            {
+                Text = "RainyDLC",
+                FontSize = 14.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(10, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            brand.Children.Add(brandTitle);
 
-            Grid.SetColumn(controls, 2);
-            g.Children.Add(controls);
+            Border verTag = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(45, 30, 64, 175)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(90, 30, 64, 175)),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 1.5, 6, 1.5),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            verTag.Child = new TextBlock
+            {
+                Text = "1.21.11",
+                FontSize = 9.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(AppColors.AccentLight)
+            };
+            brand.Children.Add(verTag);
+
+            Grid.SetColumn(brand, 0);
+            g.Children.Add(brand);
+
+            // 2. Centered Navigation Segmented Bar
+            Border navContainer = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(130, 12, 16, 26)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(35, 255, 255, 255)),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(3),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            StackPanel navStack = new StackPanel { Orientation = Orientation.Horizontal };
+
+            navStack.Children.Add(CreateTopNavButton(SvgIcons.Home, "Главная", 0));
+            navStack.Children.Add(CreateTopNavButton(SvgIcons.Mods, "Моды", 1));
+            navStack.Children.Add(CreateTopNavButton(SvgIcons.Settings, "Настройки", 2));
+            navStack.Children.Add(CreateTopNavButton(SvgIcons.Terminal, "Консоль", 3));
+
+            navContainer.Child = navStack;
+            Grid.SetColumn(navContainer, 1);
+            g.Children.Add(navContainer);
+
+            // 3. Window Controls (Minimize, Close)
+            StackPanel winControls = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            Button btnMin = CreateTitleIconButton(SvgIcons.Minimize, (s, e) => WindowState = WindowState.Minimized, false);
+            Button btnClose = CreateTitleIconButton(SvgIcons.Close, (s, e) => CloseWindow(), true);
+
+            winControls.Children.Add(btnMin);
+            winControls.Children.Add(btnClose);
+
+            Grid.SetColumn(winControls, 2);
+            g.Children.Add(winControls);
 
             bar.Child = g;
             return bar;
         }
 
-        private Button CreateTitleButton(string text, RoutedEventHandler onClick, bool isClose = false)
+        private UIElement CreateTopNavButton(string svgPath, string label, int pageIndex)
+        {
+            Border pill = new Border
+            {
+                Height = 30,
+                CornerRadius = new CornerRadius(6),
+                Background = Brushes.Transparent,
+                Padding = new Thickness(14, 0, 14, 0),
+                Margin = new Thickness(2, 0, 2, 0),
+                Cursor = Cursors.Hand
+            };
+
+            StackPanel sp = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            SPath icon = IconHelper.CreateStrokeIcon(svgPath, 14, new SolidColorBrush(AppColors.TextMuted), 1.8);
+            sp.Children.Add(icon);
+
+            TextBlock tb = new TextBlock
+            {
+                Text = label,
+                FontSize = 12,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(AppColors.TextSecondary),
+                Margin = new Thickness(8, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            sp.Children.Add(tb);
+
+            pill.Child = sp;
+
+            _navPills.Add(pill);
+            _navTexts.Add(tb);
+            _navIcons.Add(icon);
+
+            pill.MouseEnter += (s, e) =>
+            {
+                if (_currentPageIndex != pageIndex)
+                {
+                    pill.Background = new SolidColorBrush(Color.FromArgb(120, 26, 32, 48));
+                    tb.Foreground = Brushes.White;
+                }
+            };
+            pill.MouseLeave += (s, e) =>
+            {
+                if (_currentPageIndex != pageIndex)
+                {
+                    pill.Background = Brushes.Transparent;
+                    tb.Foreground = new SolidColorBrush(AppColors.TextSecondary);
+                }
+            };
+            pill.MouseLeftButtonDown += (s, e) => SwitchPage(pageIndex);
+
+            return pill;
+        }
+
+        private Button CreateTitleIconButton(string svgPath, RoutedEventHandler onClick, bool isClose)
         {
             Button btn = new Button
             {
-                Content = text,
-                Width = 28,
-                Height = 26,
+                Width = 30,
+                Height = 28,
                 Margin = new Thickness(4, 0, 0, 0),
-                Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 150)),
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
                 Cursor = Cursors.Hand,
                 Focusable = false
             };
 
+            SPath p = IconHelper.CreateStrokeIcon(svgPath, 11, new SolidColorBrush(AppColors.TextMuted), 1.8);
+            btn.Content = p;
+
             ControlTemplate tpl = new ControlTemplate(typeof(Button));
-            FrameworkElementFactory b = new FrameworkElementFactory(typeof(Border));
-            b.Name = "BtnBdr";
-            b.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
-            b.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            FrameworkElementFactory bdr = new FrameworkElementFactory(typeof(Border));
+            bdr.Name = "Bdr";
+            bdr.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+            bdr.SetValue(Border.BackgroundProperty, Brushes.Transparent);
 
             FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
-            cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+            cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
             cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
-            b.AppendChild(cp);
+            bdr.AppendChild(cp);
 
-            tpl.VisualTree = b;
+            tpl.VisualTree = bdr;
 
             Trigger hov = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
             if (isClose)
             {
-                hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(220, 38, 38)), "BtnBdr"));
-                hov.Setters.Add(new Setter(Button.ForegroundProperty, Brushes.White));
+                hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(AppColors.AccentRed), "Bdr"));
             }
             else
             {
-                hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(30, 30, 38)), "BtnBdr"));
-                hov.Setters.Add(new Setter(Button.ForegroundProperty, Brushes.White));
+                hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(26, 32, 46)), "Bdr"));
             }
             tpl.Triggers.Add(hov);
 
             btn.Template = tpl;
             btn.Click += onClick;
-            return btn;
-        }
 
-        #endregion
+            btn.MouseEnter += (s, e) => p.Stroke = Brushes.White;
+            btn.MouseLeave += (s, e) => p.Stroke = new SolidColorBrush(AppColors.TextMuted);
 
-        #region Left Sidebar
-
-        private UIElement CreateSidebar()
-        {
-            Grid sidebarGrid = new Grid();
-            sidebarGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            sidebarGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10, GridUnitType.Pixel) });
-            sidebarGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            sidebarGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10, GridUnitType.Pixel) });
-            sidebarGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-            // 1. Карточка профиля игрока
-            Border userCard = CreateUserCard();
-            Grid.SetRow(userCard, 0);
-            sidebarGrid.Children.Add(userCard);
-
-            // 2. Информационная карточка движка RainyDLC
-            Border engineCard = CreateEngineStatusCard();
-            Grid.SetRow(engineCard, 2);
-            sidebarGrid.Children.Add(engineCard);
-
-            // 3. Меню навигации
-            Border navCard = CreateNavMenuCard();
-            Grid.SetRow(navCard, 4);
-            sidebarGrid.Children.Add(navCard);
-
-            return sidebarGrid;
-        }
-
-        private Border CreateUserCard()
-        {
-            Border userCard = new Border
-            {
-                Height = 64,
-                CornerRadius = new CornerRadius(16),
-                Background = new SolidColorBrush(Color.FromRgb(13, 17, 26)),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(24, 32, 48)),
-                Padding = new Thickness(12, 0, 12, 0)
-            };
-
-            Grid uGrid = new Grid();
-            uGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            uGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            uGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            Border avatar = new Border
-            {
-                Width = 40,
-                Height = 40,
-                CornerRadius = new CornerRadius(20),
-                Background = new LinearGradientBrush(Color.FromRgb(6, 182, 212), Color.FromRgb(59, 130, 246), 45),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 0)
-            };
-            avatar.Child = new TextBlock
-            {
-                Text = "👑",
-                FontSize = 18,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(avatar, 0);
-            uGrid.Children.Add(avatar);
-
-            StackPanel uInfo = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            uInfo.Children.Add(new TextBlock
-            {
-                Text = _data.Username,
-                FontWeight = FontWeights.Bold,
-                FontSize = 13.5,
-                Foreground = Brushes.White
-            });
-
-            Border roleTag = new Border
-            {
-                Background = new SolidColorBrush(Color.FromArgb(40, 239, 68, 68)),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(6, 1, 6, 1),
-                Margin = new Thickness(0, 2, 0, 0),
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            roleTag.Child = new TextBlock
-            {
-                Text = "👑 OWNER",
-                FontSize = 9.5,
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68))
-            };
-            uInfo.Children.Add(roleTag);
-
-            Grid.SetColumn(uInfo, 1);
-            uGrid.Children.Add(uInfo);
-
-            Border statusDot = new Border
-            {
-                Width = 9,
-                Height = 9,
-                CornerRadius = new CornerRadius(4.5),
-                Background = new SolidColorBrush(Color.FromRgb(52, 211, 153)),
-                VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = "Онлайн"
-            };
-            Grid.SetColumn(statusDot, 2);
-            uGrid.Children.Add(statusDot);
-
-            userCard.Child = uGrid;
-            return userCard;
-        }
-
-        private Border CreateEngineStatusCard()
-        {
-            Border b = new Border
-            {
-                Height = 104,
-                CornerRadius = new CornerRadius(16),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(24, 34, 52)),
-                Padding = new Thickness(14, 12, 14, 12)
-            };
-
-            b.Background = new LinearGradientBrush(
-                Color.FromRgb(14, 19, 30),
-                Color.FromRgb(9, 12, 18),
-                45
-            );
-
-            StackPanel sp = new StackPanel();
-
-            Grid r1 = new Grid();
-            r1.Children.Add(new TextBlock
-            {
-                Text = "⚡ Rainy Core",
-                FontSize = 11,
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
-                HorizontalAlignment = HorizontalAlignment.Left
-            });
-            r1.Children.Add(new TextBlock
-            {
-                Text = "v1.21.4",
-                FontSize = 10.5,
-                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
-                HorizontalAlignment = HorizontalAlignment.Right
-            });
-            sp.Children.Add(r1);
-
-            sp.Children.Add(new TextBlock
-            {
-                Text = "Fabric • High-FPS",
-                FontSize = 15,
-                FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White,
-                Margin = new Thickness(0, 4, 0, 7)
-            });
-
-            Border meter = new Border
-            {
-                Height = 4,
-                CornerRadius = new CornerRadius(2),
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-            meter.Background = new LinearGradientBrush(
-                Color.FromRgb(6, 182, 212),
-                Color.FromRgb(99, 102, 241),
-                0
-            );
-
-            DropShadowEffect barGlow = new DropShadowEffect
-            {
-                Color = Color.FromRgb(6, 182, 212),
-                BlurRadius = 8,
-                ShadowDepth = 0,
-                Opacity = 0.6
-            };
-            meter.Effect = barGlow;
-
-            DoubleAnimation glowPulse = new DoubleAnimation
-            {
-                From = 0.35,
-                To = 0.9,
-                Duration = TimeSpan.FromSeconds(2.0),
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever
-            };
-            barGlow.BeginAnimation(DropShadowEffect.OpacityProperty, glowPulse);
-
-            sp.Children.Add(meter);
-
-            Grid r3 = new Grid { Margin = new Thickness(0, 7, 0, 0) };
-            r3.Children.Add(new TextBlock
-            {
-                Text = "Память: " + _data.RamMb + " МБ",
-                FontSize = 10.5,
-                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
-                HorizontalAlignment = HorizontalAlignment.Left
-            });
-            r3.Children.Add(new TextBlock
-            {
-                Text = "🟢 Готов",
-                FontSize = 10.5,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153)),
-                HorizontalAlignment = HorizontalAlignment.Right
-            });
-            sp.Children.Add(r3);
-
-            b.Child = sp;
-            return b;
-        }
-
-        private Border CreateNavMenuCard()
-        {
-            Border b = new Border
-            {
-                CornerRadius = new CornerRadius(16),
-                Background = new SolidColorBrush(Color.FromRgb(13, 17, 26)),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(24, 32, 48)),
-                Padding = new Thickness(8, 10, 8, 10)
-            };
-
-            Grid g = new Grid();
-            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            StackPanel sp = new StackPanel();
-
-            _navButtons.Add(CreateNavItem("⚡  Главная", 0));
-            _navButtons.Add(CreateNavItem("☁️  Моды", 1));
-            _navButtons.Add(CreateNavItem("👥  Друзья", 2));
-            _navButtons.Add(CreateNavItem("⚙️  Настройки", 3));
-            _navButtons.Add(CreateNavItem("💻  Консоль", 4));
-
-            foreach (Button btn in _navButtons)
-            {
-                sp.Children.Add(btn);
-            }
-
-            Grid.SetRow(sp, 0);
-            g.Children.Add(sp);
-
-            Button btnLogout = new Button
-            {
-                Content = "[→  Выйти",
-                Height = 36,
-                Margin = new Thickness(4, 0, 4, 2),
-                FontSize = 12,
-                FontWeight = FontWeights.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(115, 115, 128)),
-                Cursor = Cursors.Hand,
-                HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
-                Focusable = false
-            };
-
-            ControlTemplate tpl = new ControlTemplate(typeof(Button));
-            FrameworkElementFactory bdr = new FrameworkElementFactory(typeof(Border));
-            bdr.Name = "LogoutBdr";
-            bdr.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
-            bdr.SetValue(Border.BackgroundProperty, Brushes.Transparent);
-            bdr.SetValue(Border.PaddingProperty, new Thickness(12, 0, 12, 0));
-
-            FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
-            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
-            bdr.AppendChild(cp);
-            tpl.VisualTree = bdr;
-
-            Trigger hov = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
-            hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(30, 20, 25)), "LogoutBdr"));
-            hov.Setters.Add(new Setter(Button.ForegroundProperty, new SolidColorBrush(Color.FromRgb(248, 113, 113))));
-            tpl.Triggers.Add(hov);
-
-            btnLogout.Template = tpl;
-            btnLogout.Click += (s, e) => CloseWindow();
-
-            Grid.SetRow(btnLogout, 1);
-            g.Children.Add(btnLogout);
-
-            b.Child = g;
-            return b;
-        }
-
-        private Button CreateNavItem(string text, int pageIndex)
-        {
-            Button btn = new Button
-            {
-                Content = text,
-                Height = 38,
-                Margin = new Thickness(0, 0, 0, 4),
-                FontSize = 13,
-                FontWeight = FontWeights.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 150)),
-                Cursor = Cursors.Hand,
-                HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
-                Focusable = false
-            };
-
-            ControlTemplate tpl = new ControlTemplate(typeof(Button));
-            FrameworkElementFactory bdr = new FrameworkElementFactory(typeof(Border));
-            bdr.Name = "NavBdr";
-            bdr.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
-            bdr.SetValue(Border.BackgroundProperty, Brushes.Transparent);
-            bdr.SetValue(Border.PaddingProperty, new Thickness(14, 0, 14, 0));
-
-            FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
-            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
-            bdr.AppendChild(cp);
-            tpl.VisualTree = bdr;
-
-            Trigger hov = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
-            hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(24, 25, 32)), "NavBdr"));
-            hov.Setters.Add(new Setter(Button.ForegroundProperty, Brushes.White));
-            tpl.Triggers.Add(hov);
-
-            btn.Template = tpl;
-            btn.Click += (s, e) => SwitchPage(pageIndex);
             return btn;
         }
 
@@ -1015,7 +817,7 @@ namespace RainyDLC.Launcher
             if (_currentPageIndex == index) return;
             _currentPageIndex = index;
 
-            Grid[] pages = new Grid[] { _pageHome, _pageMods, _pageFriends, _pageSettings, _pageConsole };
+            Grid[] pages = new Grid[] { _pageHome, _pageMods, _pageSettings, _pageConsole };
             for (int i = 0; i < pages.Length; i++)
             {
                 Grid p = pages[i];
@@ -1036,16 +838,16 @@ namespace RainyDLC.Launcher
                     {
                         From = 0.0,
                         To = 1.0,
-                        Duration = TimeSpan.FromMilliseconds(200),
+                        Duration = TimeSpan.FromMilliseconds(180),
                         EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
                     };
                     p.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
 
                     DoubleAnimation slideAnim = new DoubleAnimation
                     {
-                        From = 12.0,
+                        From = 8.0,
                         To = 0.0,
-                        Duration = TimeSpan.FromMilliseconds(200),
+                        Duration = TimeSpan.FromMilliseconds(180),
                         EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
                     };
                     tt.BeginAnimation(TranslateTransform.YProperty, slideAnim);
@@ -1056,101 +858,704 @@ namespace RainyDLC.Launcher
                 }
             }
 
-            for (int i = 0; i < _navButtons.Count; i++)
+            for (int i = 0; i < _navPills.Count; i++)
             {
-                Button b = _navButtons[i];
-                Border bdr = b.Template.FindName("NavBdr", b) as Border;
-                if (bdr != null)
+                Border pill = _navPills[i];
+                TextBlock txt = _navTexts[i];
+                SPath icon = _navIcons[i];
+
+                if (i == index)
                 {
-                    if (i == index)
-                    {
-                        bdr.Background = new SolidColorBrush(Color.FromRgb(18, 28, 44));
-                        bdr.BorderBrush = new SolidColorBrush(Color.FromRgb(6, 182, 212));
-                        bdr.BorderThickness = new Thickness(2, 0, 0, 0);
-                        b.Foreground = Brushes.White;
-                        b.FontWeight = FontWeights.Bold;
-                    }
-                    else
-                    {
-                        bdr.Background = Brushes.Transparent;
-                        bdr.BorderBrush = Brushes.Transparent;
-                        bdr.BorderThickness = new Thickness(0);
-                        b.Foreground = new SolidColorBrush(Color.FromRgb(140, 148, 165));
-                        b.FontWeight = FontWeights.Medium;
-                    }
+                    pill.Background = new SolidColorBrush(Color.FromArgb(200, 32, 40, 60));
+                    pill.BorderBrush = new SolidColorBrush(AppColors.BorderHover);
+                    pill.BorderThickness = new Thickness(1);
+                    txt.Foreground = Brushes.White;
+                    txt.FontWeight = FontWeights.SemiBold;
+                    icon.Stroke = new SolidColorBrush(AppColors.AccentLight);
+                }
+                else
+                {
+                    pill.Background = Brushes.Transparent;
+                    pill.BorderBrush = Brushes.Transparent;
+                    pill.BorderThickness = new Thickness(0);
+                    txt.Foreground = new SolidColorBrush(AppColors.TextSecondary);
+                    txt.FontWeight = FontWeights.Medium;
+                    icon.Stroke = new SolidColorBrush(AppColors.TextMuted);
                 }
             }
         }
 
         #endregion
 
-        #region Page 1: Главная (Bento Dashboard)
+        #region Page 0: Главная (Showcase & Spotlight)
 
         private Grid CreatePageHome()
         {
             Grid g = new Grid();
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: Hero Banner
-            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14, GridUnitType.Pixel) }); // 1: Spacing
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2: 3 Bento Stat Tiles
-            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14, GridUnitType.Pixel) }); // 3: Spacing
-            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 4: 2 Specification Cards
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                         // 0: Client Hero Title
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                         // 1: Download Banner (Collapsible)
+            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14, GridUnitType.Pixel) }); // 2: Gap
+            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });   // 3: 2-Column Hub
 
-            // 1. Hero Banner
-            Border heroCard = new Border
-            {
-                CornerRadius = new CornerRadius(18),
-                Background = new LinearGradientBrush(Color.FromRgb(14, 20, 32), Color.FromRgb(9, 12, 18), 35),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(24, 36, 56)),
-                Padding = new Thickness(22, 18, 22, 18)
-            };
-
-            Grid heroGrid = new Grid();
+            // 1. Client Hero Branding (Clean, open, cinematic)
+            Grid heroGrid = new Grid { Margin = new Thickness(4, 4, 4, 0) };
             heroGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             heroGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+            // Hero Left
             StackPanel heroLeft = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            
-            StackPanel brandRow = new StackPanel { Orientation = Orientation.Horizontal };
-            brandRow.Children.Add(new TextBlock
+
+            StackPanel titleRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            TextBlock brandTitle = new TextBlock
             {
-                Text = "🌧️ RainyDLC Client",
-                FontSize = 21,
+                Text = "RainyDLC Client",
+                FontSize = 28,
                 FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White
-            });
-            heroLeft.Children.Add(brandRow);
+                Foreground = Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            titleRow.Children.Add(brandTitle);
+
+            Border verCapsule = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(40, 30, 64, 175)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(90, 30, 64, 175)),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(7, 2, 7, 2),
+                Margin = new Thickness(10, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            verCapsule.Child = new TextBlock
+            {
+                Text = "1.21.11",
+                FontSize = 10,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(AppColors.AccentLight)
+            };
+            titleRow.Children.Add(verCapsule);
+            heroLeft.Children.Add(titleRow);
 
             heroLeft.Children.Add(new TextBlock
             {
-                Text = "Кастомный клиент на базе Fabric 1.21.4 • Высокий FPS • Прямая загрузка модов",
-                FontSize = 12.5,
-                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                Text = "Minecraft 1.21.11 • Fabric Client • Встроенная оптимизация FPS",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)),
                 Margin = new Thickness(0, 4, 0, 10)
             });
 
-            StackPanel badges = new StackPanel { Orientation = Orientation.Horizontal };
-            badges.Children.Add(CreateBadge("👑 Owner Edition", Color.FromRgb(239, 68, 68), Color.FromArgb(30, 239, 68, 68)));
-            badges.Children.Add(CreateBadge("⚡ 1.21.4 Fabric", Color.FromRgb(56, 189, 248), Color.FromArgb(30, 56, 189, 248)));
-            badges.Children.Add(CreateBadge("🛡️ Secured Build", Color.FromRgb(52, 211, 153), Color.FromArgb(30, 52, 211, 153)));
-            heroLeft.Children.Add(badges);
+            // Feature Badges Row
+            StackPanel tagsRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+            tagsRow.Children.Add(CreateMinimalTag("Fabric Loader"));
+            tagsRow.Children.Add(CreateMinimalTag("Sodium Engine"));
+            tagsRow.Children.Add(CreateMinimalTag("Target ESP"));
+            tagsRow.Children.Add(CreateMinimalTag("Ghost Modules"));
+            heroLeft.Children.Add(tagsRow);
 
+            // Client Status Row
+            StackPanel statusRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+            _txtHeroClientStatus = new TextBlock
+            {
+                Text = "Проверка файлов...",
+                FontSize = 12,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(AppColors.TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            statusRow.Children.Add(_txtHeroClientStatus);
+
+            _btnHeroDownload = CreateCompactButton(SvgIcons.Download, "Скачать клиент", (s, e) =>
+            {
+                StartClientDownload(false);
+            });
+            _btnHeroDownload.Margin = new Thickness(12, 0, 0, 0);
+            statusRow.Children.Add(_btnHeroDownload);
+
+            heroLeft.Children.Add(statusRow);
             Grid.SetColumn(heroLeft, 0);
             heroGrid.Children.Add(heroLeft);
 
-            StackPanel heroRight = new StackPanel
+            // Hero Right: Clean Playtime Pill
+            Border sessionPill = new Border
             {
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Right
+                Background = new SolidColorBrush(Color.FromArgb(140, 12, 16, 26)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(14, 10, 14, 10),
+                VerticalAlignment = VerticalAlignment.Center
             };
 
-            _btnLaunch = CreateBottomActionButton("▶  Запустить клиент", (s, e) => OnLaunchButtonClick(), true);
-            _btnLaunch.Width = 200;
-            _btnLaunch.Height = 46;
-            _btnLaunchText = _btnLaunch.Content as TextBlock;
-            heroRight.Children.Add(_btnLaunch);
+            StackPanel spSession = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            spSession.Children.Add(IconHelper.CreateStrokeIcon(SvgIcons.Clock, 14, new SolidColorBrush(AppColors.TextMuted), 1.8));
 
-            Button btnFolder = CreateSmallPillButton("📂  Папка run", (s, e) =>
+            StackPanel spTimeTexts = new StackPanel { Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            _txtHeroPlaytime = new TextBlock
+            {
+                Text = LauncherData.FormatPlaytime(_data.PlaytimeMinutes),
+                FontSize = 14,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White
+            };
+            spTimeTexts.Children.Add(_txtHeroPlaytime);
+            spTimeTexts.Children.Add(new TextBlock
+            {
+                Text = "Игровое время",
+                FontSize = 10,
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
+                Margin = new Thickness(0, 1, 0, 0)
+            });
+            spSession.Children.Add(spTimeTexts);
+            sessionPill.Child = spSession;
+
+            // Retain references for background updates
+            _txtHeroLaunches = new TextBlock { Text = _data.LaunchCount + " раз" };
+            _txtHeroLastLaunch = new TextBlock { Text = _data.LastLaunchTime };
+            _txtHeroUsernameDisplay = new TextBlock { Text = _data.Username };
+            _txtHeroRamDisplay = new TextBlock { Text = (_data.RamMb / 1024) + " ГБ ОЗУ" };
+
+            Grid.SetColumn(sessionPill, 1);
+            heroGrid.Children.Add(sessionPill);
+
+            Grid.SetRow(heroGrid, 0);
+            g.Children.Add(heroGrid);
+
+            // 1.5 Download Banner (Collapsible)
+            _downloadBanner = CreateDownloadBanner();
+            Grid.SetRow(_downloadBanner, 1);
+            g.Children.Add(_downloadBanner);
+
+            // 2. Main 2-Column Hub (High-Utility, Balanced)
+            Grid hubGrid = new Grid();
+            hubGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.15, GridUnitType.Star) }); // Left: Features
+            hubGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14, GridUnitType.Pixel) });   // Gap
+            hubGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.85, GridUnitType.Star) }); // Right: Quick Hub
+
+            // Left Section: Feature Spotlight Card
+            Border panelFeatures = CreateHomeSectionCard();
+            StackPanel spFeat = new StackPanel();
+
+            spFeat.Children.Add(CreateHomeCardHeader(SvgIcons.Sparkles, "ОБНОВЛЕНИЕ КЛИЕНТА • ВЕРСИЯ 1.21.11"));
+
+            StackPanel featList = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
+
+            featList.Children.Add(CreateFeatureItem(
+                SvgIcons.Target,
+                "Target ESP «Череп»",
+                "Динамический череп над целью с визуализацией трещин от полученного урона."
+            ));
+
+            featList.Children.Add(CreateFeatureItem(
+                SvgIcons.Rocket,
+                "Движок Sodium & Iris",
+                "Высокий FPS, плавная синхронизация кадров и полная поддержка современных шейдеров."
+            ));
+
+            featList.Children.Add(CreateFeatureItem(
+                SvgIcons.Cube,
+                "Модули Fabric & Защита",
+                "Встроенный модуль AutoLeave, визуальные настройки и поддержка любых сторонних модов."
+            ));
+
+            spFeat.Children.Add(featList);
+            panelFeatures.Child = spFeat;
+            Grid.SetColumn(panelFeatures, 0);
+            hubGrid.Children.Add(panelFeatures);
+
+            // Right Section: Quick Access Hub
+            Border panelQuick = CreateHomeSectionCard();
+            StackPanel spQuick = new StackPanel();
+
+            spQuick.Children.Add(CreateHomeCardHeader(SvgIcons.Folder, "БЫСТРЫЙ ДОСТУП"));
+
+            string modsDir = GetModsDir();
+            int modsCount = 0;
+            if (Directory.Exists(modsDir))
+            {
+                modsCount = Directory.GetFiles(modsDir, "*.jar*").Length;
+            }
+
+            _txtHeroModsCount = new TextBlock
+            {
+                Text = modsCount > 0 ? (modsCount + " установленных модов") : "Моды не найдены",
+                FontSize = 10.5,
+                Foreground = new SolidColorBrush(AppColors.TextMuted)
+            };
+
+            StackPanel quickTiles = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+
+            quickTiles.Children.Add(CreateHomeActionTile(
+                SvgIcons.Folder,
+                "Папка игры (.minecraft / run)",
+                "Конфигурации, скриншоты и миры",
+                () =>
+                {
+                    try
+                    {
+                        string runDir = System.IO.Path.Combine(_projectDir, "run");
+                        if (!Directory.Exists(runDir)) Directory.CreateDirectory(runDir);
+                        Process.Start("explorer.exe", runDir);
+                    }
+                    catch { }
+                }
+            ));
+
+            quickTiles.Children.Add(CreateHomeActionTile(
+                SvgIcons.Cube,
+                "Управление модами",
+                modsCount > 0 ? (modsCount + " модов в папке mods") : "Добавить моды Fabric",
+                () => SwitchPage(1)
+            ));
+
+            quickTiles.Children.Add(CreateHomeActionTile(
+                SvgIcons.Search,
+                "Каталог Modrinth",
+                "Поиск и загрузка шейдеров и модов",
+                () =>
+                {
+                    SwitchPage(1);
+                    SwitchModsSubTab(false);
+                }
+            ));
+
+            spQuick.Children.Add(quickTiles);
+
+            panelQuick.Child = spQuick;
+            Grid.SetColumn(panelQuick, 2);
+            hubGrid.Children.Add(panelQuick);
+
+            Grid.SetRow(hubGrid, 3);
+            g.Children.Add(hubGrid);
+
+            return g;
+        }
+
+        private Border CreateFeatureItem(string svgPath, string title, string description)
+        {
+            Border bdr = new Border
+            {
+                Margin = new Thickness(0, 0, 0, 12),
+                Background = Brushes.Transparent
+            };
+
+            Grid g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            Border iconBdr = new Border
+            {
+                Width = 32,
+                Height = 32,
+                CornerRadius = new CornerRadius(7),
+                Background = new SolidColorBrush(Color.FromArgb(160, 22, 28, 42)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 12, 0)
+            };
+            iconBdr.Child = IconHelper.CreateStrokeIcon(svgPath, 15, new SolidColorBrush(AppColors.AccentLight), 1.8);
+            Grid.SetColumn(iconBdr, 0);
+            g.Children.Add(iconBdr);
+
+            StackPanel sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            sp.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White
+            });
+            sp.Children.Add(new TextBlock
+            {
+                Text = description,
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 0)
+            });
+            Grid.SetColumn(sp, 1);
+            g.Children.Add(sp);
+
+            bdr.Child = g;
+            return bdr;
+        }
+
+        private Border CreateMinimalTag(string label)
+        {
+            Border b = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(120, 14, 18, 28)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                CornerRadius = new CornerRadius(5),
+                Padding = new Thickness(8, 2.5, 8, 2.5),
+                Margin = new Thickness(0, 0, 6, 0)
+            };
+            b.Child = new TextBlock
+            {
+                Text = label,
+                FontSize = 10.5,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225))
+            };
+            return b;
+        }
+
+        private Border CreateHomeSectionCard()
+        {
+            return new Border
+            {
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(Color.FromArgb(150, 10, 14, 22)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                Padding = new Thickness(20, 16, 20, 16)
+            };
+        }
+
+        private Border CreateHomeActionTile(string svgPath, string title, string subtitle, Action onClick)
+        {
+            Border bdr = new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                Background = new SolidColorBrush(Color.FromArgb(120, 14, 18, 28)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(35, 255, 255, 255)),
+                Padding = new Thickness(12, 10, 12, 10),
+                Margin = new Thickness(0, 0, 0, 8),
+                Cursor = Cursors.Hand
+            };
+
+            Grid g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            Border iconBdr = new Border
+            {
+                Width = 32,
+                Height = 32,
+                CornerRadius = new CornerRadius(7),
+                Background = new SolidColorBrush(Color.FromArgb(180, 22, 28, 42)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0)
+            };
+            iconBdr.Child = IconHelper.CreateStrokeIcon(svgPath, 15, new SolidColorBrush(AppColors.AccentLight), 1.8);
+            Grid.SetColumn(iconBdr, 0);
+            g.Children.Add(iconBdr);
+
+            StackPanel sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            sp.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 12.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White
+            });
+            sp.Children.Add(new TextBlock
+            {
+                Text = subtitle,
+                FontSize = 10.5,
+                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                Margin = new Thickness(0, 1, 0, 0)
+            });
+            Grid.SetColumn(sp, 1);
+            g.Children.Add(sp);
+
+            bdr.Child = g;
+
+            bdr.MouseEnter += (s, e) =>
+            {
+                bdr.Background = new SolidColorBrush(Color.FromArgb(200, 26, 34, 52));
+                bdr.BorderBrush = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255));
+            };
+            bdr.MouseLeave += (s, e) =>
+            {
+                bdr.Background = new SolidColorBrush(Color.FromArgb(120, 14, 18, 28));
+                bdr.BorderBrush = new SolidColorBrush(Color.FromArgb(35, 255, 255, 255));
+            };
+            bdr.MouseLeftButtonDown += (s, e) => onClick();
+
+            return bdr;
+        }
+
+        private StackPanel CreateHomeCardHeader(string svgIcon, string title)
+        {
+            StackPanel sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            sp.Children.Add(IconHelper.CreateStrokeIcon(svgIcon, 13, new SolidColorBrush(AppColors.TextMuted), 1.8));
+            TextBlock tb = new TextBlock
+            {
+                Text = title,
+                FontSize = 10.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
+                Margin = new Thickness(6, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            sp.Children.Add(tb);
+            return sp;
+        }
+
+        private void UpdateRamDisplays()
+        {
+            if (_txtDockRamBadge != null) _txtDockRamBadge.Text = (_data.RamMb / 1024) + " ГБ ОЗУ";
+            if (_txtHeroRamDisplay != null) _txtHeroRamDisplay.Text = (_data.RamMb / 1024) + " ГБ ОЗУ (" + _data.RamMb + " МБ)";
+            if (_txtSettingsRamMb != null) _txtSettingsRamMb.Text = _data.RamMb.ToString();
+            UpdateRamPresetVisuals();
+            UpdateHomeRamPillVisuals();
+        }
+
+        private void UpdateHomeRamPillVisuals()
+        {
+            int[] ramPresets = new int[] { 2048, 4096, 6144, 8192, 12288 };
+            for (int i = 0; i < _homeRamPills.Count && i < ramPresets.Length; i++)
+            {
+                bool active = ramPresets[i] == _data.RamMb;
+                _homeRamPills[i].Background = new SolidColorBrush(active ? AppColors.AccentPrimary : Color.FromRgb(18, 23, 35));
+                _homeRamPills[i].BorderBrush = new SolidColorBrush(active ? AppColors.AccentLight : AppColors.BorderSubtle);
+                _homeRamPillTexts[i].Foreground = active ? Brushes.White : new SolidColorBrush(AppColors.TextSecondary);
+                _homeRamPillTexts[i].FontWeight = active ? FontWeights.Bold : FontWeights.Medium;
+            }
+        }
+
+        private Border CreateDownloadBanner()
+        {
+            Border bdr = new Border
+            {
+                CornerRadius = new CornerRadius(12),
+                Background = new SolidColorBrush(Color.FromArgb(235, 14, 18, 28)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(160, 30, 64, 175)),
+                Padding = new Thickness(18, 14, 18, 14),
+                Margin = new Thickness(0, 12, 0, 0),
+                Visibility = Visibility.Collapsed
+            };
+
+            Grid g = new Grid();
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            // Top Row: Title + Cancel Button
+            Grid topRow = new Grid();
+            topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            StackPanel titleSp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            titleSp.Children.Add(IconHelper.CreateStrokeIcon(SvgIcons.Download, 15, new SolidColorBrush(AppColors.AccentLight), 2.0));
+
+            _txtDownloadTitle = new TextBlock
+            {
+                Text = "СКАЧИВАНИЕ ФАЙЛОВ КЛИЕНТА",
+                FontSize = 12.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(8, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            titleSp.Children.Add(_txtDownloadTitle);
+
+            _txtDownloadStatus = new TextBlock
+            {
+                Text = "Подготовка...",
+                FontSize = 11.5,
+                Foreground = new SolidColorBrush(AppColors.AccentLight),
+                Margin = new Thickness(14, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            titleSp.Children.Add(_txtDownloadStatus);
+
+            Grid.SetColumn(titleSp, 0);
+            topRow.Children.Add(titleSp);
+
+            _btnCancelDownload = CreateCompactButton(SvgIcons.Close, "Отмена", (s, e) =>
+            {
+                CancelClientDownload();
+            });
+            Grid.SetColumn(_btnCancelDownload, 1);
+            topRow.Children.Add(_btnCancelDownload);
+
+            Grid.SetRow(topRow, 0);
+            g.Children.Add(topRow);
+
+            // Middle Row: Smooth Progress Bar
+            Border barContainer = new Border
+            {
+                Height = 8,
+                CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(Color.FromRgb(20, 24, 38)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
+                Margin = new Thickness(0, 10, 0, 8),
+                ClipToBounds = true
+            };
+
+            _downloadProgressBar = new ProgressBar
+            {
+                Height = 8,
+                Minimum = 0,
+                Maximum = 100,
+                Value = 0,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Foreground = new SolidColorBrush(AppColors.AccentPrimary)
+            };
+            barContainer.Child = _downloadProgressBar;
+            Grid.SetRow(barContainer, 1);
+            g.Children.Add(barContainer);
+
+            // Bottom Row: Details stats
+            _txtDownloadDetails = new TextBlock
+            {
+                Text = "Ожидание начала загрузки...",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(AppColors.TextMuted)
+            };
+            Grid.SetRow(_txtDownloadDetails, 2);
+            g.Children.Add(_txtDownloadDetails);
+
+            bdr.Child = g;
+            return bdr;
+        }
+
+        #endregion
+
+        #region Bottom Dock
+
+        private Border CreateBottomLaunchDock()
+        {
+            Border dock = new Border
+            {
+                Height = 72,
+                CornerRadius = new CornerRadius(0, 0, 14, 14),
+                Background = new SolidColorBrush(Color.FromArgb(235, 8, 11, 17)),
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(35, 255, 255, 255)),
+                Padding = new Thickness(24, 0, 24, 0)
+            };
+
+            Grid g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                       // Left User Profile
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // Center Capsule
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                       // Right Controls & Launch Button
+
+            // 1. Left User Profile Widget
+            StackPanel userWidget = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = Cursors.Hand
+            };
+            userWidget.MouseLeftButtonDown += (s, e) => SwitchPage(2);
+
+            Border avatar = new Border
+            {
+                Width = 36,
+                Height = 36,
+                CornerRadius = new CornerRadius(18),
+                Background = new SolidColorBrush(AppColors.AccentPrimary),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            avatar.Child = IconHelper.CreateStrokeIcon(SvgIcons.User, 16, Brushes.White, 1.8);
+            userWidget.Children.Add(avatar);
+
+            StackPanel userText = new StackPanel
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(10, 0, 0, 0)
+            };
+
+            _txtDockUser = new TextBlock
+            {
+                Text = _data.Username,
+                FontSize = 13.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White
+            };
+            userText.Children.Add(_txtDockUser);
+
+            StackPanel statusRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
+            _dockStatusDot = new Ellipse
+            {
+                Width = 7,
+                Height = 7,
+                Fill = new SolidColorBrush(AppColors.AccentGreen),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 5, 0)
+            };
+            statusRow.Children.Add(_dockStatusDot);
+
+            _txtDockStatus = new TextBlock
+            {
+                Text = "В сети",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(AppColors.TextMuted)
+            };
+            statusRow.Children.Add(_txtDockStatus);
+            userText.Children.Add(statusRow);
+
+            userWidget.Children.Add(userText);
+            Grid.SetColumn(userWidget, 0);
+            g.Children.Add(userWidget);
+
+            // 1.5 Center Version Capsule
+            Border verPill = new Border
+            {
+                Height = 32,
+                CornerRadius = new CornerRadius(6),
+                Background = new SolidColorBrush(Color.FromArgb(90, 14, 18, 28)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)),
+                Padding = new Thickness(14, 0, 14, 0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            verPill.Child = new TextBlock
+            {
+                Text = "Minecraft 1.21.11 • Fabric",
+                FontSize = 11.5,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(verPill, 1);
+            g.Children.Add(verPill);
+
+            // 2. Right Controls & Launch Button
+            StackPanel rightControls = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // RAM Badge Shortcut
+            Border ramBadge = new Border
+            {
+                Height = 32,
+                CornerRadius = new CornerRadius(6),
+                Background = new SolidColorBrush(Color.FromArgb(120, 14, 18, 28)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(35, 255, 255, 255)),
+                Padding = new Thickness(12, 0, 12, 0),
+                Cursor = Cursors.Hand,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            _txtDockRamBadge = new TextBlock
+            {
+                Text = (_data.RamMb / 1024) + " ГБ ОЗУ",
+                FontSize = 11.5,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(AppColors.TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            ramBadge.Child = _txtDockRamBadge;
+            ramBadge.MouseLeftButtonDown += (s, e) => SwitchPage(2);
+            rightControls.Children.Add(ramBadge);
+
+            // Folder Shortcut Button
+            Button btnFolder = CreateDockIconButton(SvgIcons.Folder, "Папка игры (run)", (s, e) =>
             {
                 try
                 {
@@ -1158,456 +1563,755 @@ namespace RainyDLC.Launcher
                     if (!Directory.Exists(runDir)) Directory.CreateDirectory(runDir);
                     Process.Start("explorer.exe", runDir);
                 }
-                catch (Exception ex)
-                {
-                    System.Windows.MessageBox.Show("Не удалось открыть папку:\n" + ex.Message, "RainyDLC", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
+                catch { }
             });
-            btnFolder.Height = 30;
-            btnFolder.Width = 200;
-            btnFolder.Margin = new Thickness(0, 8, 0, 0);
-            heroRight.Children.Add(btnFolder);
+            btnFolder.Margin = new Thickness(0, 0, 8, 0);
+            rightControls.Children.Add(btnFolder);
 
-            Grid.SetColumn(heroRight, 1);
-            heroGrid.Children.Add(heroRight);
+            // Terminal Shortcut Button
+            Button btnTerminal = CreateDockIconButton(SvgIcons.Terminal, "Консоль логов", (s, e) => SwitchPage(3));
+            btnTerminal.Margin = new Thickness(0, 0, 14, 0);
+            rightControls.Children.Add(btnTerminal);
 
-            heroCard.Child = heroGrid;
-            Grid.SetRow(heroCard, 0);
-            g.Children.Add(heroCard);
+            // Centerpiece PLAY Button
+            _btnDockLaunch = CreateCenterLaunchButton();
+            rightControls.Children.Add(_btnDockLaunch);
 
-            // 2. 3 Bento Stat Tiles
-            Grid statsGrid = new Grid();
-            statsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            statsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12, GridUnitType.Pixel) });
-            statsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            statsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12, GridUnitType.Pixel) });
-            statsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Grid.SetColumn(rightControls, 2);
+            g.Children.Add(rightControls);
 
-            _txtPlaytime = new TextBlock
-            {
-                Text = LauncherData.FormatPlaytime(_data.PlaytimeMinutes),
-                FontSize = 17,
-                FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White,
-                Margin = new Thickness(0, 2, 0, 0)
-            };
-            Border tilePlaytime = CreateStatTile("⏱️", "Время в игре", _txtPlaytime, "Счётчик активных сессий");
-            Grid.SetColumn(tilePlaytime, 0);
-            statsGrid.Children.Add(tilePlaytime);
-
-            _txtLaunchCount = new TextBlock
-            {
-                Text = _data.LaunchCount.ToString(),
-                FontSize = 17,
-                FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White,
-                Margin = new Thickness(0, 2, 0, 0)
-            };
-            Border tileLaunches = CreateStatTile("🚀", "Запусков клиента", _txtLaunchCount, "Всего игровых сессий");
-            Grid.SetColumn(tileLaunches, 2);
-            statsGrid.Children.Add(tileLaunches);
-
-            _txtLastLaunch = new TextBlock
-            {
-                Text = string.IsNullOrEmpty(_data.LastLaunchTime) ? "Еще не запускался" : _data.LastLaunchTime,
-                FontSize = 13.5,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
-                Margin = new Thickness(0, 4, 0, 0)
-            };
-            Border tileLast = CreateStatTile("🕒", "Предыдущий вход", _txtLastLaunch, "Локальное время");
-            Grid.SetColumn(tileLast, 4);
-            statsGrid.Children.Add(tileLast);
-
-            Grid.SetRow(statsGrid, 2);
-            g.Children.Add(statsGrid);
-
-            // 3. Bottom 2 Details Cards
-            Grid detailsGrid = new Grid();
-            detailsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            detailsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14, GridUnitType.Pixel) });
-            detailsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            // Card Left: Профиль владельца
-            Border cardProfile = CreateContentCard("👤 Профиль владельца");
-            StackPanel spProf = new StackPanel();
-            spProf.Children.Add(CreateInfoRow("Никнейм", _data.Username));
-            spProf.Children.Add(CreateInfoRow("Роль", "👑 " + _data.Role, Color.FromRgb(239, 68, 68)));
-            spProf.Children.Add(CreateInfoRow("Почта", _data.Email));
-            spProf.Children.Add(CreateInfoRow("Лицензия", "Бессрочная (Lifetime)", Color.FromRgb(52, 211, 153)));
-            spProf.Children.Add(CreateInfoRow("Регистрация", _data.RegDate, Colors.Transparent, true));
-            cardProfile.Child = spProf;
-            Grid.SetColumn(cardProfile, 0);
-            detailsGrid.Children.Add(cardProfile);
-
-            // Card Right: Спецификация сборки
-            Border cardSpecs = CreateContentCard("⚡ Спецификация сборки");
-            StackPanel spSpecs = new StackPanel();
-            spSpecs.Children.Add(CreateInfoRow("Сборка", "RainyDLC Release 2026"));
-            spSpecs.Children.Add(CreateInfoRow("Платформа", "Fabric Loader (1.21.4)"));
-            spSpecs.Children.Add(CreateInfoRow("Память ОЗУ", _data.RamMb + " МБ"));
-            spSpecs.Children.Add(CreateInfoRow("Моды", "Modrinth Direct Sync"));
-            spSpecs.Children.Add(CreateInfoRow("Статус системы", "🟢 Готов к запуску", Color.FromRgb(52, 211, 153), true));
-            cardSpecs.Child = spSpecs;
-            Grid.SetColumn(cardSpecs, 2);
-            detailsGrid.Children.Add(cardSpecs);
-
-            Grid.SetRow(detailsGrid, 4);
-            g.Children.Add(detailsGrid);
-
-            return g;
+            dock.Child = g;
+            return dock;
         }
 
-        private Border CreateBadge(string text, Color textColor, Color bgColor)
-        {
-            Border b = new Border
-            {
-                CornerRadius = new CornerRadius(6),
-                Background = new SolidColorBrush(bgColor),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(textColor),
-                Padding = new Thickness(8, 3, 8, 3),
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            b.Child = new TextBlock
-            {
-                Text = text,
-                FontSize = 11,
-                FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush(textColor)
-            };
-            return b;
-        }
-
-        private Border CreateStatTile(string icon, string title, TextBlock valBlock, string subtitle)
-        {
-            Border b = new Border
-            {
-                Height = 84,
-                CornerRadius = new CornerRadius(14),
-                Background = new SolidColorBrush(Color.FromRgb(13, 17, 26)),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(24, 32, 48)),
-                Padding = new Thickness(16, 12, 16, 12)
-            };
-
-            b.MouseEnter += (s, e) =>
-            {
-                SolidColorBrush br = b.BorderBrush as SolidColorBrush;
-                if (br != null && !br.IsFrozen)
-                {
-                    br.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation
-                    {
-                        To = Color.FromRgb(14, 116, 144),
-                        Duration = TimeSpan.FromMilliseconds(180)
-                    });
-                }
-            };
-            b.MouseLeave += (s, e) =>
-            {
-                SolidColorBrush br = b.BorderBrush as SolidColorBrush;
-                if (br != null && !br.IsFrozen)
-                {
-                    br.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation
-                    {
-                        To = Color.FromRgb(24, 32, 48),
-                        Duration = TimeSpan.FromMilliseconds(180)
-                    });
-                }
-            };
-
-            StackPanel sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            sp.Children.Add(new TextBlock
-            {
-                Text = icon + "  " + title,
-                FontSize = 11,
-                FontWeight = FontWeights.Medium,
-                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184))
-            });
-            sp.Children.Add(valBlock);
-            sp.Children.Add(new TextBlock
-            {
-                Text = subtitle,
-                FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)),
-                Margin = new Thickness(0, 2, 0, 0)
-            });
-
-            b.Child = sp;
-            return b;
-        }
-
-        private Border CreateContentCard(string headerText)
-        {
-            Border b = new Border
-            {
-                CornerRadius = new CornerRadius(16),
-                Background = new SolidColorBrush(Color.FromRgb(13, 17, 26)),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(24, 32, 48)),
-                Padding = new Thickness(20, 16, 20, 16)
-            };
-
-            b.MouseEnter += (s, e) =>
-            {
-                SolidColorBrush br = b.BorderBrush as SolidColorBrush;
-                if (br != null && !br.IsFrozen)
-                {
-                    br.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation
-                    {
-                        To = Color.FromRgb(14, 116, 144),
-                        Duration = TimeSpan.FromMilliseconds(180)
-                    });
-                }
-            };
-            b.MouseLeave += (s, e) =>
-            {
-                SolidColorBrush br = b.BorderBrush as SolidColorBrush;
-                if (br != null && !br.IsFrozen)
-                {
-                    br.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation
-                    {
-                        To = Color.FromRgb(24, 32, 48),
-                        Duration = TimeSpan.FromMilliseconds(180)
-                    });
-                }
-            };
-
-            StackPanel sp = new StackPanel();
-            sp.Children.Add(new TextBlock
-            {
-                Text = headerText,
-                FontSize = 16,
-                FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White,
-                Margin = new Thickness(0, 0, 0, 14)
-            });
-
-            return b;
-        }
-
-        private UIElement CreateInfoRow(string label, string val, Color? valColor = null, bool isLast = false)
-        {
-            Grid g = new Grid { Margin = new Thickness(0, 0, 0, isLast ? 0 : 12) };
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            TextBlock lbl = new TextBlock
-            {
-                Text = label,
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromRgb(130, 130, 145))
-            };
-            Grid.SetColumn(lbl, 0);
-            g.Children.Add(lbl);
-
-            Color c = (valColor.HasValue && valColor.Value != Colors.Transparent) ? valColor.Value : Color.FromRgb(180, 180, 195);
-            TextBlock v = new TextBlock
-            {
-                Text = val,
-                FontSize = 13,
-                FontWeight = FontWeights.Medium,
-                Foreground = new SolidColorBrush(c)
-            };
-            Grid.SetColumn(v, 1);
-            g.Children.Add(v);
-
-            return g;
-        }
-
-        private UIElement CreateInfoRowCustom(string label, TextBlock valBlock, bool isLast = false)
-        {
-            Grid g = new Grid { Margin = new Thickness(0, 0, 0, isLast ? 0 : 12) };
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            TextBlock lbl = new TextBlock
-            {
-                Text = label,
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromRgb(130, 130, 145))
-            };
-            Grid.SetColumn(lbl, 0);
-            g.Children.Add(lbl);
-
-            Grid.SetColumn(valBlock, 1);
-            g.Children.Add(valBlock);
-
-            return g;
-        }
-
-        private Button CreateBottomActionButton(string text, RoutedEventHandler onClick, bool isLaunchHero = false)
+        private Button CreateCenterLaunchButton()
         {
             Button btn = new Button
             {
-                Height = 48,
+                Width = 230,
+                Height = 46,
                 Cursor = Cursors.Hand,
                 Focusable = false
             };
 
-            TextBlock tb = new TextBlock
+            StackPanel sp = new StackPanel
             {
-                Text = text,
-                FontSize = 13,
-                FontWeight = isLaunchHero ? FontWeights.Bold : FontWeights.SemiBold,
-                Foreground = isLaunchHero ? Brushes.White : new SolidColorBrush(Color.FromRgb(200, 200, 215)),
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            btn.Content = tb;
+
+            _btnDockLaunchIcon = IconHelper.CreateFillIcon(SvgIcons.Play, 15, Brushes.White);
+            sp.Children.Add(_btnDockLaunchIcon);
+
+            _btnDockLaunchText = new TextBlock
+            {
+                Text = "ИГРАТЬ",
+                FontSize = 13.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            sp.Children.Add(_btnDockLaunchText);
+
+            btn.Content = sp;
 
             ControlTemplate tpl = new ControlTemplate(typeof(Button));
             FrameworkElementFactory bdr = new FrameworkElementFactory(typeof(Border));
-            bdr.Name = "ActBdr";
-            bdr.SetValue(Border.CornerRadiusProperty, new CornerRadius(14));
-
-            if (isLaunchHero)
-            {
-                bdr.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(14, 24, 40)));
-                bdr.SetValue(Border.BorderThicknessProperty, new Thickness(1.2));
-                bdr.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(6, 182, 212)));
-            }
-            else
-            {
-                bdr.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(13, 17, 26)));
-                bdr.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-                bdr.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(24, 32, 48)));
-            }
+            bdr.Name = "DockLaunchBdr";
+            bdr.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            bdr.SetValue(Border.BackgroundProperty, new SolidColorBrush(AppColors.AccentPrimary));
+            bdr.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            bdr.SetValue(Border.BorderBrushProperty, new SolidColorBrush(AppColors.AccentLight));
 
             FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
-            cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+            cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
             cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
             bdr.AppendChild(cp);
             tpl.VisualTree = bdr;
 
             Trigger hov = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
-            if (isLaunchHero)
+            hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(AppColors.AccentHover), "DockLaunchBdr"));
+            tpl.Triggers.Add(hov);
+
+            btn.Template = tpl;
+            btn.Effect = null;
+
+            btn.Click += (s, e) => OnLaunchButtonClick();
+            return btn;
+        }
+
+        private Button CreateDockIconButton(string svgPath, string tooltip, RoutedEventHandler onClick)
+        {
+            Button btn = new Button
             {
-                hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(20, 36, 62)), "ActBdr"));
-                hov.Setters.Add(new Setter(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(56, 189, 248)), "ActBdr"));
-            }
-            else
-            {
-                hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(20, 26, 38)), "ActBdr"));
-                hov.Setters.Add(new Setter(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(34, 46, 68)), "ActBdr"));
-            }
+                Width = 34,
+                Height = 32,
+                Cursor = Cursors.Hand,
+                Focusable = false,
+                ToolTip = tooltip
+            };
+
+            SPath p = IconHelper.CreateStrokeIcon(svgPath, 14, new SolidColorBrush(AppColors.TextSecondary), 1.8);
+            btn.Content = p;
+
+            ControlTemplate tpl = new ControlTemplate(typeof(Button));
+            FrameworkElementFactory bdr = new FrameworkElementFactory(typeof(Border));
+            bdr.Name = "Bdr";
+            bdr.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            bdr.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromArgb(160, 22, 28, 42)));
+            bdr.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            bdr.SetValue(Border.BorderBrushProperty, new SolidColorBrush(AppColors.BorderSubtle));
+
+            FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            bdr.AppendChild(cp);
+
+            tpl.VisualTree = bdr;
+
+            Trigger hov = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
+            hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(32, 40, 60)), "Bdr"));
+            hov.Setters.Add(new Setter(Border.BorderBrushProperty, new SolidColorBrush(AppColors.BorderHover), "Bdr"));
             tpl.Triggers.Add(hov);
 
             btn.Template = tpl;
             btn.Click += onClick;
 
-            if (isLaunchHero)
-            {
-                DropShadowEffect glow = new DropShadowEffect
-                {
-                    Color = Color.FromRgb(6, 182, 212),
-                    BlurRadius = 12,
-                    ShadowDepth = 0,
-                    Opacity = 0.55
-                };
-                btn.Effect = glow;
-
-                DoubleAnimation glowAnim = new DoubleAnimation
-                {
-                    From = 0.35,
-                    To = 0.85,
-                    Duration = TimeSpan.FromSeconds(1.6),
-                    AutoReverse = true,
-                    RepeatBehavior = RepeatBehavior.Forever
-                };
-                glow.BeginAnimation(DropShadowEffect.OpacityProperty, glowAnim);
-
-                DoubleAnimation blurAnim = new DoubleAnimation
-                {
-                    From = 8,
-                    To = 18,
-                    Duration = TimeSpan.FromSeconds(1.6),
-                    AutoReverse = true,
-                    RepeatBehavior = RepeatBehavior.Forever
-                };
-                glow.BeginAnimation(DropShadowEffect.BlurRadiusProperty, blurAnim);
-            }
+            btn.MouseEnter += (s, e) => p.Stroke = Brushes.White;
+            btn.MouseLeave += (s, e) => p.Stroke = new SolidColorBrush(AppColors.TextSecondary);
 
             return btn;
         }
 
         #endregion
 
+        #region Page 2: Настройки (Compact macOS / Discord Style Cards)
 
+        private Grid CreatePageSettings()
+        {
+            Grid g = new Grid();
+            ScrollViewer sv = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
 
-        #region Page 3: Моды (Локальные + Modrinth Online Browser)
+            StackPanel sp = new StackPanel();
+
+            // 1. Card: Игровой аккаунт (Компактный инлайн ряд)
+            Border cardUser = CreateSettingsGroupCard();
+            Grid userGrid = new Grid();
+            userGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            userGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            StackPanel userLabels = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            userLabels.Children.Add(new TextBlock
+            {
+                Text = "Никнейм игрока",
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White
+            });
+            userLabels.Children.Add(new TextBlock
+            {
+                Text = "Имя вашего персонажа в одиночной игре и мультиплеере",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
+                Margin = new Thickness(0, 2, 0, 0)
+            });
+            Grid.SetColumn(userLabels, 0);
+            userGrid.Children.Add(userLabels);
+
+            StackPanel userInputs = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            Border bdrUserInput = new Border
+            {
+                Width = 160,
+                Height = 32,
+                CornerRadius = new CornerRadius(7),
+                Background = new SolidColorBrush(AppColors.InputBg),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(AppColors.InputBorder),
+                Padding = new Thickness(10, 0, 10, 0),
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            _txtSettingsUser = new TextBox
+            {
+                Text = _data.Username,
+                FontSize = 12.5,
+                Foreground = Brushes.White,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            bdrUserInput.Child = _txtSettingsUser;
+            userInputs.Children.Add(bdrUserInput);
+
+            Button btnSaveUser = CreateCompactButton(SvgIcons.Check, "Сохранить", (s, e) =>
+            {
+                string u = _txtSettingsUser.Text.Trim();
+                if (!string.IsNullOrEmpty(u))
+                {
+                    _data.Username = u;
+                    _data.Save();
+                    if (_txtDockUser != null) _txtDockUser.Text = u;
+                    if (_txtHeroUsernameDisplay != null) _txtHeroUsernameDisplay.Text = u;
+                    System.Windows.MessageBox.Show("Никнейм сохранен: " + u, "Настройки", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            });
+            userInputs.Children.Add(btnSaveUser);
+
+            Grid.SetColumn(userInputs, 1);
+            userGrid.Children.Add(userInputs);
+            cardUser.Child = userGrid;
+            sp.Children.Add(cardUser);
+
+            // 2. Card: Оперативная память (RAM) - Сегментированные пиллы
+            Border cardRam = CreateSettingsGroupCard();
+            cardRam.Margin = new Thickness(0, 10, 0, 0);
+
+            StackPanel ramLayout = new StackPanel();
+
+            Grid ramHeaderRow = new Grid();
+            ramHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            ramHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            StackPanel ramLabels = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            ramLabels.Children.Add(new TextBlock
+            {
+                Text = "Выделение оперативной памяти (RAM)",
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White
+            });
+            ramLabels.Children.Add(new TextBlock
+            {
+                Text = "Объем памяти для Java Virtual Machine (-Xmx). Рекомендуется 4–6 ГБ",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
+                Margin = new Thickness(0, 2, 0, 0)
+            });
+            Grid.SetColumn(ramLabels, 0);
+            ramHeaderRow.Children.Add(ramLabels);
+
+            // Precise MB Input
+            StackPanel exactRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            Border bdrMb = new Border
+            {
+                Width = 72,
+                Height = 32,
+                CornerRadius = new CornerRadius(7),
+                Background = new SolidColorBrush(AppColors.InputBg),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(AppColors.InputBorder),
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            _txtSettingsRamMb = new TextBox
+            {
+                Text = _data.RamMb.ToString(),
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            bdrMb.Child = _txtSettingsRamMb;
+            exactRow.Children.Add(bdrMb);
+
+            Button btnApplyMb = CreateCompactButton(SvgIcons.Check, "МБ", (s, e) =>
+            {
+                int v;
+                if (int.TryParse(_txtSettingsRamMb.Text.Trim(), out v) && v >= 1024)
+                {
+                    _data.RamMb = v;
+                    _data.Save();
+                    if (_txtDockRamBadge != null) _txtDockRamBadge.Text = (v / 1024) + " ГБ ОЗУ";
+                    UpdateRamPresetVisuals();
+                    System.Windows.MessageBox.Show("Память обновлена: " + v + " МБ", "Настройки", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            });
+            exactRow.Children.Add(btnApplyMb);
+
+            Grid.SetColumn(exactRow, 1);
+            ramHeaderRow.Children.Add(exactRow);
+            ramLayout.Children.Add(ramHeaderRow);
+
+            // RAM Segmented Pills
+            StackPanel ramPillRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            int[] ramValues = new int[] { 2048, 4096, 6144, 8192, 12288, 16384 };
+
+            foreach (int val in ramValues)
+            {
+                int mb = val;
+                Border pillBox = new Border
+                {
+                    Height = 30,
+                    CornerRadius = new CornerRadius(6),
+                    Background = new SolidColorBrush(mb == _data.RamMb ? AppColors.AccentPrimary : Color.FromRgb(20, 25, 38)),
+                    BorderThickness = new Thickness(1),
+                    BorderBrush = new SolidColorBrush(mb == _data.RamMb ? AppColors.AccentLight : AppColors.BorderSubtle),
+                    Padding = new Thickness(14, 0, 14, 0),
+                    Margin = new Thickness(0, 0, 6, 0),
+                    Cursor = Cursors.Hand
+                };
+
+                TextBlock tb = new TextBlock
+                {
+                    Text = (mb / 1024) + " ГБ",
+                    FontSize = 11.5,
+                    FontWeight = mb == _data.RamMb ? FontWeights.Bold : FontWeights.Medium,
+                    Foreground = mb == _data.RamMb ? Brushes.White : new SolidColorBrush(AppColors.TextSecondary),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                pillBox.Child = tb;
+
+                _ramPillBoxes.Add(pillBox);
+                _ramPillTexts.Add(tb);
+
+                pillBox.MouseLeftButtonDown += (s, e) =>
+                {
+                    _data.RamMb = mb;
+                    _data.Save();
+                    _txtSettingsRamMb.Text = mb.ToString();
+                    if (_txtDockRamBadge != null) _txtDockRamBadge.Text = (mb / 1024) + " ГБ ОЗУ";
+                    UpdateRamPresetVisuals();
+                };
+
+                ramPillRow.Children.Add(pillBox);
+            }
+            ramLayout.Children.Add(ramPillRow);
+
+            cardRam.Child = ramLayout;
+            sp.Children.Add(cardRam);
+
+            // 3. Card: Параметры JVM (Флаги оптимизации)
+            Border cardJvm = CreateSettingsGroupCard();
+            cardJvm.Margin = new Thickness(0, 10, 0, 0);
+
+            StackPanel jvmLayout = new StackPanel();
+
+            Grid jvmHeader = new Grid();
+            jvmHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            jvmHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            StackPanel jvmLabels = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            jvmLabels.Children.Add(new TextBlock
+            {
+                Text = "Параметры Java Virtual Machine (JVM)",
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White
+            });
+            jvmLabels.Children.Add(new TextBlock
+            {
+                Text = "Флаги сборщика мусора и производительности",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
+                Margin = new Thickness(0, 2, 0, 0)
+            });
+            Grid.SetColumn(jvmLabels, 0);
+            jvmHeader.Children.Add(jvmLabels);
+
+            StackPanel jvmPresets = new StackPanel { Orientation = Orientation.Horizontal };
+
+            Button btnG1 = CreateCompactButton(null, "G1GC (Дефолт)", (s, e) =>
+            {
+                _data.JvmArgs = "-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200";
+                _txtSettingsJvm.Text = _data.JvmArgs;
+                _data.Save();
+            });
+            jvmPresets.Children.Add(btnG1);
+
+            Button btnZgc = CreateCompactButton(null, "ZGC (Low-Latency)", (s, e) =>
+            {
+                _data.JvmArgs = "-XX:+UseZGC -XX:+ZGenerational";
+                _txtSettingsJvm.Text = _data.JvmArgs;
+                _data.Save();
+            });
+            btnZgc.Margin = new Thickness(6, 0, 0, 0);
+            jvmPresets.Children.Add(btnZgc);
+
+            Grid.SetColumn(jvmPresets, 1);
+            jvmHeader.Children.Add(jvmPresets);
+            jvmLayout.Children.Add(jvmHeader);
+
+            Border bdrJvm = new Border
+            {
+                Height = 34,
+                CornerRadius = new CornerRadius(7),
+                Background = new SolidColorBrush(AppColors.InputBg),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(AppColors.InputBorder),
+                Padding = new Thickness(10, 0, 10, 0),
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+            _txtSettingsJvm = new TextBox
+            {
+                Text = _data.JvmArgs,
+                FontSize = 11.5,
+                FontFamily = new FontFamily("Consolas, Courier New"),
+                Foreground = Brushes.White,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            _txtSettingsJvm.LostFocus += (s, e) =>
+            {
+                _data.JvmArgs = _txtSettingsJvm.Text.Trim();
+                _data.Save();
+            };
+            bdrJvm.Child = _txtSettingsJvm;
+            jvmLayout.Children.Add(bdrJvm);
+
+            cardJvm.Child = jvmLayout;
+            sp.Children.Add(cardJvm);
+
+            // 4. Card: Каталог клиента
+            Border cardDir = CreateSettingsGroupCard();
+            cardDir.Margin = new Thickness(0, 10, 0, 0);
+
+            Grid dirGrid = new Grid();
+            dirGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            dirGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            StackPanel dirLabels = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            dirLabels.Children.Add(new TextBlock
+            {
+                Text = "Рабочая папка проекта",
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White
+            });
+
+            _txtSettingsPath = new TextBlock
+            {
+                Text = _projectDir,
+                FontSize = 11,
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxWidth = 450,
+                Margin = new Thickness(0, 2, 0, 0)
+            };
+            dirLabels.Children.Add(_txtSettingsPath);
+            Grid.SetColumn(dirLabels, 0);
+            dirGrid.Children.Add(dirLabels);
+
+            StackPanel dirBtns = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            Button btnBrowse = CreateCompactButton(SvgIcons.Folder, "Обзор...", (s, e) =>
+            {
+                System.Windows.Forms.FolderBrowserDialog fbd = new System.Windows.Forms.FolderBrowserDialog();
+                fbd.Description = "Выберите корневую папку с проектом RainyDLC";
+                if (fbd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+                    if (File.Exists(System.IO.Path.Combine(fbd.SelectedPath, "gradlew.bat")))
+                    {
+                        _projectDir = fbd.SelectedPath;
+                        _data.CustomProjectPath = _projectDir;
+                        _txtSettingsPath.Text = _projectDir;
+                        _data.Save();
+                        ReloadLocalMods();
+                    }
+                    else
+                    {
+                        System.Windows.MessageBox.Show("В выбранной папке не найден gradlew.bat!", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
+            });
+            dirBtns.Children.Add(btnBrowse);
+
+            Button btnOpen = CreateCompactButton(SvgIcons.Folder, "Открыть", (s, e) =>
+            {
+                try { Process.Start("explorer.exe", _projectDir); } catch { }
+            });
+            btnOpen.Margin = new Thickness(6, 0, 0, 0);
+            dirBtns.Children.Add(btnOpen);
+
+            Grid.SetColumn(dirBtns, 1);
+            dirGrid.Children.Add(dirBtns);
+            cardDir.Child = dirGrid;
+            sp.Children.Add(cardDir);
+
+            // 5. Card: Файлы клиента и автообновление
+            Border cardClient = CreateSettingsGroupCard();
+            cardClient.Margin = new Thickness(0, 10, 0, 0);
+
+            StackPanel clientSp = new StackPanel();
+
+            TextBlock titleClient = new TextBlock
+            {
+                Text = "Файлы клиента и автозагрузка",
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            clientSp.Children.Add(titleClient);
+
+            _txtSettingsClientStatus = new TextBlock
+            {
+                Text = "Статус файлов: Проверка...",
+                FontSize = 11.5,
+                Foreground = new SolidColorBrush(AppColors.TextSecondary),
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            clientSp.Children.Add(_txtSettingsClientStatus);
+
+            TextBlock lblUrl = new TextBlock
+            {
+                Text = "URL загрузки файлов клиента (rainydlc.jar):",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            clientSp.Children.Add(lblUrl);
+
+            Border bdrUrl = new Border
+            {
+                Height = 34,
+                CornerRadius = new CornerRadius(7),
+                Background = new SolidColorBrush(AppColors.InputBg),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(AppColors.InputBorder),
+                Padding = new Thickness(10, 0, 10, 0),
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            _txtSettingsDownloadUrl = new TextBox
+            {
+                Text = _data.ClientDownloadUrl,
+                FontSize = 11.5,
+                FontFamily = new FontFamily("Consolas, Courier New"),
+                Foreground = Brushes.White,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            _txtSettingsDownloadUrl.LostFocus += (s, e) =>
+            {
+                _data.ClientDownloadUrl = _txtSettingsDownloadUrl.Text.Trim();
+                _data.Save();
+            };
+            bdrUrl.Child = _txtSettingsDownloadUrl;
+            clientSp.Children.Add(bdrUrl);
+
+            StackPanel clientBtns = new StackPanel
+            {
+                Orientation = Orientation.Horizontal
+            };
+
+            _btnSettingsDownloadClient = CreateCompactButton(SvgIcons.Download, "Скачать клиент", (s, e) =>
+            {
+                StartClientDownload(false);
+            });
+            clientBtns.Children.Add(_btnSettingsDownloadClient);
+
+            Button btnDownloadFabricApi = CreateCompactButton(SvgIcons.Sparkles, "Скачать Fabric API", (s, e) =>
+            {
+                ThreadPool.QueueUserWorkItem(delegate
+                {
+                    EnsureFabricApiInstalled(GetModsDir());
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        ReloadLocalMods();
+                        UpdateClientStatusUI();
+                        System.Windows.MessageBox.Show("Fabric API проверен и установлен!", "RainyDLC", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }));
+                });
+            });
+            btnDownloadFabricApi.Margin = new Thickness(8, 0, 0, 0);
+            clientBtns.Children.Add(btnDownloadFabricApi);
+
+            Button btnOpenModsFolder = CreateCompactButton(SvgIcons.Folder, "Папка mods", (s, e) =>
+            {
+                try { Process.Start("explorer.exe", GetModsDir()); } catch { }
+            });
+            btnOpenModsFolder.Margin = new Thickness(8, 0, 0, 0);
+            clientBtns.Children.Add(btnOpenModsFolder);
+
+            clientSp.Children.Add(clientBtns);
+            cardClient.Child = clientSp;
+            sp.Children.Add(cardClient);
+
+            sv.Content = sp;
+            g.Children.Add(sv);
+            return g;
+        }
+
+        private Border CreateSettingsGroupCard()
+        {
+            return new Border
+            {
+                CornerRadius = new CornerRadius(12),
+                Background = new SolidColorBrush(AppColors.CardBg),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(AppColors.BorderSubtle),
+                Padding = new Thickness(16, 14, 16, 14)
+            };
+        }
+
+        private Button CreateCompactButton(string svgPath, string label, RoutedEventHandler onClick)
+        {
+            Button btn = new Button
+            {
+                Height = 32,
+                Cursor = Cursors.Hand,
+                Focusable = false,
+                Padding = new Thickness(12, 0, 12, 0)
+            };
+
+            StackPanel sp = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            if (!string.IsNullOrEmpty(svgPath))
+            {
+                sp.Children.Add(IconHelper.CreateStrokeIcon(svgPath, 12, new SolidColorBrush(AppColors.TextSecondary), 1.8));
+            }
+            TextBlock tb = new TextBlock
+            {
+                Text = label,
+                FontSize = 11.5,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(AppColors.TextSecondary),
+                Margin = string.IsNullOrEmpty(svgPath) ? new Thickness(0) : new Thickness(6, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            sp.Children.Add(tb);
+            btn.Content = sp;
+
+            ControlTemplate tpl = new ControlTemplate(typeof(Button));
+            FrameworkElementFactory bdr = new FrameworkElementFactory(typeof(Border));
+            bdr.Name = "Bdr";
+            bdr.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+            bdr.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(20, 25, 38)));
+            bdr.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            bdr.SetValue(Border.BorderBrushProperty, new SolidColorBrush(AppColors.BorderSubtle));
+
+            FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            bdr.AppendChild(cp);
+            tpl.VisualTree = bdr;
+
+            Trigger hov = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
+            hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(30, 38, 58)), "Bdr"));
+            hov.Setters.Add(new Setter(Border.BorderBrushProperty, new SolidColorBrush(AppColors.BorderHover), "Bdr"));
+            tpl.Triggers.Add(hov);
+
+            btn.Template = tpl;
+            btn.Click += onClick;
+            return btn;
+        }
+
+        private void UpdateRamPresetVisuals()
+        {
+            int[] ramValues = new int[] { 2048, 4096, 6144, 8192, 12288, 16384 };
+            for (int i = 0; i < _ramPillBoxes.Count && i < ramValues.Length; i++)
+            {
+                bool active = ramValues[i] == _data.RamMb;
+                _ramPillBoxes[i].Background = new SolidColorBrush(active ? AppColors.AccentPrimary : Color.FromRgb(20, 25, 38));
+                _ramPillBoxes[i].BorderBrush = new SolidColorBrush(active ? AppColors.AccentLight : AppColors.BorderSubtle);
+                _ramPillTexts[i].Foreground = active ? Brushes.White : new SolidColorBrush(AppColors.TextSecondary);
+                _ramPillTexts[i].FontWeight = active ? FontWeights.Bold : FontWeights.Medium;
+            }
+        }
+
+        #endregion
+
+        #region Page 1: Моды (Local & Modrinth Online)
 
         private Grid CreatePageMods()
         {
             Grid g = new Grid();
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Header & Subtabs
-            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14, GridUnitType.Pixel) }); // Gap
-            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Views
+            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(12, GridUnitType.Pixel) }); // Gap
+            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });   // Views
 
-            // 1. Верхний ряд: заголовок, переключатели подвкладок и кнопки
+            // Header & Subtabs
             Grid topRow = new Grid();
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            StackPanel titlePanel = new StackPanel();
-            titlePanel.Children.Add(new TextBlock
+            // Subtabs [ Установленные ] & [ Modrinth ]
+            Border subtabsContainer = new Border
             {
-                Text = "Моды",
-                FontSize = 20,
-                FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White
-            });
-            titlePanel.Children.Add(new TextBlock
-            {
-                Text = "Моды из папки game/mods и каталог Modrinth",
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(115, 115, 128)),
-                Margin = new Thickness(0, 2, 0, 8)
-            });
+                Background = new SolidColorBrush(Color.FromArgb(160, 16, 20, 30)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(AppColors.BorderSubtle),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(3)
+            };
 
-            // Подвкладки [ Локальные ] и [ Modrinth ]
             StackPanel tabs = new StackPanel { Orientation = Orientation.Horizontal };
 
             _tabLocalBtn = new Border
             {
-                CornerRadius = new CornerRadius(8),
-                Background = new SolidColorBrush(Color.FromRgb(79, 70, 229)),
-                Padding = new Thickness(14, 6, 14, 6),
-                Margin = new Thickness(0, 0, 10, 0),
+                CornerRadius = new CornerRadius(6),
+                Background = new SolidColorBrush(AppColors.AccentPrimary),
+                Padding = new Thickness(14, 5, 14, 5),
                 Cursor = Cursors.Hand
             };
-            _tabLocalText = new TextBlock { Text = "Локальные", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White };
+            _tabLocalText = new TextBlock
+            {
+                Text = "Установленные",
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brushes.White
+            };
             _tabLocalBtn.Child = _tabLocalText;
             _tabLocalBtn.MouseLeftButtonDown += (s, e) => SwitchModsSubTab(true);
             tabs.Children.Add(_tabLocalBtn);
 
             _tabModrinthBtn = new Border
             {
-                CornerRadius = new CornerRadius(8),
+                CornerRadius = new CornerRadius(6),
                 Background = Brushes.Transparent,
-                Padding = new Thickness(14, 6, 14, 6),
+                Padding = new Thickness(14, 5, 14, 5),
                 Cursor = Cursors.Hand
             };
-            _tabModrinthText = new TextBlock { Text = "Modrinth", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(120, 120, 135)) };
+            _tabModrinthText = new TextBlock
+            {
+                Text = "Каталог Modrinth",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(AppColors.TextSecondary)
+            };
             _tabModrinthBtn.Child = _tabModrinthText;
             _tabModrinthBtn.MouseLeftButtonDown += (s, e) => SwitchModsSubTab(false);
             tabs.Children.Add(_tabModrinthBtn);
 
-            titlePanel.Children.Add(tabs);
-            Grid.SetColumn(titlePanel, 0);
-            topRow.Children.Add(titlePanel);
+            subtabsContainer.Child = tabs;
+            Grid.SetColumn(subtabsContainer, 0);
+            topRow.Children.Add(subtabsContainer);
 
-            // Кнопки справа [ 📁 Папка модов ] и [ 🔄 Обновить ]
-            StackPanel actBtns = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 0, 0) };
-            Button btnModFolder = CreateSmallPillButton("📁  Папка модов", (s, e) =>
+            // Right Action Buttons
+            StackPanel actBtns = new StackPanel { Orientation = Orientation.Horizontal };
+
+            Button btnModFolder = CreateCompactButton(SvgIcons.Folder, "Папка модов", (s, e) =>
             {
-                string modsDir = GetModsDir();
-                try { Process.Start("explorer.exe", modsDir); } catch { }
+                string md = GetModsDir();
+                try { Process.Start("explorer.exe", md); } catch { }
             });
             actBtns.Children.Add(btnModFolder);
 
-            Button btnRefresh = CreateSmallPillButton("🔄  Обновить", (s, e) =>
+            Button btnRefresh = CreateCompactButton(SvgIcons.Refresh, "Обновить", (s, e) =>
             {
                 ReloadLocalMods();
                 if (_modsModrinthView.Visibility == Visibility.Visible)
@@ -1615,7 +2319,7 @@ namespace RainyDLC.Launcher
                     LoadModrinthMods(_txtModrinthSearch != null ? _txtModrinthSearch.Text.Trim() : "");
                 }
             });
-            btnRefresh.Margin = new Thickness(10, 0, 0, 0);
+            btnRefresh.Margin = new Thickness(8, 0, 0, 0);
             actBtns.Children.Add(btnRefresh);
 
             Grid.SetColumn(actBtns, 2);
@@ -1624,10 +2328,8 @@ namespace RainyDLC.Launcher
             Grid.SetRow(topRow, 0);
             g.Children.Add(topRow);
 
-            // 2. Представление 1: Локальные моды
+            // Subviews
             _modsLocalView = CreateLocalModsView();
-
-            // 3. Представление 2: Modrinth браузер и загрузчик
             _modsModrinthView = CreateModrinthView();
 
             Grid.SetRow(_modsLocalView, 2);
@@ -1646,12 +2348,12 @@ namespace RainyDLC.Launcher
         {
             if (showLocal)
             {
-                _tabLocalBtn.Background = new SolidColorBrush(Color.FromRgb(79, 70, 229));
+                _tabLocalBtn.Background = new SolidColorBrush(AppColors.AccentPrimary);
                 _tabLocalText.Foreground = Brushes.White;
                 _tabLocalText.FontWeight = FontWeights.SemiBold;
 
                 _tabModrinthBtn.Background = Brushes.Transparent;
-                _tabModrinthText.Foreground = new SolidColorBrush(Color.FromRgb(120, 120, 135));
+                _tabModrinthText.Foreground = new SolidColorBrush(AppColors.TextSecondary);
                 _tabModrinthText.FontWeight = FontWeights.Normal;
 
                 _modsLocalView.Visibility = Visibility.Visible;
@@ -1661,12 +2363,12 @@ namespace RainyDLC.Launcher
             }
             else
             {
-                _tabModrinthBtn.Background = new SolidColorBrush(Color.FromRgb(79, 70, 229));
+                _tabModrinthBtn.Background = new SolidColorBrush(AppColors.AccentPrimary);
                 _tabModrinthText.Foreground = Brushes.White;
                 _tabModrinthText.FontWeight = FontWeights.SemiBold;
 
                 _tabLocalBtn.Background = Brushes.Transparent;
-                _tabLocalText.Foreground = new SolidColorBrush(Color.FromRgb(120, 120, 135));
+                _tabLocalText.Foreground = new SolidColorBrush(AppColors.TextSecondary);
                 _tabLocalText.FontWeight = FontWeights.Normal;
 
                 _modsLocalView.Visibility = Visibility.Collapsed;
@@ -1699,27 +2401,73 @@ namespace RainyDLC.Launcher
             if (_localModsStack == null) return;
             _localModsStack.Children.Clear();
 
-            string modsDir = GetModsDir();
+            string md = GetModsDir();
             List<string> jarFiles = new List<string>();
 
-            if (Directory.Exists(modsDir))
+            if (Directory.Exists(md))
             {
-                jarFiles.AddRange(Directory.GetFiles(modsDir, "*.jar"));
-                jarFiles.AddRange(Directory.GetFiles(modsDir, "*.jar.disabled"));
+                jarFiles.AddRange(Directory.GetFiles(md, "*.jar"));
+                jarFiles.AddRange(Directory.GetFiles(md, "*.jar.disabled"));
             }
 
-            // Двухколоночная сетка
-            Grid modGrid = new Grid();
-            modGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            modGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14, GridUnitType.Pixel) });
-            modGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            StackPanel colLeft = new StackPanel();
-            StackPanel colRight = new StackPanel();
-
-            if (jarFiles.Count > 0)
+            if (_tabLocalText != null)
             {
-                // Показываем установленные jar моды
+                _tabLocalText.Text = "Установленные (" + jarFiles.Count + ")";
+            }
+
+            if (jarFiles.Count == 0)
+            {
+                // Compact Empty State
+                Border emptyCard = new Border
+                {
+                    CornerRadius = new CornerRadius(12),
+                    Background = new SolidColorBrush(AppColors.CardBg),
+                    BorderThickness = new Thickness(1),
+                    BorderBrush = new SolidColorBrush(AppColors.BorderSubtle),
+                    Padding = new Thickness(20, 24, 20, 24),
+                    Margin = new Thickness(0, 0, 0, 14)
+                };
+
+                StackPanel spEmpty = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+                spEmpty.Children.Add(IconHelper.CreateStrokeIcon(SvgIcons.Cube, 32, new SolidColorBrush(AppColors.AccentPrimary), 1.8));
+
+                spEmpty.Children.Add(new TextBlock
+                {
+                    Text = "В папке run/mods пока нет модов",
+                    FontSize = 14,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = Brushes.White,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 8, 0, 4)
+                });
+
+                spEmpty.Children.Add(new TextBlock
+                {
+                    Text = "Скачайте моды из каталога Modrinth ниже или добавьте файлы в папку",
+                    FontSize = 11.5,
+                    Foreground = new SolidColorBrush(AppColors.TextMuted),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 0, 0, 14)
+                });
+
+                Button btnBrowseOnline = CreateCompactButton(SvgIcons.Download, "Открыть каталог Modrinth", (s, e) => SwitchModsSubTab(false));
+                btnBrowseOnline.HorizontalAlignment = HorizontalAlignment.Center;
+                spEmpty.Children.Add(btnBrowseOnline);
+
+                emptyCard.Child = spEmpty;
+                _localModsStack.Children.Add(emptyCard);
+            }
+            else
+            {
+                // Compact Grid of Installed Mods
+                Grid modGrid = new Grid { Margin = new Thickness(0, 0, 0, 14) };
+                modGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                modGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10, GridUnitType.Pixel) });
+                modGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                StackPanel colLeft = new StackPanel();
+                StackPanel colRight = new StackPanel();
+
                 for (int i = 0; i < jarFiles.Count; i++)
                 {
                     string filePath = jarFiles[i];
@@ -1750,41 +2498,63 @@ namespace RainyDLC.Launcher
                     if (i % 2 == 0) colLeft.Children.Add(card);
                     else colRight.Children.Add(card);
                 }
+
+                Grid.SetColumn(colLeft, 0);
+                modGrid.Children.Add(colLeft);
+
+                Grid.SetColumn(colRight, 2);
+                modGrid.Children.Add(colRight);
+
+                _localModsStack.Children.Add(modGrid);
             }
 
-            // Добавляем встроенные рекомендуемые моды (из референса пользователя)
-            colLeft.Children.Add(CreateModCard("🍎", "AppleSkin", "Adds various food-related HUD improvements", true, Color.FromRgb(220, 38, 38)));
-            colLeft.Children.Add(CreateModCard("📦", "BadOptimizations", "Optimization mod that focuses on things other than rendering", true, Color.FromRgb(100, 116, 139)));
-            colLeft.Children.Add(CreateModCard("📜", "Fabric API", "Core API module providing key hooks and interoperability features.", true, Color.FromRgb(217, 119, 6)));
-            colLeft.Children.Add(CreateModCard("🌿", "FerriteCore", "Reduces memory usage", true, Color.FromRgb(34, 197, 94)));
-            colLeft.Children.Add(CreateModCard("🌈", "Iris", "A modern shaders mod for Minecraft intended to be compatible with existin...", false, Color.FromRgb(168, 85, 247)));
+            // Recommended Essential Mods Section
+            TextBlock txtRec = new TextBlock
+            {
+                Text = "Рекомендуемые моды для Fabric 1.21",
+                FontSize = 13,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                Margin = new Thickness(0, 4, 0, 8)
+            };
+            _localModsStack.Children.Add(txtRec);
 
-            colRight.Children.Add(CreateModCard("⚡", "Async", "Async - Minecraft Entity Multi-Threading Mod", true, Color.FromRgb(59, 130, 246)));
-            colRight.Children.Add(CreateModCard("⛏️", "CIT Resewn", "Re-implements MCPatcher's CIT", true, Color.FromRgb(139, 92, 246)));
-            colRight.Children.Add(CreateModCard("🧩", "Fabric Language Kotlin", "Fabric language module for Kotlin.", true, Color.FromRgb(236, 72, 153)));
-            colRight.Children.Add(CreateModCard("🔄", "In-Game Account Switcher", "Allows you to change which account you are signed in to in-game without...", true, Color.FromRgb(245, 158, 11)));
-            colRight.Children.Add(CreateModCard("🪶", "Lithium", "Lithium is a free and open-source optimization mod for Minecraft which...", true, Color.FromRgb(147, 51, 234)));
+            Grid recGrid = new Grid();
+            recGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            recGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10, GridUnitType.Pixel) });
+            recGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            Grid.SetColumn(colLeft, 0);
-            modGrid.Children.Add(colLeft);
+            StackPanel rLeft = new StackPanel();
+            StackPanel rRight = new StackPanel();
 
-            Grid.SetColumn(colRight, 2);
-            modGrid.Children.Add(colRight);
+            rLeft.Children.Add(CreateRecommendedModCard("sodium", "Sodium", "Графическая оптимизация движка рендеринга"));
+            rLeft.Children.Add(CreateRecommendedModCard("iris", "Iris Shaders", "Поддержка шейдеров с высоким FPS"));
+            rLeft.Children.Add(CreateRecommendedModCard("ferrite-core", "FerriteCore", "Снижение потребления оперативной памяти"));
 
-            _localModsStack.Children.Add(modGrid);
+            rRight.Children.Add(CreateRecommendedModCard("lithium", "Lithium", "Оптимизация тиков физики и мобов"));
+            rRight.Children.Add(CreateRecommendedModCard("appleskin", "AppleSkin", "Отображение сытости и насыщения в HUD"));
+            rRight.Children.Add(CreateRecommendedModCard("fabric-api", "Fabric API", "Библиотека хуков Fabric"));
+
+            Grid.SetColumn(rLeft, 0);
+            recGrid.Children.Add(rLeft);
+
+            Grid.SetColumn(rRight, 2);
+            recGrid.Children.Add(rRight);
+
+            _localModsStack.Children.Add(recGrid);
         }
 
         private Border CreateInstalledModCard(string fileName, string size, bool isEnabled, Action<bool> onToggle)
         {
             Border b = new Border
             {
-                Height = 72,
-                CornerRadius = new CornerRadius(14),
-                Background = new SolidColorBrush(Color.FromRgb(14, 15, 18)),
+                Height = 58,
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(AppColors.CardBg),
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(22, 23, 28)),
-                Padding = new Thickness(14, 0, 14, 0),
-                Margin = new Thickness(0, 0, 0, 10)
+                BorderBrush = new SolidColorBrush(AppColors.BorderSubtle),
+                Padding = new Thickness(12, 0, 12, 0),
+                Margin = new Thickness(0, 0, 0, 8)
             };
 
             Grid g = new Grid();
@@ -1794,20 +2564,14 @@ namespace RainyDLC.Launcher
 
             Border iconBorder = new Border
             {
-                Width = 38,
-                Height = 38,
-                CornerRadius = new CornerRadius(10),
-                Background = new SolidColorBrush(Color.FromArgb(40, 99, 102, 241)),
+                Width = 30,
+                Height = 30,
+                CornerRadius = new CornerRadius(7),
+                Background = new SolidColorBrush(Color.FromRgb(22, 28, 42)),
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 12, 0)
+                Margin = new Thickness(0, 0, 10, 0)
             };
-            iconBorder.Child = new TextBlock
-            {
-                Text = "☕",
-                FontSize = 18,
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
+            iconBorder.Child = IconHelper.CreateStrokeIcon(SvgIcons.Cube, 14, new SolidColorBrush(AppColors.AccentPrimary), 1.8);
             Grid.SetColumn(iconBorder, 0);
             g.Children.Add(iconBorder);
 
@@ -1816,17 +2580,16 @@ namespace RainyDLC.Launcher
             sp.Children.Add(new TextBlock
             {
                 Text = cleanTitle,
-                FontSize = 13,
-                FontWeight = FontWeights.Bold,
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
                 Foreground = Brushes.White,
                 TextTrimming = TextTrimming.CharacterEllipsis
             });
             sp.Children.Add(new TextBlock
             {
-                Text = "Файл: " + fileName + " (" + size + ")",
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(115, 115, 128)),
-                TextTrimming = TextTrimming.CharacterEllipsis,
+                Text = size + " • " + (isEnabled ? "Активен" : "Отключен"),
+                FontSize = 10,
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
                 Margin = new Thickness(0, 2, 0, 0)
             });
             Grid.SetColumn(sp, 1);
@@ -1841,72 +2604,111 @@ namespace RainyDLC.Launcher
             return b;
         }
 
-        private Border CreateModCard(string icon, string name, string desc, bool initialState, Color iconColor)
+        private Border CreateRecommendedModCard(string slug, string title, string desc)
         {
             Border b = new Border
             {
-                Height = 72,
-                CornerRadius = new CornerRadius(14),
-                Background = new SolidColorBrush(Color.FromRgb(14, 15, 18)),
+                Height = 56,
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(AppColors.CardBg),
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(22, 23, 28)),
-                Padding = new Thickness(14, 0, 14, 0),
-                Margin = new Thickness(0, 0, 0, 10)
+                BorderBrush = new SolidColorBrush(AppColors.BorderSubtle),
+                Padding = new Thickness(12, 0, 12, 0),
+                Margin = new Thickness(0, 0, 0, 8)
             };
 
             Grid g = new Grid();
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            Border iconBorder = new Border
-            {
-                Width = 38,
-                Height = 38,
-                CornerRadius = new CornerRadius(10),
-                Background = new SolidColorBrush(Color.FromArgb(40, iconColor.R, iconColor.G, iconColor.B)),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 12, 0)
-            };
-            iconBorder.Child = new TextBlock
-            {
-                Text = icon,
-                FontSize = 18,
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(iconBorder, 0);
-            g.Children.Add(iconBorder);
 
             StackPanel sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             sp.Children.Add(new TextBlock
             {
-                Text = name,
-                FontSize = 13,
-                FontWeight = FontWeights.Bold,
+                Text = title,
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
                 Foreground = Brushes.White
             });
             sp.Children.Add(new TextBlock
             {
                 Text = desc,
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(115, 115, 128)),
+                FontSize = 10,
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(0, 2, 0, 0)
+                Margin = new Thickness(0, 1, 0, 0)
             });
-            Grid.SetColumn(sp, 1);
+            Grid.SetColumn(sp, 0);
             g.Children.Add(sp);
 
-            bool savedState = initialState;
-            if (_data.ModStates.ContainsKey(name)) savedState = _data.ModStates[name];
-            ToggleSwitch sw = new ToggleSwitch(savedState) { VerticalAlignment = VerticalAlignment.Center };
-            sw.CheckedChanged += (state) =>
+            string dummy;
+            bool installed = IsModInstalled(slug, title, out dummy);
+
+            Button btn = new Button
             {
-                _data.ModStates[name] = state;
-                _data.Save();
+                Height = 26,
+                Cursor = Cursors.Hand,
+                Focusable = false,
+                Padding = new Thickness(10, 0, 10, 0),
+                VerticalAlignment = VerticalAlignment.Center
             };
-            Grid.SetColumn(sw, 2);
-            g.Children.Add(sw);
+
+            TextBlock btnTxt = new TextBlock
+            {
+                Text = installed ? "✓ Есть" : "Скачать",
+                FontSize = 10.5,
+                FontWeight = FontWeights.Medium,
+                Foreground = installed ? new SolidColorBrush(AppColors.AccentGreen) : Brushes.White
+            };
+            btn.Content = btnTxt;
+
+            ControlTemplate tpl = new ControlTemplate(typeof(Button));
+            FrameworkElementFactory bdr = new FrameworkElementFactory(typeof(Border));
+            bdr.Name = "RecBdr";
+            bdr.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+            bdr.SetValue(Border.BackgroundProperty, installed ? new SolidColorBrush(Color.FromArgb(32, 16, 185, 129)) : new SolidColorBrush(AppColors.AccentPrimary));
+            bdr.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            bdr.SetValue(Border.BorderBrushProperty, installed ? new SolidColorBrush(Color.FromArgb(80, 16, 185, 129)) : new SolidColorBrush(AppColors.AccentLight));
+
+            FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            bdr.AppendChild(cp);
+            tpl.VisualTree = bdr;
+
+            btn.Template = tpl;
+
+            if (!installed)
+            {
+                btn.Click += (s, e) =>
+                {
+                    btnTxt.Text = "⏳...";
+                    btn.IsEnabled = false;
+
+                    ThreadPool.QueueUserWorkItem(delegate
+                    {
+                        string outName;
+                        string err;
+                        bool ok = DownloadModrinthJar(slug, GetModsDir(), out outName, out err);
+
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            if (ok)
+                            {
+                                btnTxt.Text = "✓ Есть";
+                                btnTxt.Foreground = new SolidColorBrush(AppColors.AccentGreen);
+                                ReloadLocalMods();
+                            }
+                            else
+                            {
+                                btnTxt.Text = "Скачать";
+                                btn.IsEnabled = true;
+                            }
+                        }));
+                    });
+                };
+            }
+
+            Grid.SetColumn(btn, 1);
+            g.Children.Add(btn);
 
             b.Child = g;
             return b;
@@ -1914,45 +2716,46 @@ namespace RainyDLC.Launcher
 
         #endregion
 
-        #region Modrinth Online Section (Direct Mod Downloading)
+        #region Modrinth Catalog View
 
         private Grid CreateModrinthView()
         {
             Grid g = new Grid();
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Search Bar
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Quick category chips & Status
-            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14, GridUnitType.Pixel) }); // Gap
-            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Cards Grid
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Search
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Chips & Status
+            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(10, GridUnitType.Pixel) }); // Gap
+            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });   // Cards Grid
 
-            // 1. Поисковая строка Modrinth
+            // Search Bar
             Grid searchGrid = new Grid();
             searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10, GridUnitType.Pixel) });
+            searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8, GridUnitType.Pixel) });
             searchGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             Border searchBorder = new Border
             {
-                Height = 42,
-                CornerRadius = new CornerRadius(12),
-                Background = new SolidColorBrush(Color.FromRgb(14, 15, 18)),
+                Height = 34,
+                CornerRadius = new CornerRadius(7),
+                Background = new SolidColorBrush(AppColors.InputBg),
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(24, 25, 32)),
-                Padding = new Thickness(14, 0, 14, 0)
+                BorderBrush = new SolidColorBrush(AppColors.InputBorder),
+                Padding = new Thickness(10, 0, 10, 0)
             };
 
             Grid sInGrid = new Grid();
             sInGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             sInGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            sInGrid.Children.Add(new TextBlock { Text = "🔍  ", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(100, 100, 115)), VerticalAlignment = VerticalAlignment.Center });
+            sInGrid.Children.Add(IconHelper.CreateStrokeIcon(SvgIcons.Search, 13, new SolidColorBrush(AppColors.TextMuted), 1.8));
 
             _txtModrinthSearch = new TextBox
             {
-                FontSize = 13,
+                FontSize = 12,
                 Foreground = Brushes.White,
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6, 0, 0, 0)
             };
             _txtModrinthSearch.KeyDown += (s, e) =>
             {
@@ -1967,36 +2770,35 @@ namespace RainyDLC.Launcher
             Grid.SetColumn(searchBorder, 0);
             searchGrid.Children.Add(searchBorder);
 
-            Button btnSearch = CreateSmallPillButton("Найти", (s, e) =>
+            Button btnSearch = CreateCompactButton(SvgIcons.Search, "Найти", (s, e) =>
             {
                 LoadModrinthMods(_txtModrinthSearch.Text.Trim());
             });
-            btnSearch.Height = 42;
-            btnSearch.Padding = new Thickness(20, 0, 20, 0);
+            btnSearch.Height = 34;
             Grid.SetColumn(btnSearch, 2);
             searchGrid.Children.Add(btnSearch);
 
             Grid.SetRow(searchGrid, 0);
             g.Children.Add(searchGrid);
 
-            // 2. Быстрые чипы категорий и статус
-            Grid chipsAndStatus = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+            // Chips & Status
+            Grid chipsAndStatus = new Grid { Margin = new Thickness(0, 8, 0, 0) };
             chipsAndStatus.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             chipsAndStatus.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             WrapPanel chips = new WrapPanel();
-            chips.Children.Add(CreateFilterChip("🔥 Все популярные", () => LoadModrinthMods("")));
-            chips.Children.Add(CreateFilterChip("⚡ Оптимизация", () => LoadModrinthMods("optimization")));
-            chips.Children.Add(CreateFilterChip("🎨 Шейдеры", () => LoadModrinthMods("shader")));
-            chips.Children.Add(CreateFilterChip("🛠️ Утилиты", () => LoadModrinthMods("utility")));
+            chips.Children.Add(CreateFilterChip("Все", () => LoadModrinthMods("")));
+            chips.Children.Add(CreateFilterChip("Оптимизация", () => LoadModrinthMods("optimization")));
+            chips.Children.Add(CreateFilterChip("Шейдеры", () => LoadModrinthMods("shader")));
+            chips.Children.Add(CreateFilterChip("Утилиты", () => LoadModrinthMods("utility")));
             Grid.SetColumn(chips, 0);
             chipsAndStatus.Children.Add(chips);
 
             _txtModrinthStatus = new TextBlock
             {
-                Text = "Загрузка модов...",
+                Text = "Каталог Modrinth",
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(115, 115, 128)),
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(_txtModrinthStatus, 1);
@@ -2005,11 +2807,11 @@ namespace RainyDLC.Launcher
             Grid.SetRow(chipsAndStatus, 1);
             g.Children.Add(chipsAndStatus);
 
-            // 3. Сетка карточек модов Modrinth (2 колонки)
+            // ScrollViewer Cards Grid
             ScrollViewer sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
             Grid cardsGrid = new Grid();
             cardsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            cardsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14, GridUnitType.Pixel) });
+            cardsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10, GridUnitType.Pixel) });
             cardsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             _modrinthCardsLeft = new StackPanel();
@@ -2032,29 +2834,29 @@ namespace RainyDLC.Launcher
         {
             Border chip = new Border
             {
-                CornerRadius = new CornerRadius(8),
-                Background = new SolidColorBrush(Color.FromRgb(18, 19, 25)),
+                CornerRadius = new CornerRadius(5),
+                Background = new SolidColorBrush(Color.FromRgb(18, 23, 34)),
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(26, 27, 36)),
-                Padding = new Thickness(10, 4, 10, 4),
-                Margin = new Thickness(0, 0, 8, 0),
+                BorderBrush = new SolidColorBrush(AppColors.BorderSubtle),
+                Padding = new Thickness(8, 3, 8, 3),
+                Margin = new Thickness(0, 0, 6, 0),
                 Cursor = Cursors.Hand
             };
             chip.Child = new TextBlock
             {
                 Text = label,
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 155))
+                FontSize = 10.5,
+                Foreground = new SolidColorBrush(AppColors.TextSecondary)
             };
             chip.MouseEnter += (s, e) =>
             {
-                chip.Background = new SolidColorBrush(Color.FromRgb(30, 31, 40));
+                chip.Background = new SolidColorBrush(Color.FromRgb(26, 33, 48));
                 (chip.Child as TextBlock).Foreground = Brushes.White;
             };
             chip.MouseLeave += (s, e) =>
             {
-                chip.Background = new SolidColorBrush(Color.FromRgb(18, 19, 25));
-                (chip.Child as TextBlock).Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 155));
+                chip.Background = new SolidColorBrush(Color.FromRgb(18, 23, 34));
+                (chip.Child as TextBlock).Foreground = new SolidColorBrush(AppColors.TextSecondary);
             };
             chip.MouseLeftButtonDown += (s, e) => onClick();
             return chip;
@@ -2062,7 +2864,7 @@ namespace RainyDLC.Launcher
 
         private void LoadModrinthMods(string query)
         {
-            _txtModrinthStatus.Text = "⏳ Поиск на Modrinth...";
+            _txtModrinthStatus.Text = "Поиск...";
             _modrinthCardsLeft.Children.Clear();
             _modrinthCardsRight.Children.Clear();
 
@@ -2074,7 +2876,7 @@ namespace RainyDLC.Launcher
                 {
                     if (results.Count == 0)
                     {
-                        _txtModrinthStatus.Text = "Ничего не найдено по запросу.";
+                        _txtModrinthStatus.Text = "Ничего не найдено.";
                         return;
                     }
 
@@ -2108,7 +2910,7 @@ namespace RainyDLC.Launcher
 
                 using (WebClient wc = new WebClient { Encoding = Encoding.UTF8 })
                 {
-                    wc.Headers["User-Agent"] = "RainyDLC-Client/1.0 (contact@rainydlc.fun)";
+                    wc.Headers["User-Agent"] = "RainyDLC-Client/2.1 (contact@rainydlc.fun)";
                     string json = wc.DownloadString(url);
 
                     JavaScriptSerializer js = new JavaScriptSerializer();
@@ -2141,10 +2943,7 @@ namespace RainyDLC.Launcher
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("Modrinth error: " + ex.Message);
-            }
+            catch { }
             return list;
         }
 
@@ -2152,13 +2951,13 @@ namespace RainyDLC.Launcher
         {
             Border b = new Border
             {
-                Height = 84,
-                CornerRadius = new CornerRadius(14),
-                Background = new SolidColorBrush(Color.FromRgb(14, 15, 18)),
+                Height = 68,
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(AppColors.CardBg),
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(22, 23, 28)),
-                Padding = new Thickness(14, 0, 14, 0),
-                Margin = new Thickness(0, 0, 0, 10)
+                BorderBrush = new SolidColorBrush(AppColors.BorderSubtle),
+                Padding = new Thickness(10, 0, 10, 0),
+                Margin = new Thickness(0, 0, 0, 8)
             };
 
             Grid g = new Grid();
@@ -2166,15 +2965,15 @@ namespace RainyDLC.Launcher
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            // Иконка мода
+            // Icon
             Border iconBorder = new Border
             {
-                Width = 42,
-                Height = 42,
-                CornerRadius = new CornerRadius(10),
-                Background = new SolidColorBrush(Color.FromArgb(40, 99, 102, 241)),
+                Width = 34,
+                Height = 34,
+                CornerRadius = new CornerRadius(7),
+                Background = new SolidColorBrush(Color.FromRgb(22, 28, 42)),
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 12, 0),
+                Margin = new Thickness(0, 0, 10, 0),
                 ClipToBounds = true
             };
 
@@ -2184,8 +2983,8 @@ namespace RainyDLC.Launcher
                 {
                     Image img = new Image
                     {
-                        Width = 42,
-                        Height = 42,
+                        Width = 34,
+                        Height = 34,
                         Stretch = Stretch.UniformToFill
                     };
                     BitmapImage bmp = new BitmapImage();
@@ -2198,45 +2997,33 @@ namespace RainyDLC.Launcher
                 }
                 catch
                 {
-                    iconBorder.Child = new TextBlock
-                    {
-                        Text = "📦",
-                        FontSize = 18,
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center
-                    };
+                    iconBorder.Child = IconHelper.CreateStrokeIcon(SvgIcons.Cube, 14, new SolidColorBrush(AppColors.AccentPrimary), 1.8);
                 }
             }
             else
             {
-                iconBorder.Child = new TextBlock
-                {
-                    Text = "📦",
-                    FontSize = 18,
-                    HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
+                iconBorder.Child = IconHelper.CreateStrokeIcon(SvgIcons.Cube, 14, new SolidColorBrush(AppColors.AccentPrimary), 1.8);
             }
             Grid.SetColumn(iconBorder, 0);
             g.Children.Add(iconBorder);
 
-            // Текстовая колонка
-            StackPanel sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+            // Title & Description
+            StackPanel sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
             StackPanel titleRow = new StackPanel { Orientation = Orientation.Horizontal };
             titleRow.Children.Add(new TextBlock
             {
                 Text = item.Title,
-                FontSize = 13,
-                FontWeight = FontWeights.Bold,
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
                 Foreground = Brushes.White,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxWidth = 180
+                MaxWidth = 170
             });
             titleRow.Children.Add(new TextBlock
             {
-                Text = "  ⬇ " + item.FormattedDownloads,
-                FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(100, 100, 115)),
+                Text = "  " + item.FormattedDownloads + " ⬇",
+                FontSize = 9.5,
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
                 VerticalAlignment = VerticalAlignment.Center
             });
             sp.Children.Add(titleRow);
@@ -2244,70 +3031,64 @@ namespace RainyDLC.Launcher
             sp.Children.Add(new TextBlock
             {
                 Text = item.Description,
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(125, 125, 138)),
+                FontSize = 10,
+                Foreground = new SolidColorBrush(AppColors.TextMuted),
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(0, 3, 0, 0),
-                MaxHeight = 32,
+                Margin = new Thickness(0, 2, 0, 0),
+                MaxHeight = 26,
                 TextWrapping = TextWrapping.Wrap
             });
             Grid.SetColumn(sp, 1);
             g.Children.Add(sp);
 
-            // Кнопка Скачать / Установлен
-            StackPanel btnContainer = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-
+            // Download Button
             string installedFile;
             bool isInstalled = IsModInstalled(item.Slug, item.Title, out installedFile);
 
-            Button btnDownload = new Button
+            Button btnDl = new Button
             {
-                Height = 34,
+                Height = 28,
                 Cursor = Cursors.Hand,
                 Focusable = false,
-                Padding = new Thickness(14, 0, 14, 0)
-            };
-
-            TextBlock btnText = new TextBlock
-            {
-                Text = isInstalled ? "✓ Установлен" : "⬇ Скачать",
-                FontSize = 11,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = isInstalled ? new SolidColorBrush(Color.FromRgb(52, 211, 153)) : Brushes.White,
+                Padding = new Thickness(10, 0, 10, 0),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            btnDownload.Content = btnText;
+
+            TextBlock btnTxt = new TextBlock
+            {
+                Text = isInstalled ? "✓ Есть" : "Скачать",
+                FontSize = 10.5,
+                FontWeight = FontWeights.Medium,
+                Foreground = isInstalled ? new SolidColorBrush(AppColors.AccentGreen) : Brushes.White
+            };
+            btnDl.Content = btnTxt;
 
             ControlTemplate tpl = new ControlTemplate(typeof(Button));
             FrameworkElementFactory bdr = new FrameworkElementFactory(typeof(Border));
             bdr.Name = "DlBdr";
-            bdr.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
-            bdr.SetValue(Border.BackgroundProperty, isInstalled ? new SolidColorBrush(Color.FromArgb(50, 16, 185, 129)) : new SolidColorBrush(Color.FromRgb(79, 70, 229)));
+            bdr.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+            bdr.SetValue(Border.BackgroundProperty, isInstalled ? new SolidColorBrush(Color.FromArgb(32, 16, 185, 129)) : new SolidColorBrush(AppColors.AccentPrimary));
             bdr.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-            bdr.SetValue(Border.BorderBrushProperty, isInstalled ? new SolidColorBrush(Color.FromRgb(16, 185, 129)) : new SolidColorBrush(Color.FromRgb(99, 102, 241)));
+            bdr.SetValue(Border.BorderBrushProperty, isInstalled ? new SolidColorBrush(Color.FromArgb(80, 16, 185, 129)) : new SolidColorBrush(AppColors.AccentLight));
 
             FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
             cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
             bdr.AppendChild(cp);
             tpl.VisualTree = bdr;
 
-            Trigger hov = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
-            hov.Setters.Add(new Setter(Border.BackgroundProperty, isInstalled ? new SolidColorBrush(Color.FromArgb(80, 16, 185, 129)) : new SolidColorBrush(Color.FromRgb(99, 102, 241)), "DlBdr"));
-            tpl.Triggers.Add(hov);
+            btnDl.Template = tpl;
 
-            btnDownload.Template = tpl;
-
-            btnDownload.Click += (s, e) =>
+            btnDl.Click += (s, e) =>
             {
                 string dummy;
                 if (IsModInstalled(item.Slug, item.Title, out dummy))
                 {
-                    System.Windows.MessageBox.Show("Мод '" + item.Title + "' уже установлен в папку mods!", "Modrinth", MessageBoxButton.OK, MessageBoxImage.Information);
+                    System.Windows.MessageBox.Show("Мод '" + item.Title + "' уже установлен.", "Modrinth", MessageBoxButton.OK, MessageBoxImage.Information);
                     return;
                 }
 
-                btnText.Text = "⏳ Скачивание...";
-                btnDownload.IsEnabled = false;
+                btnTxt.Text = "⏳...";
+                btnDl.IsEnabled = false;
 
                 ThreadPool.QueueUserWorkItem(delegate
                 {
@@ -2319,32 +3100,24 @@ namespace RainyDLC.Launcher
                     {
                         if (ok)
                         {
-                            btnText.Text = "✓ Установлен";
-                            btnText.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
-                            Border db = btnDownload.Template.FindName("DlBdr", btnDownload) as Border;
-                            if (db != null)
-                            {
-                                db.Background = new SolidColorBrush(Color.FromArgb(50, 16, 185, 129));
-                                db.BorderBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129));
-                            }
-                            btnDownload.IsEnabled = true;
-                            AppendLog("[Modrinth] Успешно установлен мод: " + outName);
-                            System.Windows.MessageBox.Show("Мод '" + item.Title + "' (" + outName + ") успешно скачан в папку mods!", "Modrinth", MessageBoxButton.OK, MessageBoxImage.Information);
+                            btnTxt.Text = "✓ Есть";
+                            btnTxt.Foreground = new SolidColorBrush(AppColors.AccentGreen);
+                            btnDl.IsEnabled = true;
+                            AppendLog("[Modrinth] Успешно загружен мод: " + outName);
                         }
                         else
                         {
-                            btnText.Text = "⬇ Скачать";
-                            btnDownload.IsEnabled = true;
-                            AppendLog("[Modrinth] Ошибка загрузки: " + err);
-                            System.Windows.MessageBox.Show("Не удалось скачать мод:\n" + err, "Ошибка Modrinth", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            btnTxt.Text = "Скачать";
+                            btnDl.IsEnabled = true;
+                            AppendLog("[Modrinth] Ошибка: " + err);
+                            System.Windows.MessageBox.Show("Не удалось загрузить мод:\n" + err, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
                         }
                     }));
                 });
             };
 
-            btnContainer.Children.Add(btnDownload);
-            Grid.SetColumn(btnContainer, 2);
-            g.Children.Add(btnContainer);
+            Grid.SetColumn(btnDl, 2);
+            g.Children.Add(btnDl);
 
             b.Child = g;
             return b;
@@ -2355,10 +3128,10 @@ namespace RainyDLC.Launcher
             installedFile = "";
             try
             {
-                string modsDir = GetModsDir();
-                if (!Directory.Exists(modsDir)) return false;
+                string md = GetModsDir();
+                if (!Directory.Exists(md)) return false;
 
-                string[] files = Directory.GetFiles(modsDir, "*.jar*");
+                string[] files = Directory.GetFiles(md, "*.jar*");
                 string sClean = slug.Replace("-", "").ToLower();
                 string tClean = title.Replace(" ", "").ToLower();
 
@@ -2389,7 +3162,7 @@ namespace RainyDLC.Launcher
 
                 using (WebClient wc = new WebClient { Encoding = Encoding.UTF8 })
                 {
-                    wc.Headers["User-Agent"] = "RainyDLC-Client/1.0 (contact@rainydlc.fun)";
+                    wc.Headers["User-Agent"] = "RainyDLC-Client/2.1 (contact@rainydlc.fun)";
                     try { json = wc.DownloadString(vUrl); } catch { }
 
                     JavaScriptSerializer js = new JavaScriptSerializer();
@@ -2427,7 +3200,7 @@ namespace RainyDLC.Launcher
 
                                     using (WebClient dlClient = new WebClient())
                                     {
-                                        dlClient.Headers["User-Agent"] = "RainyDLC-Client/1.0 (contact@rainydlc.fun)";
+                                        dlClient.Headers["User-Agent"] = "RainyDLC-Client/2.1 (contact@rainydlc.fun)";
                                         dlClient.DownloadFile(new Uri(downloadUrl), targetPath);
                                     }
 
@@ -2450,388 +3223,104 @@ namespace RainyDLC.Launcher
 
         #endregion
 
-        #region Page 4: Друзья (Social)
-
-        private Grid CreatePageFriends()
-        {
-            Grid g = new Grid();
-            Border b = CreateContentCard("Друзья");
-            StackPanel sp = new StackPanel();
-
-            sp.Children.Add(new TextBlock
-            {
-                Text = "Список друзей",
-                FontSize = 15,
-                FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White,
-                Margin = new Thickness(0, 0, 0, 10)
-            });
-
-            sp.Children.Add(new TextBlock
-            {
-                Text = "В данный момент никого нет в сети. Добавьте друзей по никнейму или ID аккаунта.",
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(115, 115, 128)),
-                Margin = new Thickness(0, 0, 0, 20)
-            });
-
-            Button btnAdd = CreateSmallPillButton("➕  Добавить друга", (s, e) =>
-            {
-                System.Windows.MessageBox.Show("Функция добавления друзей будет доступна в следующем обновлении!", "Друзья", MessageBoxButton.OK, MessageBoxImage.Information);
-            });
-            sp.Children.Add(btnAdd);
-
-            b.Child = sp;
-            g.Children.Add(b);
-            return g;
-        }
-
-        #endregion
-
-        #region Page 5: Настройки
-
-        private Grid CreatePageSettings()
-        {
-            Grid g = new Grid();
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(14, GridUnitType.Pixel) });
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            Border cardAcc = CreateContentCard("Настройки аккаунта");
-            StackPanel spAcc = new StackPanel();
-            spAcc.Children.Add(new TextBlock
-            {
-                Text = "Ваши данные для доступа к аккаунту",
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(115, 115, 128)),
-                Margin = new Thickness(0, -6, 0, 14)
-            });
-
-            Grid accGrid = new Grid();
-            accGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            accGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14, GridUnitType.Pixel) });
-            accGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            StackPanel spEmail = new StackPanel();
-            spEmail.Children.Add(new TextBlock { Text = "Почта", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 155)), Margin = new Thickness(0, 0, 0, 6) });
-            Border bdrEmail = new Border
-            {
-                Height = 44,
-                CornerRadius = new CornerRadius(12),
-                Background = new SolidColorBrush(Color.FromRgb(18, 19, 24)),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(26, 27, 34)),
-                Padding = new Thickness(14, 0, 10, 0)
-            };
-            Grid eGrid = new Grid();
-            eGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            eGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            _txtEmail = new TextBox
-            {
-                Text = _data.Email,
-                FontSize = 13,
-                Foreground = Brushes.White,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(_txtEmail, 0);
-            eGrid.Children.Add(_txtEmail);
-
-            TextBlock btnChangeEmail = new TextBlock
-            {
-                Text = "Сменить",
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = Brushes.White,
-                VerticalAlignment = VerticalAlignment.Center,
-                Cursor = Cursors.Hand
-            };
-            btnChangeEmail.MouseLeftButtonDown += (s, e) =>
-            {
-                _data.Email = _txtEmail.Text.Trim();
-                _data.Save();
-                System.Windows.MessageBox.Show("Почта успешно обновлена!", "Настройки", MessageBoxButton.OK, MessageBoxImage.Information);
-            };
-            Grid.SetColumn(btnChangeEmail, 1);
-            eGrid.Children.Add(btnChangeEmail);
-            bdrEmail.Child = eGrid;
-            spEmail.Children.Add(bdrEmail);
-            Grid.SetColumn(spEmail, 0);
-            accGrid.Children.Add(spEmail);
-
-            StackPanel spPass = new StackPanel();
-            spPass.Children.Add(new TextBlock { Text = "Пароль", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 155)), Margin = new Thickness(0, 0, 0, 6) });
-            Border bdrPass = new Border
-            {
-                Height = 44,
-                CornerRadius = new CornerRadius(12),
-                Background = new SolidColorBrush(Color.FromRgb(18, 19, 24)),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(26, 27, 34)),
-                Padding = new Thickness(14, 0, 10, 0)
-            };
-            Grid pGrid = new Grid();
-            pGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            pGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            pGrid.Children.Add(new TextBlock { Text = "••••••••••", FontSize = 14, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center });
-            TextBlock btnChangePass = new TextBlock
-            {
-                Text = "Сменить",
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = Brushes.White,
-                VerticalAlignment = VerticalAlignment.Center,
-                Cursor = Cursors.Hand
-            };
-            btnChangePass.MouseLeftButtonDown += (s, e) =>
-            {
-                System.Windows.MessageBox.Show("Пароль успешно обновлен!", "Настройки", MessageBoxButton.OK, MessageBoxImage.Information);
-            };
-            Grid.SetColumn(btnChangePass, 1);
-            pGrid.Children.Add(btnChangePass);
-            bdrPass.Child = pGrid;
-            spPass.Children.Add(bdrPass);
-            Grid.SetColumn(spPass, 2);
-            accGrid.Children.Add(spPass);
-
-            spAcc.Children.Add(accGrid);
-            cardAcc.Child = spAcc;
-            Grid.SetRow(cardAcc, 0);
-            g.Children.Add(cardAcc);
-
-            Border cardLch = CreateContentCard("Настройки лаунчера");
-            StackPanel spLch = new StackPanel();
-            spLch.Children.Add(new TextBlock
-            {
-                Text = "Папка для файлов, ресурсы и запуск клиента",
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(115, 115, 128)),
-                Margin = new Thickness(0, -6, 0, 16)
-            });
-
-            Grid pathRow = new Grid { Margin = new Thickness(0, 0, 0, 18) };
-            pathRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            pathRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            StackPanel pathLabels = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            pathLabels.Children.Add(new TextBlock { Text = "Папка для файлов", FontSize = 13, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
-            pathLabels.Children.Add(new TextBlock { Text = "Куда лаунчер будет сохранять свои файлы", FontSize = 11, Foreground = new SolidColorBrush(Color.FromRgb(115, 115, 128)), Margin = new Thickness(0, 2, 0, 0) });
-            Grid.SetColumn(pathLabels, 0);
-            pathRow.Children.Add(pathLabels);
-
-            StackPanel pathActions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            _txtPathDisplay = new TextBlock
-            {
-                Text = _projectDir,
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(115, 115, 128)),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 14, 0),
-                MaxWidth = 220,
-                TextTrimming = TextTrimming.CharacterEllipsis
-            };
-            pathActions.Children.Add(_txtPathDisplay);
-
-            Button btnOpen = CreateSmallPillButton("↗  Открыть", (s, e) =>
-            {
-                try { Process.Start("explorer.exe", _projectDir); } catch { }
-            });
-            pathActions.Children.Add(btnOpen);
-
-            Button btnBrowse = CreateSmallPillButton("📁  Выбрать", (s, e) =>
-            {
-                System.Windows.Forms.FolderBrowserDialog fbd = new System.Windows.Forms.FolderBrowserDialog();
-                fbd.Description = "Выберите папку с клиентом RainyDLC";
-                if (fbd.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-                {
-                    if (File.Exists(System.IO.Path.Combine(fbd.SelectedPath, "gradlew.bat")))
-                    {
-                        _projectDir = fbd.SelectedPath;
-                        _data.CustomProjectPath = _projectDir;
-                        _txtPathDisplay.Text = _projectDir;
-                        _data.Save();
-                    }
-                    else
-                    {
-                        System.Windows.MessageBox.Show("В выбранной папке не найден gradlew.bat!", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    }
-                }
-            });
-            btnBrowse.Margin = new Thickness(8, 0, 0, 0);
-            pathActions.Children.Add(btnBrowse);
-
-            Grid.SetColumn(pathActions, 1);
-            pathRow.Children.Add(pathActions);
-            spLch.Children.Add(pathRow);
-
-            Grid ramRow = new Grid();
-            ramRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            ramRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            StackPanel ramLabels = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            ramLabels.Children.Add(new TextBlock { Text = "Оперативная память", FontSize = 13, FontWeight = FontWeights.Bold, Foreground = Brushes.White });
-            ramLabels.Children.Add(new TextBlock { Text = "Сколько выделять клиенту при запуске, МБ (1024–65536, кратно 1024)", FontSize = 11, Foreground = new SolidColorBrush(Color.FromRgb(115, 115, 128)), Margin = new Thickness(0, 2, 0, 0) });
-            Grid.SetColumn(ramLabels, 0);
-            ramRow.Children.Add(ramLabels);
-
-            StackPanel ramActions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            Border bdrRamInput = new Border
-            {
-                Width = 72,
-                Height = 36,
-                CornerRadius = new CornerRadius(10),
-                Background = new SolidColorBrush(Color.FromRgb(18, 19, 24)),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(26, 27, 34)),
-                Margin = new Thickness(0, 0, 10, 0)
-            };
-            _txtRamMb = new TextBox
-            {
-                Text = _data.RamMb.ToString(),
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = Brushes.White,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            bdrRamInput.Child = _txtRamMb;
-            ramActions.Children.Add(bdrRamInput);
-
-            Button btnSaveRam = CreateSmallPillButton("Сохранить", (s, e) =>
-            {
-                int val;
-                if (int.TryParse(_txtRamMb.Text.Trim(), out val) && val >= 1024)
-                {
-                    _data.RamMb = val;
-                    _data.Save();
-                    System.Windows.MessageBox.Show("Выделенная память сохранена: " + val + " МБ", "Настройки", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                else
-                {
-                    System.Windows.MessageBox.Show("Введите корректное число памяти в МБ (минимум 1024).", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
-            });
-            ramActions.Children.Add(btnSaveRam);
-
-            Grid.SetColumn(ramActions, 1);
-            ramRow.Children.Add(ramActions);
-            spLch.Children.Add(ramRow);
-
-            cardLch.Child = spLch;
-            Grid.SetRow(cardLch, 2);
-            g.Children.Add(cardLch);
-
-            return g;
-        }
-
-        private Button CreateSmallPillButton(string text, RoutedEventHandler onClick)
-        {
-            Button btn = new Button
-            {
-                Height = 36,
-                Padding = new Thickness(14, 0, 14, 0),
-                Cursor = Cursors.Hand,
-                Focusable = false
-            };
-
-            TextBlock tb = new TextBlock
-            {
-                Text = text,
-                FontSize = 12,
-                FontWeight = FontWeights.Medium,
-                Foreground = Brushes.White,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            btn.Content = tb;
-
-            ControlTemplate tpl = new ControlTemplate(typeof(Button));
-            FrameworkElementFactory bdr = new FrameworkElementFactory(typeof(Border));
-            bdr.Name = "PillBdr";
-            bdr.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
-            bdr.SetValue(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(20, 21, 27)));
-            bdr.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-            bdr.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(28, 29, 36)));
-
-            FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
-            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
-            bdr.AppendChild(cp);
-            tpl.VisualTree = bdr;
-
-            Trigger hov = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
-            hov.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(32, 33, 42)), "PillBdr"));
-            tpl.Triggers.Add(hov);
-
-            btn.Template = tpl;
-            btn.Click += onClick;
-            return btn;
-        }
-
-        #endregion
-
-        #region Page 6: Консоль
+        #region Page 3: Консоль (Console Logs)
 
         private Grid CreatePageConsole()
         {
             Grid g = new Grid();
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                         // Toolbar
+            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(8, GridUnitType.Pixel) });  // Gap
+            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });   // Terminal Box
 
-            Border tb = new Border
+            // Toolbar
+            Border bar = new Border
             {
-                Height = 44,
-                CornerRadius = new CornerRadius(12),
-                Background = new SolidColorBrush(Color.FromRgb(14, 15, 18)),
+                Height = 40,
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(AppColors.CardBg),
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(22, 23, 28)),
-                Padding = new Thickness(14, 0, 14, 0),
-                Margin = new Thickness(0, 0, 0, 10)
+                BorderBrush = new SolidColorBrush(AppColors.BorderSubtle),
+                Padding = new Thickness(14, 0, 10, 0)
             };
 
-            Grid tbg = new Grid();
-            tbg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            tbg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid bg = new Grid();
+            bg.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            bg.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            TextBlock t = new TextBlock
+            // macOS Traffic Light Dots + Title
+            StackPanel statusPanel = new StackPanel
             {
-                Text = "Консоль клиента и лог сборки Gradle",
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(140, 140, 155)),
+                Orientation = Orientation.Horizontal,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            Grid.SetColumn(t, 0);
-            tbg.Children.Add(t);
 
-            StackPanel btns = new StackPanel { Orientation = Orientation.Horizontal };
-            Button bClr = CreateSmallPillButton("Очистить", (s, e) => _txtConsoleLogs.Clear());
+            Ellipse dotRed = new Ellipse { Width = 9, Height = 9, Fill = new SolidColorBrush(Color.FromRgb(239, 68, 68)), Margin = new Thickness(0, 0, 5, 0) };
+            Ellipse dotYel = new Ellipse { Width = 9, Height = 9, Fill = new SolidColorBrush(Color.FromRgb(245, 158, 11)), Margin = new Thickness(0, 0, 5, 0) };
+            Ellipse dotGrn = new Ellipse { Width = 9, Height = 9, Fill = new SolidColorBrush(Color.FromRgb(16, 185, 129)), Margin = new Thickness(0, 0, 10, 0) };
+
+            statusPanel.Children.Add(dotRed);
+            statusPanel.Children.Add(dotYel);
+            statusPanel.Children.Add(dotGrn);
+
+            _txtConsoleHeaderStatus = new TextBlock
+            {
+                Text = "Консоль процесса • Ожидание запуска",
+                FontSize = 12,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(AppColors.TextSecondary),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            statusPanel.Children.Add(_txtConsoleHeaderStatus);
+
+            Grid.SetColumn(statusPanel, 0);
+            bg.Children.Add(statusPanel);
+
+            StackPanel btns = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+            Button bClr = CreateCompactButton(SvgIcons.Trash, "Очистить", (s, e) =>
+            {
+                if (_txtConsoleLogs != null) _txtConsoleLogs.Clear();
+            });
             btns.Children.Add(bClr);
-            Button bCpy = CreateSmallPillButton("Скопировать", (s, e) =>
+
+            Button bCpy = CreateCompactButton(SvgIcons.Copy, "Копировать", (s, e) =>
             {
                 try
                 {
                     System.Windows.Clipboard.SetText(_txtConsoleLogs.Text);
-                    System.Windows.MessageBox.Show("Лог скопирован!", "RainyDLC", MessageBoxButton.OK, MessageBoxImage.Information);
+                    System.Windows.MessageBox.Show("Лог скопирован.", "Консоль", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch { }
             });
-            bCpy.Margin = new Thickness(8, 0, 0, 0);
+            bCpy.Margin = new Thickness(6, 0, 0, 0);
             btns.Children.Add(bCpy);
+
+            Button bLog = CreateCompactButton(SvgIcons.Folder, "latest.log", (s, e) =>
+            {
+                try
+                {
+                    string logFile = System.IO.Path.Combine(_projectDir, "run", "logs", "latest.log");
+                    if (File.Exists(logFile)) Process.Start("notepad.exe", logFile);
+                }
+                catch { }
+            });
+            bLog.Margin = new Thickness(6, 0, 0, 0);
+            btns.Children.Add(bLog);
+
             Grid.SetColumn(btns, 1);
-            tbg.Children.Add(btns);
+            bg.Children.Add(btns);
 
-            tb.Child = tbg;
-            Grid.SetRow(tb, 0);
-            g.Children.Add(tb);
+            bar.Child = bg;
+            Grid.SetRow(bar, 0);
+            g.Children.Add(bar);
 
+            // Terminal Box
             Border bdrConsole = new Border
             {
-                CornerRadius = new CornerRadius(12),
-                Background = new SolidColorBrush(Color.FromRgb(10, 11, 14)),
+                CornerRadius = new CornerRadius(10),
+                Background = new SolidColorBrush(Color.FromRgb(8, 10, 15)),
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(20, 21, 26)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(20, 25, 38)),
                 Padding = new Thickness(12)
             };
 
@@ -2841,20 +3330,21 @@ namespace RainyDLC.Launcher
                 IsReadOnly = true,
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
-                Foreground = new SolidColorBrush(Color.FromRgb(190, 195, 205)),
-                FontFamily = new FontFamily("Consolas"),
-                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)),
+                FontFamily = new FontFamily("Consolas, Courier New"),
+                FontSize = 11.5,
                 TextWrapping = TextWrapping.Wrap,
                 AcceptsReturn = true
             };
             _scrollConsole.Content = _txtConsoleLogs;
             bdrConsole.Child = _scrollConsole;
 
-            Grid.SetRow(bdrConsole, 1);
+            Grid.SetRow(bdrConsole, 2);
             g.Children.Add(bdrConsole);
 
-            AppendLog("RainyDLC Launcher инициализирован.");
+            AppendLog("RainyDLC Launcher v2.1 запущен.");
             AppendLog("Папка проекта: " + _projectDir);
+            AppendLog("Память: " + _data.RamMb + " MB");
 
             return g;
         }
@@ -2878,10 +3368,21 @@ namespace RainyDLC.Launcher
 
         private void OnLaunchButtonClick()
         {
+            if (_isDownloading)
+            {
+                System.Windows.MessageBox.Show(
+                    "Идет скачивание файлов клиента. Дождитесь окончания загрузки.",
+                    "RainyDLC",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
+                return;
+            }
+
             if (_runningProcess != null && !_runningProcess.HasExited)
             {
                 MessageBoxResult r = System.Windows.MessageBox.Show(
-                    "Клиент Minecraft запущен. Остановить его?",
+                    "Клиент Minecraft запущен. Завершить процесс?",
                     "RainyDLC",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question
@@ -2893,32 +3394,82 @@ namespace RainyDLC.Launcher
                 return;
             }
 
+            // If client files are missing and no gradlew exists, automatically download client!
+            if (!IsClientInstalled())
+            {
+                string gradlew = System.IO.Path.Combine(_projectDir, "gradlew.bat");
+                if (!File.Exists(gradlew))
+                {
+                    AppendLog("[Launcher] Файлы клиента не найдены. Запуск автоматического скачивания...");
+                    StartClientDownload(true);
+                    return;
+                }
+            }
+
             StartClient();
         }
 
         private void StartClient()
         {
-            string gradlew = System.IO.Path.Combine(_projectDir, "gradlew.bat");
-            if (!File.Exists(gradlew))
+            if (_isDownloading)
             {
                 System.Windows.MessageBox.Show(
-                    "gradlew.bat не найден по пути: " + _projectDir + "\nУкажите правильный путь во вкладке 'Настройки'.",
-                    "Ошибка",
+                    "Идет скачивание файлов клиента. Дождитесь окончания загрузки.",
+                    "RainyDLC",
                     MessageBoxButton.OK,
-                    MessageBoxImage.Error
+                    MessageBoxImage.Information
                 );
-                SwitchPage(3);
                 return;
             }
 
-            _btnLaunchText.Text = "⏳  Запуск клиента...";
+            string modsDir = GetModsDir();
+            bool hasClientJar = IsClientInstalled();
+            string gradlew = System.IO.Path.Combine(_projectDir, "gradlew.bat");
+            bool hasGradlew = File.Exists(gradlew);
+
+            // If neither client jar nor gradlew exists, trigger download!
+            if (!hasClientJar && !hasGradlew)
+            {
+                AppendLog("[Launcher] Файлы клиента отсутствуют. Запуск скачивания...");
+                StartClientDownload(true);
+                return;
+            }
+
+            // If client jar is missing in modsDir, check if local build exists in build/libs/
+            if (!hasClientJar)
+            {
+                string localBuild1 = System.IO.Path.Combine(_projectDir, "build", "libs", "rainydlc-1.0-SNAPSHOT.jar");
+                string localBuild2 = System.IO.Path.Combine(_projectDir, "build", "libs", "rainydlc-protected.jar");
+                string src = File.Exists(localBuild2) ? localBuild2 : (File.Exists(localBuild1) ? localBuild1 : null);
+                if (src != null)
+                {
+                    try
+                    {
+                        if (!Directory.Exists(modsDir)) Directory.CreateDirectory(modsDir);
+                        File.Copy(src, GetClientJarPath(), true);
+                        hasClientJar = true;
+                        AppendLog("[Launcher] Синхронизирована локальная сборка в: " + GetClientJarPath());
+                        UpdateClientStatusUI();
+                        ReloadLocalMods();
+                    }
+                    catch { }
+                }
+                else if (!hasGradlew)
+                {
+                    AppendLog("[Launcher] Скачивание файлов клиента...");
+                    StartClientDownload(true);
+                    return;
+                }
+            }
+
+            SetLaunchUIStarting();
 
             _data.LaunchCount++;
             _data.LastLaunchTime = DateTime.Now.ToString("dd MMMM в HH:mm", new System.Globalization.CultureInfo("ru-RU"));
             _data.Save();
 
-            if (_txtLaunchCount != null) _txtLaunchCount.Text = _data.LaunchCount.ToString();
-            if (_txtLastLaunch != null) _txtLastLaunch.Text = _data.LastLaunchTime;
+            if (_txtHeroLaunches != null) _txtHeroLaunches.Text = _data.LaunchCount + " раз";
+            if (_txtHeroLastLaunch != null) _txtHeroLastLaunch.Text = _data.LastLaunchTime;
 
             _sessionStart = DateTime.Now;
             int initialPlaytime = _data.PlaytimeMinutes;
@@ -2933,16 +3484,20 @@ namespace RainyDLC.Launcher
                         int currentMins = (int)(DateTime.Now - _sessionStart).TotalMinutes;
                         _data.PlaytimeMinutes = initialPlaytime + currentMins;
                         _data.Save();
-                        if (_txtPlaytime != null) _txtPlaytime.Text = LauncherData.FormatPlaytime(_data.PlaytimeMinutes);
+                        if (_txtHeroPlaytime != null) _txtHeroPlaytime.Text = LauncherData.FormatPlaytime(_data.PlaytimeMinutes);
                     }
                 };
             }
             _playtimeTimer.Start();
 
+            string usernameArg = string.IsNullOrEmpty(_data.Username) ? "Owner" : _data.Username.Trim();
+            string javaOpts = string.Format("-Dfile.encoding=UTF-8 -Xmx{0}m {1}", _data.RamMb, _data.JvmArgs);
+
             AppendLog("=========================================");
-            AppendLog("Запуск клиента: gradlew.bat runClient");
-            AppendLog("Выделенная память: " + _data.RamMb + " MB");
-            AppendLog("Рабочая папка: " + _projectDir);
+            AppendLog("Запуск клиента RainyDLC");
+            AppendLog("Игрок: " + usernameArg);
+            AppendLog("RAM: " + _data.RamMb + " MB");
+            AppendLog("Папка модов: " + modsDir);
             AppendLog("=========================================");
 
             ThreadPool.QueueUserWorkItem(delegate
@@ -2950,15 +3505,47 @@ namespace RainyDLC.Launcher
                 try
                 {
                     ProcessStartInfo psi = new ProcessStartInfo();
-                    psi.FileName = "cmd.exe";
-                    psi.Arguments = "/c \"\"" + gradlew + "\" runClient\"";
-                    psi.WorkingDirectory = _projectDir;
+
+                    if (hasGradlew && (_data.LaunchMode == 1 || (_data.LaunchMode == 0 && !hasClientJar)))
+                    {
+                        AppendLog("Режим запуска: gradlew.bat runClient");
+                        psi.FileName = "cmd.exe";
+                        psi.Arguments = "/c \"\"" + gradlew + "\" runClient --args=\"--username " + usernameArg + "\"\"";
+                        psi.WorkingDirectory = _projectDir;
+                    }
+                    else
+                    {
+                        string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                        string tlBootstrap = System.IO.Path.Combine(appData, ".tlauncher", "legacy", "Minecraft", "launcher", "bootstrap.jar");
+                        string javaExe = FindJavaExecutable();
+
+                        if (File.Exists(tlBootstrap))
+                        {
+                            AppendLog("Режим запуска: установленный Minecraft лаунчер с модом RainyDLC...");
+                            psi.FileName = javaExe;
+                            psi.Arguments = string.Format("-Xmx{0}m {1} -jar \"{2}\"", _data.RamMb, _data.JvmArgs, tlBootstrap);
+                            psi.WorkingDirectory = System.IO.Path.GetDirectoryName(tlBootstrap);
+                        }
+                        else if (hasGradlew)
+                        {
+                            AppendLog("Режим запуска: gradlew.bat runClient");
+                            psi.FileName = "cmd.exe";
+                            psi.Arguments = "/c \"\"" + gradlew + "\" runClient --args=\"--username " + usernameArg + "\"\"";
+                            psi.WorkingDirectory = _projectDir;
+                        }
+                        else
+                        {
+                            AppendLog("Режим запуска: Java клиент...");
+                            psi.FileName = javaExe;
+                            psi.Arguments = "-version";
+                            psi.WorkingDirectory = modsDir;
+                        }
+                    }
+
                     psi.UseShellExecute = false;
                     psi.CreateNoWindow = true;
                     psi.RedirectStandardOutput = true;
                     psi.RedirectStandardError = true;
-
-                    string javaOpts = string.Format("-Dfile.encoding=UTF-8 -Xmx{0}m {1}", _data.RamMb, _data.JvmArgs);
                     psi.EnvironmentVariables["JAVA_TOOL_OPTIONS"] = javaOpts;
 
                     Process proc = new Process();
@@ -2974,7 +3561,7 @@ namespace RainyDLC.Launcher
                             {
                                 Dispatcher.BeginInvoke(new Action(() =>
                                 {
-                                    _btnLaunchText.Text = "■  Остановить клиент";
+                                    SetLaunchUIRunning(proc.Id);
                                 }));
                             }
                         }
@@ -2998,8 +3585,8 @@ namespace RainyDLC.Launcher
                             _data.PlaytimeMinutes = initialPlaytime + sessionMins;
                             _data.Save();
 
-                            if (_txtPlaytime != null) _txtPlaytime.Text = LauncherData.FormatPlaytime(_data.PlaytimeMinutes);
-                            _btnLaunchText.Text = "Запустить клиент";
+                            if (_txtHeroPlaytime != null) _txtHeroPlaytime.Text = LauncherData.FormatPlaytime(_data.PlaytimeMinutes);
+                            SetLaunchUIIdle();
                             AppendLog("Клиент завершил работу.");
                         }));
                     };
@@ -3011,19 +3598,474 @@ namespace RainyDLC.Launcher
 
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        _btnLaunchText.Text = "■  Остановить клиент";
+                        SetLaunchUIRunning(proc.Id);
                     }));
                 }
                 catch (Exception ex)
                 {
                     Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        AppendLog("[!] Ошибка запуска: " + ex.Message);
-                        _btnLaunchText.Text = "Запустить клиент";
-                        System.Windows.MessageBox.Show("Ошибка:\n" + ex.Message, "RainyDLC", MessageBoxButton.OK, MessageBoxImage.Error);
+                        AppendLog("[!] Ошибка: " + ex.Message);
+                        SetLaunchUIIdle();
+                        System.Windows.MessageBox.Show("Не удалось запустить клиент:\n" + ex.Message, "Ошибка запуска", MessageBoxButton.OK, MessageBoxImage.Error);
                     }));
                 }
             });
+        }
+
+        private string FindJavaExecutable()
+        {
+            string javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+            if (!string.IsNullOrEmpty(javaHome))
+            {
+                string p = System.IO.Path.Combine(javaHome, "bin", "java.exe");
+                if (File.Exists(p)) return p;
+            }
+
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string jdks = System.IO.Path.Combine(userProfile, ".jdks");
+            if (Directory.Exists(jdks))
+            {
+                try
+                {
+                    string[] corr = Directory.GetFiles(jdks, "java.exe", SearchOption.AllDirectories);
+                    if (corr.Length > 0) return corr[corr.Length - 1];
+                }
+                catch { }
+            }
+
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string tlJre = System.IO.Path.Combine(appData, ".tlauncher", "mojang_jre");
+            if (Directory.Exists(tlJre))
+            {
+                try
+                {
+                    string[] found = Directory.GetFiles(tlJre, "java.exe", SearchOption.AllDirectories);
+                    if (found.Length > 0) return found[0];
+                }
+                catch { }
+            }
+
+            return "java.exe";
+        }
+
+        #region Client Downloader Engine
+
+        private void StartClientDownload(bool autoLaunchAfter)
+        {
+            if (_isDownloading) return;
+
+            _isDownloading = true;
+            _autoLaunchAfterDownload = autoLaunchAfter;
+            _downloadStartTime = DateTime.Now;
+
+            string modsDir = GetModsDir();
+            if (!Directory.Exists(modsDir))
+            {
+                try { Directory.CreateDirectory(modsDir); } catch { }
+            }
+
+            SetDownloadUIActive("Подготовка к скачиванию...", 0);
+            AppendLog("=========================================");
+            AppendLog("[Downloader] Старт скачивания файлов клиента RainyDLC");
+            AppendLog("[Downloader] Папка назначения модов: " + modsDir);
+            AppendLog("=========================================");
+
+            SwitchPage(0);
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    string targetJar = System.IO.Path.Combine(modsDir, "rainydlc.jar");
+                    string tempJar = targetJar + ".download";
+
+                    string localBuild1 = System.IO.Path.Combine(_projectDir, "build", "libs", "rainydlc-1.0-SNAPSHOT.jar");
+                    string localBuild2 = System.IO.Path.Combine(_projectDir, "build", "libs", "rainydlc-protected.jar");
+                    string sourceLocal = File.Exists(localBuild2) ? localBuild2 : (File.Exists(localBuild1) ? localBuild1 : null);
+
+                    string url = string.IsNullOrEmpty(_data.ClientDownloadUrl)
+                        ? "https://github.com/RainyDLC/FrostixDLC/releases/latest/download/rainydlc.jar"
+                        : _data.ClientDownloadUrl.Trim();
+
+                    bool downloadedSuccessfully = false;
+
+                    AppendLog("[Downloader] Скачивание клиента: " + url);
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        SetDownloadUIActive("Скачивание rainydlc.jar...", 0);
+                    }));
+
+                    try
+                    {
+                        using (WebClient wc = new WebClient())
+                        {
+                            _activeDownloader = wc;
+                            wc.Headers["User-Agent"] = "RainyDLC-Launcher/2.1";
+
+                            DateTime lastUpdate = DateTime.MinValue;
+                            wc.DownloadProgressChanged += (s, e) =>
+                            {
+                                if ((DateTime.Now - lastUpdate).TotalMilliseconds > 100)
+                                {
+                                    lastUpdate = DateTime.Now;
+                                    double speedMb = 0;
+                                    double elapsed = (DateTime.Now - _downloadStartTime).TotalSeconds;
+                                    if (elapsed > 0) speedMb = (e.BytesReceived / 1048576.0) / elapsed;
+
+                                    string detail = string.Format(
+                                        "{0:F1} МБ / {1:F1} МБ ({2}%) • {3:F1} МБ/с",
+                                        e.BytesReceived / 1048576.0,
+                                        e.TotalBytesToReceive / 1048576.0,
+                                        e.ProgressPercentage,
+                                        speedMb
+                                    );
+
+                                    Dispatcher.BeginInvoke(new Action(() =>
+                                    {
+                                        SetDownloadProgress(e.ProgressPercentage, "Скачивание rainydlc.jar...", detail);
+                                    }));
+                                }
+                            };
+
+                            AutoResetEvent done = new AutoResetEvent(false);
+                            Exception dlEx = null;
+                            wc.DownloadFileCompleted += (s, e) =>
+                            {
+                                if (e.Error != null) dlEx = e.Error;
+                                done.Set();
+                            };
+
+                            wc.DownloadFileAsync(new Uri(url), tempJar);
+                            done.WaitOne();
+
+                            if (dlEx != null) throw dlEx;
+
+                            if (File.Exists(tempJar) && new FileInfo(tempJar).Length > 1024)
+                            {
+                                if (File.Exists(targetJar)) File.Delete(targetJar);
+                                File.Move(tempJar, targetJar);
+                                downloadedSuccessfully = true;
+                                AppendLog("[Downloader] rainydlc.jar успешно загружен (" + FormatFileSize(new FileInfo(targetJar).Length) + ")");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        AppendLog("[Downloader] Предупреждение сетевой загрузки: " + ex.Message);
+                        if (File.Exists(tempJar)) { try { File.Delete(tempJar); } catch { } }
+
+                        if (sourceLocal != null && File.Exists(sourceLocal))
+                        {
+                            AppendLog("[Downloader] Использована локальная копия из " + sourceLocal);
+                            Dispatcher.BeginInvoke(new Action(() =>
+                            {
+                                SetDownloadProgress(75, "Копирование локальной сборки клиента...", "Синхронизация файлов...");
+                            }));
+                            File.Copy(sourceLocal, targetJar, true);
+                            downloadedSuccessfully = true;
+                        }
+                    }
+
+                    if (!downloadedSuccessfully)
+                    {
+                        throw new Exception("Не удалось скачать файлы клиента (проверьте интернет-соединение или URL в Настройках)");
+                    }
+
+                    EnsureFabricApiInstalled(modsDir);
+
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        _isDownloading = false;
+                        _activeDownloader = null;
+                        SetDownloadUICompleted();
+                        UpdateClientStatusUI();
+                        ReloadLocalMods();
+
+                        AppendLog("[Downloader] Все файлы клиента готовы к игре!");
+
+                        if (_autoLaunchAfterDownload)
+                        {
+                            _autoLaunchAfterDownload = false;
+                            StartClient();
+                        }
+                    }));
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        _isDownloading = false;
+                        _activeDownloader = null;
+                        SetDownloadUIIdle();
+                        UpdateClientStatusUI();
+                        AppendLog("[!] Ошибка скачивания клиента: " + ex.Message);
+                        System.Windows.MessageBox.Show(
+                            "Не удалось скачать файлы клиента:\n" + ex.Message,
+                            "Ошибка загрузки",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error
+                        );
+                    }));
+                }
+            });
+        }
+
+        private void EnsureFabricApiInstalled(string modsDir)
+        {
+            try
+            {
+                string[] existing = Directory.GetFiles(modsDir, "*fabric*api*.jar");
+                if (existing.Length > 0)
+                {
+                    AppendLog("[Downloader] Fabric API уже установлен: " + System.IO.Path.GetFileName(existing[0]));
+                    return;
+                }
+
+                string fApiUrl = "https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.141.3+1.21.11/fabric-api-0.141.3+1.21.11.jar";
+                string fApiTarget = System.IO.Path.Combine(modsDir, "fabric-api-0.141.3+1.21.11.jar");
+                string fApiTemp = fApiTarget + ".download";
+
+                AppendLog("[Downloader] Скачивание Fabric API 0.141.3...");
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    SetDownloadProgress(90, "Скачивание Fabric API...", "Загрузка вспомогательных библиотек...");
+                }));
+
+                using (WebClient wc = new WebClient())
+                {
+                    wc.Headers["User-Agent"] = "RainyDLC-Launcher/2.1";
+                    wc.DownloadFile(new Uri(fApiUrl), fApiTemp);
+                    if (File.Exists(fApiTemp) && new FileInfo(fApiTemp).Length > 1024)
+                    {
+                        if (File.Exists(fApiTarget)) File.Delete(fApiTarget);
+                        File.Move(fApiTemp, fApiTarget);
+                        AppendLog("[Downloader] Fabric API успешно установлен (" + FormatFileSize(new FileInfo(fApiTarget).Length) + ")");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[Downloader] Предупреждение при загрузке Fabric API: " + ex.Message);
+            }
+        }
+
+        private void CancelClientDownload()
+        {
+            if (_activeDownloader != null)
+            {
+                try
+                {
+                    _activeDownloader.CancelAsync();
+                    _activeDownloader.Dispose();
+                }
+                catch { }
+                _activeDownloader = null;
+            }
+            _isDownloading = false;
+            _autoLaunchAfterDownload = false;
+            AppendLog("[Downloader] Скачивание отменено пользователем.");
+            SetDownloadUIIdle();
+        }
+
+        private void SetDownloadUIActive(string status, double percent)
+        {
+            if (_downloadBanner != null) _downloadBanner.Visibility = Visibility.Visible;
+            if (_downloadProgressBar != null) _downloadProgressBar.Value = percent;
+            if (_txtDownloadStatus != null) _txtDownloadStatus.Text = status;
+            if (_txtDownloadDetails != null) _txtDownloadDetails.Text = "Подключение к серверу...";
+
+            if (_btnDockLaunchText != null)
+            {
+                _btnDockLaunchText.Text = string.Format("СКАЧИВАНИЕ {0}%", (int)percent);
+            }
+            if (_btnDockLaunchIcon != null)
+            {
+                _btnDockLaunchIcon.Data = Geometry.Parse(SvgIcons.Download);
+            }
+
+            Border bdr = _btnDockLaunch.Template.FindName("DockLaunchBdr", _btnDockLaunch) as Border;
+            if (bdr != null)
+            {
+                bdr.Background = new SolidColorBrush(AppColors.AccentAmber);
+                bdr.BorderBrush = new SolidColorBrush(Color.FromRgb(252, 211, 77));
+            }
+
+            if (_dockStatusDot != null) _dockStatusDot.Fill = new SolidColorBrush(AppColors.AccentAmber);
+            if (_txtDockStatus != null) _txtDockStatus.Text = "Скачивание файлов...";
+        }
+
+        private void SetDownloadProgress(double percent, string status, string details)
+        {
+            if (_downloadBanner != null) _downloadBanner.Visibility = Visibility.Visible;
+            if (_downloadProgressBar != null) _downloadProgressBar.Value = percent;
+            if (_txtDownloadStatus != null) _txtDownloadStatus.Text = status;
+            if (_txtDownloadDetails != null) _txtDownloadDetails.Text = details;
+
+            if (_btnDockLaunchText != null)
+            {
+                _btnDockLaunchText.Text = string.Format("СКАЧИВАНИЕ {0}%", (int)percent);
+            }
+            if (_txtDockStatus != null) _txtDockStatus.Text = "Загрузка: " + (int)percent + "%";
+        }
+
+        private void SetDownloadUICompleted()
+        {
+            if (_downloadProgressBar != null) _downloadProgressBar.Value = 100;
+            if (_txtDownloadStatus != null)
+            {
+                _txtDownloadStatus.Text = "✓ Готово";
+                _txtDownloadStatus.Foreground = new SolidColorBrush(AppColors.AccentGreen);
+            }
+            if (_txtDownloadDetails != null)
+            {
+                _txtDownloadDetails.Text = "Все файлы клиента успешно загружены и установлены!";
+                _txtDownloadDetails.Foreground = new SolidColorBrush(AppColors.AccentGreen);
+            }
+
+            DispatcherTimer t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            t.Tick += (s, e) =>
+            {
+                t.Stop();
+                if (!_isDownloading && _downloadBanner != null)
+                {
+                    _downloadBanner.Visibility = Visibility.Collapsed;
+                }
+            };
+            t.Start();
+
+            SetLaunchUIIdle();
+            UpdateClientStatusUI();
+        }
+
+        private void SetDownloadUIIdle()
+        {
+            if (_downloadBanner != null) _downloadBanner.Visibility = Visibility.Collapsed;
+            SetLaunchUIIdle();
+            UpdateClientStatusUI();
+        }
+
+        private void UpdateClientStatusUI()
+        {
+            bool installed = IsClientInstalled();
+            long size = GetClientFileSize();
+
+            if (_txtHeroClientStatus != null)
+            {
+                if (installed)
+                {
+                    _txtHeroClientStatus.Text = string.Format("Установлен ({0}) ✓", FormatFileSize(size));
+                    _txtHeroClientStatus.Foreground = new SolidColorBrush(AppColors.AccentGreen);
+                }
+                else
+                {
+                    _txtHeroClientStatus.Text = "Не скачан ✗";
+                    _txtHeroClientStatus.Foreground = new SolidColorBrush(AppColors.AccentAmber);
+                }
+            }
+
+            if (_btnHeroDownload != null)
+            {
+                StackPanel sp = _btnHeroDownload.Content as StackPanel;
+                if (sp != null && sp.Children.Count > 1)
+                {
+                    TextBlock tb = sp.Children[1] as TextBlock;
+                    if (tb != null)
+                    {
+                        tb.Text = installed ? "Обновить файлы" : "Скачать клиент";
+                    }
+                }
+            }
+
+            if (_btnDockLaunchText != null && !_isDownloading && (_runningProcess == null || _runningProcess.HasExited))
+            {
+                _btnDockLaunchText.Text = installed ? "ИГРАТЬ" : "СКАЧАТЬ И ИГРАТЬ";
+            }
+            if (_btnDockLaunchIcon != null && !_isDownloading && (_runningProcess == null || _runningProcess.HasExited))
+            {
+                _btnDockLaunchIcon.Data = Geometry.Parse(installed ? SvgIcons.Play : SvgIcons.Download);
+            }
+
+            if (_txtSettingsClientStatus != null)
+            {
+                if (installed)
+                {
+                    _txtSettingsClientStatus.Text = string.Format("Файлы клиента установлены: {0} ({1})", System.IO.Path.GetFileName(GetClientJarPath()), FormatFileSize(size));
+                    _txtSettingsClientStatus.Foreground = new SolidColorBrush(AppColors.AccentGreen);
+                }
+                else
+                {
+                    _txtSettingsClientStatus.Text = "Файлы клиента не найдены в папке модов";
+                    _txtSettingsClientStatus.Foreground = new SolidColorBrush(AppColors.AccentAmber);
+                }
+            }
+        }
+
+        #endregion
+
+        private void SetLaunchUIStarting()
+        {
+            if (_btnDockLaunchText != null) _btnDockLaunchText.Text = "ЗАПУСК...";
+            if (_btnDockLaunchIcon != null) _btnDockLaunchIcon.Data = Geometry.Parse(SvgIcons.Refresh);
+
+            Border bdr = _btnDockLaunch.Template.FindName("DockLaunchBdr", _btnDockLaunch) as Border;
+            if (bdr != null)
+            {
+                bdr.Background = new SolidColorBrush(AppColors.AccentAmber);
+                bdr.BorderBrush = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+            }
+
+            if (_dockStatusDot != null) _dockStatusDot.Fill = new SolidColorBrush(AppColors.AccentAmber);
+            if (_txtDockStatus != null) _txtDockStatus.Text = "Запуск игры...";
+            if (_txtConsoleHeaderStatus != null) _txtConsoleHeaderStatus.Text = "Консоль процесса • Запуск...";
+        }
+
+        private void SetLaunchUIRunning(int pid)
+        {
+            if (_btnDockLaunchText != null) _btnDockLaunchText.Text = "ОСТАНОВИТЬ";
+            if (_btnDockLaunchIcon != null) _btnDockLaunchIcon.Data = Geometry.Parse(SvgIcons.Stop);
+
+            Border bdr = _btnDockLaunch.Template.FindName("DockLaunchBdr", _btnDockLaunch) as Border;
+            if (bdr != null)
+            {
+                bdr.Background = new SolidColorBrush(AppColors.AccentRed);
+                bdr.BorderBrush = new SolidColorBrush(Color.FromRgb(248, 113, 113));
+            }
+
+            if (_dockStatusDot != null) _dockStatusDot.Fill = new SolidColorBrush(AppColors.AccentLight);
+            if (_txtDockStatus != null) _txtDockStatus.Text = "В игре (PID " + pid + ")";
+            if (_txtConsoleHeaderStatus != null) _txtConsoleHeaderStatus.Text = "Консоль процесса • В игре (PID: " + pid + ")";
+        }
+
+        private void SetLaunchUIIdle()
+        {
+            bool installed = IsClientInstalled();
+
+            if (_btnDockLaunchText != null)
+            {
+                _btnDockLaunchText.Text = installed ? "ИГРАТЬ" : "СКАЧАТЬ И ИГРАТЬ";
+            }
+            if (_btnDockLaunchIcon != null)
+            {
+                _btnDockLaunchIcon.Data = Geometry.Parse(installed ? SvgIcons.Play : SvgIcons.Download);
+            }
+
+            Border bdr = _btnDockLaunch.Template.FindName("DockLaunchBdr", _btnDockLaunch) as Border;
+            if (bdr != null)
+            {
+                bdr.Background = new SolidColorBrush(AppColors.AccentPrimary);
+                bdr.BorderBrush = new SolidColorBrush(AppColors.AccentLight);
+            }
+
+            if (_dockStatusDot != null)
+            {
+                _dockStatusDot.Fill = new SolidColorBrush(installed ? AppColors.AccentGreen : AppColors.AccentAmber);
+            }
+            if (_txtDockStatus != null)
+            {
+                _txtDockStatus.Text = installed ? "В сети" : "Клиент не скачан";
+            }
+            if (_txtConsoleHeaderStatus != null) _txtConsoleHeaderStatus.Text = "Консоль процесса • Ожидание запуска";
         }
 
         private void StopClient()
@@ -3045,14 +4087,106 @@ namespace RainyDLC.Launcher
 
         #region Helpers & Directory Resolution
 
+        private string GetShortProjectPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return "";
+            if (path.Length > 28)
+            {
+                return "..." + path.Substring(path.Length - 25);
+            }
+            return path;
+        }
+
         private string GetModsDir()
         {
+            if (!string.IsNullOrEmpty(_data.CustomGamePath) && Directory.Exists(_data.CustomGamePath))
+            {
+                string p = System.IO.Path.Combine(_data.CustomGamePath, "mods");
+                if (!Directory.Exists(p)) { try { Directory.CreateDirectory(p); } catch { } }
+                return p;
+            }
+
             string runMods = System.IO.Path.Combine(_projectDir, "run", "mods");
+            if (Directory.Exists(runMods) && File.Exists(System.IO.Path.Combine(_projectDir, "gradlew.bat")))
+            {
+                return runMods;
+            }
+
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string tlGame = System.IO.Path.Combine(appData, ".tlauncher", "legacy", "Minecraft", "game");
+            if (Directory.Exists(tlGame))
+            {
+                string tlMods = System.IO.Path.Combine(tlGame, "mods");
+                if (!Directory.Exists(tlMods)) { try { Directory.CreateDirectory(tlMods); } catch { } }
+                return tlMods;
+            }
+
+            string mcDir = System.IO.Path.Combine(appData, ".minecraft");
+            if (Directory.Exists(mcDir))
+            {
+                string mcMods = System.IO.Path.Combine(mcDir, "mods");
+                if (!Directory.Exists(mcMods)) { try { Directory.CreateDirectory(mcMods); } catch { } }
+                return mcMods;
+            }
+
             if (!Directory.Exists(runMods))
             {
                 try { Directory.CreateDirectory(runMods); } catch { }
             }
             return runMods;
+        }
+
+        private string GetClientJarPath()
+        {
+            return System.IO.Path.Combine(GetModsDir(), "rainydlc.jar");
+        }
+
+        private bool IsClientInstalled()
+        {
+            try
+            {
+                string p = GetClientJarPath();
+                if (File.Exists(p)) return true;
+                string dir = GetModsDir();
+                if (Directory.Exists(dir))
+                {
+                    string[] jars = Directory.GetFiles(dir, "rainydlc*.jar");
+                    if (jars.Length > 0) return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        private long GetClientFileSize()
+        {
+            try
+            {
+                string p = GetClientJarPath();
+                if (File.Exists(p)) return new FileInfo(p).Length;
+                string dir = GetModsDir();
+                if (Directory.Exists(dir))
+                {
+                    string[] jars = Directory.GetFiles(dir, "rainydlc*.jar");
+                    if (jars.Length > 0) return new FileInfo(jars[0]).Length;
+                }
+            }
+            catch { }
+            return 0;
+        }
+
+        private static string FormatFileSize(long bytes)
+        {
+            if (bytes <= 0) return "0 Б";
+            if (bytes >= 1048576)
+            {
+                return string.Format("{0:F1} МБ", bytes / 1048576.0);
+            }
+            if (bytes >= 1024)
+            {
+                return string.Format("{0:F0} КБ", bytes / 1024.0);
+            }
+            return bytes + " Б";
         }
 
         private string ResolveProjectDir()
@@ -3140,7 +4274,17 @@ namespace RainyDLC.Launcher
         [STAThread]
         public static void Main(string[] args)
         {
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                try { File.WriteAllText("launcher_crash.txt", e.ExceptionObject.ToString()); } catch { }
+            };
+
             Application app = new Application();
+            app.DispatcherUnhandledException += (s, e) =>
+            {
+                try { File.WriteAllText("launcher_crash.txt", e.Exception.ToString()); } catch { }
+            };
+
             MainWindow w = new MainWindow();
             app.Run(w);
         }
