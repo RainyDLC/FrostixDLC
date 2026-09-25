@@ -6,8 +6,8 @@ import fun.newrar.module.api.ModuleInfo;
 import fun.newrar.module.api.settings.impl.BooleanSetting;
 import fun.newrar.module.api.settings.impl.ModeSetting;
 import fun.newrar.module.api.settings.impl.SliderSetting;
-import fun.newrar.utils.other.Instance;
 import fun.newrar.utils.colors.ColorUtil;
+import fun.newrar.utils.other.Instance;
 import fun.newrar.utils.render.GifTexture;
 import fun.newrar.utils.render.RenderUtil;
 import fun.newrar.utils.render.font.Font;
@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @ModuleInfo(
         name = "Gif",
-        desc = "Отображает анимированные GIF в ClickGUI",
+        desc = "Кастомизация анимированных картинок в ClickGUI",
         category = Category.RENDER,
         autoEnabled = true
 )
@@ -32,33 +32,46 @@ public class Gif extends Module {
         return Instance.get(Gif.class);
     }
 
-    public final ModeSetting mode = new ModeSetting(this, "Выбор", "Фурри 1",
-            "Фурри 1", "Фурри 2", "Фурри 3", "Фурри 4", "Фурри 5");
+    public final ModeSetting mode = new ModeSetting(this, "Выбор", "Дефолт",
+            "Дефолт", "Фурри 1", "Фурри 2", "Фурри 3", "Фурри 4", "Фурри 5");
 
-    public final SliderSetting size = new SliderSetting(this, "Размер", 130.0F, 60.0F, 260.0F, 5.0F);
-    public final SliderSetting padding = new SliderSetting(this, "Отступ", 12.0F, 0.0F, 50.0F, 1.0F);
-    public final SliderSetting round = new SliderSetting(this, "Закругление", 10.0F, 0.0F, 25.0F, 1.0F);
+    public final BooleanSetting inGui = new BooleanSetting(this, "Внутри меню", true);
+    public final SliderSetting guiScale = new SliderSetting(this, "Размер в меню", 1.0F, 0.5F, 2.0F, 0.1F)
+            .setVisible(inGui::getValue);
 
-    public final BooleanSetting background = new BooleanSetting("Подложка", true);
-    public final BooleanSetting glow = new BooleanSetting("Свечение", true);
-    public final BooleanSetting label = new BooleanSetting("Подпись", true);
+    public final BooleanSetting inBottomRight = new BooleanSetting(this, "Справа на экране", false);
+
+    public final SliderSetting size = new SliderSetting(this, "Размер справа", 130.0F, 60.0F, 260.0F, 5.0F)
+            .setVisible(inBottomRight::getValue);
+    public final SliderSetting padding = new SliderSetting(this, "Отступ справа", 12.0F, 0.0F, 50.0F, 1.0F)
+            .setVisible(inBottomRight::getValue);
+    public final SliderSetting round = new SliderSetting(this, "Закругление", 10.0F, 0.0F, 25.0F, 1.0F)
+            .setVisible(inBottomRight::getValue);
+
+    public final BooleanSetting background = new BooleanSetting(this, "Подложка справа", true)
+            .setVisible(inBottomRight::getValue);
+    public final BooleanSetting glow = new BooleanSetting(this, "Свечение справа", true)
+            .setVisible(inBottomRight::getValue);
+    public final BooleanSetting label = new BooleanSetting(this, "Подпись справа", true)
+            .setVisible(inBottomRight::getValue);
 
     private final Map<String, GifTexture> cache = new ConcurrentHashMap<>();
     private final Set<String> loading = ConcurrentHashMap.newKeySet();
 
     public Gif() {
-        // Pre-load the first GIF asynchronously
+        loadGifAsync("Дефолт");
         loadGifAsync("Фурри 1");
     }
 
-    private String getFileName(String modeName) {
+    private String getTexturePath(String modeName) {
         return switch (modeName) {
-            case "Фурри 1" -> "furry1.gif";
-            case "Фурри 2" -> "furry2.gif";
-            case "Фурри 3" -> "furry3.gif";
-            case "Фурри 4" -> "furry4.gif";
-            case "Фурри 5" -> "furry5.gif";
-            default -> "furry1.gif";
+            case "Дефолт" -> "textures/gui.gif";
+            case "Фурри 1" -> "textures/gif/furry1.gif";
+            case "Фурри 2" -> "textures/gif/furry2.gif";
+            case "Фурри 3" -> "textures/gif/furry3.gif";
+            case "Фурри 4" -> "textures/gif/furry4.gif";
+            case "Фурри 5" -> "textures/gif/furry5.gif";
+            default -> "textures/gui.gif";
         };
     }
 
@@ -70,19 +83,19 @@ public class Gif extends Module {
         return null;
     }
 
-    private void loadGifAsync(String modeName) {
+    public void loadGifAsync(String modeName) {
         if (!loading.add(modeName)) return;
 
         CompletableFuture.runAsync(() -> {
             try {
-                String fileName = getFileName(modeName);
-                InputStream in = Gif.class.getResourceAsStream("/assets/client/textures/gif/" + fileName);
+                String relPath = getTexturePath(modeName);
+                InputStream in = Gif.class.getResourceAsStream("/assets/client/" + relPath);
                 if (in == null) {
-                    in = Gif.class.getClassLoader().getResourceAsStream("assets/client/textures/gif/" + fileName);
+                    in = Gif.class.getClassLoader().getResourceAsStream("assets/client/" + relPath);
                 }
                 if (in == null) {
                     var res = MinecraftClient.getInstance().getResourceManager()
-                            .getResource(Identifier.of("client", "textures/gif/" + fileName));
+                            .getResource(Identifier.of("client", relPath));
                     if (res.isPresent()) {
                         in = res.get().getInputStream();
                     }
@@ -103,7 +116,7 @@ public class Gif extends Module {
     }
 
     public void renderInGui(float screenWidth, float screenHeight, float globalAnim) {
-        if (!isEnabled() || globalAnim <= 0.01F) return;
+        if (!isEnabled() || !inBottomRight.getValue() || globalAnim <= 0.01F) return;
 
         GifTexture tex = getGif(mode.getValue());
         if (tex == null || !tex.isLoaded()) return;

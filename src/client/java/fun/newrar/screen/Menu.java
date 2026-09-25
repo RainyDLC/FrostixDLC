@@ -860,9 +860,37 @@ public class Menu extends Screen implements IMinecraft {
         float phCenter = ySetting + hSetting / 2;
         draw.drawCentered("Выберите модуль", xSetting + wSetting / 2, phCenter + 34 * S + 30 * S * animation2.getOutput(), 7 * S, ColorUtil.getColor(255, (globalAnim - animation2.getOutput()) * 0.8F));
 
-        loadGif();
-        if (gif != null) {
-            gif.draw(context, (int) (xSetting + wSetting / 2 - (78 * S) / 2), (int) (phCenter - 66 * S + 30 * S - 30 * S * animation2.getOutput()), (int)(78 * S), (int)(70 * S), ColorUtil.replAlpha(ColorUtil.WHITE, globalAnim - animation2.getOutput()));
+        GifTexture renderGif = null;
+        Gif gifModule = Instance.get(Gif.class);
+        if (gifModule != null && gifModule.isEnabled() && gifModule.inGui.getValue()) {
+            renderGif = gifModule.getGif(gifModule.mode.getValue());
+        }
+        if (renderGif == null) {
+            loadGif();
+            renderGif = gif;
+        }
+
+        if (renderGif != null && renderGif.isLoaded()) {
+            float scaleMul = (gifModule != null && gifModule.isEnabled() && gifModule.inGui.getValue())
+                    ? gifModule.guiScale.getValue() : 1.0F;
+            float boxW = 80 * S * scaleMul;
+            float boxH = 72 * S * scaleMul;
+            float gw = boxW;
+            float gh = boxH;
+            if (renderGif.getWidth() > 0 && renderGif.getHeight() > 0) {
+                float asp = (float) renderGif.getWidth() / (float) renderGif.getHeight();
+                if (asp > (boxW / boxH)) {
+                    gw = boxW;
+                    gh = boxW / asp;
+                } else {
+                    gh = boxH;
+                    gw = boxH * asp;
+                }
+            }
+            float gx = xSetting + wSetting / 2 - gw / 2;
+            float gy = phCenter - 66 * S + 30 * S - 30 * S * animation2.getOutput() + (boxH - gh) / 2;
+            int alphaCol = ColorUtil.replAlpha(ColorUtil.WHITE, globalAnim - animation2.getOutput());
+            renderGif.draw(context, (int) gx, (int) gy, (int) gw, (int) gh, alphaCol);
         }
 
         settingScrollAnim += (settingScrollTarget - settingScrollAnim) * 0.2F;
@@ -1308,7 +1336,9 @@ public class Menu extends Screen implements IMinecraft {
         renderThemePopup(draw, x + 8 * S, y + 26 * S, globalAnim);
         shards.render();
 
-        Gif gifModule = Instance.get(Gif.class);
+        if (gifModule == null) {
+            gifModule = Instance.get(Gif.class);
+        }
         if (gifModule != null) {
             gifModule.renderInGui(screenWidth, screenHeight, globalAnim);
         }
