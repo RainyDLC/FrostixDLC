@@ -888,7 +888,9 @@ public class Menu extends Screen implements IMinecraft {
                 }
             }
             float gx = xSetting + wSetting / 2 - gw / 2;
-            float gy = phCenter - 66 * S + 30 * S - 30 * S * animation2.getOutput() + (boxH - gh) / 2;
+            float userYOffset = (gifModule != null && gifModule.isEnabled() && gifModule.inGui.getValue())
+                    ? gifModule.yOffset.getValue() * S : 0.0F;
+            float gy = phCenter - 55 * S - gh / 2 - 30 * S * animation2.getOutput() + userYOffset;
             int alphaCol = ColorUtil.replAlpha(ColorUtil.WHITE, globalAnim - animation2.getOutput());
             renderGif.draw(context, (int) gx, (int) gy, (int) gw, (int) gh, alphaCol);
         }

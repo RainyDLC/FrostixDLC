@@ -13,6 +13,7 @@ import javax.imageio.metadata.IIOMetadataNode;
 import javax.imageio.stream.ImageInputStream;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -93,7 +94,8 @@ public class GifTexture {
                 g.drawImage(rawFrame, fx, fy, null);
                 g.dispose();
 
-                pixelData.add(canvas.getRGB(0, 0, canvasW, canvasH, null, 0, canvasW));
+                BufferedImage transCanvas = makeTransparent(canvas);
+                pixelData.add(transCanvas.getRGB(0, 0, canvasW, canvasH, null, 0, canvasW));
                 delays.add(readDelay(reader, i));
                 frameIds.add(Identifier.of("white", "gif/" + uid + "/" + i));
 
@@ -172,6 +174,192 @@ public class GifTexture {
         g.drawImage(src, 0, 0, null);
         g.dispose();
         return copy;
+    }
+
+    private BufferedImage makeTransparent(BufferedImage img) {
+        int w = img.getWidth();
+        int h = img.getHeight();
+
+        int c0 = img.getRGB(0, 0);
+        int alpha0 = (c0 >>> 24);
+        if (alpha0 < 100) {
+            // Already transparent
+            return img;
+        }
+
+        // Check if corners are light/pastel background
+        int[] corners = {img.getRGB(0, 0), img.getRGB(w - 1, 0), img.getRGB(0, h - 1), img.getRGB(w - 1, h - 1)};
+        boolean isBrightBg = false;
+        for (int c : corners) {
+            int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF;
+            if (r > 180 && g > 180) { isBrightBg = true; break; }
+        }
+        if (!isBrightBg) return img;
+
+        boolean[][] isLine = new boolean[w][h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int c = img.getRGB(x, y);
+                int r = (c >> 16) & 0xFF;
+                int g = (c >> 8) & 0xFF;
+                int b = c & 0xFF;
+                if (r < 215 && g < 215 && b < 215) {
+                    isLine[x][y] = true;
+                }
+            }
+        }
+
+        final int R = 3;
+        // Phase 1: Thick barrier (radius R)
+        boolean[][] thickBarrier = new boolean[w][h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (isLine[x][y]) {
+                    for (int dy = -R; dy <= R; dy++) {
+                        for (int dx = -R; dx <= R; dx++) {
+                            int nx = x + dx;
+                            int ny = y + dy;
+                            if (nx >= 0 && nx < w && ny >= 0 && ny < h) thickBarrier[nx][ny] = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Find bottom cut endpoints
+        int leftCutX = -1, leftCutY = -1;
+        int rightCutX = -1, rightCutY = -1;
+        for (int y = h - 1; y >= (int)(h * 0.65); y--) {
+            for (int x = 0; x < w / 2; x++) {
+                if (isLine[x][y] && leftCutX == -1) {
+                    leftCutX = x; leftCutY = y;
+                }
+            }
+            for (int x = w - 1; x >= w / 2; x--) {
+                if (isLine[x][y] && rightCutX == -1) {
+                    rightCutX = x; rightCutY = y;
+                }
+            }
+            if (leftCutX != -1 && rightCutX != -1) break;
+        }
+
+        boolean hasBottomCut = (leftCutX != -1 && rightCutX != -1 
+                && (rightCutX - leftCutX) > (w * 0.15) 
+                && Math.abs(leftCutY - rightCutY) <= Math.max(15, (int)(h * 0.05)));
+        boolean[][] cutBarrier = new boolean[w][h];
+        if (hasBottomCut) {
+            int steps = Math.abs(rightCutX - leftCutX);
+            for (int s = 0; s <= steps; s++) {
+                int px = leftCutX + s;
+                int py = leftCutY + (rightCutY - leftCutY) * s / steps;
+                for (int dy = -R; dy <= R; dy++) {
+                    int ny = py + dy;
+                    if (ny >= 0 && ny < h && px >= 0 && px < w) {
+                        thickBarrier[px][ny] = true;
+                        cutBarrier[px][ny] = true;
+                    }
+                }
+            }
+            // Vertical barriers from cuts down to bottom
+            for (int y = Math.min(leftCutY, rightCutY); y < h; y++) {
+                for (int dx = -R; dx <= R; dx++) {
+                    if (leftCutX + dx >= 0 && leftCutX + dx < w) {
+                        thickBarrier[leftCutX + dx][y] = true;
+                        cutBarrier[leftCutX + dx][y] = true;
+                    }
+                    if (rightCutX + dx >= 0 && rightCutX + dx < w) {
+                        thickBarrier[rightCutX + dx][y] = true;
+                        cutBarrier[rightCutX + dx][y] = true;
+                    }
+                }
+            }
+        }
+
+        // BFS: Outer background with thick barrier
+        int[][] bgDist = new int[w][h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                bgDist[x][y] = -1;
+            }
+        }
+        ArrayDeque<int[]> queue = new ArrayDeque<>();
+        for (int x = 0; x < w; x++) {
+            if (!thickBarrier[x][0] && bgDist[x][0] == -1) { queue.add(new int[]{x, 0}); bgDist[x][0] = 0; }
+            if (hasBottomCut) {
+                if ((x < leftCutX || x > rightCutX) && !thickBarrier[x][h - 1] && bgDist[x][h - 1] == -1) {
+                    queue.add(new int[]{x, h - 1});
+                    bgDist[x][h - 1] = 0;
+                }
+            } else {
+                if (!thickBarrier[x][h - 1] && bgDist[x][h - 1] == -1) {
+                    queue.add(new int[]{x, h - 1});
+                    bgDist[x][h - 1] = 0;
+                }
+            }
+        }
+        for (int y = 0; y < h; y++) {
+            if (!thickBarrier[0][y] && bgDist[0][y] == -1) { queue.add(new int[]{0, y}); bgDist[0][y] = 0; }
+            if (!thickBarrier[w - 1][y] && bgDist[w - 1][y] == -1) { queue.add(new int[]{w - 1, y}); bgDist[w - 1][y] = 0; }
+        }
+
+        int[] dx = {1, -1, 0, 0};
+        int[] dy = {0, 0, 1, -1};
+        while (!queue.isEmpty()) {
+            int[] pt = queue.poll();
+            int x = pt[0], y = pt[1];
+            for (int i = 0; i < 4; i++) {
+                int nx = x + dx[i];
+                int ny = y + dy[i];
+                if (nx >= 0 && nx < w && ny >= 0 && ny < h && bgDist[nx][ny] == -1 && !thickBarrier[nx][ny]) {
+                    bgDist[nx][ny] = 0;
+                    queue.add(new int[]{nx, ny});
+                }
+            }
+        }
+
+        // Phase 2: Expand at most R steps toward isLine to completely eliminate halo
+        ArrayDeque<int[]> expandQueue = new ArrayDeque<>();
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (bgDist[x][y] == 0) {
+                    expandQueue.add(new int[]{x, y});
+                }
+            }
+        }
+
+        while (!expandQueue.isEmpty()) {
+            int[] pt = expandQueue.poll();
+            int x = pt[0], y = pt[1];
+            int curDist = bgDist[x][y];
+            if (curDist >= R) continue;
+
+            for (int i = 0; i < 4; i++) {
+                int nx = x + dx[i];
+                int ny = y + dy[i];
+                if (nx >= 0 && nx < w && ny >= 0 && ny < h && bgDist[nx][ny] == -1 && !isLine[nx][ny] && !cutBarrier[nx][ny]) {
+                    int c = img.getRGB(nx, ny);
+                    int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+                    if (r >= 180 && g >= 180 && b >= 180) {
+                        bgDist[nx][ny] = curDist + 1;
+                        expandQueue.add(new int[]{nx, ny});
+                    }
+                }
+            }
+        }
+
+        BufferedImage res = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        int maxCutY = hasBottomCut ? Math.max(leftCutY, rightCutY) : h;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                boolean clear = (bgDist[x][y] >= 0) || (hasBottomCut && y >= maxCutY && (x < leftCutX || x > rightCutX));
+                if (clear && !isLine[x][y]) {
+                    res.setRGB(x, y, 0x00000000);
+                } else {
+                    res.setRGB(x, y, img.getRGB(x, y));
+                }
+            }
+        }
+        return res;
     }
 
     public Identifier currentFrame() {

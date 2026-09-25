@@ -38,6 +38,8 @@ public class Gif extends Module {
     public final BooleanSetting inGui = new BooleanSetting(this, "Внутри меню", true);
     public final SliderSetting guiScale = new SliderSetting(this, "Размер в меню", 1.0F, 0.5F, 2.0F, 0.1F)
             .setVisible(inGui::getValue);
+    public final SliderSetting yOffset = new SliderSetting(this, "Смещение Y", 0.0F, -60.0F, 60.0F, 1.0F)
+            .setVisible(inGui::getValue);
 
     public final BooleanSetting inBottomRight = new BooleanSetting(this, "Справа на экране", false);
 
