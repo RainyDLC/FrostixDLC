@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@wasm-audio-decoders/ogg-vorbis": "^0.1.20"
+  }
+}
