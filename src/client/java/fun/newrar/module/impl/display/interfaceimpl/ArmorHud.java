@@ -50,7 +50,8 @@ public class ArmorHud implements IMinecraft {
     public void onRender(DragSetting dragSetting, InterFace interFace, EventDisplay eventDisplay) {
         if (mc.player == null) return;
 
-        float s = interFace.sizeHud.getValue() * 1.1F;
+        float scale = interFace.armorScale != null ? interFace.armorScale.getValue() : 1.0F;
+        float s = interFace.sizeHud.getValue() * 1.1F * scale;
         float opacity = interFace.alphaHUD.getValue();
         boolean isHorizontal = interFace.armorOrientation != null && interFace.armorOrientation.is("Горизонтальная");
         String durMode = interFace.armorDurability != null ? interFace.armorDurability.getValue() : "Проценты";

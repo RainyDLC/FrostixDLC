@@ -66,6 +66,7 @@ public class InterFace extends Module {
 
     public ModeSetting armorOrientation = new ModeSetting(this, "Ориентация брони", "Горизонтальная", "Вертикальная");
     public ModeSetting armorDurability = new ModeSetting(this, "Прочность брони", "Проценты", "Полоса", "Числа", "Нет");
+    public SliderSetting armorScale = new SliderSetting(this, "Размер брони", 1.0F, 0.3F, 1.5F, 0.05F);
     public BooleanSetting armorHands = new BooleanSetting(this, "Предметы в руках", true);
     public BooleanSetting armorEmptySlots = new BooleanSetting(this, "Пустые слоты", false);
     public BooleanSetting armorGlow = new BooleanSetting(this, "Свечение брони", true);
