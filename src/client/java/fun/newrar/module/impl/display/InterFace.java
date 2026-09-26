@@ -15,6 +15,7 @@ import fun.newrar.module.api.settings.impl.DragSetting;
 import fun.newrar.module.api.settings.impl.ModeSetting;
 import fun.newrar.module.api.settings.impl.MultiBooleanSetting;
 import fun.newrar.module.api.settings.impl.SliderSetting;
+import fun.newrar.module.impl.display.interfaceimpl.ArmorHud;
 import fun.newrar.module.impl.display.interfaceimpl.Information;
 import fun.newrar.module.impl.display.interfaceimpl.KeyBinds;
 import fun.newrar.module.impl.display.interfaceimpl.MusicHud;
@@ -43,6 +44,7 @@ public class InterFace extends Module {
             new BooleanSetting("Information", true),
             new BooleanSetting("Key Binds", true),
             new BooleanSetting("Potions", true),
+            new BooleanSetting("Armor", true),
             new BooleanSetting("Music Player", true),
             new BooleanSetting("Notifications", true),
             new BooleanSetting("Target Hud", true),
@@ -51,7 +53,22 @@ public class InterFace extends Module {
 
     public SliderSetting volume = new SliderSetting(this, "Громкость уведомления", 0.5F, 0.1F, 1.0F, 0.1F);
     public ModeSetting typeNotify = new ModeSetting(this, "Тип уведомления", "Первый", "Второй", "Третий");
-    public ModeSetting watermarkMode = new ModeSetting(this, "Тип ватермарки", "Классический", "Островок");
+    public ModeSetting watermarkMode = new ModeSetting(this, "Тип ватермарки", "Премиум Остров", "Нео-Гласс", "Островок", "Классический");
+
+    public BooleanSetting hudAvatar = new BooleanSetting(this, "Аватар игрока", true)
+            .setVisible(() -> watermarkMode.is("Премиум Остров") || watermarkMode.is("Нео-Гласс"));
+    public BooleanSetting hudServer = new BooleanSetting(this, "Сервер", true)
+            .setVisible(() -> watermarkMode.is("Премиум Остров") || watermarkMode.is("Нео-Гласс"));
+    public BooleanSetting hudBps = new BooleanSetting(this, "Скорость BPS", true)
+            .setVisible(() -> watermarkMode.is("Премиум Остров") || watermarkMode.is("Нео-Гласс"));
+    public BooleanSetting hudGlow = new BooleanSetting(this, "Неоновое свечение", true)
+            .setVisible(() -> watermarkMode.is("Премиум Остров") || watermarkMode.is("Нео-Гласс"));
+
+    public ModeSetting armorOrientation = new ModeSetting(this, "Ориентация брони", "Горизонтальная", "Вертикальная");
+    public ModeSetting armorDurability = new ModeSetting(this, "Прочность брони", "Проценты", "Полоса", "Числа", "Нет");
+    public BooleanSetting armorHands = new BooleanSetting(this, "Предметы в руках", true);
+    public BooleanSetting armorEmptySlots = new BooleanSetting(this, "Пустые слоты", false);
+    public BooleanSetting armorGlow = new BooleanSetting(this, "Свечение брони", true);
 
     public SliderSetting sizeHud = new SliderSetting(this, "Размер интерфейса", 1.0F, 0.5F, 1.5F, 0.05F);
     public SliderSetting alphaHUD = new SliderSetting(this, "Прозрачность худа", 0.6F, 0.0F, 0.9F, 0.1F);
@@ -68,6 +85,7 @@ public class InterFace extends Module {
     public DragSetting information = new DragSetting(this, "Information", new Vector2f(10, 30));
     public DragSetting keyBind = new DragSetting(this, "Key Binds", new Vector2f(10, 50));
     public DragSetting potion = new DragSetting(this, "Potions", new Vector2f(90, 50));
+    public DragSetting armorDrag = new DragSetting(this, "Armor", new Vector2f(160, 90));
     public DragSetting music = new DragSetting(this, "Music Player", new Vector2f(10, 400));
     public DragSetting notifications = new DragSetting(this, "Notifications", new Vector2f(0, 200));
     public DragSetting targetHudDrag = new DragSetting(this, "Target Hud", new Vector2f(90, 40));
@@ -78,6 +96,7 @@ public class InterFace extends Module {
     private final Information informationElement = new Information();
     private final KeyBinds keyBinds = new KeyBinds();
     private final Potions potions = new Potions();
+    private final ArmorHud armorHud = new ArmorHud();
     private final MusicHud musicHud = new MusicHud();
     private final Notify notifyHud = new Notify();
     private final TargetHud targetHud = new TargetHud();
@@ -123,6 +142,7 @@ public class InterFace extends Module {
         if (element.getValue("Potions")) potions.onRender(potion, this, eventDisplay);
         if (element.getValue("Information")) informationElement.onRender(information, this);
         if (element.getValue("Key Binds")) keyBinds.onRender(keyBind, this);
+        if (element.getValue("Armor")) armorHud.onRender(armorDrag, this, eventDisplay);
         if (element.getValue("Water mark")) waterMarkElement.onRender(waterMark, this);
         if (element.getValue("Music Player")) musicHud.onRender(music, this);
         if (element.getValue("Notifications")) notifyHud.onRender(notifications, this, eventDisplay);
