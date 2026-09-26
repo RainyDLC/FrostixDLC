@@ -67,7 +67,7 @@ public class TargetEsp extends Module implements ModulePreview {
     public SliderSetting saturation = new SliderSetting(this, "Насыщенность", 100.0f, 0.0f, 200.0f, 5.0f).setVisible(() -> type.is("Переливание"));
     public SliderSetting scanSpeed = new SliderSetting(this, "Скорость переливания", 1.0f, 0.25f, 3.0f, 0.05f).setVisible(() -> type.is("Переливание"));
     public ColorSetting scanColor = new ColorSetting(this, "Цвет переливания", ColorUtil.getColor(55, 170, 255, 255)).setVisible(() -> type.is("Переливание"));
-    public BooleanSetting scanColorFlow = new BooleanSetting(this, "Переливание цветов", false).setVisible(() -> type.is("Переливание"));
+    public BooleanSetting scanColorFlow = new BooleanSetting(this, "Переливание цветов", true).setVisible(() -> type.is("Переливание"));
     public ColorSetting scanSecondColor = new ColorSetting(this, "Второй цвет", ColorUtil.getColor(190, 75, 255, 255)).setVisible(() -> type.is("Переливание") && scanColorFlow.getValue());
     public SliderSetting scanGlow = new SliderSetting(this, "Яркость переливания", 100.0f, 25.0f, 200.0f, 5.0f).setVisible(() -> type.is("Переливание"));
 
@@ -177,11 +177,12 @@ public class TargetEsp extends Module implements ModulePreview {
     public BooleanSetting cubeGlow = new BooleanSetting(this,"Свечение куба",true).setVisible(() -> type.is("Куб"));
 
     public SliderSetting skullSize = new SliderSetting(this,"Размер черепа",1.0F,0.4F,2.5F,0.05F).setVisible(() -> type.is("Череп"));
-    public SliderSetting skullBobSpeed = new SliderSetting(this,"Скорость анимации",1.0F,0.2F,3.0F,0.05F).setVisible(() -> type.is("Череп"));
+    public SliderSetting skullHeight = new SliderSetting(this,"Высота в теле",0.50F,0.1F,1.1F,0.05F).setVisible(() -> type.is("Череп"));
+    public ModeSetting skullMode = new ModeSetting(this, "Ориентация", "По телу", "Крест", "На камеру").setVisible(() -> type.is("Череп"));
+    public ModeSetting skullColorMode = new ModeSetting(this, "Цвет черепа", "Кость", "Тема", "Свой").setVisible(() -> type.is("Череп"));
+    public ColorSetting skullCustomColor = new ColorSetting(this, "Свой цвет", ColorUtil.getColor(255, 255, 255, 255)).setVisible(() -> type.is("Череп") && skullColorMode.is("Свой"));
     public SliderSetting skullCrackThreshold = new SliderSetting(this, "Порог трещин %", 50.0F, 15.0F, 85.0F, 5.0F).setVisible(() -> type.is("Череп"));
-    public BooleanSetting skullRotate = new BooleanSetting(this,"Вращение черепа",true).setVisible(() -> type.is("Череп"));
-    public BooleanSetting skullGlow = new BooleanSetting(this, "Свечение ауры", true).setVisible(() -> type.is("Череп"));
-    public BooleanSetting skullShake = new BooleanSetting(this, "Тряска при низком ХП", true).setVisible(() -> type.is("Череп"));
+    public BooleanSetting skullGlow = new BooleanSetting(this, "Свечение ауры", false).setVisible(() -> type.is("Череп"));
 
     private float skullCrackAnim = 0f;
 
@@ -1882,49 +1883,40 @@ public class TargetEsp extends Module implements ModulePreview {
         skullCrackAnim += (targetCrack - skullCrackAnim) * 0.12f;
         skullCrackAnim = MathHelper.clamp(skullCrackAnim, 0f, 1f);
 
-        long now = System.currentTimeMillis();
-        float bobSpeed = skullBobSpeed.getValue();
-        float bob = (float) Math.sin(now / 600.0 * bobSpeed) * 0.08f;
-        float tilt = (float) Math.sin(now / 800.0 * bobSpeed) * 3f;
+        float size = skullSize.getValue() * (1.0f + 0.08f * alpha_2.get());
 
-        float lowHpWeight = hpFrac >= threshold ? 0f : MathHelper.clamp((threshold - hpFrac) / threshold, 0f, 1f);
-        float pulse = (float) Math.sin(now * 0.012) * 0.05f * lowHpWeight;
-        float shakeX = 0f;
-        float shakeY = 0f;
-        if (skullShake.getValue() && lowHpWeight > 0.02f) {
-            shakeX = (float) (Math.sin(now * 0.080) * 0.022f * lowHpWeight);
-            shakeY = (float) (Math.cos(now * 0.095) * 0.016f * lowHpWeight);
+        int whiteCol;
+        if (skullColorMode.is("Тема")) {
+            whiteCol = ColorUtil.multAlpha(ColorUtil.fade(0), alphaPC);
+        } else if (skullColorMode.is("Свой")) {
+            whiteCol = ColorUtil.multAlpha(skullCustomColor.getValue(), alphaPC);
+        } else {
+            whiteCol = ColorUtil.getColor(245, 240, 230, (int) (255 * alphaPC));
         }
-
-        float size = (skullSize.getValue() + pulse) * (1.0f + 0.12f * alpha_2.get());
-
-        int whiteCol = ColorUtil.getColor(245, 240, 230, (int) (255 * alphaPC));
         int redCol = ColorUtil.getColor(255, 60, 50, (int) (255 * alphaPC));
         int skullCol = ColorUtil.overCol(whiteCol, redCol, damage * 0.65f);
         skullCol = ColorUtil.overCol(skullCol, ColorUtil.getColor(255, 80, 80, (int) (255 * alphaPC)), alpha_2.get());
 
-        int glowCol = ColorUtil.replAlpha(skullCol, (int) (alphaPC * (45 + 55 * damage)));
+        int glowCol = ColorUtil.replAlpha(skullCol, (int) (alphaPC * (40 + 40 * damage)));
 
         MatrixStack matrices = e.getMatrixStack();
         Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
         Vec3d targetPos = target.getLerpedPos(e.getTickDelta());
 
+        float bodyY = target.getHeight() * skullHeight.getValue();
+
         matrices.push();
         matrices.translate(
-                targetPos.x - cameraPos.x + shakeX,
-                targetPos.y - cameraPos.y + target.getHeight() + 0.38f + bob + shakeY,
+                targetPos.x - cameraPos.x,
+                targetPos.y - cameraPos.y + bodyY,
                 targetPos.z - cameraPos.z
         );
 
-        matrices.multiply(mc.gameRenderer.getCamera().getRotation());
-
-        if (skullRotate.getValue()) {
-            float rotY = (now / 22.0f * bobSpeed) % 360f;
-            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(rotY));
-            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(tilt));
+        if (skullMode.is("На камеру")) {
+            matrices.multiply(mc.gameRenderer.getCamera().getRotation());
         } else {
-            float sway = (float) Math.sin(now / 500.0 * bobSpeed) * 8.0f;
-            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(sway + tilt));
+            float bodyYaw = target.getBodyYaw();
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180.0F - bodyYaw));
         }
 
         float scale = size * 0.65f;
@@ -1932,28 +1924,33 @@ public class TargetEsp extends Module implements ModulePreview {
 
         Matrix4f m = matrices.peek().getPositionMatrix();
 
+        float ss = 0.5f;
+
         if (skullGlow.getValue()) {
             VertexConsumer glowBuf = immediate.getBuffer(
                     ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
-            float glowSize = 1.9f + 0.4f * damage;
+            float glowSize = 1.6f + 0.3f * damage;
             float hs = glowSize * 0.5f;
-            glowBuf.vertex(m, -hs, -hs, -0.01f).color(glowCol).texture(0, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            glowBuf.vertex(m, hs, -hs, -0.01f).color(glowCol).texture(1, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            glowBuf.vertex(m, hs, hs, -0.01f).color(glowCol).texture(1, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            glowBuf.vertex(m, -hs, hs, -0.01f).color(glowCol).texture(0, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+            drawSkullQuad(glowBuf, m, -hs, hs, -hs, hs, 0f, glowCol, false);
         }
 
-        float ss = 0.5f;
+        boolean isCross = skullMode.is("Крест");
+        boolean isCamera = skullMode.is("На камеру");
 
         if (skullCrackAnim < 0.99f) {
             int normalAlpha = (int) (alphaPC * 255 * (1f - skullCrackAnim));
             int normalCol = ColorUtil.replAlpha(skullCol, normalAlpha);
             VertexConsumer skullBuf = immediate.getBuffer(
                     ROMB_ESP.apply(Identifier.of("client", "textures/targetesp/skull.png")));
-            skullBuf.vertex(m, -ss, -ss, 0).color(normalCol).texture(0, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            skullBuf.vertex(m, ss, -ss, 0).color(normalCol).texture(1, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            skullBuf.vertex(m, ss, ss, 0).color(normalCol).texture(1, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            skullBuf.vertex(m, -ss, ss, 0).color(normalCol).texture(0, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+
+            drawSkullQuad(skullBuf, m, -ss, ss, -ss, ss, 0.01f, normalCol, false);
+
+            if (!isCamera) {
+                drawSkullQuadBack(skullBuf, m, -ss, ss, -ss, ss, -0.01f, normalCol);
+                if (isCross) {
+                    drawSkullQuadSide(skullBuf, m, -ss, ss, -ss, ss, 0f, normalCol);
+                }
+            }
         }
 
         if (skullCrackAnim > 0.01f) {
@@ -1961,35 +1958,46 @@ public class TargetEsp extends Module implements ModulePreview {
             int crackCol = ColorUtil.replAlpha(skullCol, crackAlpha);
             VertexConsumer crackBuf = immediate.getBuffer(
                     ROMB_ESP.apply(Identifier.of("client", "textures/targetesp/skull_cracked.png")));
-            crackBuf.vertex(m, -ss, -ss, 0).color(crackCol).texture(0, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            crackBuf.vertex(m, ss, -ss, 0).color(crackCol).texture(1, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            crackBuf.vertex(m, ss, ss, 0).color(crackCol).texture(1, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            crackBuf.vertex(m, -ss, ss, 0).color(crackCol).texture(0, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-        }
 
-        if (skullCrackAnim > 0.15f) {
-            float flareIntensity = skullCrackAnim * alphaPC;
-            int eyeCol = ColorUtil.getColor(255, 40, 20, (int) (flareIntensity * 220));
+            drawSkullQuad(crackBuf, m, -ss, ss, -ss, ss, 0.01f, crackCol, false);
 
-            VertexConsumer eyeBuf = immediate.getBuffer(
-                    ROMB_ESP.apply(Identifier.of("client", "textures/visuals/particles_1.png")));
-            float es = 0.10f;
-            float eyeY = 0.035f;
-            float eyeXL = -0.11f;
-            float eyeXR = 0.11f;
-
-            eyeBuf.vertex(m, eyeXL - es, eyeY - es, 0.01f).color(eyeCol).texture(0, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            eyeBuf.vertex(m, eyeXL + es, eyeY - es, 0.01f).color(eyeCol).texture(1, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            eyeBuf.vertex(m, eyeXL + es, eyeY + es, 0.01f).color(eyeCol).texture(1, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            eyeBuf.vertex(m, eyeXL - es, eyeY + es, 0.01f).color(eyeCol).texture(0, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-
-            eyeBuf.vertex(m, eyeXR - es, eyeY - es, 0.01f).color(eyeCol).texture(0, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            eyeBuf.vertex(m, eyeXR + es, eyeY - es, 0.01f).color(eyeCol).texture(1, 1).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            eyeBuf.vertex(m, eyeXR + es, eyeY + es, 0.01f).color(eyeCol).texture(1, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
-            eyeBuf.vertex(m, eyeXR - es, eyeY + es, 0.01f).color(eyeCol).texture(0, 0).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+            if (!isCamera) {
+                drawSkullQuadBack(crackBuf, m, -ss, ss, -ss, ss, -0.01f, crackCol);
+                if (isCross) {
+                    drawSkullQuadSide(crackBuf, m, -ss, ss, -ss, ss, 0f, crackCol);
+                }
+            }
         }
 
         matrices.pop();
+    }
+
+    private void drawSkullQuad(VertexConsumer buf, Matrix4f m, float x1, float x2, float y1, float y2, float z, int col, boolean flipX) {
+        float u1 = flipX ? 1f : 0f;
+        float u2 = flipX ? 0f : 1f;
+        buf.vertex(m, x1, y1, z).color(col).texture(u1, 1f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+        buf.vertex(m, x2, y1, z).color(col).texture(u2, 1f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+        buf.vertex(m, x2, y2, z).color(col).texture(u2, 0f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+        buf.vertex(m, x1, y2, z).color(col).texture(u1, 0f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, 1);
+    }
+
+    private void drawSkullQuadBack(VertexConsumer buf, Matrix4f m, float x1, float x2, float y1, float y2, float z, int col) {
+        buf.vertex(m, x2, y1, z).color(col).texture(0f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, -1);
+        buf.vertex(m, x1, y1, z).color(col).texture(1f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, -1);
+        buf.vertex(m, x1, y2, z).color(col).texture(1f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, -1);
+        buf.vertex(m, x2, y2, z).color(col).texture(0f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(0, 0, -1);
+    }
+
+    private void drawSkullQuadSide(VertexConsumer buf, Matrix4f m, float z1, float z2, float y1, float y2, float x, int col) {
+        buf.vertex(m, x, y1, z1).color(col).texture(0f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(1, 0, 0);
+        buf.vertex(m, x, y1, z2).color(col).texture(1f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(1, 0, 0);
+        buf.vertex(m, x, y2, z2).color(col).texture(1f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(1, 0, 0);
+        buf.vertex(m, x, y2, z1).color(col).texture(0f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(1, 0, 0);
+
+        buf.vertex(m, x, y1, z2).color(col).texture(0f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(-1, 0, 0);
+        buf.vertex(m, x, y1, z1).color(col).texture(1f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(-1, 0, 0);
+        buf.vertex(m, x, y2, z1).color(col).texture(1f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(-1, 0, 0);
+        buf.vertex(m, x, y2, z2).color(col).texture(0f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(-1, 0, 0);
     }
 
     private void renderTargetFire(EventRender3D e, VertexConsumerProvider.Immediate immediate,

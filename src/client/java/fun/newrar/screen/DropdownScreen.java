@@ -297,8 +297,10 @@ public class DropdownScreen extends Screen implements IMinecraft {
                 h += 17F * S;
             } else if (setting instanceof SliderSetting) {
                 h += 22F * S;
-            } else if (setting instanceof ColorSetting) {
-                h += 17F * S;
+            } else if (setting instanceof ColorSetting cs) {
+                cs.pickerAnim.setDirection(cs.pickerOpen ? Direction.FORWARDS : Direction.BACKWARDS);
+                float open = cs.pickerAnim.getOutput();
+                h += 17F * S + open * 38F * S;
             } else if (setting instanceof BindSetting) {
                 h += 17F * S;
             } else if (setting instanceof MultiBooleanSetting mbs) {
@@ -614,7 +616,57 @@ public class DropdownScreen extends Screen implements IMinecraft {
                             RenderUtil.Render2D.rect(cx + cw - 26F * S, currentY + 3.5F * S, 14F * S, 8.5F * S, ColorUtil.multAlpha(cs.getValue(), globalAnim * exp), 2.5F * S);
                             RenderUtil.Render2D.outline(cx + cw - 26F * S, currentY + 3.5F * S, 14F * S, 8.5F * S, 0.5F * S, ColorUtil.getColor(255, 255, 255, 0.25F * globalAnim * exp), 2.5F * S);
 
-                            currentY += 17F * S;
+                            cs.pickerAnim.setDirection(cs.pickerOpen ? Direction.FORWARDS : Direction.BACKWARDS);
+                            float open = cs.pickerAnim.getOutput();
+                            if (open > 0.01F) {
+                                int cVal = cs.getValue();
+                                float[] hsb = java.awt.Color.RGBtoHSB((cVal >> 16) & 0xFF, (cVal >> 8) & 0xFF, cVal & 0xFF, null);
+                                float bx = cx + 12F * S;
+                                float bwd = cw - 24F * S;
+                                int segs = 16;
+                                float seg = bwd / segs;
+
+                                for (int bar = 0; bar < 3; bar++) {
+                                    float by = currentY + 18F * S + bar * 11.5F * S;
+                                    for (int sIdx = 0; sIdx < segs; sIdx++) {
+                                        float t0 = (float) sIdx / segs;
+                                        float t1 = (float) (sIdx + 1) / segs;
+                                        int c0 = switch (bar) {
+                                            case 0 -> java.awt.Color.HSBtoRGB(t0, 1F, 1F);
+                                            case 1 -> java.awt.Color.HSBtoRGB(hsb[0], t0, hsb[2]);
+                                            default -> java.awt.Color.HSBtoRGB(hsb[0], hsb[1], t0);
+                                        };
+                                        int c1 = switch (bar) {
+                                            case 0 -> java.awt.Color.HSBtoRGB(t1, 1F, 1F);
+                                            case 1 -> java.awt.Color.HSBtoRGB(hsb[0], t1, hsb[2]);
+                                            default -> java.awt.Color.HSBtoRGB(hsb[0], hsb[1], t1);
+                                        };
+                                        int a0 = ColorUtil.replAlpha(c0, globalAnim * exp * open);
+                                        int a1 = ColorUtil.replAlpha(c1, globalAnim * exp * open);
+                                        RenderUtil.Render2D.gradientRect(bx + sIdx * seg, by, seg + (sIdx == segs - 1 ? 0 : 0.5F * S), 3.5F * S,
+                                                new int[]{a0, a1, a1, a0},
+                                                sIdx == 0 ? 1.5F * S : 0, sIdx == segs - 1 ? 1.5F * S : 0,
+                                                sIdx == segs - 1 ? 1.5F * S : 0, sIdx == 0 ? 1.5F * S : 0);
+                                    }
+
+                                    float kx = bx + bwd * hsb[bar];
+                                    RenderUtil.Render2D.rect(kx - 2.5F * S, by - 0.75F * S, 5F * S, 5F * S, ColorUtil.getColor(255, globalAnim * exp * open), 5F * S);
+                                    RenderUtil.Render2D.rect(kx - 1.5F * S, by + 0.25F * S, 3F * S, 3F * S, ColorUtil.getColor(30, 30, 30, globalAnim * exp * open), 3F * S);
+                                }
+
+                                if (draggingColor == cs && draggingColorBar >= 0 && draggingColorBar < 3) {
+                                    float t = MathHelper.clamp(((float) lastMouseX - bx) / bwd, 0F, 1F);
+                                    hsb[draggingColorBar] = t;
+                                    int rgb = java.awt.Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
+                                    int updatedCol = (cVal & 0xFF000000) | (rgb & 0x00FFFFFF);
+                                    if (updatedCol != cVal) {
+                                        cs.set(updatedCol);
+                                        GuiSounds.colorTick(t);
+                                    }
+                                }
+                            }
+
+                            currentY += 17F * S + open * 38F * S;
                         } else if (setting instanceof BindSetting bs) {
                             boolean hovBind = MathUtil.isHovered((float) lastMouseX, (float) lastMouseY, cx + 8F * S, currentY, cw - 16F * S, 16F * S);
                             if (hovBind) {
@@ -884,7 +936,27 @@ public class DropdownScreen extends Screen implements IMinecraft {
                                     GuiSounds.picker(cs.pickerOpen);
                                     return true;
                                 }
-                                currentY += 17F * S;
+                                float open = cs.pickerAnim.getOutput();
+                                if (open > 0.01F) {
+                                    float bx = cx + 12F * S;
+                                    float bwd = cw - 24F * S;
+                                    for (int bar = 0; bar < 3; bar++) {
+                                        float by = currentY + 18F * S + bar * 11.5F * S;
+                                        if (MathUtil.isHovered(mouseX, mouseY, bx - 2F * S, by - 2F * S, bwd + 4F * S, 7.5F * S) && button == 0) {
+                                            draggingColor = cs;
+                                            draggingColorBar = bar;
+                                            float t = MathHelper.clamp((mouseX - bx) / bwd, 0F, 1F);
+                                            int cVal = cs.getValue();
+                                            float[] hsb = java.awt.Color.RGBtoHSB((cVal >> 16) & 0xFF, (cVal >> 8) & 0xFF, cVal & 0xFF, null);
+                                            hsb[bar] = t;
+                                            int rgb = java.awt.Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
+                                            cs.set((cVal & 0xFF000000) | (rgb & 0x00FFFFFF));
+                                            GuiSounds.sliderGrab();
+                                            return true;
+                                        }
+                                    }
+                                }
+                                currentY += 17F * S + open * 38F * S;
                             } else if (setting instanceof BindSetting bs) {
                                 boolean hovBind = MathUtil.isHovered(mouseX, mouseY, cx + 8F * S, currentY, cw - 16F * S, 16F * S);
                                 if (hovBind) {

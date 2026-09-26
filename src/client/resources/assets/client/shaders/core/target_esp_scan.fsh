@@ -64,8 +64,8 @@ void main() {
     colorFlow = smoothstep(0.0, 1.0, colorFlow);
     vec3 flowingColor = mix(scanColor, secondScanColor, colorFlow);
 
-    vec3 whiteCore = vec3(0.82, 0.96, 1.0);
-    vec3 color = mix(flowingColor * 0.68, whiteCore, core * 0.90);
-    color *= 0.85 + core * 0.5 * glowStrength;
+    vec3 whiteCore = mix(flowingColor, vec3(1.0), 0.60);
+    vec3 color = mix(flowingColor, whiteCore, core * 0.55);
+    color *= 0.95 + core * 0.5 * glowStrength;
     fragColor = vec4(color * ColorModulator.rgb, opacity * ColorModulator.a);
 }

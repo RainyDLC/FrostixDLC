@@ -587,6 +587,7 @@ namespace RainyDLC.Launcher
             Content = root;
 
             SwitchPage(0);
+            AutoSyncLocalClientIfAvailable();
             UpdateClientStatusUI();
         }
 
@@ -3394,13 +3395,18 @@ namespace RainyDLC.Launcher
                 return;
             }
 
-            // If client files are missing and no gradlew exists, automatically download client!
+            // If client files are missing, try auto-syncing from local directory next to launcher first!
+            if (!IsClientInstalled())
+            {
+                AutoSyncLocalClientIfAvailable();
+            }
+
             if (!IsClientInstalled())
             {
                 string gradlew = System.IO.Path.Combine(_projectDir, "gradlew.bat");
                 if (!File.Exists(gradlew))
                 {
-                    AppendLog("[Launcher] Файлы клиента не найдены. Запуск автоматического скачивания...");
+                    AppendLog("[Launcher] Файлы клиента не найдены. Запуск автоматического поиска и загрузки...");
                     StartClientDownload(true);
                     return;
                 }
@@ -3427,39 +3433,32 @@ namespace RainyDLC.Launcher
             string gradlew = System.IO.Path.Combine(_projectDir, "gradlew.bat");
             bool hasGradlew = File.Exists(gradlew);
 
-            // If neither client jar nor gradlew exists, trigger download!
-            if (!hasClientJar && !hasGradlew)
-            {
-                AppendLog("[Launcher] Файлы клиента отсутствуют. Запуск скачивания...");
-                StartClientDownload(true);
-                return;
-            }
-
-            // If client jar is missing in modsDir, check if local build exists in build/libs/
+            // If client jar is missing in modsDir, check if local build or file next to exe exists
             if (!hasClientJar)
             {
-                string localBuild1 = System.IO.Path.Combine(_projectDir, "build", "libs", "rainydlc-1.0-SNAPSHOT.jar");
-                string localBuild2 = System.IO.Path.Combine(_projectDir, "build", "libs", "rainydlc-protected.jar");
-                string src = File.Exists(localBuild2) ? localBuild2 : (File.Exists(localBuild1) ? localBuild1 : null);
-                if (src != null)
+                string src = FindLocalClientJar();
+                if (src != null && File.Exists(src))
                 {
                     try
                     {
                         if (!Directory.Exists(modsDir)) Directory.CreateDirectory(modsDir);
                         File.Copy(src, GetClientJarPath(), true);
                         hasClientJar = true;
-                        AppendLog("[Launcher] Синхронизирована локальная сборка в: " + GetClientJarPath());
+                        AppendLog("[Launcher] Установлена локальная сборка: " + System.IO.Path.GetFileName(src));
+                        EnsureFabricApiInstalled(modsDir);
                         UpdateClientStatusUI();
                         ReloadLocalMods();
                     }
                     catch { }
                 }
-                else if (!hasGradlew)
-                {
-                    AppendLog("[Launcher] Скачивание файлов клиента...");
-                    StartClientDownload(true);
-                    return;
-                }
+            }
+
+            // If neither client jar nor gradlew exists, trigger download!
+            if (!hasClientJar && !hasGradlew)
+            {
+                AppendLog("[Launcher] Файлы клиента отсутствуют. Запуск скачивания...");
+                StartClientDownload(true);
+                return;
             }
 
             SetLaunchUIStarting();
@@ -3504,43 +3503,86 @@ namespace RainyDLC.Launcher
             {
                 try
                 {
-                    ProcessStartInfo psi = new ProcessStartInfo();
+                    ProcessStartInfo psi = null;
+                    ProcessStartInfo directPsi = null;
+                    ProcessStartInfo tlPsi = null;
 
                     if (hasGradlew && (_data.LaunchMode == 1 || (_data.LaunchMode == 0 && !hasClientJar)))
                     {
                         AppendLog("Режим запуска: gradlew.bat runClient");
-                        psi.FileName = "cmd.exe";
-                        psi.Arguments = "/c \"\"" + gradlew + "\" runClient --args=\"--username " + usernameArg + "\"\"";
-                        psi.WorkingDirectory = _projectDir;
+                        psi = new ProcessStartInfo
+                        {
+                            FileName = "cmd.exe",
+                            Arguments = "/c \"\"" + gradlew + "\" runClient --args=\"--username " + usernameArg + "\"\"",
+                            WorkingDirectory = _projectDir
+                        };
+                    }
+                    else if (TryDirectLaunchMinecraft(usernameArg, javaOpts, out directPsi))
+                    {
+                        psi = directPsi;
+                    }
+                    else if (TryConfigureAndLaunchTlLegacy(usernameArg, javaOpts, out tlPsi))
+                    {
+                        if (tlPsi != null) psi = tlPsi;
+                        else return; // Started via TL.exe
                     }
                     else
                     {
-                        string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                        string tlBootstrap = System.IO.Path.Combine(appData, ".tlauncher", "legacy", "Minecraft", "launcher", "bootstrap.jar");
-                        string javaExe = FindJavaExecutable();
-
-                        if (File.Exists(tlBootstrap))
+                        string extLauncher = FindExternalMinecraftLauncher();
+                        if (!string.IsNullOrEmpty(extLauncher))
                         {
-                            AppendLog("Режим запуска: установленный Minecraft лаунчер с модом RainyDLC...");
-                            psi.FileName = javaExe;
-                            psi.Arguments = string.Format("-Xmx{0}m {1} -jar \"{2}\"", _data.RamMb, _data.JvmArgs, tlBootstrap);
-                            psi.WorkingDirectory = System.IO.Path.GetDirectoryName(tlBootstrap);
+                            AppendLog("Режим запуска: запуск " + System.IO.Path.GetFileName(extLauncher));
+                            try
+                            {
+                                Process.Start(new ProcessStartInfo
+                                {
+                                    FileName = extLauncher,
+                                    WorkingDirectory = System.IO.Path.GetDirectoryName(extLauncher),
+                                    UseShellExecute = true
+                                });
+
+                                Dispatcher.BeginInvoke(new Action(() =>
+                                {
+                                    SetLaunchUIIdle();
+                                    AppendLog("[Launcher] Лаунчер Minecraft открыт! Дождитесь запуска игры.");
+                                }));
+                                return;
+                            }
+                            catch (Exception exLaunch)
+                            {
+                                AppendLog("[Launcher] Ошибка открытия лаунчера: " + exLaunch.Message);
+                            }
                         }
-                        else if (hasGradlew)
+
+                        if (hasGradlew)
                         {
                             AppendLog("Режим запуска: gradlew.bat runClient");
-                            psi.FileName = "cmd.exe";
-                            psi.Arguments = "/c \"\"" + gradlew + "\" runClient --args=\"--username " + usernameArg + "\"\"";
-                            psi.WorkingDirectory = _projectDir;
+                            psi = new ProcessStartInfo
+                            {
+                                FileName = "cmd.exe",
+                                Arguments = "/c \"\"" + gradlew + "\" runClient --args=\"--username " + usernameArg + "\"\"",
+                                WorkingDirectory = _projectDir
+                            };
                         }
                         else
                         {
-                            AppendLog("Режим запуска: Java клиент...");
-                            psi.FileName = javaExe;
-                            psi.Arguments = "-version";
-                            psi.WorkingDirectory = modsDir;
+                            Dispatcher.BeginInvoke(new Action(() =>
+                            {
+                                SetLaunchUIIdle();
+                                AppendLog("[Launcher] Файлы RainyDLC установлены в: " + modsDir);
+                                try { Process.Start("explorer.exe", modsDir); } catch { }
+                                System.Windows.MessageBox.Show(
+                                    "Файлы мода RainyDLC успешно установлены в папку:\n" + modsDir + "\n\nНа этом компьютере не найден запущенный клиент Minecraft 1.21.11.\nЗапустите любой лаунчер Minecraft (TLauncher, TL Legacy, Prism) с версией Fabric 1.21.11 один раз, чтобы игра загрузила необходимые файлы.",
+                                    "RainyDLC готов к игре",
+                                    MessageBoxButton.OK,
+                                    MessageBoxImage.Information
+                                );
+                            }));
+                            return;
                         }
                     }
+
+                    if (psi == null) return;
 
                     psi.UseShellExecute = false;
                     psi.CreateNoWindow = true;
@@ -3680,15 +3722,46 @@ namespace RainyDLC.Launcher
                     string targetJar = System.IO.Path.Combine(modsDir, "rainydlc.jar");
                     string tempJar = targetJar + ".download";
 
-                    string localBuild1 = System.IO.Path.Combine(_projectDir, "build", "libs", "rainydlc-1.0-SNAPSHOT.jar");
-                    string localBuild2 = System.IO.Path.Combine(_projectDir, "build", "libs", "rainydlc-protected.jar");
-                    string sourceLocal = File.Exists(localBuild2) ? localBuild2 : (File.Exists(localBuild1) ? localBuild1 : null);
+                    string sourceLocal = FindLocalClientJar();
+
+                    // If local client file or build is present, copy directly!
+                    if (sourceLocal != null && File.Exists(sourceLocal))
+                    {
+                        AppendLog("[Downloader] Найдена локальная копия клиента: " + sourceLocal);
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            SetDownloadProgress(50, "Копирование файлов клиента...", "Синхронизация локальных файлов...");
+                        }));
+
+                        File.Copy(sourceLocal, targetJar, true);
+                        AppendLog("[Downloader] Клиент успешно скопирован в папку mods (" + FormatFileSize(new FileInfo(targetJar).Length) + ")");
+                        EnsureFabricApiInstalled(modsDir);
+
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            _isDownloading = false;
+                            _activeDownloader = null;
+                            SetDownloadUICompleted();
+                            UpdateClientStatusUI();
+                            ReloadLocalMods();
+
+                            AppendLog("[Downloader] Все файлы клиента готовы к игре!");
+
+                            if (_autoLaunchAfterDownload)
+                            {
+                                _autoLaunchAfterDownload = false;
+                                StartClient();
+                            }
+                        }));
+                        return;
+                    }
 
                     string url = string.IsNullOrEmpty(_data.ClientDownloadUrl)
                         ? "https://github.com/RainyDLC/FrostixDLC/releases/latest/download/rainydlc.jar"
                         : _data.ClientDownloadUrl.Trim();
 
                     bool downloadedSuccessfully = false;
+                    string networkError = null;
 
                     AppendLog("[Downloader] Скачивание клиента: " + url);
                     Dispatcher.BeginInvoke(new Action(() =>
@@ -3752,24 +3825,20 @@ namespace RainyDLC.Launcher
                     }
                     catch (Exception ex)
                     {
+                        networkError = ex.Message;
                         AppendLog("[Downloader] Предупреждение сетевой загрузки: " + ex.Message);
                         if (File.Exists(tempJar)) { try { File.Delete(tempJar); } catch { } }
-
-                        if (sourceLocal != null && File.Exists(sourceLocal))
-                        {
-                            AppendLog("[Downloader] Использована локальная копия из " + sourceLocal);
-                            Dispatcher.BeginInvoke(new Action(() =>
-                            {
-                                SetDownloadProgress(75, "Копирование локальной сборки клиента...", "Синхронизация файлов...");
-                            }));
-                            File.Copy(sourceLocal, targetJar, true);
-                            downloadedSuccessfully = true;
-                        }
                     }
 
                     if (!downloadedSuccessfully)
                     {
-                        throw new Exception("Не удалось скачать файлы клиента (проверьте интернет-соединение или URL в Настройках)");
+                        string errText = "Не удалось загрузить клиент из сети:\n";
+                        if (!string.IsNullOrEmpty(networkError))
+                        {
+                            errText += "• Ошибка: " + networkError + "\n\n";
+                        }
+                        errText += "Решение:\nПоложите файл rainydlc.jar рядом с RainyDLC.exe или в папку .minecraft/mods,\nлибо настройте рабочий URL в Настройках.";
+                        throw new Exception(errText);
                     }
 
                     EnsureFabricApiInstalled(modsDir);
@@ -3819,6 +3888,15 @@ namespace RainyDLC.Launcher
                 if (existing.Length > 0)
                 {
                     AppendLog("[Downloader] Fabric API уже установлен: " + System.IO.Path.GetFileName(existing[0]));
+                    return;
+                }
+
+                string localFApi = FindLocalFabricApiJar();
+                if (localFApi != null && File.Exists(localFApi))
+                {
+                    string targetFApi = System.IO.Path.Combine(modsDir, System.IO.Path.GetFileName(localFApi));
+                    File.Copy(localFApi, targetFApi, true);
+                    AppendLog("[Downloader] Fabric API установлен из локального файла: " + System.IO.Path.GetFileName(localFApi));
                     return;
                 }
 
@@ -4187,6 +4265,447 @@ namespace RainyDLC.Launcher
                 return string.Format("{0:F0} КБ", bytes / 1024.0);
             }
             return bytes + " Б";
+        }
+
+        private string FindLocalClientJar()
+        {
+            try
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                if (!string.IsNullOrEmpty(baseDir) && Directory.Exists(baseDir))
+                {
+                    string[] candidates = new string[]
+                    {
+                        System.IO.Path.Combine(baseDir, "rainydlc.jar"),
+                        System.IO.Path.Combine(baseDir, "rainydlc-protected.jar"),
+                        System.IO.Path.Combine(baseDir, "rainydlc-1.0-SNAPSHOT.jar")
+                    };
+                    foreach (string c in candidates)
+                    {
+                        if (File.Exists(c) && new FileInfo(c).Length > 1024) return c;
+                    }
+
+                    string[] found = Directory.GetFiles(baseDir, "rainydlc*.jar");
+                    foreach (string f in found)
+                    {
+                        if (!f.EndsWith(".download", StringComparison.OrdinalIgnoreCase) && !f.Contains("-sources") && new FileInfo(f).Length > 1024)
+                            return f;
+                    }
+                }
+
+                try
+                {
+                    string cur = Directory.GetCurrentDirectory();
+                    if (!string.IsNullOrEmpty(cur) && Directory.Exists(cur) && !string.Equals(cur, baseDir, StringComparison.OrdinalIgnoreCase))
+                    {
+                        string p1 = System.IO.Path.Combine(cur, "rainydlc.jar");
+                        if (File.Exists(p1) && new FileInfo(p1).Length > 1024) return p1;
+                        string p2 = System.IO.Path.Combine(cur, "rainydlc-protected.jar");
+                        if (File.Exists(p2) && new FileInfo(p2).Length > 1024) return p2;
+                        string p3 = System.IO.Path.Combine(cur, "rainydlc-1.0-SNAPSHOT.jar");
+                        if (File.Exists(p3) && new FileInfo(p3).Length > 1024) return p3;
+                    }
+                }
+                catch { }
+
+                if (!string.IsNullOrEmpty(_projectDir) && Directory.Exists(_projectDir))
+                {
+                    string pBuild2 = System.IO.Path.Combine(_projectDir, "build", "libs", "rainydlc-protected.jar");
+                    if (File.Exists(pBuild2) && new FileInfo(pBuild2).Length > 1024) return pBuild2;
+
+                    string pBuild1 = System.IO.Path.Combine(_projectDir, "build", "libs", "rainydlc-1.0-SNAPSHOT.jar");
+                    if (File.Exists(pBuild1) && new FileInfo(pBuild1).Length > 1024) return pBuild1;
+
+                    string pProj = System.IO.Path.Combine(_projectDir, "rainydlc.jar");
+                    if (File.Exists(pProj) && new FileInfo(pProj).Length > 1024) return pProj;
+
+                    string libsDir = System.IO.Path.Combine(_projectDir, "build", "libs");
+                    if (Directory.Exists(libsDir))
+                    {
+                        string[] jars = Directory.GetFiles(libsDir, "rainydlc*.jar");
+                        foreach (string j in jars)
+                        {
+                            if (!j.Contains("-sources") && !j.EndsWith(".download", StringComparison.OrdinalIgnoreCase) && new FileInfo(j).Length > 1024)
+                                return j;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
+        private string FindLocalFabricApiJar()
+        {
+            try
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                if (!string.IsNullOrEmpty(baseDir) && Directory.Exists(baseDir))
+                {
+                    string[] f = Directory.GetFiles(baseDir, "*fabric*api*.jar");
+                    if (f.Length > 0 && new FileInfo(f[0]).Length > 1024) return f[0];
+
+                    string subLibs = System.IO.Path.Combine(baseDir, "libs");
+                    if (Directory.Exists(subLibs))
+                    {
+                        string[] fLibs = Directory.GetFiles(subLibs, "*fabric*api*.jar");
+                        if (fLibs.Length > 0 && new FileInfo(fLibs[0]).Length > 1024) return fLibs[0];
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(_projectDir) && Directory.Exists(_projectDir))
+                {
+                    string projLibs = System.IO.Path.Combine(_projectDir, "libs");
+                    if (Directory.Exists(projLibs))
+                    {
+                        string[] fProj = Directory.GetFiles(projLibs, "*fabric*api*.jar");
+                        if (fProj.Length > 0 && new FileInfo(fProj[0]).Length > 1024) return fProj[0];
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private void AutoSyncLocalClientIfAvailable()
+        {
+            try
+            {
+                string localJar = FindLocalClientJar();
+                if (localJar != null && File.Exists(localJar))
+                {
+                    string modsDir = GetModsDir();
+                    if (!Directory.Exists(modsDir)) Directory.CreateDirectory(modsDir);
+
+                    string targetJar = GetClientJarPath();
+                    bool needCopy = false;
+
+                    if (!File.Exists(targetJar))
+                    {
+                        needCopy = true;
+                    }
+                    else
+                    {
+                        FileInfo fiLocal = new FileInfo(localJar);
+                        FileInfo fiTarget = new FileInfo(targetJar);
+                        if (fiLocal.Length != fiTarget.Length && Math.Abs((fiLocal.LastWriteTime - fiTarget.LastWriteTime).TotalSeconds) > 2)
+                        {
+                            needCopy = true;
+                        }
+                    }
+
+                    if (needCopy)
+                    {
+                        File.Copy(localJar, targetJar, true);
+                        AppendLog("[Launcher] Установлен клиент из локального файла: " + System.IO.Path.GetFileName(localJar));
+                        EnsureFabricApiInstalled(modsDir);
+                        ReloadLocalMods();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[Launcher] Предупреждение синхронизации: " + ex.Message);
+            }
+        }
+
+        private string FindExternalMinecraftLauncher()
+        {
+            try
+            {
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+                string progFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+
+                string[] candidates = new string[]
+                {
+                    System.IO.Path.Combine(appData, ".tlauncher", "legacy", "Minecraft", "launcher", "bootstrap.jar"),
+                    System.IO.Path.Combine(appData, ".tlauncher", "legacy", "Minecraft", "launcher", "TL.exe"),
+                    System.IO.Path.Combine(appData, ".tlauncher", "TLauncher.exe"),
+                    System.IO.Path.Combine(appData, ".minecraft", "TLauncher.exe"),
+                    System.IO.Path.Combine(progFiles, "PrismLauncher", "prismlauncher.exe"),
+                    System.IO.Path.Combine(localAppData, "Programs", "PrismLauncher", "prismlauncher.exe"),
+                    System.IO.Path.Combine(progFilesX86, "Minecraft Launcher", "MinecraftLauncher.exe"),
+                    System.IO.Path.Combine(progFiles, "Minecraft Launcher", "MinecraftLauncher.exe"),
+                    System.IO.Path.Combine(localAppData, "Programs", "Modrinth App", "Modrinth App.exe"),
+                    System.IO.Path.Combine(localAppData, "Programs", "CurseForge", "CurseForge.exe")
+                };
+
+                foreach (string c in candidates)
+                {
+                    if (File.Exists(c)) return c;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private string MavenToPath(string mavenName)
+        {
+            try
+            {
+                string[] parts = mavenName.Split(':');
+                if (parts.Length < 3) return null;
+                string group = parts[0].Replace('.', System.IO.Path.DirectorySeparatorChar);
+                string artifact = parts[1];
+                string version = parts[2];
+                string classifier = parts.Length > 3 ? "-" + parts[3] : "";
+                string fileName = string.Format("{0}-{1}{2}.jar", artifact, version, classifier);
+                return System.IO.Path.Combine(group, artifact, version, fileName);
+            }
+            catch { return null; }
+        }
+
+        private string[] GetCandidateGameDirs()
+        {
+            List<string> dirs = new List<string>();
+            if (!string.IsNullOrEmpty(_data.CustomGamePath) && Directory.Exists(_data.CustomGamePath))
+                dirs.Add(_data.CustomGamePath);
+
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string tlGame = System.IO.Path.Combine(appData, ".tlauncher", "legacy", "Minecraft", "game");
+            if (Directory.Exists(tlGame)) dirs.Add(tlGame);
+
+            string mcDir = System.IO.Path.Combine(appData, ".minecraft");
+            if (Directory.Exists(mcDir)) dirs.Add(mcDir);
+
+            return dirs.ToArray();
+        }
+
+        private bool TryDirectLaunchMinecraft(string usernameArg, string javaOpts, out ProcessStartInfo directPsi)
+        {
+            directPsi = null;
+            try
+            {
+                string[] candidateDirs = GetCandidateGameDirs();
+                foreach (string gameDir in candidateDirs)
+                {
+                    string versionsDir = System.IO.Path.Combine(gameDir, "versions");
+                    if (!Directory.Exists(versionsDir)) continue;
+
+                    string[] verDirs = Directory.GetDirectories(versionsDir);
+                    string chosenVerDir = null;
+                    string chosenJson = null;
+
+                    // Prioritize Fabric 1.21.11 or any Fabric 1.21
+                    foreach (string vd in verDirs)
+                    {
+                        string name = System.IO.Path.GetFileName(vd);
+                        if (name.IndexOf("Fabric", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                            name.IndexOf("1.21", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            string json = System.IO.Path.Combine(vd, name + ".json");
+                            if (File.Exists(json))
+                            {
+                                chosenVerDir = vd;
+                                chosenJson = json;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (chosenJson == null)
+                    {
+                        foreach (string vd in verDirs)
+                        {
+                            string name = System.IO.Path.GetFileName(vd);
+                            if (name.IndexOf("Fabric", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                string json = System.IO.Path.Combine(vd, name + ".json");
+                                if (File.Exists(json))
+                                {
+                                    chosenVerDir = vd;
+                                    chosenJson = json;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (chosenJson == null) continue;
+
+                    string verName = System.IO.Path.GetFileName(chosenVerDir);
+                    string jsonContent = File.ReadAllText(chosenJson);
+
+                    string mainClass = "net.fabricmc.loader.impl.launch.knot.KnotClient";
+                    int mcIdx = jsonContent.IndexOf("\"mainClass\"");
+                    if (mcIdx >= 0)
+                    {
+                        int colon = jsonContent.IndexOf(':', mcIdx);
+                        int q1 = jsonContent.IndexOf('"', colon + 1);
+                        int q2 = jsonContent.IndexOf('"', q1 + 1);
+                        if (q1 >= 0 && q2 > q1)
+                        {
+                            mainClass = jsonContent.Substring(q1 + 1, q2 - q1 - 1);
+                        }
+                    }
+
+                    string libRoot = System.IO.Path.Combine(gameDir, "libraries");
+                    if (!Directory.Exists(libRoot)) continue;
+
+                    List<string> cpList = new List<string>();
+                    var matches = System.Text.RegularExpressions.Regex.Matches(jsonContent, "\"name\"\\s*:\\s*\"([^\"]+)\"");
+                    int foundLibs = 0;
+                    foreach (System.Text.RegularExpressions.Match m in matches)
+                    {
+                        string rel = MavenToPath(m.Groups[1].Value);
+                        if (rel != null)
+                        {
+                            string full = System.IO.Path.Combine(libRoot, rel);
+                            if (File.Exists(full))
+                            {
+                                cpList.Add(full);
+                                foundLibs++;
+                            }
+                        }
+                    }
+
+                    if (foundLibs < 15)
+                    {
+                        AppendLog(string.Format("[Launcher] Найдена версия {0}, но найдено всего {1} библиотек. Игра требует начальной загрузки.", verName, foundLibs));
+                        continue;
+                    }
+
+                    string verJar = System.IO.Path.Combine(chosenVerDir, verName + ".jar");
+                    if (File.Exists(verJar)) cpList.Add(verJar);
+                    else
+                    {
+                        string baseJar = System.IO.Path.Combine(gameDir, "versions", "1.21.11", "1.21.11.jar");
+                        if (File.Exists(baseJar)) cpList.Add(baseJar);
+                    }
+
+                    string clientJar = GetClientJarPath();
+                    if (File.Exists(clientJar)) cpList.Add(clientJar);
+
+                    string nativesDir = System.IO.Path.Combine(chosenVerDir, "natives");
+                    if (!Directory.Exists(nativesDir)) nativesDir = System.IO.Path.Combine(gameDir, "bin", "natives");
+                    if (!Directory.Exists(nativesDir)) nativesDir = chosenVerDir;
+
+                    string assetsDir = System.IO.Path.Combine(gameDir, "assets");
+                    string javaExe = FindJavaExecutable();
+                    string cpStr = string.Join(";", cpList);
+
+                    ProcessStartInfo psi = new ProcessStartInfo();
+                    psi.FileName = javaExe;
+                    psi.Arguments = string.Format(
+                        "-Xmx{0}m {1} -Djava.library.path=\"{2}\" -cp \"{3}\" {4} --username {5} --version \"{6}\" --gameDir \"{7}\" --assetsDir \"{8}\" --assetIndex 29 --uuid {9} --accessToken 0",
+                        _data.RamMb,
+                        _data.JvmArgs,
+                        nativesDir,
+                        cpStr,
+                        mainClass,
+                        usernameArg,
+                        verName,
+                        gameDir,
+                        assetsDir,
+                        Guid.NewGuid().ToString("N")
+                    );
+                    psi.WorkingDirectory = gameDir;
+                    directPsi = psi;
+
+                    AppendLog("Режим запуска: прямой запуск Minecraft клиент (" + verName + ")...");
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[Launcher] Ошибка прямого запуска: " + ex.Message);
+            }
+            return false;
+        }
+
+        private bool TryConfigureAndLaunchTlLegacy(string usernameArg, string javaOpts, out ProcessStartInfo tlPsi)
+        {
+            tlPsi = null;
+            try
+            {
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string tlDir = System.IO.Path.Combine(appData, ".tlauncher", "legacy", "Minecraft");
+                string tlBootstrap = System.IO.Path.Combine(tlDir, "launcher", "bootstrap.jar");
+                string tlExe = System.IO.Path.Combine(tlDir, "TL.exe");
+                if (!File.Exists(tlExe)) tlExe = System.IO.Path.Combine(tlDir, "LL.exe");
+
+                if (!File.Exists(tlBootstrap) && !File.Exists(tlExe)) return false;
+
+                string propsFile = System.IO.Path.Combine(tlDir, "tl.properties");
+                if (File.Exists(propsFile))
+                {
+                    try
+                    {
+                        string[] lines = File.ReadAllLines(propsFile);
+                        List<string> newLines = new List<string>();
+                        bool hasVer = false, hasAuto = false;
+                        foreach (string line in lines)
+                        {
+                            if (line.StartsWith("login.version="))
+                            {
+                                newLines.Add("login.version=Fabric 1.21.11");
+                                hasVer = true;
+                            }
+                            else if (line.StartsWith("login.auto="))
+                            {
+                                newLines.Add("login.auto=true");
+                                hasAuto = true;
+                            }
+                            else if (line.StartsWith("login.account="))
+                            {
+                                if (!string.IsNullOrEmpty(usernameArg))
+                                    newLines.Add("login.account=" + usernameArg);
+                                else newLines.Add(line);
+                            }
+                            else
+                            {
+                                newLines.Add(line);
+                            }
+                        }
+                        if (!hasVer) newLines.Add("login.version=Fabric 1.21.11");
+                        if (!hasAuto) newLines.Add("login.auto=true");
+                        File.WriteAllLines(propsFile, newLines.ToArray());
+                    }
+                    catch { }
+                }
+
+                AppendLog("Режим запуска: автозапуск клиента через Legacy Launcher...");
+
+                if (File.Exists(tlExe))
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = tlExe,
+                            WorkingDirectory = tlDir,
+                            UseShellExecute = true
+                        });
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            SetLaunchUIIdle();
+                            AppendLog("[Launcher] Клиент запускается через TL Legacy! Дождитесь открытия окна игры.");
+                        }));
+                        return true;
+                    }
+                    catch { }
+                }
+
+                if (File.Exists(tlBootstrap))
+                {
+                    string javaExe = FindJavaExecutable();
+                    tlPsi = new ProcessStartInfo
+                    {
+                        FileName = javaExe,
+                        Arguments = string.Format("-Xmx{0}m {1} -jar \"{2}\"", _data.RamMb, _data.JvmArgs, tlBootstrap),
+                        WorkingDirectory = System.IO.Path.GetDirectoryName(tlBootstrap)
+                    };
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[Launcher] Ошибка Legacy Launcher: " + ex.Message);
+            }
+            return false;
         }
 
         private string ResolveProjectDir()

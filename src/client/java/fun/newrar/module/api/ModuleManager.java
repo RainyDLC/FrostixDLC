@@ -33,6 +33,7 @@ public final class ModuleManager extends LinkedHashMap<Class<? extends Module>, 
                 new TriggerBot(),
                 new TpAura(),
                 new UseTracker(),
+                new KillSound(),
 
                 new Sprint(),
                 new NoSlow(),

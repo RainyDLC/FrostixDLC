@@ -20,7 +20,10 @@ public class SoundUtil {
 
                 String resourcePath = "/assets/client/sound/" + location + ".wav";
                 InputStream inputStream = SoundUtil.class.getResourceAsStream(resourcePath);
-                if (inputStream == null) return;
+                if (inputStream == null) {
+                    System.err.println("[SoundUtil] Audio resource not found: " + resourcePath);
+                    return;
+                }
 
                 try (AudioInputStream stream = AudioSystem.getAudioInputStream(new BufferedInputStream(inputStream))) {
                     Clip clip = AudioSystem.getClip();

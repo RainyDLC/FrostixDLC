@@ -454,7 +454,17 @@ public final class TargetScanRenderer {
         }
 
         @Override
+        public VertexConsumer overlay(int overlay) {
+            return this;
+        }
+
+        @Override
         public VertexConsumer light(int u, int v) {
+            return this;
+        }
+
+        @Override
+        public VertexConsumer light(int light) {
             return this;
         }
 
@@ -545,7 +555,20 @@ public final class TargetScanRenderer {
         }
 
         @Override
+        public VertexConsumer overlay(int overlay) {
+            this.delegate.overlay(this.phase, this.motion);
+            return this;
+        }
+
+        @Override
         public VertexConsumer light(int u, int v) {
+            float horizontal = normalize(this.x, this.bounds.minX, this.bounds.maxX);
+            this.delegate.light(this.glow, Math.round(horizontal * ATTRIBUTE_SCALE));
+            return this;
+        }
+
+        @Override
+        public VertexConsumer light(int light) {
             float horizontal = normalize(this.x, this.bounds.minX, this.bounds.maxX);
             this.delegate.light(this.glow, Math.round(horizontal * ATTRIBUTE_SCALE));
             return this;

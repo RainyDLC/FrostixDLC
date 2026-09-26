@@ -21,6 +21,13 @@ if %ERRORLEVEL% equ 0 (
         copy /y RainyDLC.exe "%USERPROFILE%\Desktop\RainyDLC.exe" >nul
         echo [OK] Updated %USERPROFILE%\Desktop\RainyDLC.exe
     )
+    if exist "build\libs\rainydlc-protected.jar" (
+        copy /y "build\libs\rainydlc-protected.jar" "rainydlc.jar" >nul
+        echo [OK] Synced build\libs\rainydlc-protected.jar to rainydlc.jar
+    ) else if exist "build\libs\rainydlc-1.0-SNAPSHOT.jar" (
+        copy /y "build\libs\rainydlc-1.0-SNAPSHOT.jar" "rainydlc.jar" >nul
+        echo [OK] Synced build\libs\rainydlc-1.0-SNAPSHOT.jar to rainydlc.jar
+    )
     echo [OK] RainyDLC.exe and runClient.exe built successfully.
 ) else (
     echo [!] Build failed with code %ERRORLEVEL%
