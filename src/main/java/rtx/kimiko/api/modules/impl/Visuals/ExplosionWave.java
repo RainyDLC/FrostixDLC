@@ -201,9 +201,6 @@ extends Module {
     }
 
     private final void trackCrystals() {
-        if (this.pending.isEmpty()) {
-            return;
-        }
         ClientWorld clientWorld3 = this.mc.world;
         if (clientWorld3 == null) {
             return;

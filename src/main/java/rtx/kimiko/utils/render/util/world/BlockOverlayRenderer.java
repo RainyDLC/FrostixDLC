@@ -34,16 +34,6 @@ public final class BlockOverlayRenderer {
     private static final int TUBE_SIDES = 6;
     private static final int DASH_COUNT = 10;
     private static final double TAU = Math.PI * 2;
-    private static final double[] COS_6 = new double[7];
-    private static final double[] SIN_6 = new double[7];
-
-    static {
-        for (int i = 0; i < 7; i++) {
-            double a = Math.PI * 2 * (double)i / 6.0;
-            COS_6[i] = Math.cos(a);
-            SIN_6[i] = Math.sin(a);
-        }
-    }
 
     private BlockOverlayRenderer() {
     }
@@ -133,60 +123,26 @@ public final class BlockOverlayRenderer {
     }
 
     private final void tube(VertexConsumer c, MatrixStack.Entry pose, Vec3d cam, double x0, double y0, double z0, double x1, double y1, double z1, Gradient gradient, double radius) {
-        double dx = x1 - x0;
-        double dy = y1 - y0;
-        double dz = z1 - z0;
-        double lenSq = dx * dx + dy * dy + dz * dz;
-        if (lenSq < 1.0E-8) {
+        Vec3d direction = new Vec3d(x1 - x0, y1 - y0, z1 - z0);
+        if (direction.lengthSquared() < 1.0E-8) {
             return;
         }
-        double invLen = 1.0 / Math.sqrt(lenSq);
-        double dirX = dx * invLen;
-        double dirY = dy * invLen;
-        double dirZ = dz * invLen;
-
-        double refX = Math.abs(dirY) < 0.9 ? 0.0 : 1.0;
-        double refY = Math.abs(dirY) < 0.9 ? 1.0 : 0.0;
-        double refZ = 0.0;
-
-        double cx = dirY * refZ - dirZ * refY;
-        double cy = dirZ * refX - dirX * refZ;
-        double cz = dirX * refY - dirY * refX;
-        double cLen = Math.sqrt(cx * cx + cy * cy + cz * cz);
-        double cScale = radius / (cLen > 1.0E-8 ? cLen : 1.0);
-        double sideX = cx * cScale;
-        double sideY = cy * cScale;
-        double sideZ = cz * cScale;
-
-        double ux = dirY * sideZ - dirZ * sideY;
-        double uy = dirZ * sideX - dirX * sideZ;
-        double uz = dirX * sideY - dirY * sideX;
-        double uLen = Math.sqrt(ux * ux + uy * uy + uz * uz);
-        double uScale = radius / (uLen > 1.0E-8 ? uLen : 1.0);
-        double upX = ux * uScale;
-        double upY = uy * uScale;
-        double upZ = uz * uScale;
-
+        Vec3d vec3d2 = direction.normalize();
+        Intrinsics.checkNotNullExpressionValue((Object)vec3d2, (String)"normalize(...)");
+        direction = vec3d2;
+        Vec3d reference = Math.abs(direction.y) < 0.9 ? new Vec3d(0.0, 1.0, 0.0) : new Vec3d(1.0, 0.0, 0.0);
+        Vec3d vec3d3 = direction.crossProduct(reference).normalize().multiply(radius);
+        Intrinsics.checkNotNullExpressionValue((Object)vec3d3, (String)"scale(...)");
+        Vec3d side = vec3d3;
+        Vec3d vec3d4 = direction.crossProduct(side).normalize().multiply(radius);
+        Intrinsics.checkNotNullExpressionValue((Object)vec3d4, (String)"scale(...)");
+        Vec3d up = vec3d4;
         for (int i = 0; i < 6; ++i) {
-            double c0 = COS_6[i];
-            double s0 = SIN_6[i];
-            double c1 = COS_6[i + 1];
-            double s1 = SIN_6[i + 1];
-
-            double o0x = sideX * c0 + upX * s0;
-            double o0y = sideY * c0 + upY * s0;
-            double o0z = sideZ * c0 + upZ * s0;
-
-            double o1x = sideX * c1 + upX * s1;
-            double o1y = sideY * c1 + upY * s1;
-            double o1z = sideZ * c1 + upZ * s1;
-
-            this.quad(c, pose, cam,
-                x0 + o0x, y0 + o0y, z0 + o0z,
-                x0 + o1x, y0 + o1y, z0 + o1z,
-                x1 + o1x, y1 + o1y, z1 + o1z,
-                x1 + o0x, y1 + o0y, z1 + o0z,
-                gradient);
+            double a0 = Math.PI * 2 * (double)i / (double)6;
+            double a1 = Math.PI * 2 * (double)(i + 1) / (double)6;
+            Vec3d o0 = side.multiply(Math.cos(a0)).add(up.multiply(Math.sin(a0)));
+            Vec3d o1 = side.multiply(Math.cos(a1)).add(up.multiply(Math.sin(a1)));
+            this.quad(c, pose, cam, x0 + o0.x, y0 + o0.y, z0 + o0.z, x0 + o1.x, y0 + o1.y, z0 + o1.z, x1 + o1.x, y1 + o1.y, z1 + o1.z, x1 + o0.x, y1 + o0.y, z1 + o0.z, gradient);
         }
     }
 

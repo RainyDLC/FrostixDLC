@@ -38,36 +38,7 @@ public final class TargetCircleRenderer {
     private static final int CROSS_SIDES = 6;
     private static final float TAPER_POWER = 0.8f;
 
-    private static final float[] THETA_COS = new float[129];
-    private static final float[] THETA_SIN = new float[129];
-    private static final float[] TAPER_FACTOR = new float[129];
-    private static final int[] THETA_DEGREES_X2 = new int[129];
-    private static final float[] PHI_COS = new float[6];
-    private static final float[] PHI_SIN = new float[6];
-
-    private final Vector3f[] ring = new Vector3f[6];
-    private final Vector3f[] scratch = new Vector3f[6];
-
-    static {
-        for (int i = 0; i < 129; i++) {
-            double theta = Math.PI * 2 * (double)i / 128.0;
-            THETA_COS[i] = (float)Math.cos(theta);
-            THETA_SIN[i] = (float)Math.sin(theta);
-            TAPER_FACTOR[i] = (float)Math.pow(Math.abs(THETA_SIN[i]), 0.8f);
-            THETA_DEGREES_X2[i] = (int)(Math.toDegrees(theta) * 2.0);
-        }
-        for (int j = 0; j < 6; j++) {
-            double phi = Math.PI * 2 * (double)j / 6.0;
-            PHI_COS[j] = (float)Math.cos(phi);
-            PHI_SIN[j] = (float)Math.sin(phi);
-        }
-    }
-
     private TargetCircleRenderer() {
-        for (int i = 0; i < 6; i++) {
-            this.ring[i] = new Vector3f();
-            this.scratch[i] = new Vector3f();
-        }
     }
 
     @JvmStatic
@@ -97,29 +68,43 @@ public final class TargetCircleRenderer {
     }
 
     private final void emitTube(VertexConsumer consumer, MatrixStack.Entry pose, Vector3f axisA, Vector3f axisB, Vector3f normal, float radius, float centerY, float thickness, float alpha, TargetEspColorProvider colors) {
-        Vector3f[] ring = this.ring;
-        Vector3f[] scratch = this.scratch;
+        int n = 0;
+        Vector3f[] vector3fArray = new Vector3f[6];
+        while (n < 6) {
+            int n2 = n++;
+            vector3fArray[n2] = new Vector3f();
+        }
+        Vector3f[] ring = vector3fArray;
+        int n3 = 0;
+        Vector3f[] vector3fArray2 = new Vector3f[6];
+        while (n3 < 6) {
+            int n4 = n3++;
+            vector3fArray2[n4] = new Vector3f();
+        }
+        Vector3f[] scratch = vector3fArray2;
         Vector3f[] prevRing = null;
         for (int i = 0; i < 129; ++i) {
-            float cosT = THETA_COS[i];
-            float sinT = THETA_SIN[i];
+            double theta = Math.PI * 2 * (double)i / (double)128;
+            float cosT = (float)Math.cos(theta);
+            float sinT = (float)Math.sin(theta);
             float dirX = axisA.x * cosT + axisB.x * sinT;
             float dirY = axisA.y * cosT + axisB.y * sinT;
             float dirZ = axisA.z * cosT + axisB.z * sinT;
             float cX = dirX * radius;
             float cY = centerY + dirY * radius;
             float cZ = dirZ * radius;
-            float crossR = thickness * TAPER_FACTOR[i];
+            float crossR = thickness * (float)Math.pow(Math.abs(sinT), 0.8f);
             Vector3f[] current = prevRing == scratch ? ring : scratch;
             for (int j = 0; j < 6; ++j) {
-                float cosP = PHI_COS[j];
-                float sinP = PHI_SIN[j];
+                double phi = Math.PI * 2 * (double)j / (double)6;
+                float cosP = (float)Math.cos(phi);
+                float sinP = (float)Math.sin(phi);
                 float ox = crossR * (cosP * dirX + sinP * normal.x);
                 float oy = crossR * (cosP * dirY + sinP * normal.y);
                 float oz = crossR * (cosP * dirZ + sinP * normal.z);
                 current[j].set(cX + ox, cY + oy, cZ + oz);
             }
-            int color = colors.color(THETA_DEGREES_X2[i], alpha);
+            int color = colors.color((int)(Math.toDegrees(theta) * 2.0), alpha);
             Vector3f[] previous = prevRing;
             if (previous != null && ColorEngine.alpha(color) > 1) {
                 for (int j = 0; j < 6; ++j) {

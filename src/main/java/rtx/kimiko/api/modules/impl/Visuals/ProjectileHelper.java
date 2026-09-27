@@ -298,27 +298,23 @@ extends Module {
     }
 
     private final void predictFromHand(float partial) {
-        ClientPlayerEntity clientPlayerEntity2 = this.mc.player;
-        if (clientPlayerEntity2 == null) {
+        ClientPlayerEntity player = this.mc.player;
+        if (player == null) {
             return;
         }
-        ClientPlayerEntity player = clientPlayerEntity2;
-        ItemStack itemStack2 = player.getMainHandStack();
-        Intrinsics.checkNotNullExpressionValue((Object)itemStack2, (String)"getMainHandItem(...)");
-        ItemStack stack = itemStack2;
+        ItemStack stack = player.getMainHandStack();
         HandShot handShot = this.handShot((PlayerEntity)player, stack);
         if (handShot == null) {
+            stack = player.getOffHandStack();
+            handShot = this.handShot((PlayerEntity)player, stack);
+        }
+        if (handShot == null || !this.itemsToPredict.isSelected(handShot.getProfile().getSetting())) {
             return;
         }
-        HandShot shot = handShot;
-        Vec3d look = this.directionFromRotation(player.getPitch(), player.getYaw());
-        Vec3d vec3d2 = player.getCameraPosVec(partial).add(look.multiply(0.2));
-        Intrinsics.checkNotNullExpressionValue((Object)vec3d2, (String)"add(...)");
-        Vec3d start = vec3d2;
-        Vec3d vec3d3 = look.multiply(shot.getSpeed()).add(0.0, player.getVelocity().y * 0.5, 0.0);
-        Intrinsics.checkNotNullExpressionValue((Object)vec3d3, (String)"add(...)");
-        Vec3d motion = vec3d3;
-        this.predict((Entity)player, start, motion, false, shot.getProfile());
+        Vec3d look = player.getRotationVec(partial);
+        Vec3d start = player.getCameraPosVec(partial).add(look.multiply(0.2));
+        Vec3d motion = look.multiply(handShot.getSpeed()).add(player.getVelocity().x, player.isOnGround() ? 0.0 : player.getVelocity().y, player.getVelocity().z);
+        this.predict((Entity)player, start, motion, false, handShot.getProfile());
     }
 
     private final void predict(Entity shooter, Vec3d start, Vec3d motion, boolean isEntityProjectile, Profile profile) {
@@ -331,37 +327,38 @@ extends Module {
         boolean living = false;
         boolean stopped = false;
         for (int i = 0; i < 200; ++i) {
-            BlockHitResult blockHit;
-            ClientWorld level;
             points.add(pos);
             Vec3d prev = pos;
-            Intrinsics.checkNotNullExpressionValue((Object)pos.add(vel), (String)"add(...)");
+            pos = pos.add(vel);
             ++ticks;
             EntityHit entityHit = this.firstEntityInPath(prev, pos, shooter);
-            if (entityHit != null) {
-                Vec3d vec3d2;
+            ClientWorld level = this.mc.world;
+            BlockHitResult blockHit = level != null ? level.raycast(new RaycastContext(prev, pos, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, shooter)) : null;
+            boolean hitBlock = blockHit != null && blockHit.getType() != HitResult.Type.MISS;
+            if (entityHit != null && hitBlock) {
+                double entDist = prev.squaredDistanceTo(entityHit.getPoint());
+                double blockDist = prev.squaredDistanceTo(blockHit.getPos());
+                if (entDist <= blockDist) {
+                    finalPos = entityHit.getPoint();
+                    living = true;
+                    normal = vel.lengthSquared() > 1.0E-9 ? vel.normalize().multiply(-1.0) : normal;
+                    stopped = true;
+                    break;
+                } else {
+                    finalPos = blockHit.getPos();
+                    normal = ProjectileHelper.Companion.faceToNormal(blockHit.getSide());
+                    stopped = true;
+                    break;
+                }
+            } else if (entityHit != null) {
                 finalPos = entityHit.getPoint();
                 living = true;
-                if (vel.lengthSquared() > 1.0E-9) {
-                    Vec3d vec3d3 = vel.normalize().multiply(-1.0);
-                    vec3d2 = vec3d3;
-                    Intrinsics.checkNotNullExpressionValue((Object)vec3d3, (String)"scale(...)");
-                } else {
-                    vec3d2 = normal;
-                }
-                normal = vec3d2;
+                normal = vel.lengthSquared() > 1.0E-9 ? vel.normalize().multiply(-1.0) : normal;
                 stopped = true;
                 break;
-            }
-            ClientWorld clientWorld3 = level = this.mc.world;
-            BlockHitResult blockHitResult2 = blockHit = clientWorld3 != null ? clientWorld3.raycast(new RaycastContext(prev, pos, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, shooter)) : null;
-            if (blockHit != null && blockHit.getType() != HitResult.Type.MISS) {
-                Vec3d vec3d4 = blockHit.getPos();
-                Intrinsics.checkNotNullExpressionValue((Object)vec3d4, (String)"getLocation(...)");
-                finalPos = vec3d4;
-                Direction direction2 = blockHit.getSide();
-                Intrinsics.checkNotNullExpressionValue((Object)direction2, (String)"getDirection(...)");
-                normal = ProjectileHelper.Companion.faceToNormal(direction2);
+            } else if (hitBlock) {
+                finalPos = blockHit.getPos();
+                normal = ProjectileHelper.Companion.faceToNormal(blockHit.getSide());
                 stopped = true;
                 break;
             }
@@ -370,13 +367,15 @@ extends Module {
                 stopped = true;
                 break;
             }
-            vel = this.step(prev, vel, profile);
+            vel = this.step(pos, vel, profile);
         }
         if (!stopped) {
             finalPos = pos;
         }
         this.linesToRender.add(new LineData(points, finalPos));
-        this.landingData.add(new LandingData(finalPos, ticks, isEntityProjectile, normal, living));
+        if (stopped) {
+            this.landingData.add(new LandingData(finalPos, ticks, isEntityProjectile, normal, living));
+        }
     }
 
     @Protect(value=Level.MAX)
@@ -411,7 +410,7 @@ extends Module {
         LivingEntity found = null;
         Vec3d point = null;
         for (LivingEntity living : this.livingScratch) {
-            if (Intrinsics.areEqual((Object)living, (Object)shooter)) continue;
+            if (shooter != null && (living == shooter || living.getId() == shooter.getId())) continue;
             Optional<Vec3d> hit = living.getBoundingBox().expand(0.1).raycast(from, to);
             if (!hit.isPresent()) continue;
             Vec3d hitPoint = hit.get();
@@ -448,19 +447,8 @@ extends Module {
             tangent[k] = t.lengthSquared() > 1.0E-9 ? t.normalize() : (b.lengthSquared() > 1.0E-9 ? b.normalize() : new Vec3d(0.0, 0.0, 1.0));
         }
         Vec3d frameNormal = ProjectileHelper.Companion.anyPerpendicular(tangent[0]).normalize();
-        double[] currRingX = new double[10];
-        double[] currRingY = new double[10];
-        double[] currRingZ = new double[10];
-        int[] currColor = new int[10];
-        double[] prevRingX = new double[10];
-        double[] prevRingY = new double[10];
-        double[] prevRingZ = new double[10];
-        int[] prevColor = new int[10];
-        boolean hasPrev = false;
-        float vAlpha = this.visualAlpha();
-        float camX = (float)cameraPos.x;
-        float camY = (float)cameraPos.y;
-        float camZ = (float)cameraPos.z;
+        Vec3d[] prevRing = null;
+        int[] prevColor = null;
         for (int k = 0; k < m; ++k) {
             Vec3d pk = p[k];
             Vec3d tk = tangent[k];
@@ -477,41 +465,41 @@ extends Module {
             float envAlpha = ProjectileHelper.Companion.relakeAlpha(k);
             float gradientPos = (float)k / (float)(m - 1);
             int rgb = ClientAccent.gradientColor(gradientPos, 255.0f) & 0xFFFFFF;
+            Vec3d[] ring = new Vec3d[10];
+            int[] ringColor = new int[10];
             for (int j = 0; j < 10; ++j) {
-                double c = (double)CROSS_COS[j] * radius;
-                double s = (double)CROSS_SIN[j] * radius;
-                double ox = frameNormal.x * c + binormal.x * s;
-                double oy = frameNormal.y * c + binormal.y * s;
-                double oz = frameNormal.z * c + binormal.z * s;
-                currRingX[j] = pk.x + ox;
-                currRingY[j] = pk.y + oy;
-                currRingZ[j] = pk.z + oz;
-                double facing = radius > 1.0E-9 ? MathHelper.clamp((ox * camDir.x + oy * camDir.y + oz * camDir.z) / radius, 0.0, 1.0) : 0.0;
+                Vec3d offset = ProjectileHelper.Companion.ringOffset(frameNormal, binormal, j, radius);
+                ring[j] = pk.add(offset);
+                double facing = radius > 1.0E-9 ? MathHelper.clamp((double)(offset.dotProduct(camDir) / radius), (double)0.0, (double)1.0) : 0.0;
                 float nearFactor = 1.0f - 0.5f * (float)facing;
-                int rawColor = rgb | (ProjectileHelper.Companion.alpha255(envAlpha * nearFactor) << 24);
-                currColor[j] = ColorEngine.multAlpha(rawColor, vAlpha);
+                ringColor[j] = rgb | ProjectileHelper.Companion.alpha255(envAlpha * nearFactor) << 24;
             }
-            if (hasPrev) {
+            if (prevRing != null && prevColor != null) {
                 for (int j = 0; j < 10; ++j) {
                     int n = (j + 1) % 10;
-                    consumer.vertex(pose, (float)(prevRingX[j] - camX), (float)(prevRingY[j] - camY), (float)(prevRingZ[j] - camZ)).color(prevColor[j]);
-                    consumer.vertex(pose, (float)(prevRingX[n] - camX), (float)(prevRingY[n] - camY), (float)(prevRingZ[n] - camZ)).color(prevColor[n]);
-                    consumer.vertex(pose, (float)(currRingX[n] - camX), (float)(currRingY[n] - camY), (float)(currRingZ[n] - camZ)).color(currColor[n]);
-                    consumer.vertex(pose, (float)(currRingX[j] - camX), (float)(currRingY[j] - camY), (float)(currRingZ[j] - camZ)).color(currColor[j]);
+                    Vec3d vec3d20 = prevRing[j];
+                    Intrinsics.checkNotNull((Object)vec3d20);
+                    this.vertex(consumer, pose, vec3d20, cameraPos, prevColor[j]);
+                    Vec3d vec3d21 = prevRing[n];
+                    Intrinsics.checkNotNull((Object)vec3d21);
+                    this.vertex(consumer, pose, vec3d21, cameraPos, prevColor[n]);
+                    Vec3d vec3d22 = ring[n];
+                    Intrinsics.checkNotNull((Object)vec3d22);
+                    this.vertex(consumer, pose, vec3d22, cameraPos, ringColor[n]);
+                    Vec3d vec3d23 = ring[j];
+                    Intrinsics.checkNotNull((Object)vec3d23);
+                    this.vertex(consumer, pose, vec3d23, cameraPos, ringColor[j]);
                 }
             }
-            double[] tmpX = prevRingX; prevRingX = currRingX; currRingX = tmpX;
-            double[] tmpY = prevRingY; prevRingY = currRingY; currRingY = tmpY;
-            double[] tmpZ = prevRingZ; prevRingZ = currRingZ; currRingZ = tmpZ;
-            int[] tmpC = prevColor; prevColor = currColor; currColor = tmpC;
-            hasPrev = true;
+            prevRing = ring;
+            prevColor = ringColor;
         }
     }
 
     @Protect(value=Level.STD)
     private final void renderDisc(VertexConsumer consumer, MatrixStack.Entry pose, Vec3d cameraPos, LandingData data) {
-        Vec3d center = data.getPos();
         Vec3d normal = data.getNormal();
+        Vec3d center = data.getPos().add(normal.multiply(0.01));
         double radius = this.indicatorSize.getFloat();
         float spin = (float)(System.currentTimeMillis() % 4000L) / 4000.0f;
         int centerColor = ColorEngine.multAlpha(ClientAccent.gradientColor(ProjectileHelper.Companion.pingPong(spin), 255.0f), 0.55f);
@@ -537,8 +525,8 @@ extends Module {
 
     @Protect(value=Level.STD)
     private final void emitCrossTube(VertexConsumer consumer, MatrixStack.Entry pose, Vec3d cameraPos, LandingData data, double radius) {
-        Vec3d center = data.getPos();
         Vec3d normal = data.getNormal();
+        Vec3d center = data.getPos().add(normal.multiply(0.01));
         int color = ColorEngine.multAlpha(ClientAccent.accentOpaque(), 0.6f);
         Vec3d vec3d2 = ProjectileHelper.Companion.anyPerpendicular(normal).normalize().multiply(0.15);
         Intrinsics.checkNotNullExpressionValue((Object)vec3d2, (String)"scale(...)");
@@ -574,32 +562,22 @@ extends Module {
         Vec3d vec3d5 = dir.crossProduct(frameNormal).normalize();
         Intrinsics.checkNotNullExpressionValue((Object)vec3d5, (String)"normalize(...)");
         Vec3d binormal = vec3d5;
-        int vColor = ColorEngine.multAlpha(color, this.visualAlpha());
-        double[] ox = new double[10];
-        double[] oy = new double[10];
-        double[] oz = new double[10];
-        for (int j = 0; j < 10; ++j) {
-            double c = (double)CROSS_COS[j] * radius;
-            double s = (double)CROSS_SIN[j] * radius;
-            ox[j] = frameNormal.x * c + binormal.x * s;
-            oy[j] = frameNormal.y * c + binormal.y * s;
-            oz[j] = frameNormal.z * c + binormal.z * s;
-        }
-        float camX = (float)cameraPos.x;
-        float camY = (float)cameraPos.y;
-        float camZ = (float)cameraPos.z;
-        float ax = (float)a.x;
-        float ay = (float)a.y;
-        float az = (float)a.z;
-        float bx = (float)b.x;
-        float by = (float)b.y;
-        float bz = (float)b.z;
         for (int j = 0; j < 10; ++j) {
             int n = (j + 1) % 10;
-            consumer.vertex(pose, ax + (float)ox[j] - camX, ay + (float)oy[j] - camY, az + (float)oz[j] - camZ).color(vColor);
-            consumer.vertex(pose, ax + (float)ox[n] - camX, ay + (float)oy[n] - camY, az + (float)oz[n] - camZ).color(vColor);
-            consumer.vertex(pose, bx + (float)ox[n] - camX, by + (float)oy[n] - camY, bz + (float)oz[n] - camZ).color(vColor);
-            consumer.vertex(pose, bx + (float)ox[j] - camX, by + (float)oy[j] - camY, bz + (float)oz[j] - camZ).color(vColor);
+            Vec3d oJ = ProjectileHelper.Companion.ringOffset(frameNormal, binormal, j, radius);
+            Vec3d oN = ProjectileHelper.Companion.ringOffset(frameNormal, binormal, n, radius);
+            Vec3d vec3d6 = a.add(oJ);
+            Intrinsics.checkNotNullExpressionValue((Object)vec3d6, (String)"add(...)");
+            this.vertex(consumer, pose, vec3d6, cameraPos, color);
+            Vec3d vec3d7 = a.add(oN);
+            Intrinsics.checkNotNullExpressionValue((Object)vec3d7, (String)"add(...)");
+            this.vertex(consumer, pose, vec3d7, cameraPos, color);
+            Vec3d vec3d8 = b.add(oN);
+            Intrinsics.checkNotNullExpressionValue((Object)vec3d8, (String)"add(...)");
+            this.vertex(consumer, pose, vec3d8, cameraPos, color);
+            Vec3d vec3d9 = b.add(oJ);
+            Intrinsics.checkNotNullExpressionValue((Object)vec3d9, (String)"add(...)");
+            this.vertex(consumer, pose, vec3d9, cameraPos, color);
         }
     }
 

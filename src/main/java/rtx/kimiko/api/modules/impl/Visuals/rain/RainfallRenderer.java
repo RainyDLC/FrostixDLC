@@ -39,7 +39,6 @@ import kotlin.jvm.internal.SourceDebugExtension;
 import kotlin.ranges.RangesKt;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.client.render.RenderLayer;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.Heightmap;
 import net.minecraft.client.util.math.MatrixStack;
@@ -91,15 +90,6 @@ public final class RainfallRenderer {
     private static final double FOOT_SIDE_OFFSET = 0.11875;
     private static final int RING_SEGMENTS = 18;
     private static final float SEGMENT_ANGLE = 0.34906584f;
-    private static final float[] RING_COS = new float[19];
-    private static final float[] RING_SIN = new float[19];
-    static {
-        for (int i = 0; i < 19; ++i) {
-            float angle = (float)i * SEGMENT_ANGLE;
-            RING_COS[i] = (float)Math.cos(angle);
-            RING_SIN[i] = (float)Math.sin(angle);
-        }
-    }
 
     public final void clear() {
         this.drops.clear();
@@ -118,9 +108,11 @@ public final class RainfallRenderer {
         while (this.drops.size() > target) {
             this.drops.remove(this.drops.size() - 1);
         }
-        int dropSize = this.drops.size();
-        for (int i = 0; i < dropSize; i++) {
-            Drop drop = this.drops.get(i);
+        Iterator<Drop> iterator = this.drops.iterator();
+        Intrinsics.checkNotNullExpressionValue(iterator, (String)"iterator(...)");
+        Iterator<Drop> iterator2 = iterator;
+        while (iterator2.hasNext()) {
+            Drop drop = (Drop) (iterator2.next());
             if (!drop.getAlive()) {
                 this.respawn(drop, level, camPos, true);
                 continue;
@@ -133,18 +125,17 @@ public final class RainfallRenderer {
             drop.setZ(drop.getZ() + (double)(drop.getVz() * dt));
             double dxc = drop.getX() - camPos.x;
             double dzc = drop.getZ() - camPos.z;
-            double horizSq = dxc * dxc + dzc * dzc;
             if (drop.getY() < drop.getGroundY()) {
-                if (horizSq < 196.0 && this.ripples.size() < 300) {
+                if (dxc * dxc + dzc * dzc < 196.0 && this.ripples.size() < 300) {
                     RainfallRenderer.spawnRipple$default(this, drop.getX(), drop.getGroundY() + 0.02, drop.getZ(), 0.34f + this.random.nextFloat() * 0.26f, 0.7f + this.random.nextFloat() * 0.35f, 0.65f + this.random.nextFloat() * 0.35f, true, 0, 128, null);
                 }
-                if (horizSq < 121.0) {
+                if (dxc * dxc + dzc * dzc < 121.0) {
                     this.spawnShards(drop.getX(), drop.getGroundY() + 0.02, drop.getZ(), 3);
                 }
                 this.respawn(drop, level, camPos, false);
                 continue;
             }
-            if (!(drop.getY() > Math.max(camPos.y, drop.getGroundY()) + 30.0) && !(horizSq > 400.0)) continue;
+            if (!(drop.getY() > Math.max(camPos.y, drop.getGroundY()) + (double)18.0f + 12.0) && !(dxc * dxc + dzc * dzc > 400.0)) continue;
             this.respawn(drop, level, camPos, false);
         }
         if (wetLevel > 0.12f) {
@@ -316,8 +307,8 @@ public final class RainfallRenderer {
     private final void respawn(Drop drop, ClientWorld level, Vec3d camPos, boolean initial) {
         float angle = this.random.nextFloat() * ((float)Math.PI * 2);
         float radius = (float)Math.sqrt(this.random.nextFloat()) * 16.0f;
-        drop.setX(camPos.x + (double)(MathHelper.cos(angle) * radius));
-        drop.setZ(camPos.z + (double)(MathHelper.sin(angle) * radius));
+        drop.setX(camPos.x + (double)((float)Math.cos(angle) * radius));
+        drop.setZ(camPos.z + (double)((float)Math.sin(angle) * radius));
         drop.setSpeed(14.0f + this.random.nextFloat() * 16.0f);
         drop.setLen(drop.getSpeed() * 0.026f + this.random.nextFloat() * 0.08f);
         drop.setWidth(0.0035f + this.random.nextFloat() * 0.0045f);
@@ -333,6 +324,10 @@ public final class RainfallRenderer {
     }
 
     public final void render(@NotNull MatrixStack stack, @NotNull VertexConsumerProvider.Immediate provider, @NotNull Vec3d camPos, float dropAlpha, float rippleAlpha, float footAlpha) {
+        Iterator iterator;
+        Intrinsics.checkNotNullParameter((Object)stack, (String)"stack");
+        Intrinsics.checkNotNullParameter((Object)provider, (String)"provider");
+        Intrinsics.checkNotNullParameter((Object)camPos, (String)"camPos");
         if (this.drops.isEmpty() && this.ripples.isEmpty()) {
             return;
         }
@@ -345,46 +340,38 @@ public final class RainfallRenderer {
         Intrinsics.checkNotNullExpressionValue((Object)entry2, (String)"last(...)");
         MatrixStack.Entry pose = entry2;
         if (dropAlpha > 0.01f) {
-            int dropCount = this.drops.size();
-            for (int i = 0; i < dropCount; i++) {
-                Drop drop = this.drops.get(i);
-                if (!drop.getAlive()) continue;
-                float rx = (float)(drop.getX() - camPos.x);
-                float rz = (float)(drop.getZ() - camPos.z);
-                float horizSq = rx * rx + rz * rz;
-                if (horizSq >= 256.0f) continue;
-                float ry = (float)(drop.getY() - camPos.y);
-                float distSq = horizSq + ry * ry;
-                if (distSq < 0.49f) continue;
+            Iterator iterator2 = this.drops.iterator();
+            Intrinsics.checkNotNullExpressionValue(iterator2, (String)"iterator(...)");
+            iterator = iterator2;
+            while (iterator.hasNext()) {
+                float sz;
+                float sy;
+                float tz;
+                float vlen;
+                float rz;
+                float ry;
+                float rx;
+                float distSq;
+                Object e = iterator.next();
+                Intrinsics.checkNotNullExpressionValue(e, (String)"next(...)");
+                Drop drop = (Drop)e;
+                if (!drop.getAlive() || (distSq = (rx = (float)(drop.getX() - camPos.x)) * rx + (ry = (float)(drop.getY() - camPos.y)) * ry + (rz = (float)(drop.getZ() - camPos.z)) * rz) < 0.36f) continue;
                 float dist = (float)Math.sqrt(distSq);
-                float horiz = (float)Math.sqrt(horizSq);
+                float horiz = (float)Math.sqrt(rx * rx + rz * rz);
                 float fade = 1.0f - RainfallRenderer.Companion.smoothstep(13.0f, 16.0f, horiz);
-                if ((fade *= RainfallRenderer.Companion.smoothstep(0.7f, 1.6f, dist)) <= 0.02f) continue;
-                float vx = drop.getVx();
-                float vy = drop.getVy();
-                float vz = drop.getVz();
-                float vlenSq = vx * vx + vy * vy + vz * vz;
-                if (vlenSq < 1.0E-6f) continue;
-                float vlen = (float)Math.sqrt(vlenSq);
+                if ((fade *= RainfallRenderer.Companion.smoothstep(0.7f, 1.6f, dist)) <= 0.02f || (vlen = (float)Math.sqrt(drop.getVx() * drop.getVx() + drop.getVy() * drop.getVy() + drop.getVz() * drop.getVz())) < 0.001f) continue;
                 float inv = drop.getLen() / vlen;
-                float tx = -vx * inv;
-                float ty = -vy * inv;
-                float tz = -vz * inv;
-                float sx = ty * rz - tz * ry;
-                float sy = tz * rx - tx * rz;
-                float sz = tx * ry - ty * rx;
-                float slSq = sx * sx + sy * sy + sz * sz;
-                if (slSq < 1.0E-8f) continue;
-                float sl = (float)Math.sqrt(slSq);
+                float tx = -drop.getVx() * inv;
+                float ty = -drop.getVy() * inv;
+                float sx = ty * rz - (tz = -drop.getVz() * inv) * ry;
+                float sl = (float)Math.sqrt(sx * sx + (sy = tz * rx - tx * rz) * sy + (sz = tx * ry - ty * rx) * sz);
+                if (sl < 1.0E-4f) continue;
                 float half = drop.getWidth() / sl;
                 int a = RangesKt.coerceIn((int)((int)(dropAlpha * fade * 150.0f)), (int)0, (int)255);
                 int aTop = (int)((float)a * 0.12f);
                 int bottom = a << 24 | 0xBFCEE6;
                 int top = aTop << 24 | 0xBFCEE6;
-                sx *= half;
-                sy *= half;
-                sz *= half;
-                consumer.vertex(pose, rx - sx, ry - sy, rz - sz).color(bottom);
+                consumer.vertex(pose, rx - (sx *= half), ry - (sy *= half), rz - (sz *= half)).color(bottom);
                 consumer.vertex(pose, rx + sx, ry + sy, rz + sz).color(bottom);
                 consumer.vertex(pose, rx + sx + tx, ry + sy + ty, rz + sz + tz).color(top);
                 consumer.vertex(pose, rx - sx + tx, ry - sy + ty, rz - sz + tz).color(top);
@@ -405,10 +392,13 @@ public final class RainfallRenderer {
     }
 
     private final void renderShard(VertexConsumer consumer, MatrixStack.Entry pose, Shard shard, Vec3d camPos, float alphaMul) {
+        float sz;
+        float sy;
+        float tz;
+        float rz;
+        float ry;
         float rx = (float)(shard.getX() - camPos.x);
-        float ry = (float)(shard.getY() - camPos.y);
-        float rz = (float)(shard.getZ() - camPos.z);
-        float distSq = rx * rx + ry * ry + rz * rz;
+        float distSq = rx * rx + (ry = (float)(shard.getY() - camPos.y)) * ry + (rz = (float)(shard.getZ() - camPos.z)) * rz;
         if (distSq > 484.0f || distSq < 0.09f) {
             return;
         }
@@ -418,34 +408,23 @@ public final class RainfallRenderer {
         if (a <= 3) {
             return;
         }
-        float vx = shard.getVx();
-        float vy = shard.getVy();
-        float vz = shard.getVz();
-        float vlenSq = vx * vx + vy * vy + vz * vz;
-        if (vlenSq < 1.0E-6f) {
+        float vlen = (float)Math.sqrt(shard.getVx() * shard.getVx() + shard.getVy() * shard.getVy() + shard.getVz() * shard.getVz());
+        if (vlen < 0.001f) {
             return;
         }
-        float vlen = (float)Math.sqrt(vlenSq);
         float len = 0.035f + vlen * 0.022f;
         float inv = len / vlen;
-        float tx = vx * inv;
-        float ty = vy * inv;
-        float tz = vz * inv;
-        float sx = ty * rz - tz * ry;
-        float sy = tz * rx - tx * rz;
-        float sz = tx * ry - ty * rx;
-        float slSq = sx * sx + sy * sy + sz * sz;
-        if (slSq < 1.0E-8f) {
+        float tx = shard.getVx() * inv;
+        float ty = shard.getVy() * inv;
+        float sx = ty * rz - (tz = shard.getVz() * inv) * ry;
+        float sl = (float)Math.sqrt(sx * sx + (sy = tz * rx - tx * rz) * sy + (sz = tx * ry - ty * rx) * sz);
+        if (sl < 1.0E-4f) {
             return;
         }
-        float sl = (float)Math.sqrt(slSq);
         float half = shard.getWidth() / sl;
         int head = a << 24 | 0xDCE8F8;
         int tail = a / 4 << 24 | 0xDCE8F8;
-        sx *= half;
-        sy *= half;
-        sz *= half;
-        consumer.vertex(pose, rx - sx, ry - sy, rz - sz).color(tail);
+        consumer.vertex(pose, rx - (sx *= half), ry - (sy *= half), rz - (sz *= half)).color(tail);
         consumer.vertex(pose, rx + sx, ry + sy, rz + sz).color(tail);
         consumer.vertex(pose, rx + sx + tx, ry + sy + ty, rz + sz + tz).color(head);
         consumer.vertex(pose, rx - sx + tx, ry - sy + ty, rz - sz + tz).color(head);
@@ -453,10 +432,10 @@ public final class RainfallRenderer {
 
     private final void renderRipple(VertexConsumer consumer, MatrixStack.Entry pose, Ripple ripple, Vec3d camPos, float alphaMul) {
         int spotAlpha;
+        float cz;
+        float cy;
         float cx = (float)(ripple.getX() - camPos.x);
-        float cy = (float)(ripple.getY() - camPos.y);
-        float cz = (float)(ripple.getZ() - camPos.z);
-        float distSq = cx * cx + cy * cy + cz * cz;
+        float distSq = cx * cx + (cy = (float)(ripple.getY() - camPos.y)) * cy + (cz = (float)(ripple.getZ() - camPos.z)) * cz;
         if (distSq > 676.0f) {
             return;
         }
@@ -482,11 +461,12 @@ public final class RainfallRenderer {
         if ((spotAlpha = RangesKt.coerceIn((int)((int)((1.0f - t * 0.85f) * ripple.getStrength() * alphaMul * 34.0f)), (int)0, (int)255)) > 2) {
             float spotR = radius + width * 1.6f;
             int spotColor = spotAlpha << 24 | 0xD4E2F4;
-            float pc = RING_COS[0];
-            float ps = RING_SIN[0];
+            float pc = 1.0f;
+            float ps = 0.0f;
             for (int i = 1; i < 19; ++i) {
-                float c = RING_COS[i];
-                float sN = RING_SIN[i];
+                float angle = (float)i * 0.34906584f;
+                float c = (float)Math.cos(angle);
+                float sN = (float)Math.sin(angle);
                 consumer.vertex(pose, cx, cy, cz).color(spotColor);
                 consumer.vertex(pose, cx, cy, cz).color(spotColor);
                 consumer.vertex(pose, cx + c * spotR, cy, cz + sN * spotR).color(13951732);
@@ -497,7 +477,7 @@ public final class RainfallRenderer {
         }
         if (ripple.getSplash() && ripple.getAge() < 0.22f) {
             float st = ripple.getAge() / 0.22f;
-            float h = 0.17f * MathHelper.sin(st * (float)Math.PI);
+            float h = 0.17f * (float)Math.sin(st * 3.1416f);
             float w = 0.028f;
             int sa = RangesKt.coerceIn((int)((int)((1.0f - st) * ripple.getStrength() * alphaMul * 200.0f)), (int)0, (int)255);
             int col = sa << 24 | 0xDCE8F8;
@@ -522,11 +502,12 @@ public final class RainfallRenderer {
         int edgeColor = 13951732;
         float inner = Math.max(0.01f, radius - width);
         float outer = radius + width;
-        float prevCos = RING_COS[0];
-        float prevSin = RING_SIN[0];
+        float prevCos = 1.0f;
+        float prevSin = 0.0f;
         for (int i = 1; i < 19; ++i) {
-            float c = RING_COS[i];
-            float s = RING_SIN[i];
+            float angle = (float)i * 0.34906584f;
+            float c = (float)Math.cos(angle);
+            float s = (float)Math.sin(angle);
             consumer.vertex(pose, cx + prevCos * inner, cy, cz + prevSin * inner).color(edgeColor);
             consumer.vertex(pose, cx + c * inner, cy, cz + s * inner).color(edgeColor);
             consumer.vertex(pose, cx + c * radius, cy, cz + s * radius).color(midColor);

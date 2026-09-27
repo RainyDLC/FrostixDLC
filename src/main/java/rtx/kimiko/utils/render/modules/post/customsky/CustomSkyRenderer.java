@@ -157,17 +157,6 @@ public final class CustomSkyRenderer {
     private static final Matrix4f PENDING_VIEW_PROJ;
     private static boolean pendingValid;
     private static boolean appliedThisFrame;
-    private static final String[] BLOOM_SAMPLER_NAMES = new String[]{"Bloom0", "Bloom1", "Bloom2", "Bloom3", "Bloom4", "Bloom5"};
-    private static final ByteBuffer BLOOM_DIRECT = ByteBuffer.allocateDirect(16).order(java.nio.ByteOrder.nativeOrder());
-    @SuppressWarnings("unchecked")
-    private static final Supplier<String>[] BLOOM_PASS_NAMES = new Supplier[]{
-        () -> "kimiko:customsky_bloom_down_0",
-        () -> "kimiko:customsky_bloom_down_1",
-        () -> "kimiko:customsky_bloom_down_2",
-        () -> "kimiko:customsky_bloom_down_3",
-        () -> "kimiko:customsky_bloom_down_4",
-        () -> "kimiko:customsky_bloom_down_5"
-    };
     @Nullable
     private static WeakReference<ClientWorld> lastLevel;
 
@@ -361,7 +350,7 @@ public final class CustomSkyRenderer {
                 pass.bindTexture("DepthTex", renderTarget.getDepthAttachmentView(), RenderSampler.nearest());
                 pass.bindTexture("Sky", skyTextureViews[write], RenderSampler.linear());
                 for (int level = 0; level < 6; ++level) {
-                    pass.bindTexture(BLOOM_SAMPLER_NAMES[level], bloomTextureViews[level], RenderSampler.linear());
+                    pass.bindTexture("Bloom" + level, bloomTextureViews[level], RenderSampler.linear());
                 }
                 pass.draw(0, 6);
                 Unit unit = Unit.INSTANCE;
@@ -391,31 +380,53 @@ public final class CustomSkyRenderer {
      */
     private final void buildBloom(CommandEncoder encoder, GpuTextureView skyView, boolean hdr) {
         GpuTextureView source = skyView;
-        int srcWidth = marchWidth;
-        int srcHeight = marchHeight;
+        int srcWidth = 0;
+        srcWidth = marchWidth;
+        int srcHeight = 0;
+        srcHeight = marchHeight;
         for (int level = 0; level < 6; ++level) {
-            BLOOM_DIRECT.position(0);
-            BLOOM_DIRECT.putFloat(0, 1.0f / (float)srcWidth);
-            BLOOM_DIRECT.putFloat(4, 1.0f / (float)srcHeight);
-            BLOOM_DIRECT.putFloat(8, !hdr && level == 0 ? 0.28f : 0.0f);
-            BLOOM_DIRECT.putFloat(12, hdr ? 1.0f : 0.0f);
-            BLOOM_DIRECT.position(0);
-            GpuBuffer gpuBuffer = bloomUniformBuffer;
-            Intrinsics.checkNotNull((Object)gpuBuffer);
-            encoder.writeToBuffer(gpuBuffer.slice(0L, 16L), BLOOM_DIRECT);
+            Object object;
+            int current = level;
+            AutoCloseable autoCloseable = (AutoCloseable)MemoryStack.stackPush();
+            Throwable throwable = null;
+            try {
+                MemoryStack stack = (MemoryStack)autoCloseable;
+                boolean bl = false;
+                ByteBuffer data = stack.calloc(16);
+                data.putFloat(0, 1.0f / (float)srcWidth);
+                data.putFloat(4, 1.0f / (float)srcHeight);
+                data.putFloat(8, !hdr && level == 0 ? 0.28f : 0.0f);
+                data.putFloat(12, hdr ? 1.0f : 0.0f);
+                data.position(0);
+                GpuBuffer gpuBuffer = bloomUniformBuffer;
+                Intrinsics.checkNotNull((Object)gpuBuffer);
+                encoder.writeToBuffer(gpuBuffer.slice(0L, 16L), data);
+// object = Unit.INSTANCE;
+            }
+            catch (Throwable throwable2) {
+                throwable = throwable2;
+                throw throwable2;
+            }
+            finally {
+                AutoCloseableKt.closeFinally((AutoCloseable)autoCloseable, (Throwable)throwable);
+            }
             GpuTextureView target = bloomTextureViews[level];
             Intrinsics.checkNotNull((Object)target);
             GpuTextureView input = source;
-            AutoCloseable object = (AutoCloseable)encoder.createRenderPass(BLOOM_PASS_NAMES[level], target, OptionalInt.empty());
+            object = (AutoCloseable)encoder.createRenderPass(() -> CustomSkyRenderer.buildBloom$lambda$1(current), target, OptionalInt.empty());
             Throwable throwable3 = null;
             try {
                 RenderPass pass = (RenderPass)object;
+                boolean bl = false;
                 RenderPipeline renderPipeline = bloomPipeline;
                 Intrinsics.checkNotNull((Object)renderPipeline);
                 pass.setPipeline(renderPipeline);
+                GpuBuffer gpuBuffer = bloomUniformBuffer;
+                Intrinsics.checkNotNull((Object)gpuBuffer);
                 pass.setUniform("BloomParams", gpuBuffer);
                 pass.bindTexture("Source", input, RenderSampler.linear());
                 pass.draw(0, 6);
+                Unit unit = Unit.INSTANCE;
             }
             catch (Throwable throwable4) {
                 throwable3 = throwable4;

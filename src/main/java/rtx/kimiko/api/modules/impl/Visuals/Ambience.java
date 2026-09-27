@@ -561,14 +561,6 @@ extends Module {
         if (!this.isVisuallyActive() || !this.customFog.getValue() || this.fogDensity.getFloat() <= 0.5f) {
             return;
         }
-        float alpha = this.visualAlpha();
-        if (alpha <= 0.001f) {
-            return;
-        }
-        float d = this.fogDensity.getFloat() / 100.0f * alpha;
-        if (d <= 0.001f) {
-            return;
-        }
         if (camera.getSubmersionType() != CameraSubmersionType.NONE) {
             return;
         }
@@ -579,6 +571,7 @@ extends Module {
         Intrinsics.checkNotNullExpressionValue((Object)vec3d2, (String)"position(...)");
         Vec3d cam = vec3d2;
         int color = this.fogColorRGB();
+        float d = this.fogDensity.getFloat() / 100.0f * this.visualAlpha();
         float[] data = this.fogUniform;
         data[0] = d * d * 0.05f + d * 0.002f;
         data[1] = (float)(System.currentTimeMillis() % 600000L) / 1000.0f;
@@ -606,11 +599,7 @@ extends Module {
         if (renderTarget == null || positionMatrix == null || projectionMatrix == null || camera == null) {
             return;
         }
-        if (!this.isVisuallyActive() || !this.wetWorld.getValue() || this.wetReflection.getFloat() <= 0.5f || this.wetAmount.getFloat() <= 0.5f) {
-            return;
-        }
-        float alpha = this.visualAlpha();
-        if (alpha <= 0.001f) {
+        if (!this.isVisuallyActive() || !this.wetWorld.getValue() || this.wetReflection.getFloat() <= 0.5f) {
             return;
         }
         if (renderTarget.textureWidth <= 0 || renderTarget.textureHeight <= 0) {
@@ -641,8 +630,8 @@ extends Module {
         data[5] = (float)(skyColor >> 8 & 0xFF) / 255.0f;
         data[6] = (float)(skyColor & 0xFF) / 255.0f;
         data[7] = this.wetReflection.getFloat() / 100.0f;
-        data[8] = -MathHelper.sin(sunAngle);
-        data[9] = MathHelper.cos(sunAngle);
+        data[8] = -((float)Math.sin(sunAngle));
+        data[9] = (float)Math.cos(sunAngle);
         data[10] = 0.0f;
         data[11] = this.wetAmount.getFloat() / 100.0f;
         data[12] = 0.0f;
@@ -663,7 +652,7 @@ extends Module {
 
     public final void renderRainfall(@NotNull WorldRenderEvent event) {
         Intrinsics.checkNotNullParameter((Object)event, (String)"event");
-        if (!this.isEnabled() || !this.customRain.getValue() || this.rainDropDensity.getFloat() <= 0.5f) {
+        if (!this.isEnabled() || !this.customRain.getValue()) {
             this.lastRainfallNanos = 0L;
             this.rainfall.clear();
             return;
@@ -701,13 +690,7 @@ extends Module {
 
     public final void renderFireflies(@NotNull WorldRenderEvent event) {
         Intrinsics.checkNotNullParameter((Object)event, (String)"event");
-        if (!this.isVisuallyActive() || !this.fireflies.getValue() || this.fireflyCount.getFloat() <= 0.5f) {
-            this.lastFireflyNanos = 0L;
-            this.fireflyField.clear();
-            return;
-        }
-        float alpha = this.visualAlpha();
-        if (alpha <= 0.001f) {
+        if (!this.isVisuallyActive() || !this.fireflies.getValue()) {
             this.lastFireflyNanos = 0L;
             this.fireflyField.clear();
             return;

@@ -102,23 +102,6 @@ extends Module {
     private static final int SEGMENTS = 144;
     private static final int OUTLINE_CROSS_SIDES = 16;
     private static final float TAU = (float)Math.PI * 2;
-    private static final float[] RING_SIN = new float[145];
-    private static final float[] RING_COS = new float[145];
-    private static final float[] TUBE_COS = new float[16];
-    private static final float[] TUBE_SIN = new float[16];
-
-    static {
-        for (int i = 0; i < 145; i++) {
-            float ang = (float)i / 144.0f * ((float)Math.PI * 2);
-            RING_SIN[i] = MathHelper.sin((double)ang);
-            RING_COS[i] = -MathHelper.cos((double)ang);
-        }
-        for (int j = 0; j < 16; j++) {
-            float phi = (float)Math.PI * 2 * (float)j / 16.0f;
-            TUBE_COS[j] = MathHelper.cos((double)phi);
-            TUBE_SIN[j] = MathHelper.sin((double)phi);
-        }
-    }
     private static final int DARK_SECOND_COLOR = new Color(16, 16, 16, 75).getRGB();
     private static final long TRANSFORM_TTL_MS = 250L;
     private static final float HAT_SCALE = 1.0f;
@@ -265,10 +248,12 @@ extends Module {
         for (int i = 0; i < 144; ++i) {
             float t0 = (float)i / 144.0f;
             float t1 = (float)(i + 1) / 144.0f;
-            float x0 = RING_SIN[i] * radius;
-            float z0 = RING_COS[i] * radius;
-            float x1 = RING_SIN[i + 1] * radius;
-            float z1 = RING_COS[i + 1] * radius;
+            float a0 = t0 * ((float)Math.PI * 2);
+            float a1 = t1 * ((float)Math.PI * 2);
+            float x0 = MathHelper.sin((double)a0) * radius;
+            float z0 = -MathHelper.cos((double)a0) * radius;
+            float x1 = MathHelper.sin((double)a1) * radius;
+            float z1 = -MathHelper.cos((double)a1) * radius;
             int c0 = this.modeColor((int)(t0 * 720.0f), 0.5f);
             int c1 = this.modeColor((int)(t1 * 720.0f), 0.5f);
             body.vertex(pose, x0, baseY, z0).color(c0);
@@ -293,14 +278,16 @@ extends Module {
         for (int i = 0; i < 145; ++i) {
             int j;
             float t = (float)i / 144.0f;
-            float dirX = RING_SIN[i];
-            float dirZ = RING_COS[i];
+            float ang = t * ((float)Math.PI * 2);
+            float dirX = MathHelper.sin((double)ang);
+            float dirZ = -MathHelper.cos((double)ang);
             float centerX = dirX * ringRadius;
             float centerZ = dirZ * ringRadius;
             int color = this.modeColor((int)(t * 720.0f), 1.0f);
             for (j = 0; j < 16; ++j) {
-                float cosP = TUBE_COS[j];
-                float sinP = TUBE_SIN[j];
+                float phi = (float)Math.PI * 2 * (float)j / (float)16;
+                float cosP = MathHelper.cos((double)phi);
+                float sinP = MathHelper.sin((double)phi);
                 cx[j] = centerX + tubeR * cosP * dirX;
                 cy[j] = ringY + tubeR * sinP;
                 cz[j] = centerZ + tubeR * cosP * dirZ;
