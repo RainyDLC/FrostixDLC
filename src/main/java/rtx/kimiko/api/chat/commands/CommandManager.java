@@ -47,6 +47,7 @@ import org.jetbrains.annotations.Nullable;
 import rtx.kimiko.api.chat.commands.Command;
 import rtx.kimiko.api.chat.commands.impl.BindCommand;
 import rtx.kimiko.api.chat.commands.impl.CardsCommand;
+import rtx.kimiko.api.chat.commands.impl.GuiCommand;
 import rtx.kimiko.api.chat.commands.impl.HelpCommand;
 import rtx.kimiko.api.chat.commands.impl.MacroCommand;
 import rtx.kimiko.api.chat.commands.impl.PartyChatCommand;
@@ -90,6 +91,7 @@ public final class CommandManager {
         }
         this.prefix = string;
         this.register(new HelpCommand());
+        this.register(new GuiCommand());
         this.register(new MacroCommand());
         this.register(new BindCommand());
         this.register(new PrefixCommand());

@@ -28,6 +28,9 @@
       "file": "META-INF/jars/core-3.8.3.jar"
     },
     {
+      "file": "META-INF/jars/fabric-language-kotlin-1.13.12+kotlin.2.4.0.jar"
+    },
+    {
       "file": "META-INF/jars/geckolib-fabric-1.21.11-5.4.5.jar"
     },
     {
@@ -47,9 +50,11 @@
     }
   ],
   "depends": {
-    "fabricloader": ">=0.19.3",
-    "minecraft": "1.21.11",
-    "java": ">=21",
+    "fabricloader": ">=0.15.0",
+    "minecraft": ">=1.21",
+    "java": ">=21"
+  },
+  "recommends": {
     "fabric-api": "*",
     "fabric-language-kotlin": "*"
   }
