@@ -29,7 +29,7 @@ public final class SunTracker {
         ClientWorld world = mc.world;
         Camera camera = mc.gameRenderer.getCamera();
 
-        Vector3f sunDir = sunDirection(world, tickDelta);
+        Vector3f sunDir = sunDirection(camera, tickDelta);
         Vector3f view = new Vector3f(sunDir).rotate(new Quaternionf(camera.getRotation()).conjugate());
 
         float target = 0f;
@@ -57,13 +57,14 @@ public final class SunTracker {
     }
 
     /** Vanilla sky: sun is rotated -90 around Y then by the sky angle around X. */
-    private static Vector3f sunDirection(ClientWorld world, float tickDelta) {
-        float angle = world.getSkyAngleRadians(tickDelta);
+    private static Vector3f sunDirection(Camera camera, float tickDelta) {
+        float angle = camera.getEnvironmentAttributeInterpolator().get(
+                net.minecraft.world.attribute.EnvironmentAttributes.SUN_ANGLE_VISUAL, tickDelta) * 0.017453292f;
         return new Vector3f((float) -Math.sin(angle), (float) Math.cos(angle), 0f);
     }
 
     private static boolean isOccluded(MinecraftClient mc, Camera camera, Vector3f sunDir) {
-        Vec3d start = camera.getPos();
+        Vec3d start = camera.getCameraPos();
         Vec3d end = start.add(sunDir.x * OCCLUSION_RAY_LENGTH, sunDir.y * OCCLUSION_RAY_LENGTH, sunDir.z * OCCLUSION_RAY_LENGTH);
         HitResult hit = mc.world.raycast(new RaycastContext(start, end,
                 RaycastContext.ShapeType.VISUAL, RaycastContext.FluidHandling.ANY, mc.player));
