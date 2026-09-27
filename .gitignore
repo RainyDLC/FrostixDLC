@@ -19,3 +19,8 @@ logs/
 *.log
 .DS_Store
 Thumbs.db
+
+launcher/node_modules/
+launcher/runtime/
+launcher/mods/*.jar
+launcher/*.exe
