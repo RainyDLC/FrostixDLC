@@ -45,7 +45,7 @@ public final class WindowTitleAnimation {
 
     @NotNull
     public final String currentTitle() {
-        return "Kimiko v1.5  \u2758  " + this.visible;
+        return "RainyDLC v1.5  \u2758  " + this.visible;
     }
 
     public final void tick() {

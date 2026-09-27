@@ -106,7 +106,7 @@ extends MenuPage {
         }
         float textX = hx + head + 18.0f;
         Fonts.BOLD.draw(name, textX, cy + 34.0f, 14.0f, MenuTheme.white(255.0f, alpha));
-        String profileLabel = I18n.tr("Профиль Kimiko: ") + profile;
+        String profileLabel = I18n.tr("Профиль RainyDLC: ") + profile;
         Fonts.MEDIUM.draw(profileLabel, textX, cy + 56.0f, 4.8f, MenuTheme.inkMuted(alpha));
         String uuidLabel = "UUID " + uuid;
         float maxW = cw - (textX - cx) - 24.0f;

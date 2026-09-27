@@ -41,7 +41,7 @@ extends Module {
     private boolean lastDown;
 
     public Cards() {
-        super("Cards", "Подкидной дурак с игроками Kimiko: приглашайте и играйте прямо в клиенте.", Category.UTILS);
+        super("Cards", "Подкидной дурак с игроками RainyDLC: приглашайте и играйте прямо в клиенте.", Category.UTILS);
     }
 
     @Override

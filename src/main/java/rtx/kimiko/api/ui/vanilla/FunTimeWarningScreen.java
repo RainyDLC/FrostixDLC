@@ -122,7 +122,7 @@ extends Screen {
         this.address = match == null ? "" : match.address();
         this.subtitle = Text.literal(I18n.tr("Вы подключаетесь к серверу %s", display));
         this.paragraphs = List.of(
-            new Paragraph(Text.literal(I18n.tr("За игру на %s с клиентом Kimiko вы можете получить бан.", display)), -34202),
+            new Paragraph(Text.literal(I18n.tr("За игру на %s с клиентом RainyDLC вы можете получить бан.", display)), -34202),
             new Paragraph(Text.literal(I18n.tr("Сейчас администрация разрабатывает собственный API для клиентов. ") + I18n.tr("Как только его закончат, мы свяжемся с ними и получим одобрение.")), -3159082),
             new Paragraph(Text.literal(I18n.tr("Заявку мы уже подавали — нам ответили, что её не рассматривают.")), -3159082),
             new Paragraph(Text.literal(I18n.tr("Продолжая, вы играете на свой страх и риск.")), -6646874)

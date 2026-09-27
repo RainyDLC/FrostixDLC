@@ -119,7 +119,7 @@ extends MenuPage {
         int dotColor = online > 0 ? MenuTheme.fade(-10755958, alpha) : MenuTheme.white(80.0f, alpha);
         Render2D.circle(textX + 8.0f, chipY + 7.0f, 2.0f, 2.0f, dotColor);
         Fonts.SEMIBOLD.draw(chipText, textX + 14.0f, chipY + 4.5f, 4.6f, MenuTheme.inkSoft(alpha));
-        String badge = "Kimiko v1.5";
+        String badge = "RainyDLC v1.5";
         float badgeW = Fonts.SEMIBOLD.width(badge, 5.0f);
         Fonts.SEMIBOLD.draw(badge, hx + hw - 22.0f - badgeW, hy + hh * 0.18f, 5.0f, MenuTheme.accent(210.0f, alpha));
         long total = MenuStats.totalSeconds();
@@ -136,7 +136,7 @@ extends MenuPage {
         if (alpha <= 0.004f) {
             return;
         }
-        String[] stringArray = new String[]{I18n.tr("Запусков"), I18n.tr("Сессия"), I18n.tr("С нами с"), I18n.tr("Kimiko в сети")};
+        String[] stringArray = new String[]{I18n.tr("Запусков"), I18n.tr("Сессия"), I18n.tr("С нами с"), I18n.tr("RainyDLC в сети")};
         String[] labels = stringArray;
         long first = MenuStats.firstLaunch();
         String since = first > 0L ? new SimpleDateFormat("dd.MM.yy", Locale.ROOT).format(new Date(first)) : "—";
@@ -168,7 +168,7 @@ extends MenuPage {
         Fonts.BOLD.draw(title, ix + 14.0f, iy + 13.0f, 5.6f, MenuTheme.ink(alpha * 0.9f));
         MenuTheme.hairline(ix + 14.0f, iy + 26.0f, iw - 28.0f, alpha * 0.7f);
         String[][] stringArrayArray = new String[4][];
-        String[] stringArray = new String[]{I18n.tr("Клиент"), "Kimiko v1.5"};
+        String[] stringArray = new String[]{I18n.tr("Клиент"), "RainyDLC v1.5"};
         stringArrayArray[0] = stringArray;
         stringArray = new String[]{"Minecraft", MainWindow.getMinecraftVersionName()};
         stringArrayArray[1] = stringArray;

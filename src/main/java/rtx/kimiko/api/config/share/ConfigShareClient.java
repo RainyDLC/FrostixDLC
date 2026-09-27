@@ -109,7 +109,7 @@ public final class ConfigShareClient {
         }
         int uid = ConfigIdentity.uid();
         if (uid <= 0) {
-            ConfigShareClient.Companion.reply(callback, null, "Нужен профиль Kimiko");
+            ConfigShareClient.Companion.reply(callback, null, "Нужен профиль RainyDLC");
             return;
         }
         JsonObject body = this.identity(uid);
@@ -128,7 +128,7 @@ public final class ConfigShareClient {
         }
         int uid = ConfigIdentity.uid();
         if (uid <= 0) {
-            ConfigShareClient.Companion.reply(callback, null, "Нужен профиль Kimiko");
+            ConfigShareClient.Companion.reply(callback, null, "Нужен профиль RainyDLC");
             return;
         }
         JsonObject body = this.identity(uid);

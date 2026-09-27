@@ -8,4 +8,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "KimikoClient"
+rootProject.name = "RainyDLC"

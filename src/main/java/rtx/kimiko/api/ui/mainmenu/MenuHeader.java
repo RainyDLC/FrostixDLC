@@ -53,7 +53,7 @@ public final class MenuHeader {
         float iconW = Fonts.KIMIKO.msdfWidth(BRAND_GLYPH, iconSize);
         AccentGradient.msdfIcon(Fonts.KIMIKO, BRAND_GLYPH, x, centerY - iconSize * 0.5f + 0.5f, iconSize, 235.0f * headAlpha, 0.1f);
         float nameX = x + iconW + gap;
-        String string = "Kimiko";
+        String string = "RainyDLC";
         Locale locale = Locale.ROOT;
         Intrinsics.checkNotNullExpressionValue((Object)locale, (String)"ROOT");
         String string2 = string.toUpperCase(locale);

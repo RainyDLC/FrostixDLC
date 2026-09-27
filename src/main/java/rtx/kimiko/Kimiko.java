@@ -29,7 +29,7 @@ ClientModInitializer {
     @NotNull
     public static final Companion Companion = new Companion(null);
     @NotNull
-    public static final String CLIENT_NAME = "Kimiko";
+    public static final String CLIENT_NAME = "RainyDLC";
     @NotNull
     public static final String CLIENT_VERSION = "v1.5";
 
@@ -54,12 +54,7 @@ ClientModInitializer {
         @JvmStatic
         @NotNull
         public final String namespace() {
-            String string = Kimiko.CLIENT_NAME;
-            Locale locale = Locale.ROOT;
-            Intrinsics.checkNotNullExpressionValue((Object)locale, (String)"ROOT");
-            String string2 = string.toLowerCase(locale);
-            Intrinsics.checkNotNullExpressionValue((Object)string2, (String)"toLowerCase(...)");
-            return string2;
+            return "kimiko";
         }
 
         public /* synthetic */ Companion(DefaultConstructorMarker $constructor_marker) {

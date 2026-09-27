@@ -641,7 +641,7 @@ extends Draggable {
         LOADER_MARGIN_EM = new float[]{-2.1f, -0.98f, -0.33f, -0.05f, 0.0f, 0.05f, 0.33f, 0.98f, 2.1f};
         LOADER_GRAD_START = new float[]{0.04f, 0.09f, 0.15f, 0.2f, 0.0f, 0.29f, 0.34f, 0.39f, 0.45f};
         LOADER_GRAD_END = new float[]{0.07f, 0.13f, 0.18f, 0.23f, 0.0f, 0.32f, 0.37f, 0.42f, 0.48f};
-        BRAND_GLYPHS = new String[]{"K", "i", "m", "i", "k", "o"};
+        BRAND_GLYPHS = new String[]{"R", "a", "i", "n", "y", "D", "L", "C"};
         BRAND_ICON_GLYPHS = new String[]{BRAND_ICON_GLYPH};
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
         Intrinsics.checkNotNullExpressionValue((Object)dateTimeFormatter, (String)"ofPattern(...)");

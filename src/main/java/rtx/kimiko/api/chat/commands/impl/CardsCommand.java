@@ -123,7 +123,7 @@ extends Command {
     @NotNull
     public List<String> getLongDesc() {
         return List.of(
-            I18n.tr("Карточная игра «Подкидной дурак» с другими игроками Kimiko."),
+            I18n.tr("Карточная игра «Подкидной дурак» с другими игроками RainyDLC."),
             I18n.tr("> cards open — открыть стол"),
             I18n.tr("> cards invite <ник> — пригласить игрока"),
             I18n.tr("> cards leave — покинуть стол")

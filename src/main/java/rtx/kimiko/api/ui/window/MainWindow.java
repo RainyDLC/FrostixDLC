@@ -44,7 +44,7 @@ public final class MainWindow {
     @NotNull
     public static final MainWindow INSTANCE = new MainWindow();
     @NotNull
-    public static final String CLIENT_NAME = "Kimiko";
+    public static final String CLIENT_NAME = "RainyDLC";
     @JvmField
     @NotNull
     public static final String CLIENT_NAME_UPPER;

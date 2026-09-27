@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "kimiko",
   "version": "1.5-privacy",
-  "name": "Kimiko Privacy",
+  "name": "RainyDLC",
   "environment": "client",
   "entrypoints": {
     "preLaunch": [

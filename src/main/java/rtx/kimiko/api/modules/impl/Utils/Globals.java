@@ -35,16 +35,16 @@ extends Module {
     @NotNull
     public static final Companion Companion = new Companion(null);
     @NotNull
-    private final BooleanSetting inTags = (BooleanSetting)this.register((Setting)new BooleanSetting("Показывать в тегах", "Логотип клиента рядом с именем игроков Kimiko в табличках над головой.", true));
+    private final BooleanSetting inTags = (BooleanSetting)this.register((Setting)new BooleanSetting("Показывать в тегах", "Логотип клиента рядом с именем игроков RainyDLC в табличках над головой.", true));
     @NotNull
-    private final BooleanSetting inTab = (BooleanSetting)this.register((Setting)new BooleanSetting("Показывать в табе", "Логотип клиента рядом с именем игроков Kimiko в списке игроков (Tab).", true));
+    private final BooleanSetting inTab = (BooleanSetting)this.register((Setting)new BooleanSetting("Показывать в табе", "Логотип клиента рядом с именем игроков RainyDLC в списке игроков (Tab).", true));
     @NotNull
-    private final BooleanSetting shareGui = (BooleanSetting)this.register((Setting)new BooleanSetting("Транслировать гуй", "Пользователи Kimiko рядом видят ваш открытый гуй в мире перед вами.", true));
+    private final BooleanSetting shareGui = (BooleanSetting)this.register((Setting)new BooleanSetting("Транслировать гуй", "Пользователи RainyDLC рядом видят ваш открытый гуй в мире перед вами.", true));
     @NotNull
-    private final BooleanSetting remoteGuis = (BooleanSetting)this.register((Setting)new BooleanSetting("Гуй игроков в мире", "Показывает открытые гуи других пользователей Kimiko у их лица.", true));
+    private final BooleanSetting remoteGuis = (BooleanSetting)this.register((Setting)new BooleanSetting("Гуй игроков в мире", "Показывает открытые гуи других пользователей RainyDLC у их лица.", true));
 
     public Globals() {
-        super("Globals", "Показывает метку клиента у других пользователей Kimiko.", Category.UTILS);
+        super("Globals", "Показывает метку клиента у других пользователей RainyDLC.", Category.UTILS);
     }
 
     @Override

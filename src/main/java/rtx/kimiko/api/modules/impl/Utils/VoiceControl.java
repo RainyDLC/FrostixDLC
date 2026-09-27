@@ -40,7 +40,7 @@ extends Module {
     @NotNull
     private final SeparatorSetting wakeSeparator = (SeparatorSetting)this.register((Setting)new SeparatorSetting("Ключевое слово"));
     @NotNull
-    private final ButtonSetting recordWake = (ButtonSetting)this.register((Setting)new ButtonSetting("Ключевое слово", "Записать фразу активации, например «Кимико».").label("Записать").onClick(() -> VoiceControl.recordWake$lambda$0(this)));
+    private final ButtonSetting recordWake = (ButtonSetting)this.register((Setting)new ButtonSetting("Ключевое слово", "Записать фразу активации, например «RainyDLC».").label("Записать").onClick(() -> VoiceControl.recordWake$lambda$0(this)));
     @NotNull
     private final ButtonSetting clearWake = (ButtonSetting)this.register((Setting)new ButtonSetting("Сбросить", "Удалить записанное ключевое слово.").label("Удалить").onClick(() -> VoiceControl.clearWake$lambda$0(this)).visible(VoiceControl::clearWake$lambda$1));
     @NotNull

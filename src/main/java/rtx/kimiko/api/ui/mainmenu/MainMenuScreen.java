@@ -87,7 +87,7 @@ extends BaseScreen {
     private static MainMenuScreen instance;
 
     private MainMenuScreen() {
-        super((Text)Text.literal("Kimiko"));
+        super((Text)Text.literal("RainyDLC"));
         this.pages = new EnumMap(MainMenuTab.class);
         this.dock = new MenuDock();
         this.header = new MenuHeader();
