@@ -88,14 +88,14 @@ let isLaunching = false;
 
 // Ensure Fabric Profile JSON exists
 async function ensureFabricProfile(gameDir) {
-    const fabricVersionId = 'fabric-loader-0.16.10-1.21.1';
+    const fabricVersionId = 'fabric-loader-0.19.5-1.21.11';
     const versionDir = path.join(gameDir, 'versions', fabricVersionId);
     const jsonPath = path.join(versionDir, `${fabricVersionId}.json`);
 
     if (!fs.existsSync(jsonPath)) {
         fs.mkdirSync(versionDir, { recursive: true });
-        broadcast('log', { text: 'Загрузка манифеста Fabric Loader 0.16.10...' });
-        const res = await fetch('https://meta.fabricmc.net/v2/versions/loader/1.21.1/0.16.10/profile/json');
+        broadcast('log', { text: 'Загрузка манифеста Fabric Loader 0.19.5 (Minecraft 1.21.11)...' });
+        const res = await fetch('https://meta.fabricmc.net/v2/versions/loader/1.21.11/0.19.5/profile/json');
         if (!res.ok) throw new Error(`Fabric Meta API returned ${res.status}`);
         const data = await res.json();
         fs.writeFileSync(jsonPath, JSON.stringify(data, null, 2), 'utf8');
@@ -306,7 +306,7 @@ const server = http.createServer(async (req, res) => {
                     broadcast('log', { text: `[Kimiko Launcher] Игра завершена с кодом ${code}` });
                 });
 
-                broadcast('status', { state: 'downloading', text: 'Проверка ресурсов и библиотек Minecraft 1.21.1...' });
+                broadcast('status', { state: 'downloading', text: 'Проверка ресурсов и библиотек Minecraft 1.21.11...' });
 
                 const opts = {
                     clientPackage: null,
@@ -314,9 +314,9 @@ const server = http.createServer(async (req, res) => {
                     root: gameDir,
                     javaPath: javaPath,
                     version: {
-                        number: '1.21.1',
+                        number: '1.21.11',
                         type: 'release',
-                        custom: 'fabric-loader-0.16.10-1.21.1'
+                        custom: 'fabric-loader-0.19.5-1.21.11'
                     },
                     memory: {
                         max: `${ram}M`,
