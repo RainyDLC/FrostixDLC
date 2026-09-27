@@ -29,8 +29,5 @@ public interface MinecraftAccessor {
 
     @Accessor(value="itemUseCooldown")
     public void kimiko$setRightClickDelay(int var1);
-
-    @Invoker(value="setWorld")
-    public void kimiko$updateLevelInEngines(ClientWorld var1);
 }
 
