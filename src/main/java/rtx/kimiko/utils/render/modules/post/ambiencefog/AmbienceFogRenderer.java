@@ -67,7 +67,9 @@ public final class AmbienceFogRenderer {
     @NotNull
     public static final AmbienceFogRenderer INSTANCE = new AmbienceFogRenderer();
     public static final int INV_VP_OFFSET = 16;
-    public static final int UNIFORM_FLOATS = 32;
+    private static final ByteBuffer UNIFORM_DIRECT = ByteBuffer.allocateDirect(128).order(java.nio.ByteOrder.nativeOrder());
+    private static final java.nio.FloatBuffer UNIFORM_FLOAT = UNIFORM_DIRECT.asFloatBuffer();
+    private static final int UNIFORM_FLOATS = 32;
     private static final int UNIFORM_SIZE = 128;
     @NotNull
     private static final Identifier PIPELINE_ID = INSTANCE.id("pipeline/post/ambiencefog");
@@ -81,10 +83,6 @@ public final class AmbienceFogRenderer {
     private static GpuTexture sceneCopyTexture;
     @Nullable
     private static GpuTextureView sceneCopyTextureView;
-    @Nullable
-    private static GpuTexture depthCopyTexture;
-    @Nullable
-    private static GpuTextureView depthCopyTextureView;
     private static int sceneWidth;
     private static int sceneHeight;
     private static boolean disabledAfterError;
@@ -92,13 +90,10 @@ public final class AmbienceFogRenderer {
     private AmbienceFogRenderer() {
     }
 
-    /*
-     * WARNING - Removed try catching itself - possible behaviour change.
-     */
     @JvmStatic
     public static final void apply(@Nullable Framebuffer renderTarget, @NotNull float[] uniform) {
         Intrinsics.checkNotNullParameter((Object)uniform, (String)"uniform");
-        if (disabledAfterError || renderTarget == null || renderTarget.getColorAttachment() == null || renderTarget.getColorAttachmentView() == null || renderTarget.getDepthAttachment() == null || renderTarget.textureWidth <= 0 || renderTarget.textureHeight <= 0) {
+        if (disabledAfterError || renderTarget == null || renderTarget.getColorAttachment() == null || renderTarget.getColorAttachmentView() == null || renderTarget.getDepthAttachmentView() == null || renderTarget.textureWidth <= 0 || renderTarget.textureHeight <= 0) {
             return;
         }
         INSTANCE.init();
@@ -116,52 +111,19 @@ public final class AmbienceFogRenderer {
             GpuTexture gpuTexture2 = sceneCopyTexture;
             Intrinsics.checkNotNull((Object)gpuTexture2);
             encoder.copyTextureToTexture(gpuTexture, gpuTexture2, 0, 0, 0, 0, 0, renderTarget.textureWidth, renderTarget.textureHeight);
-            GpuTexture gpuTexture3 = renderTarget.getDepthAttachment();
-            Intrinsics.checkNotNull((Object)gpuTexture3);
-            GpuTexture gpuTexture4 = depthCopyTexture;
-            Intrinsics.checkNotNull((Object)gpuTexture4);
-            encoder.copyTextureToTexture(gpuTexture3, gpuTexture4, 0, 0, 0, 0, 0, renderTarget.textureWidth, renderTarget.textureHeight);
-            AutoCloseable autoCloseable = (AutoCloseable)MemoryStack.stackPush();
-            Throwable throwable = null;
-            try {
-                MemoryStack stack = (MemoryStack)autoCloseable;
-                boolean bl = false;
-                ByteBuffer data = stack.calloc(128);
-                for (int i = 0; i < 32; ++i) {
-                    data.putFloat(i * 4, i < uniform.length ? uniform[i] : 0.0f);
-                }
-                data.position(0);
-                encoder.writeToBuffer(currentUniform.slice(0L, 128L), data);
-// stack = Unit.INSTANCE;
-            }
-            catch (Throwable bl) {
-                throwable = bl;
-                throw bl;
-            }
-            finally {
-                AutoCloseableKt.closeFinally((AutoCloseable)autoCloseable, (Throwable)throwable);
-            }
+            UNIFORM_FLOAT.position(0);
+            UNIFORM_FLOAT.put(uniform, 0, Math.min(32, uniform.length));
+            UNIFORM_DIRECT.position(0);
+            encoder.writeToBuffer(currentUniform.slice(0L, 128L), UNIFORM_DIRECT);
             Supplier<String> supplier = AmbienceFogRenderer::apply$lambda$1;
             GpuTextureView gpuTextureView = renderTarget.getColorAttachmentView();
             Intrinsics.checkNotNull((Object)gpuTextureView);
-            autoCloseable = (AutoCloseable)encoder.createRenderPass(supplier, gpuTextureView, OptionalInt.empty());
-            throwable = null;
-            try {
-                RenderPass renderPass = (RenderPass)autoCloseable;
-                boolean bl = false;
+            try (RenderPass renderPass = encoder.createRenderPass(supplier, gpuTextureView, OptionalInt.empty())) {
                 renderPass.setPipeline(currentPipeline);
                 renderPass.bindTexture("Scene", sceneCopyTextureView, RenderSampler.linear());
-                renderPass.bindTexture("DepthSampler", depthCopyTextureView, RenderSampler.nearest());
+                renderPass.bindTexture("DepthSampler", renderTarget.getDepthAttachmentView(), RenderSampler.nearest());
                 renderPass.setUniform("FogParams", currentUniform);
                 renderPass.draw(0, 6);
-                Unit unit = Unit.INSTANCE;
-            }
-            catch (Throwable throwable2) {
-                throwable = throwable2;
-                throw throwable2;
-            }
-            finally {
-                AutoCloseableKt.closeFinally((AutoCloseable)autoCloseable, (Throwable)throwable);
             }
         }
         catch (Throwable throwable) {
@@ -204,9 +166,6 @@ public final class AmbienceFogRenderer {
         GpuTexture gpuTexture = sceneCopyTexture = device.createTexture(AmbienceFogRenderer::ensureSceneCopy$lambda$0, 5, TextureFormat.RGBA8, width, height, 1, 1);
         Intrinsics.checkNotNull((Object)gpuTexture);
         sceneCopyTextureView = device.createTextureView(gpuTexture);
-        GpuTexture gpuTexture2 = depthCopyTexture = device.createTexture(AmbienceFogRenderer::ensureSceneCopy$lambda$1, 5, TextureFormat.DEPTH32, width, height, 1, 1);
-        Intrinsics.checkNotNull((Object)gpuTexture2);
-        depthCopyTextureView = device.createTextureView(gpuTexture2);
         sceneWidth = width;
         sceneHeight = height;
         return true;
@@ -228,16 +187,6 @@ public final class AmbienceFogRenderer {
             gpuTexture.close();
         }
         sceneCopyTexture = null;
-        GpuTextureView gpuTextureView2 = depthCopyTextureView;
-        if (gpuTextureView2 != null) {
-            gpuTextureView2.close();
-        }
-        depthCopyTextureView = null;
-        GpuTexture gpuTexture2 = depthCopyTexture;
-        if (gpuTexture2 != null) {
-            gpuTexture2.close();
-        }
-        depthCopyTexture = null;
         sceneWidth = -1;
         sceneHeight = -1;
     }
@@ -266,10 +215,6 @@ public final class AmbienceFogRenderer {
 
     private static final String ensureSceneCopy$lambda$0() {
         return "kimiko:ambience_fog_scene_copy";
-    }
-
-    private static final String ensureSceneCopy$lambda$1() {
-        return "kimiko:ambience_fog_depth_copy";
     }
 
     static {

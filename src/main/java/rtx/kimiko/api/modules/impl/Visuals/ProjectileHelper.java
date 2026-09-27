@@ -448,8 +448,19 @@ extends Module {
             tangent[k] = t.lengthSquared() > 1.0E-9 ? t.normalize() : (b.lengthSquared() > 1.0E-9 ? b.normalize() : new Vec3d(0.0, 0.0, 1.0));
         }
         Vec3d frameNormal = ProjectileHelper.Companion.anyPerpendicular(tangent[0]).normalize();
-        Vec3d[] prevRing = null;
-        int[] prevColor = null;
+        double[] currRingX = new double[10];
+        double[] currRingY = new double[10];
+        double[] currRingZ = new double[10];
+        int[] currColor = new int[10];
+        double[] prevRingX = new double[10];
+        double[] prevRingY = new double[10];
+        double[] prevRingZ = new double[10];
+        int[] prevColor = new int[10];
+        boolean hasPrev = false;
+        float vAlpha = this.visualAlpha();
+        float camX = (float)cameraPos.x;
+        float camY = (float)cameraPos.y;
+        float camZ = (float)cameraPos.z;
         for (int k = 0; k < m; ++k) {
             Vec3d pk = p[k];
             Vec3d tk = tangent[k];
@@ -466,34 +477,34 @@ extends Module {
             float envAlpha = ProjectileHelper.Companion.relakeAlpha(k);
             float gradientPos = (float)k / (float)(m - 1);
             int rgb = ClientAccent.gradientColor(gradientPos, 255.0f) & 0xFFFFFF;
-            Vec3d[] ring = new Vec3d[10];
-            int[] ringColor = new int[10];
             for (int j = 0; j < 10; ++j) {
-                Vec3d offset = ProjectileHelper.Companion.ringOffset(frameNormal, binormal, j, radius);
-                ring[j] = pk.add(offset);
-                double facing = radius > 1.0E-9 ? MathHelper.clamp((double)(offset.dotProduct(camDir) / radius), (double)0.0, (double)1.0) : 0.0;
+                double c = (double)CROSS_COS[j] * radius;
+                double s = (double)CROSS_SIN[j] * radius;
+                double ox = frameNormal.x * c + binormal.x * s;
+                double oy = frameNormal.y * c + binormal.y * s;
+                double oz = frameNormal.z * c + binormal.z * s;
+                currRingX[j] = pk.x + ox;
+                currRingY[j] = pk.y + oy;
+                currRingZ[j] = pk.z + oz;
+                double facing = radius > 1.0E-9 ? MathHelper.clamp((ox * camDir.x + oy * camDir.y + oz * camDir.z) / radius, 0.0, 1.0) : 0.0;
                 float nearFactor = 1.0f - 0.5f * (float)facing;
-                ringColor[j] = rgb | ProjectileHelper.Companion.alpha255(envAlpha * nearFactor) << 24;
+                int rawColor = rgb | (ProjectileHelper.Companion.alpha255(envAlpha * nearFactor) << 24);
+                currColor[j] = ColorEngine.multAlpha(rawColor, vAlpha);
             }
-            if (prevRing != null && prevColor != null) {
+            if (hasPrev) {
                 for (int j = 0; j < 10; ++j) {
                     int n = (j + 1) % 10;
-                    Vec3d vec3d20 = prevRing[j];
-                    Intrinsics.checkNotNull((Object)vec3d20);
-                    this.vertex(consumer, pose, vec3d20, cameraPos, prevColor[j]);
-                    Vec3d vec3d21 = prevRing[n];
-                    Intrinsics.checkNotNull((Object)vec3d21);
-                    this.vertex(consumer, pose, vec3d21, cameraPos, prevColor[n]);
-                    Vec3d vec3d22 = ring[n];
-                    Intrinsics.checkNotNull((Object)vec3d22);
-                    this.vertex(consumer, pose, vec3d22, cameraPos, ringColor[n]);
-                    Vec3d vec3d23 = ring[j];
-                    Intrinsics.checkNotNull((Object)vec3d23);
-                    this.vertex(consumer, pose, vec3d23, cameraPos, ringColor[j]);
+                    consumer.vertex(pose, (float)(prevRingX[j] - camX), (float)(prevRingY[j] - camY), (float)(prevRingZ[j] - camZ)).color(prevColor[j]);
+                    consumer.vertex(pose, (float)(prevRingX[n] - camX), (float)(prevRingY[n] - camY), (float)(prevRingZ[n] - camZ)).color(prevColor[n]);
+                    consumer.vertex(pose, (float)(currRingX[n] - camX), (float)(currRingY[n] - camY), (float)(currRingZ[n] - camZ)).color(currColor[n]);
+                    consumer.vertex(pose, (float)(currRingX[j] - camX), (float)(currRingY[j] - camY), (float)(currRingZ[j] - camZ)).color(currColor[j]);
                 }
             }
-            prevRing = ring;
-            prevColor = ringColor;
+            double[] tmpX = prevRingX; prevRingX = currRingX; currRingX = tmpX;
+            double[] tmpY = prevRingY; prevRingY = currRingY; currRingY = tmpY;
+            double[] tmpZ = prevRingZ; prevRingZ = currRingZ; currRingZ = tmpZ;
+            int[] tmpC = prevColor; prevColor = currColor; currColor = tmpC;
+            hasPrev = true;
         }
     }
 
@@ -563,22 +574,32 @@ extends Module {
         Vec3d vec3d5 = dir.crossProduct(frameNormal).normalize();
         Intrinsics.checkNotNullExpressionValue((Object)vec3d5, (String)"normalize(...)");
         Vec3d binormal = vec3d5;
+        int vColor = ColorEngine.multAlpha(color, this.visualAlpha());
+        double[] ox = new double[10];
+        double[] oy = new double[10];
+        double[] oz = new double[10];
+        for (int j = 0; j < 10; ++j) {
+            double c = (double)CROSS_COS[j] * radius;
+            double s = (double)CROSS_SIN[j] * radius;
+            ox[j] = frameNormal.x * c + binormal.x * s;
+            oy[j] = frameNormal.y * c + binormal.y * s;
+            oz[j] = frameNormal.z * c + binormal.z * s;
+        }
+        float camX = (float)cameraPos.x;
+        float camY = (float)cameraPos.y;
+        float camZ = (float)cameraPos.z;
+        float ax = (float)a.x;
+        float ay = (float)a.y;
+        float az = (float)a.z;
+        float bx = (float)b.x;
+        float by = (float)b.y;
+        float bz = (float)b.z;
         for (int j = 0; j < 10; ++j) {
             int n = (j + 1) % 10;
-            Vec3d oJ = ProjectileHelper.Companion.ringOffset(frameNormal, binormal, j, radius);
-            Vec3d oN = ProjectileHelper.Companion.ringOffset(frameNormal, binormal, n, radius);
-            Vec3d vec3d6 = a.add(oJ);
-            Intrinsics.checkNotNullExpressionValue((Object)vec3d6, (String)"add(...)");
-            this.vertex(consumer, pose, vec3d6, cameraPos, color);
-            Vec3d vec3d7 = a.add(oN);
-            Intrinsics.checkNotNullExpressionValue((Object)vec3d7, (String)"add(...)");
-            this.vertex(consumer, pose, vec3d7, cameraPos, color);
-            Vec3d vec3d8 = b.add(oN);
-            Intrinsics.checkNotNullExpressionValue((Object)vec3d8, (String)"add(...)");
-            this.vertex(consumer, pose, vec3d8, cameraPos, color);
-            Vec3d vec3d9 = b.add(oJ);
-            Intrinsics.checkNotNullExpressionValue((Object)vec3d9, (String)"add(...)");
-            this.vertex(consumer, pose, vec3d9, cameraPos, color);
+            consumer.vertex(pose, ax + (float)ox[j] - camX, ay + (float)oy[j] - camY, az + (float)oz[j] - camZ).color(vColor);
+            consumer.vertex(pose, ax + (float)ox[n] - camX, ay + (float)oy[n] - camY, az + (float)oz[n] - camZ).color(vColor);
+            consumer.vertex(pose, bx + (float)ox[n] - camX, by + (float)oy[n] - camY, bz + (float)oz[n] - camZ).color(vColor);
+            consumer.vertex(pose, bx + (float)ox[j] - camX, by + (float)oy[j] - camY, bz + (float)oz[j] - camZ).color(vColor);
         }
     }
 

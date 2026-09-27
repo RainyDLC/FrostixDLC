@@ -460,7 +460,6 @@ extends Module {
         for (Tag tag : this.tags) {
             float s = NameTags.Companion.isSettled(tag) ? 1.0f : tag.getScale();
             this.drawTagUnderHand(ctx, tag, s);
-            ctx.barrier();
         }
     }
 

@@ -42,6 +42,7 @@ import rtx.kimiko.utils.render.others.pipeline.ClientPipelines;
 public final class ParticleRenderer {
     @NotNull
     private final HashSet<RenderLayer> usedRenderTypes = new HashSet();
+    private final Quaternionf rotZ = new Quaternionf();
 
     public final void clear() {
         this.usedRenderTypes.clear();
@@ -106,7 +107,10 @@ public final class ParticleRenderer {
         stack.push();
         stack.translate(pos.x - cameraPos.x, pos.y - cameraPos.y, pos.z - cameraPos.z);
         stack.multiply((Quaternionfc)cameraRotation);
-        stack.multiply((Quaternionfc)RotationAxis.POSITIVE_Z.rotationDegrees(rotation));
+        if (rotation != 0.0f) {
+            this.rotZ.rotationZ((float)Math.toRadians(rotation));
+            stack.multiply((Quaternionfc)this.rotZ);
+        }
         MatrixStack.Entry entry2 = stack.peek();
         Intrinsics.checkNotNullExpressionValue((Object)entry2, (String)"last(...)");
         MatrixStack.Entry pose = entry2;

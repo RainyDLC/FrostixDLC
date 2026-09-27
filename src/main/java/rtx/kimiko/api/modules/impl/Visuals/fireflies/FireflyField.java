@@ -42,6 +42,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.client.render.Camera;
+import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -105,23 +106,20 @@ public final class FireflyField {
         int wanted = Math.min(target, 400);
         float despawnSq = (radius + 6.0f) * (radius + 6.0f);
         this.clock += (double)(dt * speedMul);
-        Iterator<Firefly> iterator = this.flies.iterator();
-        Intrinsics.checkNotNullExpressionValue(iterator, (String)"iterator(...)");
-        Iterator<Firefly> iterator2 = iterator;
-        while (iterator2.hasNext()) {
-            Firefly fly = (Firefly) (iterator2.next());
+        for (int i = this.flies.size() - 1; i >= 0; i--) {
+            Firefly fly = this.flies.get(i);
             fly.setAge(fly.getAge() + dt * speedMul);
             double dx = fly.getHomeX() - camPos.x;
             double dz = fly.getHomeZ() - camPos.z;
             if (fly.getAge() >= fly.getLife() || dx * dx + dz * dz > (double)despawnSq || this.flies.size() > wanted) {
-                iterator2.remove();
+                this.flies.remove(i);
                 continue;
             }
             double t = this.clock;
             double r = fly.getWander();
-            fly.setX(fly.getHomeX() + r * (Math.sin(t * 0.61 + (double)fly.getPhaseA()) * 0.7 + Math.sin(t * 1.37 + (double)fly.getPhaseB()) * 0.3));
-            fly.setY(fly.getHomeY() + r * 0.45 * (Math.sin(t * 0.83 + (double)fly.getPhaseB()) * 0.6 + Math.sin(t * 1.91 + (double)fly.getPhaseC()) * 0.4));
-            fly.setZ(fly.getHomeZ() + r * (Math.cos(t * 0.53 + (double)fly.getPhaseC()) * 0.7 + Math.cos(t * 1.19 + (double)fly.getPhaseA()) * 0.3));
+            fly.setX(fly.getHomeX() + r * ((double)MathHelper.sin((float)(t * 0.61 + (double)fly.getPhaseA())) * 0.7 + (double)MathHelper.sin((float)(t * 1.37 + (double)fly.getPhaseB())) * 0.3));
+            fly.setY(fly.getHomeY() + r * 0.45 * ((double)MathHelper.sin((float)(t * 0.83 + (double)fly.getPhaseB())) * 0.6 + (double)MathHelper.sin((float)(t * 1.91 + (double)fly.getPhaseC())) * 0.4));
+            fly.setZ(fly.getHomeZ() + r * ((double)MathHelper.cos((float)(t * 0.53 + (double)fly.getPhaseC())) * 0.7 + (double)MathHelper.cos((float)(t * 1.19 + (double)fly.getPhaseA())) * 0.3));
         }
         int camChunkX = MathHelper.floor((double)camPos.x) >> 4;
         int camChunkZ = MathHelper.floor((double)camPos.z) >> 4;
@@ -143,14 +141,14 @@ public final class FireflyField {
         }
         int spawned = 0;
         boolean found = false;
-        for (int attempts = 12; attempts > 0 && this.flies.size() < wanted && spawned < 4; --attempts) {
+        for (int attempts = 8; attempts > 0 && this.flies.size() < wanted && spawned < 4; --attempts) {
             if (!this.trySpawn(level, camPos, radius)) continue;
             ++spawned;
             found = true;
         }
-        if (!found && this.flies.isEmpty()) {
+        if (!found) {
             this.noTreesNearby = true;
-            this.rescanCooldown = 1.5f;
+            this.rescanCooldown = 1.0f;
         }
     }
 
@@ -224,12 +222,8 @@ public final class FireflyField {
         Vec3d vec3d2 = camera.getCameraPos();
         Intrinsics.checkNotNullExpressionValue((Object)vec3d2, (String)"position(...)");
         Vec3d camPos = vec3d2;
-        Quaternionf quaternionf = camera.getRotation();
-        Intrinsics.checkNotNullExpressionValue((Object)quaternionf, (String)"rotation(...)");
-        Quaternionf rotation = quaternionf;
-        Vector3fc vector3fc = camera.getHorizontalPlane();
-        Intrinsics.checkNotNullExpressionValue((Object)vector3fc, (String)"forwardVector(...)");
-        Vector3fc forward = vector3fc;
+        Quaternionf rotation = camera.getRotation();
+        Vector3fc forward = camera.getHorizontalPlane();
         RenderLayer renderLayer2 = ClientPipelines.WORLD_PARTICLES_GLOW.apply(GLOW_TEXTURE);
         Intrinsics.checkNotNullExpressionValue((Object)renderLayer2, (String)"apply(...)");
         RenderLayer renderType = renderLayer2;
@@ -238,50 +232,96 @@ public final class FireflyField {
         VertexConsumer consumer = vertexConsumer2;
         float fadeStart = radius * 0.7f;
         float fadeRange = Math.max(1.0f, radius + 6.0f - fadeStart);
-        for (Firefly fly : this.flies) {
-            float blink;
-            float dist;
-            float distFade;
-            float glow;
-            float lifeFade = Math.min(1.0f, Math.min(fly.getAge() / 1.6f, (fly.getLife() - fly.getAge()) / 2.2f));
+
+        float qx = rotation.x();
+        float qy = rotation.y();
+        float qz = rotation.z();
+        float qw = rotation.w();
+        float rightX = 1.0f - 2.0f * (qy * qy + qz * qz);
+        float rightY = 2.0f * (qx * qy + qz * qw);
+        float rightZ = 2.0f * (qx * qz - qy * qw);
+        float upX = 2.0f * (qx * qy - qz * qw);
+        float upY = 1.0f - 2.0f * (qx * qx + qz * qz);
+        float upZ = 2.0f * (qy * qz + qx * qw);
+
+        float fx = forward.x();
+        float fy = forward.y();
+        float fz = forward.z();
+
+        float maxDist = radius + 6.0f;
+        float maxDistSq = maxDist * maxDist;
+
+        stack.push();
+        MatrixStack.Entry pose = stack.peek();
+        int count = this.flies.size();
+        for (int i = 0; i < count; i++) {
+            Firefly fly = this.flies.get(i);
+            float age = fly.getAge();
+            float life = fly.getLife();
+            float lifeFade = Math.min(1.0f, Math.min(age * 0.625f, (life - age) * 0.45454547f));
             if (lifeFade <= 0.0f) continue;
-            double rx = fly.getX() - camPos.x;
-            double ry = fly.getY() - camPos.y;
-            double rz = fly.getZ() - camPos.z;
-            if (rx * (double)forward.x() + ry * (double)forward.y() + rz * (double)forward.z() < -1.0 || (glow = lifeFade * (distFade = 1.0f - MathHelper.clamp((float)(((dist = (float)Math.sqrt(rx * rx + ry * ry + rz * rz)) - fadeStart) / fadeRange), (float)0.0f, (float)1.0f)) * (blink = this.blinkCurve((float)(this.clock * (double)fly.getBlinkSpeed() + (double)fly.getBlinkPhase()), fly.getBlinkDuty())) * alpha) <= 0.01f) continue;
+            float rx = (float)(fly.getX() - camPos.x);
+            float ry = (float)(fly.getY() - camPos.y);
+            float rz = (float)(fly.getZ() - camPos.z);
+            if (rx * fx + ry * fy + rz * fz < -1.0f) continue;
+            float distSq = rx * rx + ry * ry + rz * rz;
+            if (distSq > maxDistSq) continue;
+            float dist = (float)Math.sqrt(distSq);
+            float distFade = 1.0f - MathHelper.clamp((dist - fadeStart) / fadeRange, 0.0f, 1.0f);
+            float blink = this.blinkCurve((float)(this.clock * (double)fly.getBlinkSpeed() + (double)fly.getBlinkPhase()), fly.getBlinkDuty());
+            float glow = lifeFade * distFade * blink * alpha;
+            if (glow <= 0.01f) continue;
             int base = primaryColor == secondaryColor ? primaryColor : ColorEngine.lerpColor(primaryColor, secondaryColor, fly.getTint());
             int core = ColorEngine.lerpColor(base, -1, 0.55f);
             float s = size * fly.getScale();
-            float haloAlpha = MathHelper.clamp((float)(glow * intensity * 0.32f), (float)0.0f, (float)1.0f);
-            float coreAlpha = MathHelper.clamp((float)(glow * Math.min(1.0f, intensity * 0.5f + 0.5f)), (float)0.0f, (float)1.0f);
-            stack.push();
-            stack.translate(rx, ry, rz);
-            stack.multiply((Quaternionfc)rotation);
-            MatrixStack.Entry pose = stack.peek();
-            this.quad(consumer, pose, s * 3.2f, this.withAlpha(base, haloAlpha));
-            this.quad(consumer, pose, s, this.withAlpha(core, coreAlpha));
-            stack.pop();
+            float haloAlpha = MathHelper.clamp(glow * intensity * 0.32f, 0.0f, 1.0f);
+            float coreAlpha = MathHelper.clamp(glow * Math.min(1.0f, intensity * 0.5f + 0.5f), 0.0f, 1.0f);
+            this.billboardQuad(consumer, pose, rx, ry, rz, rightX, rightY, rightZ, upX, upY, upZ, s * 1.6f, this.withAlpha(base, haloAlpha));
+            this.billboardQuad(consumer, pose, rx, ry, rz, rightX, rightY, rightZ, upX, upY, upZ, s * 0.5f, this.withAlpha(core, coreAlpha));
         }
+        stack.pop();
         provider.draw(renderType);
     }
 
     private final float blinkCurve(float t, float duty) {
-        float phase = t - (float)MathHelper.floor((float)t);
+        float phase = t - (float)MathHelper.floor(t);
         if (phase >= duty) {
             float tail = (phase - duty) / (1.0f - duty);
             return 0.08f + 0.12f * (1.0f - tail) * (1.0f - tail);
         }
         float u = phase / duty;
-        float bell = (float)Math.sin((double)u * Math.PI);
+        float bell = MathHelper.sin(u * (float)Math.PI);
         return 0.2f + 0.8f * bell * bell;
     }
 
-    private final void quad(VertexConsumer consumer, MatrixStack.Entry pose, float size, int color) {
-        float half = size * 0.5f;
-        WorldVertex.textured(consumer, pose, -half, -half, 0.0f, 0.0f, 0.0f, color);
-        WorldVertex.textured(consumer, pose, half, -half, 0.0f, 1.0f, 0.0f, color);
-        WorldVertex.textured(consumer, pose, half, half, 0.0f, 1.0f, 1.0f, color);
-        WorldVertex.textured(consumer, pose, -half, half, 0.0f, 0.0f, 1.0f, color);
+    private final void billboardQuad(VertexConsumer consumer, MatrixStack.Entry pose, float cx, float cy, float cz, float rightX, float rightY, float rightZ, float upX, float upY, float upZ, float half, int color) {
+        float hxRight = rightX * half;
+        float hyRight = rightY * half;
+        float hzRight = rightZ * half;
+        float hxUp = upX * half;
+        float hyUp = upY * half;
+        float hzUp = upZ * half;
+
+        float x0 = cx - hxRight - hxUp;
+        float y0 = cy - hyRight - hyUp;
+        float z0 = cz - hzRight - hzUp;
+
+        float x1 = cx + hxRight - hxUp;
+        float y1 = cy + hyRight - hyUp;
+        float z1 = cz + hzRight - hzUp;
+
+        float x2 = cx + hxRight + hxUp;
+        float y2 = cy + hyRight + hyUp;
+        float z2 = cz + hzRight + hzUp;
+
+        float x3 = cx - hxRight + hxUp;
+        float y3 = cy - hyRight + hyUp;
+        float z3 = cz - hzRight + hzUp;
+
+        consumer.vertex(pose, x0, y0, z0).texture(0.0f, 0.0f).color(color).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(pose, 0.0f, 0.0f, 1.0f);
+        consumer.vertex(pose, x1, y1, z1).texture(1.0f, 0.0f).color(color).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(pose, 0.0f, 0.0f, 1.0f);
+        consumer.vertex(pose, x2, y2, z2).texture(1.0f, 1.0f).color(color).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(pose, 0.0f, 0.0f, 1.0f);
+        consumer.vertex(pose, x3, y3, z3).texture(0.0f, 1.0f).color(color).overlay(OverlayTexture.DEFAULT_UV).light(0xF000F0).normal(pose, 0.0f, 0.0f, 1.0f);
     }
 
     private final int withAlpha(int rgb, float alpha) {

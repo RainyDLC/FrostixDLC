@@ -205,8 +205,14 @@ extends Module {
             double dx = MathHelper.lerp((double)partialTick, (double)entity.lastRenderX, (double)entity.getX()) - entity.getX();
             double dy = MathHelper.lerp((double)partialTick, (double)entity.lastRenderY, (double)entity.getY()) - entity.getY();
             double dz = MathHelper.lerp((double)partialTick, (double)entity.lastRenderZ, (double)entity.getZ()) - entity.getZ();
-            Box bb = entity.getBoundingBox().offset(dx, dy, dz);
-            tmp.set((float)(bb.getCenter().x - cam.x), (float)(bb.getCenter().y - cam.y), (float)(bb.getCenter().z - cam.z), 1.0f);
+            Box origBb = entity.getBoundingBox();
+            double bMinX = origBb.minX + dx;
+            double bMinY = origBb.minY + dy;
+            double bMinZ = origBb.minZ + dz;
+            double bMaxX = origBb.maxX + dx;
+            double bMaxY = origBb.maxY + dy;
+            double bMaxZ = origBb.maxZ + dz;
+            tmp.set((float)((bMinX + bMaxX) * 0.5 - cam.x), (float)((bMinY + bMaxY) * 0.5 - cam.y), (float)((bMinZ + bMaxZ) * 0.5 - cam.z), 1.0f);
             vp.transform(tmp);
             depths[index] = tmp.w > 1.0E-4f ? tmp.z / tmp.w * 0.5f + 0.5f : 1.0f;
             float minX = Float.MAX_VALUE;
@@ -214,9 +220,9 @@ extends Module {
             float maxX = -3.4028235E38f;
             float maxY = -3.4028235E38f;
             for (int corner = 0; corner < 8; ++corner) {
-                double cx = (corner & 1) == 0 ? bb.minX : bb.maxX;
-                double cy = (corner & 2) == 0 ? bb.minY : bb.maxY;
-                double cz = (corner & 4) == 0 ? bb.minZ : bb.maxZ;
+                double cx = (corner & 1) == 0 ? bMinX : bMaxX;
+                double cy = (corner & 2) == 0 ? bMinY : bMaxY;
+                double cz = (corner & 4) == 0 ? bMinZ : bMaxZ;
                 tmp.set((float)(cx - cam.x), (float)(cy - cam.y), (float)(cz - cam.z), 1.0f);
                 vp.transform(tmp);
                 if (tmp.w <= 1.0E-4f) continue;
