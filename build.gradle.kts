@@ -3,16 +3,16 @@ plugins {
     id("maven-publish")
 }
 
-val minecraftVersion = property("minecraft_version") as String
-val yarnMappings = property("yarn_mappings") as String
-val loaderVersion = property("loader_version") as String
-val fabricVersion = property("fabric_version") as String
+val minecraftVersion = (findProperty("minecraft_version") as String?) ?: "1.21.11"
+val yarnMappings = (findProperty("yarn_mappings") as String?) ?: "1.21.11+build.6:v2"
+val loaderVersion = (findProperty("loader_version") as String?) ?: "0.19.5"
+val fabricVersion = (findProperty("fabric_version") as String?) ?: "0.141.6+1.21.11"
 
-version = property("mod_version") as String
-group = property("maven_group") as String
+version = (findProperty("mod_version") as String?) ?: "1.5-privacy"
+group = (findProperty("maven_group") as String?) ?: "rtx.kimiko"
 
 base {
-    archivesName.set(property("archives_base_name") as String)
+    archivesName.set((findProperty("archives_base_name") as String?) ?: "kimiko-privacy")
 }
 
 repositories {
@@ -28,6 +28,7 @@ dependencies {
     modImplementation("net.fabricmc:fabric-loader:$loaderVersion")
     modImplementation("net.fabricmc.fabric-api:fabric-api:$fabricVersion")
     modImplementation("net.fabricmc:fabric-language-kotlin:1.13.12+kotlin.2.4.0")
+    include("net.fabricmc:fabric-language-kotlin:1.13.12+kotlin.2.4.0")
 
     // Local libraries bundled in libs/
     implementation(fileTree("libs") {
