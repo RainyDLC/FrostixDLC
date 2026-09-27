@@ -5,6 +5,8 @@
   "plugin": "mixin.mixinplugin.KimikoMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "AtmosphereGameRendererMixin",
+    "AtmosphereHudMixin",
     "AccountProfileKeyPairManagerMixin",
     "AvatarRendererMixin",
     "AvatarRenderStateMixin",
