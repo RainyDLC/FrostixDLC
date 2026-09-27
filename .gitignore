@@ -1,35 +1,21 @@
+# Gradle
 .gradle/
 build/
-run/
+!gradle/wrapper/gradle-wrapper.jar
 
+# IDE
 .idea/
+*.iml
+*.ipr
+*.iws
 .vscode/
 
-*.log
+# Run directory
+run/
+logs/
 
+# Java / OS
+*.class
+*.log
 .DS_Store
 Thumbs.db
-.claude/settings.local.json
-
-bin/
-
-# --- сайт (деплой через wrangler из папки website; убери строку ниже, если деплой через GitHub) ---
-website/
-
-# --- прочий мусор ---
-decoded_tmp/
-*.log
-.dev.vars
-.cookies.txt
-.t1.json
-rain/
-zzz/
-main/
-# --- аудит защиты (PoC, не коммитить!) ---
-.audit/
-audit/
-
-# --- защита: секреты сборки ---
-protection/keystore.jks
-protection/signing.properties
-*.jks
