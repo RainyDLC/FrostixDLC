@@ -307,7 +307,7 @@ implements GuiCapture.Source {
         pendingAfterClose = null;
         BaseScreen.Companion.dropClosingOverlay();
         GuiCapture.bind(this);
-        if (this.screenAnim.isClosing()) {
+        if (this.screenAnim.isClosing() && this.screenAnim.alpha() > 0.05f) {
             WorldGuiCloseAnimation.reverse();
             GuiShatterAnimation.gather(WorldGuiCloseAnimation.isReversing() ? WorldGuiCloseAnimation.remainingNanos() : 0L);
             this.screenAnim.resumeOpening();
@@ -1509,7 +1509,7 @@ implements GuiCapture.Source {
         }
         ClickGui clickGui = ModuleManager.Companion.get().get(ClickGui.class);
         int toggleKey = clickGui != null && clickGui.getBind() != null ? clickGui.getBind().getCode() : 344;
-        if (event.key() == 256 || event.key() == toggleKey) {
+        if (event.key() == 256 || event.key() == toggleKey || event.key() == 344) {
             this.close();
             return true;
         }

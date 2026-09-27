@@ -16,7 +16,13 @@ package mixin;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.Keyboard;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.ChatScreen;
+import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
+import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
+import net.minecraft.client.gui.screen.world.SelectWorldScreen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -36,10 +42,21 @@ public abstract class KeyboardHandlerMixin {
         KeyPressEvent event;
         if (action == 1) {
             VoiceBindManager.INSTANCE.noteInput();
-            ClickGui clickGui = ModuleManager.get().get(ClickGui.class);
-            if (clickGui != null && keyEvent.key() == clickGui.getBind().getCode()) {
+            ClickGui clickGui = ClickGui.getInstance();
+            if (clickGui == null) {
+                clickGui = ModuleManager.get().get(ClickGui.class);
+            }
+            int bind = (clickGui != null && clickGui.getBind() != null) ? clickGui.getBind().getCode() : 344;
+            if (keyEvent.key() == 344 || (bind > 0 && keyEvent.key() == bind)) {
                 MinecraftClient mc = MinecraftClient.getInstance();
-                if (mc.world != null && mc.player != null && mc.currentScreen == null) {
+                if (mc.currentScreen == UI.INSTANCE) {
+                    UI.INSTANCE.close();
+                    ci.cancel();
+                    return;
+                }
+                boolean isBlocked = (mc.currentScreen instanceof ChatScreen
+                        || mc.currentScreen instanceof HandledScreen);
+                if (!isBlocked) {
                     mc.setScreen((Screen)UI.INSTANCE);
                     Sounds.play("gui_open");
                     ci.cancel();
