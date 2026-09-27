@@ -7,6 +7,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import fun.newrar.emotions.EmoteManager;
+import fun.newrar.utils.render.models.CustomModelManager;
 
 @Mixin(PlayerEntityModel.class)
 public class PlayerEntityModelMixin {
@@ -14,6 +15,7 @@ public class PlayerEntityModelMixin {
             at = @At("TAIL"))
     private void onSetAngles(PlayerEntityRenderState state, CallbackInfo ci) {
         EmoteManager.apply((PlayerEntityModel) (Object) this, state);
+        CustomModelManager.apply((PlayerEntityModel) (Object) this, state);
     }
 }
 
