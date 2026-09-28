@@ -55,6 +55,8 @@ public final class MediaNative {
     private static volatile boolean isPlaying = false;
     private static volatile long currentDurationMs = 0L;
     private static volatile long currentPositionMs = 0L;
+    private static volatile long lastPositionUpdateNanos = 0L;
+    private static volatile long lastRawPositionMs = -1L;
     private static volatile long revision = 1L;
     private static volatile long thumbnailVersion = 1L;
     private static volatile byte[] currentThumbnail = null;
@@ -125,7 +127,7 @@ public final class MediaNative {
                 t.setDaemon(true);
                 return t;
             });
-            poller.scheduleWithFixedDelay(MediaNative::poll, 0L, 200L, TimeUnit.MILLISECONDS);
+            poller.scheduleWithFixedDelay(MediaNative::poll, 0L, 50L, TimeUnit.MILLISECONDS);
         }
         return true;
     }
@@ -147,6 +149,8 @@ public final class MediaNative {
         isPlaying = false;
         currentDurationMs = 0L;
         currentPositionMs = 0L;
+        lastPositionUpdateNanos = 0L;
+        lastRawPositionMs = -1L;
         currentThumbnail = null;
     }
 
@@ -163,6 +167,7 @@ public final class MediaNative {
                 long dur = Math.max(0L, artist.durationMs);
                 long pos = Math.max(0L, artist.positionMs);
                 byte[] art = artist.getAlbumArt();
+                long nowNanos = System.nanoTime();
 
                 boolean trackChanged = !Objects.equals(t, currentTitle)
                         || !Objects.equals(a, currentArtist)
@@ -176,9 +181,15 @@ public final class MediaNative {
                     isPlaying = playing;
                     currentDurationMs = dur;
                     currentPositionMs = pos;
+                    lastRawPositionMs = pos;
+                    lastPositionUpdateNanos = nowNanos;
                     revision++;
                 } else {
-                    currentPositionMs = pos;
+                    if (pos != lastRawPositionMs) {
+                        lastRawPositionMs = pos;
+                        currentPositionMs = pos;
+                        lastPositionUpdateNanos = nowNanos;
+                    }
                 }
 
                 if (art != null && art.length > 0) {
@@ -258,9 +269,9 @@ public final class MediaNative {
     @JvmStatic
     public static int nativeStatus() {
         if (currentTitle == null || currentTitle.isEmpty()) {
-            return 0; // CLOSED
+            return 0;
         }
-        return isPlaying ? 4 : 5; // 4 = PLAYING, 5 = PAUSED
+        return isPlaying ? 4 : 5;
     }
 
     @JvmStatic
@@ -275,7 +286,15 @@ public final class MediaNative {
 
     @JvmStatic
     public static long nativePositionMillis() {
-        return currentPositionMs;
+        if (!isPlaying || lastPositionUpdateNanos == 0L) {
+            return currentPositionMs;
+        }
+        long elapsedMs = (System.nanoTime() - lastPositionUpdateNanos) / 1000000L;
+        long estimated = currentPositionMs + elapsedMs;
+        if (currentDurationMs > 0L && estimated > currentDurationMs) {
+            return currentDurationMs;
+        }
+        return estimated;
     }
 
     @JvmStatic
@@ -362,6 +381,8 @@ public final class MediaNative {
         if (optMedia != null) {
             optMedia.SeekToMs(millis);
             currentPositionMs = millis;
+            lastRawPositionMs = millis;
+            lastPositionUpdateNanos = System.nanoTime();
         }
     }
 
@@ -371,6 +392,8 @@ public final class MediaNative {
             long target = Math.max(0L, currentPositionMs + delta);
             optMedia.SeekToMs(target);
             currentPositionMs = target;
+            lastRawPositionMs = target;
+            lastPositionUpdateNanos = System.nanoTime();
         }
     }
 
@@ -605,7 +628,6 @@ public final class MediaNative {
 
                 if (isArray) {
                     JsonArray arr = JsonParser.parseString(body).getAsJsonArray();
-                    // 1. Try to find syncedLyrics first
                     for (JsonElement e : arr) {
                         if (e.isJsonObject()) {
                             JsonObject o = e.getAsJsonObject();
@@ -615,7 +637,6 @@ public final class MediaNative {
                             }
                         }
                     }
-                    // 2. If no syncedLyrics found, take plainLyrics and synthesize timestamps
                     for (JsonElement e : arr) {
                         if (e.isJsonObject()) {
                             JsonObject o = e.getAsJsonObject();

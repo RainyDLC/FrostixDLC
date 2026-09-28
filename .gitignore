@@ -26,3 +26,4 @@ launcher/mods/*.jar
 launcher/*.exe
 launcher/payload.zip
 /*.jar
+*.mp4

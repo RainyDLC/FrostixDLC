@@ -1,28 +1,3 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  kotlin.Metadata
- *  kotlin.collections.CollectionsKt
- *  kotlin.jvm.internal.DefaultConstructorMarker
- *  kotlin.jvm.internal.Intrinsics
- *  kotlin.jvm.internal.SourceDebugExtension
- *  kotlin.text.StringsKt
- *  net.minecraft.world.BlockView
- *  net.minecraft.util.math.BlockPos
- *  net.minecraft.util.math.BlockPos.Mutable
- *  net.minecraft.util.math.Direction.Axis
- *  net.minecraft.util.math.Vec3d
- *  net.minecraft.util.shape.VoxelShape
- *  net.minecraft.block.BlockState
- *  net.minecraft.client.MinecraftClient
- *  net.minecraft.util.math.MathHelper
- *  net.minecraft.client.render.Camera
- *  net.minecraft.client.world.ClientWorld
- *  net.minecraft.client.network.ClientPlayerEntity
- *  org.jetbrains.annotations.NotNull
- *  org.jetbrains.annotations.Nullable
- */
 package rtx.kimiko.api.modules.impl.Visuals.particles.lyrics;
 
 import java.util.ArrayList;
@@ -222,7 +197,7 @@ public final class LyricParticles {
         for (int index = this.held.size() - 1; -1 < index; --index) {
             Held piece = this.held.get(index);
             boolean expired = options.getFall() ? piece.getShattered() || time >= piece.getDeath() + 1600L : time >= piece.getDeath();
-            if (!expired && time >= piece.getSpawn() - 500L) continue;
+            if (!expired && time >= piece.getSpawn() - 1000L) continue;
             this.held.remove(index);
         }
         this.stepDebris(delta, options);
@@ -282,12 +257,13 @@ public final class LyricParticles {
         if (this.fragments.isEmpty()) {
             return;
         }
-        if (this.lastIndex >= 0 && this.lastIndex < this.fragments.size() && time < this.fragments.get(this.lastIndex).getStartMillis() - 500L) {
+        if (this.lastIndex >= 0 && this.lastIndex < this.fragments.size() && time < this.fragments.get(this.lastIndex).getStartMillis() - 1000L) {
             this.held.clear();
             this.lastIndex = -1;
         }
         int alive = Math.max(1, options.getLimit());
-        while (this.lastIndex + 1 < this.fragments.size() && time >= (candidate = this.fragments.get(next = this.lastIndex + 1)).getStartMillis()) {
+        long leadIn = words ? 300L : 650L;
+        while (this.lastIndex + 1 < this.fragments.size() && time >= (candidate = this.fragments.get(next = this.lastIndex + 1)).getStartMillis() - leadIn) {
             this.lastIndex = next;
             Timing timing = LyricParticles.Companion.timing(candidate, this.handoff(next), words);
             if (time >= timing.getDeath()) continue;
@@ -711,11 +687,11 @@ public final class LyricParticles {
             float inCascade = this.clamp(span * 0.3f, bounds[2], bounds[3]);
             float outTime = this.clamp(span * 0.24f, bounds[4], bounds[5]);
             float outCascade = this.clamp(span * 0.26f, bounds[6], bounds[7]);
-            long spawn = fragment.getStartMillis();
+            long entrance = (long)Math.round(inTime + inCascade);
+            long spawn = fragment.getStartMillis() - entrance;
             int exit = Math.round(outTime + outCascade);
-            long entrance = spawn + (long)Math.round(inTime + inCascade);
-            long visibleEnd = words ? Math.min(Math.max(fragment.getEndMillis() + 140L, spawn + 650L), spawn + 2600L) : Math.min(handoff - (long)exit, spawn + 7000L);
-            visibleEnd = Math.max(visibleEnd, entrance);
+            long visibleEnd = words ? Math.min(Math.max(fragment.getEndMillis() + 140L, fragment.getStartMillis() + 650L), fragment.getStartMillis() + 2600L) : Math.min(handoff - (long)exit, fragment.getStartMillis() + 7000L);
+            visibleEnd = Math.max(visibleEnd, fragment.getStartMillis());
             return new Timing(spawn, visibleEnd, visibleEnd + (long)exit, inTime, inCascade, outTime, outCascade);
         }
 

@@ -1,18 +1,3 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  kotlin.Metadata
- *  kotlin.jvm.JvmStatic
- *  kotlin.jvm.internal.Intrinsics
- *  net.minecraft.client.texture.NativeImage
- *  net.minecraft.client.texture.NativeImageBackedTexture
- *  net.minecraft.client.texture.AbstractTexture
- *  net.minecraft.util.Identifier
- *  net.minecraft.client.MinecraftClient
- *  org.jetbrains.annotations.NotNull
- *  org.jetbrains.annotations.Nullable
- */
 package rtx.kimiko.utils.media;
 
 import java.util.Collection;
@@ -41,8 +26,8 @@ import rtx.kimiko.utils.media.MediaTrack;
 public final class MediaPlayer {
     @NotNull
     public static final MediaPlayer INSTANCE = new MediaPlayer();
-    private static final double CLOCK_SNAP_MILLIS = 300.0;
-    private static final double CLOCK_CATCHUP_MILLIS = 450.0;
+    private static final double CLOCK_SNAP_MILLIS = 1200.0;
+    private static final double CLOCK_CATCHUP_MILLIS = 800.0;
     private static final long SETTLE_MILLIS = 400L;
     private static double clockMillis;
     private static long clockNanos;
@@ -376,14 +361,16 @@ public final class MediaPlayer {
         double elapsed = Math.max(0.0, (double)(now - clockNanos) / 1000000.0);
         clockNanos = now;
         boolean running = MediaStatus.Companion.of(MediaNative.nativeStatus()).playing();
-        if (running) {
-            clockMillis += elapsed;
+        if (!running) {
+            clockMillis = reported;
+            return clockMillis;
         }
+        clockMillis += elapsed;
         double drift = reported - clockMillis;
-        if (!running || Math.abs(drift) >= 300.0) {
+        if (Math.abs(drift) >= CLOCK_SNAP_MILLIS) {
             clockMillis = reported;
         } else if (elapsed > 0.0) {
-            clockMillis += drift * Math.min(1.0, elapsed / 450.0);
+            clockMillis += drift * Math.min(1.0, elapsed / CLOCK_CATCHUP_MILLIS);
         }
         long duration = MediaNative.nativeDurationMillis();
         if (duration > 0L) {
@@ -441,7 +428,6 @@ public final class MediaPlayer {
                 MinecraftClient.getInstance().getTextureManager().destroyTexture(current);
             }
             catch (Throwable throwable) {
-                // empty catch block
             }
             cover = null;
         }
