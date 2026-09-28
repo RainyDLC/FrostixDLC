@@ -5,19 +5,29 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Оптимизированные версии шейдеров кастомного неба. Регистрируются ПОСЛЕ {@link CustomskyShaders}
- * и перезаписывают blackhole + composite. Картинка та же, считается в разы дешевле:
+ * и перезаписывают blackhole + composite.
  *
- * blackhole:
- *  - GasDisc: дешёвая проверка «есть ли тут вообще диск/свечение» теперь ДО всех pow/normalize
- *    (раньше доплер, glow и bloom считались на каждом из 200 шагов, даже в пустоте);
- *  - pcurve(x, 4, 0.9): константа посчитана заранее, результат переиспользуется (было 10 pow на шаг);
- *  - длина/квадрат радиуса луча считаются 1 раз на шаг и шарятся между WarpSpace/GasDisc/Haze;
- *  - pow(x, 2/1.5/0.5/-2.5) заменены на умножения/sqrt (математически то же самое);
- *  - луч, упавший за горизонт событий (r < 0.25), больше не гоняется до 200 итераций:
- *    внутри r < 0.5 диск и дымка дают ровно 0, а обратно такие лучи не выходят (проверено симуляцией).
+ * blackhole, PERF v2 (картинка та же):
+ *  - АДАПТИВНЫЙ ШАГ луча. Раньше каждый пиксель делал до 200 одинаковых шагов по 0.08, хотя
+ *    бОльшая часть пути проходит через пустоту, где диск/свечение дают ровно 0. Теперь:
+ *      * вблизи дыры (r < 2.5) и в слое диска (|y| < 0.3) шаг прежний 0.08 -> картинка та же;
+ *      * в пустоте шаг растёт до 0.45, но никогда не перескакивает слой диска и сферу r = 2.5
+ *        (шаг ограничен расстоянием до них), граница слоя дизерится -> без бандинга;
+ *      * изгиб луча и дымка (Haze) масштабируются на длину шага (та же интеграл, меньше шагов);
+ *      * общий путь луча тот же (FAR = 16).
+ *    Итог: 200 -> ~50-80 итераций на пиксель, основная причина просадки FPS.
+ *  - GasDisc: ранний выход по |y| > 0.29 до любых pow (там coverage гарантированно < 0.01 -> вклад 0);
+ *  - cos/sin угла диска считаются 3 раза на шаг вместо 14 (octave/discCoord получают готовый вектор);
+ *  - pow(x, 1.5) / pow(x, 6) заменены на умножения.
  * composite:
- *  - не читает копию сцены: пиксели с геометрией просто discard (в буфере и так лежит сцена),
- *    поэтому полноэкранная копия цвета каждый кадр больше не нужна.
+ *  - звёзды не считаются там, где их всё равно не видно (тень дыры / яркий диск).
+ *
+ * Зрелищность (почти бесплатно):
+ *  - настоящее кольцо Эйнштейна: звёзды гравитационно линзируются и собираются в дуги вокруг тени,
+ *    плюс лёгкое «закручивание» пространства (frame dragging) и усиление яркости у кольца;
+ *  - фотонное кольцо: тонкое горячее ядро, доплер-асимметрия (ярче со стороны приближения диска)
+ *    и медленное мерцание;
+ *  - горячие пятна на диске периодически вспыхивают (флеры раз в ~27 c).
  */
 public final class CustomskyFastShaders {
     private CustomskyFastShaders() {
@@ -53,6 +63,7 @@ public final class CustomskyFastShaders {
 
             const int ITERATIONS = 200;
             const float FAR = 16.0;
+            const float STEP = FAR / float(ITERATIONS);
             const float ENTRY_R = 8.0;
             const float CAM_DIST = 14.0;
             const float INCL = 0.10;
@@ -63,8 +74,14 @@ public final class CustomskyFastShaders {
             const float SPIN = 0.16;
             const float TAU = 6.28318531;
 
+            // адаптивный шаг
+            const float R_FINE = 2.5;
+            const float Y_BAND = 0.30;
+            const float STEP_MAX = 0.45;
+
             const float DISC_INNER = 0.55;
             const float DISC_WIDTH = 5.3;
+            const float DISC_BAND = 0.29;
             const float PCURVE_K = 10.349099641;
             const float WARP_K = 5.0 / 200.0;
             const float HAZE_K = 2.9 / 200.0;
@@ -90,17 +107,17 @@ public final class CustomskyFastShaders {
                 return -1.0 + 2.0 * mix(rg.x, rg.y, f.z);
             }
 
-            vec3 discCoord(float ang, float rad, float freq) {
-                float a = 1.425 * freq;
-                return vec3(cos(ang) * a, sin(ang) * a, rad * freq);
+            // cs = vec2(cos(ang), sin(ang)) * 1.425, считается один раз на угол
+            vec3 discCoord(vec2 cs, float rad, float freq) {
+                return vec3(cs * freq, rad * freq);
             }
 
-            float octave(float ang, float rad, float freq, float aa) {
+            float octave(vec2 cs, float rad, float freq, float aa) {
                 float w = clamp(1.5 - aa * freq * 1.5, 0.0, 1.0);
                 if (w <= 0.01) {
                     return 0.5;
                 }
-                return mix(0.5, noise(discCoord(ang, rad, freq)) * 0.5 + 0.5, w);
+                return mix(0.5, noise(discCoord(cs, rad, freq)) * 0.5 + 0.5, w);
             }
 
             float pcurveDisc(float x) {
@@ -129,21 +146,23 @@ public final class CustomskyFastShaders {
                 return c1;
             }
 
-            void Haze(inout vec3 color, vec3 pos, float r2, float alpha, vec3 mainColor) {
+            void Haze(inout vec3 color, vec3 pos, float r2, float alpha, vec3 mainColor, float weight) {
                 if (r2 > 36.0 || r2 < 0.25) {
                     return;
                 }
                 vec2 q = vec2(length(pos.xz) - 1.0, pos.y - 0.05);
                 float torusDist = abs(length(q) - 0.01);
                 float bloomDisc = 1.0 / (torusDist * torusDist + 0.001);
-                color += mainColor * (bloomDisc * HAZE_K * (1.0 - alpha));
+                color += mainColor * (bloomDisc * HAZE_K * weight * (1.0 - alpha));
             }
 
-            void GasDisc(inout vec3 color, inout float alpha, vec3 pos, float distFromCenter, float time, vec3 mainColor, float aa, vec3 eyevec) {
-                if (distFromCenter > 7.0) {
+            void GasDisc(inout vec3 color, inout float alpha, vec3 pos, float distFromCenter, float time, vec3 mainColor,
+                         float aa, vec3 eyevec, float flare) {
+                float distFromDisc = pos.y;
+                // вне этого слоя coverage < 0.01 гарантированно -> вклад ровно 0 (как и раньше)
+                if (distFromCenter > 7.0 || abs(distFromDisc) > DISC_BAND) {
                     return;
                 }
-                float distFromDisc = pos.y;
                 float radialGradient = 1.0 - clamp((distFromCenter - DISC_INNER) / DISC_WIDTH * 0.5, 0.0, 1.0);
                 float pc = pcurveDisc(radialGradient);
                 if (pc <= 0.0) {
@@ -182,31 +201,35 @@ public final class CustomskyFastShaders {
                 float ang = atan(-pos.x, -pos.z);
                 float rad = (distFromCenter * 1.5 + 0.55 + distFromDisc * 1.5) * 0.95 + time * 0.012;
 
-                float omega = SPIN * pow(3.2 / max(distFromCenter, 0.75), 1.5);
+                float om = 3.2 / max(distFromCenter, 0.75);
+                float omega = SPIN * om * sqrt(om);
                 float angA = ang + mod(time * omega, TAU);
                 float angB = ang + mod(time * omega * 0.45, TAU);
+                vec2 csA = vec2(cos(angA), sin(angA)) * 1.425;
+                vec2 csB = vec2(cos(angB), sin(angB)) * 1.425;
 
                 float n1 = 1.0;
-                n1 *= octave(angA, rad, 3.0, aa);
-                n1 *= octave(angB, rad, 6.0, aa);
-                n1 *= octave(angA, rad, 12.0, aa);
-                n1 *= octave(angB, rad, 24.0, aa);
+                n1 *= octave(csA, rad, 3.0, aa);
+                n1 *= octave(csB, rad, 6.0, aa);
+                n1 *= octave(csA, rad, 12.0, aa);
+                n1 *= octave(csB, rad, 24.0, aa);
 
                 float n2 = 2.0;
                 float rad2 = rad + 30.0;
-                n2 *= octave(angB, rad2, 3.0, aa);
-                n2 *= octave(angA, rad2, 6.0, aa);
-                n2 *= octave(angB, rad2, 12.0, aa);
-                n2 *= octave(angA, rad2, 24.0, aa);
-                n2 *= octave(angB, rad2, 48.0, aa);
-                n2 *= octave(angA, rad2, 92.0, aa);
+                n2 *= octave(csB, rad2, 3.0, aa);
+                n2 *= octave(csA, rad2, 6.0, aa);
+                n2 *= octave(csB, rad2, 12.0, aa);
+                n2 *= octave(csA, rad2, 24.0, aa);
+                n2 *= octave(csB, rad2, 48.0, aa);
+                n2 *= octave(csA, rad2, 92.0, aa);
 
                 dustColor *= n1 * 0.998 + 0.002;
                 coverage *= n2;
 
                 float bandAng = ang + mod(time * omega * 0.5, TAU);
-                float band = noise(discCoord(bandAng, rad, 1.35)) * 0.5 + 0.5;
-                float grain = noise(discCoord(bandAng, rad + 70.0, 3.46)) * 0.5 + 0.5;
+                vec2 csBand = vec2(cos(bandAng), sin(bandAng)) * 1.425;
+                float band = noise(discCoord(csBand, rad, 1.35)) * 0.5 + 0.5;
+                float grain = noise(discCoord(csBand, rad + 70.0, 3.46)) * 0.5 + 0.5;
                 vec3 texCol = mix(vec3(0.95, 0.55, 0.26), vec3(0.42, 0.60, 1.0), band) * (0.45 + 0.80 * grain);
                 dustColor *= texCol * texCol * 4.0;
 
@@ -218,7 +241,7 @@ public final class CustomskyFastShaders {
                 float dRadA = distFromCenter - 1.5;
                 float dAngB = abs(mod(angB - 4.2, TAU) - 3.14159265);
                 float dRadB = distFromCenter - 2.7;
-                float hot = exp(-(dAngA * dAngA * 0.5 + dRadA * dRadA * 7.0)) * 3.4
+                float hot = exp(-(dAngA * dAngA * 0.5 + dRadA * dRadA * 7.0)) * 3.4 * flare
                           + exp(-(dAngB * dAngB * 0.9 + dRadB * dRadB * 5.0)) * 1.8;
                 dustColor *= 1.0 + hot;
 
@@ -294,11 +317,16 @@ public final class CustomskyFastShaders {
                 vec3 tint = skyTint(atan(rd.z, rd.x), 0.5, time);
                 vec3 mainColor = mix(vec3(1.0), tint, THEME_MIX);
 
+                // редкие вспышки горячего пятна (~раз в 27 c)
+                float fl = 0.5 + 0.5 * sin(time * 0.23);
+                fl *= fl; fl *= fl; fl *= fl; fl *= fl;
+                float flare = 1.0 + 1.6 * fl;
+
                 vec3 camWorld = -bhDir * CAM_DIST;
                 vec3 pos = vec3(dot(camWorld, eX), dot(camWorld, eY), dot(camWorld, eZ));
                 vec3 eyevec = toLocal(rdJitter, eX, eY, eZ);
-                float pixAngle = length(toLocal(rayDir(texCoord + vec2(1.0, 0.0) / res), eX, eY, eZ)
-                        - toLocal(rd, eX, eY, eZ));
+                vec3 localRd = toLocal(rd, eX, eY, eZ);
+                float pixAngle = length(toLocal(rayDir(texCoord + vec2(1.0, 0.0) / res), eX, eY, eZ) - localRd);
                 float aa = pixAngle * CAM_DIST * 1.425;
 
                 vec3 color = vec3(0.0);
@@ -310,20 +338,33 @@ public final class CustomskyFastShaders {
 
                 if (impact < ENTRY_R && along < 0.0) {
                     float tEnter = -along - sqrt(max(0.0, ENTRY_R * ENTRY_R - impact * impact));
-                    float stepLen = FAR / float(ITERATIONS);
                     float dither = fract(hash21(gl_FragCoord.xy) + taa.w);
-                    vec3 raypos = pos + eyevec * (tEnter + dither * stepLen);
+                    vec3 raypos = pos + eyevec * (tEnter + dither * STEP);
                     float r2 = dot(raypos, raypos);
+                    float bandEdge = Y_BAND + dither * STEP;
+                    float traveled = 0.0;
 
                     for (int i = 0; i < ITERATIONS; i++) {
                         float sd = sqrt(r2);
-                        eyevec = normalize(eyevec - raypos * (WARP_K / ((r2 + 0.000001) * max(sd, 1e-4))));
-                        raypos += eyevec * stepLen;
+
+                        // адаптивный шаг: мелкий у дыры и в слое диска, крупный в пустоте
+                        float s = STEP;
+                        if (sd > R_FINE) {
+                            float ay = abs(raypos.y);
+                            float sy = ay > bandEdge ? 0.9 * (ay - bandEdge) / max(abs(eyevec.y), 0.25) : 0.0;
+                            s = clamp(min(sd - R_FINE, sy), STEP, STEP_MAX);
+                        }
+                        s = min(s, FAR - traveled);
+                        float w = s / STEP;
+
+                        eyevec = normalize(eyevec - raypos * (WARP_K * w / ((r2 + 0.000001) * max(sd, 1e-4))));
+                        raypos += eyevec * s;
+                        traveled += s;
 
                         r2 = dot(raypos, raypos);
                         float r = sqrt(r2);
-                        GasDisc(color, alpha, raypos, r, time, mainColor, aa, eyevec);
-                        Haze(color, raypos, r2, alpha, mainColor);
+                        GasDisc(color, alpha, raypos, r, time, mainColor, aa, eyevec, flare);
+                        Haze(color, raypos, r2, alpha, mainColor, w);
 
                         captured = max(captured, 1.0 - smoothstep(0.32, 0.85, r));
                         if (alpha > 0.995) {
@@ -335,13 +376,25 @@ public final class CustomskyFastShaders {
                         if (r2 < 0.0625) {
                             break;
                         }
+                        if (traveled >= FAR - 1e-4) {
+                            break;
+                        }
                     }
                 }
 
                 color *= EXPOSURE;
 
-                float ring = pow(clamp(captured * (1.0 - captured) * 4.0, 0.0, 1.0), 6.0);
-                color += mix(vec3(1.0), mainColor, 0.35) * ring * 0.6 * (1.0 - alpha);
+                // фотонное кольцо: мягкий ореол (как раньше) + тонкое горячее ядро,
+                // доплер-асимметрия и медленное мерцание
+                float rq = clamp(captured * (1.0 - captured) * 4.0, 0.0, 1.0);
+                float rq2 = rq * rq;
+                float ring6 = rq2 * rq2 * rq2;
+                float ringCore = ring6 * ring6 * rq2;
+                float ringAng = atan(localRd.y, localRd.x);
+                float ringSide = localRd.x / max(length(localRd.xy), 1e-4);
+                float shimmer = 0.88 + 0.12 * sin(ringAng * 5.0 - time * 1.3) * sin(ringAng * 3.0 + time * 0.7);
+                float ringI = (ring6 * 0.6 + ringCore * 0.55) * (1.0 + 0.4 * ringSide) * shimmer;
+                color += mix(vec3(1.0), mainColor, 0.35) * ringI * (1.0 - alpha);
 
                 color *= brightness;
 
@@ -391,6 +444,9 @@ public final class CustomskyFastShaders {
             out vec4 fragColor;
 
             const float BLOOM_STRENGTH = 0.13;
+            // гравитационное линзирование звёзд: theta_E^2 (кольцо Эйнштейна ~0.19 рад) и закрутка
+            const float STAR_LENS_E2 = 0.035;
+            const float STAR_SWIRL = 0.010;
 
             vec3 nmzHash33(vec3 q) {
                 uvec3 p = uvec3(ivec3(q));
@@ -493,16 +549,28 @@ public final class CustomskyFastShaders {
                 vec3 bhDir = normalize(vec3(0.34, 0.62, 0.71));
                 float cosT = clamp(dot(rd, bhDir), -1.0, 1.0);
                 float theta = acos(cosT);
-                vec3 toHole = bhDir - cosT * rd;
-                float tl = length(toHole);
-                vec3 rdL = rd;
-                if (tl > 1e-4) {
-                    rdL = normalize(rd + toHole / tl * (0.010 / max(theta, 0.05)));
-                }
 
                 float lum = dot(color, vec3(0.299, 0.587, 0.114));
-                vec3 stars = bhStars(rdL, misc.x) * smoothstep(0.10, 0.17, theta);
-                color += stars * misc.w * clamp(1.0 - lum * 2.4, 0.0, 1.0);
+                float starMask = smoothstep(0.10, 0.17, theta) * clamp(1.0 - lum * 2.4, 0.0, 1.0) * misc.w;
+                // звёзды не считаем там, где их не видно (тень / яркий диск)
+                if (starMask > 0.002) {
+                    vec3 toHole = bhDir - cosT * rd;
+                    float tl = length(toHole);
+                    vec3 rdL = rd;
+                    float mag = 1.0;
+                    if (tl > 1e-4) {
+                        // линза-точка: свет отклоняется к дыре на theta_E^2 / theta -> кольцо Эйнштейна
+                        float th = max(theta, 0.05);
+                        rdL = normalize(rd + toHole / tl * (STAR_LENS_E2 / th));
+                        // лёгкая закрутка пространства вокруг оси дыры
+                        float phi = STAR_SWIRL / (theta * theta + 0.008);
+                        float cp = cos(phi);
+                        float sp = sin(phi);
+                        rdL = rdL * cp + cross(bhDir, rdL) * sp + bhDir * (dot(bhDir, rdL) * (1.0 - cp));
+                        mag = clamp(1.0 + 0.5 * STAR_LENS_E2 / (th * th), 1.0, 2.2);
+                    }
+                    color += bhStars(rdL, misc.x) * (starMask * mag);
+                }
 
                 return color;
             }
