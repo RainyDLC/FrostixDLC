@@ -48,6 +48,13 @@ import org.jetbrains.annotations.NotNull;
  *    обновляется раз в 2 кадра — на глаз разницы нет, а самый дорогой проход стал в 2 раза дешевле.
  *    Чётность кадра берётся из знака TAA-джиттера по X (halton base 2: чётный кадр >= 0, нечётный < 0),
  *    поэтому Java-сторона не менялась. Без валидной истории (первый кадр, край экрана) — полный марш.
+ *
+ * v7, сглаживание краёв дыры и силуэтов объектов (без потери FPS):
+ *  - убран edgeDim (ужасная пиксельная черная 60%-кайма вокруг объектов на фоне дыры);
+ *  - субпиксельное anti-aliasing сглаживание геометрии мира (4-tap coverage) с ранним discard для 99% пикселей сцены;
+ *  - исправлен баг в bicubic фильтре (отрицательные веса B-сплайна давали 2x2 пиксельную сетку по всей дыре и bloom);
+ *  - тень чёрной дыры (alpha) теперь тоже фильтруется bicubic и накапливается через TAA;
+ *  - сглажен порог горизонта событий (fellSmooth) и спад фотонного кольца (esc) без ступенчатого клиппинга.
  */
 public final class CustomskyFastShaders {
     private CustomskyFastShaders() {
@@ -337,7 +344,7 @@ public final class CustomskyFastShaders {
                 return normalize(local);
             }
 
-            vec3 sampleHistory(vec2 uv, vec2 res) {
+            vec4 sampleHistory(vec2 uv, vec2 res) {
                 vec2 samplePos = uv * res;
                 vec2 texPos1 = floor(samplePos - 0.5) + 0.5;
                 vec2 f = samplePos - texPos1;
@@ -354,23 +361,24 @@ public final class CustomskyFastShaders {
                 vec2 p3 = (texPos1 + 2.0) / res;
                 vec2 p12 = (texPos1 + offset12) / res;
 
-                vec3 result = vec3(0.0);
-                result += textureLod(History, vec2(p0.x, p0.y), 0.0).rgb * (w0.x * w0.y);
-                result += textureLod(History, vec2(p12.x, p0.y), 0.0).rgb * (w12.x * w0.y);
-                result += textureLod(History, vec2(p3.x, p0.y), 0.0).rgb * (w3.x * w0.y);
-                result += textureLod(History, vec2(p0.x, p12.y), 0.0).rgb * (w0.x * w12.y);
-                result += textureLod(History, vec2(p12.x, p12.y), 0.0).rgb * (w12.x * w12.y);
-                result += textureLod(History, vec2(p3.x, p12.y), 0.0).rgb * (w3.x * w12.y);
-                result += textureLod(History, vec2(p0.x, p3.y), 0.0).rgb * (w0.x * w3.y);
-                result += textureLod(History, vec2(p12.x, p3.y), 0.0).rgb * (w12.x * w3.y);
-                result += textureLod(History, vec2(p3.x, p3.y), 0.0).rgb * (w3.x * w3.y);
+                vec4 result = vec4(0.0);
+                result += textureLod(History, vec2(p0.x, p0.y), 0.0) * (w0.x * w0.y);
+                result += textureLod(History, vec2(p12.x, p0.y), 0.0) * (w12.x * w0.y);
+                result += textureLod(History, vec2(p3.x, p0.y), 0.0) * (w3.x * w0.y);
+                result += textureLod(History, vec2(p0.x, p12.y), 0.0) * (w0.x * w12.y);
+                result += textureLod(History, vec2(p12.x, p12.y), 0.0) * (w12.x * w12.y);
+                result += textureLod(History, vec2(p3.x, p12.y), 0.0) * (w3.x * w12.y);
+                result += textureLod(History, vec2(p0.x, p3.y), 0.0) * (w0.x * w3.y);
+                result += textureLod(History, vec2(p12.x, p3.y), 0.0) * (w12.x * w3.y);
+                result += textureLod(History, vec2(p3.x, p3.y), 0.0) * (w3.x * w3.y);
 
-                return clamp(result, vec3(0.0), vec3(1.0));
+                return clamp(result, vec4(0.0), vec4(1.0));
             }
 
             void main() {
                 vec2 res = vec2(textureSize(History, 0));
                 vec3 rd = rayDir(texCoord);
+                vec3 rdJitter = rayDir(texCoord + taa.xy / res);
 
                 // PERF v6: шахматный марш. Половина пикселей в этом кадре берётся из истории с точной
                 // репроекцией неба (оно на бесконечности), вторая половина маршируется. Чётность кадра = знак
@@ -379,14 +387,13 @@ public final class CustomskyFastShaders {
                     int parity = taa.x < -1e-4 ? 1 : 0;
                     ivec2 fc = ivec2(gl_FragCoord.xy);
                     if (((fc.x + fc.y) & 1) == parity) {
-                        vec4 hc = prevViewProj * vec4(rd, 0.0);
+                        vec4 hc = prevViewProj * vec4(rdJitter, 0.0);
                         if (hc.w > 1e-5) {
                             vec2 prevUV = hc.xy / hc.w * 0.5 + 0.5;
                             vec2 guard = 1.5 / res;
                             if (all(greaterThan(prevUV, guard)) && all(lessThan(prevUV, 1.0 - guard))) {
-                                vec3 hist = sampleHistory(prevUV, res);
-                                float histShadow = textureLod(History, prevUV, 0.0).a;
-                                fragColor = vec4(hist, histShadow);
+                                vec4 hist = sampleHistory(prevUV, res);
+                                fragColor = hist;
                                 return;
                             }
                         }
@@ -401,8 +408,6 @@ public final class CustomskyFastShaders {
                 gTin = mix(3200.0, 16000.0, clamp(skyExtra.z, 0.0, 1.0));
                 gAct = max(bhParams.y, 0.0);
                 gSpin = max(bhParams.z, 0.0);
-
-                vec3 rdJitter = rayDir(texCoord + taa.xy / res);
 
                 vec3 bhDir = normalize(vec3(0.34, 0.62, 0.71));
                 vec3 upRef = vec3(0.0, 1.0, 0.0);
@@ -497,6 +502,11 @@ public final class CustomskyFastShaders {
 
                 color *= EXPOSURE;
 
+                float horizonWidth = max(aa * 0.5, 0.005);
+                float fellSmooth = smoothstep(0.25 + horizonWidth, 0.25 - horizonWidth, rmin);
+                fell = max(fell, fellSmooth);
+                float esc = 1.0 - fell;
+
                 float rq = clamp(captured * (1.0 - captured) * 4.0, 0.0, 1.0);
                 float rq2 = rq * rq;
                 float ring6 = rq2 * rq2 * rq2;
@@ -508,7 +518,6 @@ public final class CustomskyFastShaders {
 
                 // фотонное кольцо: лучи, которые обогнули дыру почти по кругу и вырвались, дают тонкое яркое кольцо
                 float bend = acos(clamp(dot(eye0, eyevec), -1.0, 1.0));
-                float esc = 1.0 - fell;
                 float pr = clamp((bend - 0.9) / 1.35, 0.0, 1.0);
                 float photon = pr * pr * pr * esc;          // тонкое яркое кольцо у самого края тени
                 float sub = pr * esc * 0.18;                // мягкий ореол вокруг него
@@ -521,21 +530,23 @@ public final class CustomskyFastShaders {
 
                 vec3 cur = encodeHDR(color);
 
+                float shadowVal = fell * (1.0 - alpha);
                 if (taa.z > 0.5) {
-                    vec4 pc = prevViewProj * vec4(rd, 0.0);
+                    vec4 pc = prevViewProj * vec4(rdJitter, 0.0);
                     if (pc.w > 1e-5) {
                         vec2 prevUV = pc.xy / pc.w * 0.5 + 0.5;
                         vec2 guard = 1.5 / res;
                         if (all(greaterThan(prevUV, guard)) && all(lessThan(prevUV, 1.0 - guard))) {
-                            vec3 hist = clamp(sampleHistory(prevUV, res), cur - 0.35, cur + 0.35);
-                            cur = mix(cur, hist, TAA_BLEND);
+                            vec4 hist = sampleHistory(prevUV, res);
+                            cur = mix(cur, clamp(hist.rgb, cur - 0.35, cur + 0.35), TAA_BLEND);
+                            shadowVal = mix(shadowVal, hist.a, TAA_BLEND);
                         }
                     }
                 }
 
                 cur += (fract(hash21(gl_FragCoord.xy + 13.7) + taa.w) - 0.5) / 255.0;
-                // alpha = маска тени (для composite: там гасим bloom, чтобы тень была по-настоящему чёрной)
-                fragColor = vec4(max(cur, vec3(0.0)), fell * (1.0 - alpha));
+                // alpha = маска тени (сглаженная и TAA-накопленная)
+                fragColor = vec4(max(cur, vec3(0.0)), shadowVal);
             }
             """;
 
@@ -654,7 +665,7 @@ public final class CustomskyFastShaders {
                     float tw = 0.72 + 0.28 * sin(time * (0.6 + rn.z * 1.3) + rn.y * 47.0);
                     vec3 tint = rn.y < 0.33 ? vec3(1.0, 0.70, 0.45) : (rn.y < 0.8 ? vec3(0.95, 0.95, 1.0) : vec3(0.62, 0.78, 1.0));
                     float bright = step(0.82, rn.z) * step(float(i), 1.5);
-                    float spikes = bright * (exp(-abs(q.x) * 60.0) + exp(-abs(q.y) * 60.0)) * smoothstep(0.5, 0.0, dq) * 0.35;
+                    float spikes = bright * (exp(-abs(q.x) * 24.0) + exp(-abs(q.y) * 24.0)) * smoothstep(0.5, 0.0, dq) * 0.35;
                     c += hit * (core * core + spikes) * tint * (0.35 + 0.65 * rn.z) * (1.0 + bright * 1.5) * tw * amp;
                     p = p * 1.63 + 17.0;
                     dens *= 0.62;
@@ -704,44 +715,36 @@ public final class CustomskyFastShaders {
                 return c / max(1.0 - c, vec3(0.0055));
             }
 
-            vec4 cubic(float x) {
-                float x2 = x * x;
-                float x3 = x2 * x;
-                vec4 w;
-                w.x = -x3 + 3.0 * x2 - 3.0 * x + 1.0;
-                w.y = 3.0 * x3 - 6.0 * x2 + 4.0;
-                w.z = -3.0 * x3 + 3.0 * x2 + 3.0 * x + 1.0;
-                w.w = x3;
-                return w / 6.0;
-            }
+            vec4 bicubic(sampler2D tex, vec2 uv) {
+                vec2 res = vec2(textureSize(tex, 0));
+                vec2 coord = uv * res - 0.5;
+                vec2 f = fract(coord);
+                vec2 i = floor(coord);
 
-            vec3 bicubic(sampler2D tex, vec2 uv) {
-                vec2 resolution = vec2(textureSize(tex, 0));
-                vec2 coord = uv * resolution;
+                vec2 f2 = f * f;
+                vec2 f3 = f2 * f;
 
-                float fx = fract(coord.x);
-                float fy = fract(coord.y);
-                coord.x -= fx;
-                coord.y -= fy;
-                fx -= 0.5;
-                fy -= 0.5;
+                vec2 w0 = -f3 + 3.0 * f2 - 3.0 * f + 1.0;
+                vec2 w1 = 3.0 * f3 - 6.0 * f2 + 4.0;
+                vec2 w2 = -3.0 * f3 + 3.0 * f2 + 3.0 * f + 1.0;
+                vec2 w3 = f3;
 
-                vec4 xcubic = cubic(fx);
-                vec4 ycubic = cubic(fy);
+                vec2 s0 = w0 + w1;
+                vec2 s1 = w2 + w3;
 
-                vec4 c = vec4(coord.x - 0.5, coord.x + 1.5, coord.y - 0.5, coord.y + 1.5);
-                vec4 s = vec4(xcubic.x + xcubic.y, xcubic.z + xcubic.w, ycubic.x + ycubic.y, ycubic.z + ycubic.w);
-                vec4 offset = c + vec4(xcubic.y, xcubic.w, ycubic.y, ycubic.w) / s;
+                vec2 f0 = w1 / s0;
+                vec2 f1 = w3 / s1;
 
-                vec3 s0 = texture(tex, vec2(offset.x, offset.z) / resolution).rgb;
-                vec3 s1 = texture(tex, vec2(offset.y, offset.z) / resolution).rgb;
-                vec3 s2 = texture(tex, vec2(offset.x, offset.w) / resolution).rgb;
-                vec3 s3 = texture(tex, vec2(offset.y, offset.w) / resolution).rgb;
+                vec2 uv0 = (i - 0.5 + f0) / res;
+                vec2 uv1 = (i + 1.5 + f1) / res;
 
-                float sx = s.x / (s.x + s.y);
-                float sy = s.z / (s.z + s.w);
+                vec2 w = s1 / (s0 + s1);
 
-                return mix(mix(s3, s2, sx), mix(s1, s0, sx), sy);
+                return mix(
+                    mix(texture(tex, vec2(uv0.x, uv0.y)), texture(tex, vec2(uv1.x, uv0.y)), w.x),
+                    mix(texture(tex, vec2(uv0.x, uv1.y)), texture(tex, vec2(uv1.x, uv1.y)), w.x),
+                    w.y
+                );
             }
 
             vec3 blackHole() {
@@ -754,15 +757,16 @@ public final class CustomskyFastShaders {
                 float cosT = clamp(dot(rd, bhDir), -1.0, 1.0);
                 float theta = acos(cosT);
 
-                vec3 color = decodeHDR(bicubic(Sky, texCoord));
-                float shadow = texture(Sky, texCoord).a;
+                vec4 skySample = bicubic(Sky, texCoord);
+                vec3 color = decodeHDR(skySample.rgb);
+                float shadow = skySample.a;
 
-                vec3 bloom = decodeHDR(bicubic(Bloom0, texCoord)) * 1.00;
-                bloom += decodeHDR(bicubic(Bloom1, texCoord)) * 1.00;
-                bloom += decodeHDR(bicubic(Bloom2, texCoord)) * 1.00;
-                bloom += decodeHDR(bicubic(Bloom3, texCoord)) * 0.90;
-                bloom += decodeHDR(bicubic(Bloom4, texCoord)) * 0.80;
-                bloom += decodeHDR(bicubic(Bloom5, texCoord)) * 0.65;
+                vec3 bloom = decodeHDR(bicubic(Bloom0, texCoord).rgb) * 1.00;
+                bloom += decodeHDR(bicubic(Bloom1, texCoord).rgb) * 1.00;
+                bloom += decodeHDR(bicubic(Bloom2, texCoord).rgb) * 1.00;
+                bloom += decodeHDR(bicubic(Bloom3, texCoord).rgb) * 0.90;
+                bloom += decodeHDR(bicubic(Bloom4, texCoord).rgb) * 0.80;
+                bloom += decodeHDR(bicubic(Bloom5, texCoord).rgb) * 0.65;
 
                 // внутри тени bloom почти гасим: горизонт событий должен быть чёрным провалом
                 color += bloom * BLOOM_STRENGTH * (1.0 - 0.85 * shadow);
@@ -837,17 +841,24 @@ public final class CustomskyFastShaders {
             }
 
             void main() {
-                float depth = texture(DepthTex, texCoord).r;
-                if (depth < 0.9999) {
+                // Быстрый discard пикселей, гарантированно покрытых геометрией мира
+                float centerDepth = texture(DepthTex, texCoord).r;
+                if (centerDepth < 0.999) {
                     discard;
                 }
 
+                // Субпиксельное anti-aliasing сглаживание силуэтов геометрии на фоне неба
                 vec2 dt = 1.0 / vec2(textureSize(DepthTex, 0));
-                float dmin = min(
-                    min(texture(DepthTex, texCoord + vec2(dt.x, 0.0)).r, texture(DepthTex, texCoord - vec2(dt.x, 0.0)).r),
-                    min(texture(DepthTex, texCoord + vec2(0.0, dt.y)).r, texture(DepthTex, texCoord - vec2(0.0, dt.y)).r)
-                );
-                float edgeDim = 1.0 - 0.6 * step(dmin, 0.9998);
+                vec2 off = dt * 0.35;
+                float d0 = texture(DepthTex, texCoord + vec2(-off.x, -off.y)).r;
+                float d1 = texture(DepthTex, texCoord + vec2( off.x, -off.y)).r;
+                float d2 = texture(DepthTex, texCoord + vec2(-off.x,  off.y)).r;
+                float d3 = texture(DepthTex, texCoord + vec2( off.x,  off.y)).r;
+
+                float coverage = (step(0.9999, d0) + step(0.9999, d1) + step(0.9999, d2) + step(0.9999, d3)) * 0.25;
+                if (coverage <= 0.0) {
+                    discard;
+                }
 
                 vec3 result;
                 if (skyColor2.w > 0.5 && skyColor2.w < 1.5) {
@@ -860,7 +871,7 @@ public final class CustomskyFastShaders {
                     result = sky + bloom * 0.34;
                 }
 
-                fragColor = vec4(result * edgeDim, 1.0);
+                fragColor = vec4(result, coverage);
             }
             """;
 }
