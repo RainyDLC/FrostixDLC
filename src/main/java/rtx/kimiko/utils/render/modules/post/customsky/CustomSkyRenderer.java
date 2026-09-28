@@ -48,8 +48,17 @@ import rtx.kimiko.utils.render.render2d.ThemeWaveUniform;
  *    на каждый value-noise на полном разрешении). Текстура шума 256x256 создаётся один раз для всех типов неба,
  *    потому что composite общий и сэмплер должен быть привязан всегда.
  *
+ * v8, чёрная дыра больше не пиксельная (FPS тот же):
+ *  - раньше марш шёл в буфер 1/2 x 1/2 и растягивался на экран -> блоки 2x2, лесенка на кольце и диске;
+ *  - теперь марш по-прежнему считает 1/4 пикселей за кадр (цена та же), но каждый кадр со своим
+ *    субпиксельным сдвигом (4 фазы), а отдельный дешёвый resolve-проход собирает их в ПОЛНОЕ разрешение
+ *    через историю с точной репроекцией (небо на бесконечности). Через 4 кадра каждый пиксель экрана
+ *    посчитан честно, а не растянут;
+ *  - bloom строится с той же базы 1/2, поэтому свечение выглядит как раньше и не дорожает.
+ *
  * Uniform SkyParams (std140):
  *  0 invViewProj | 64 misc | 80 skyColor | 96 skyColor2 | 112 taa | 128 prevViewProj
+ *  taa = (фаза субпиксельного сдвига 0..3, 0, historyValid, taaSequence)
  *  192 skyExtra = (useClientColor, bhPalette, bhTemperature, bhJets)
  *  208 bhParams = (bhLensing, bhActivity, bhSpin, 0)  <- читают только blackhole/composite,
  *      остальные шейдеры объявляют блок на 208 байт, буфер больше блока — это нормально.
@@ -76,6 +85,8 @@ public final class CustomSkyRenderer {
     @NotNull private static final Identifier COMPOSITE_PIPELINE_ID = INSTANCE.id("pipeline/post/customsky/composite");
     @NotNull private static final Identifier BLOOM_SHADER = INSTANCE.id("post/customsky/bloom_down");
     @NotNull private static final Identifier BLOOM_PIPELINE_ID = INSTANCE.id("pipeline/post/customsky/bloom_down");
+    @NotNull private static final Identifier RESOLVE_SHADER = INSTANCE.id("post/customsky/blackhole_resolve");
+    @NotNull private static final Identifier RESOLVE_PIPELINE_ID = INSTANCE.id("pipeline/post/customsky/blackhole_resolve");
     @NotNull private static final Identifier[] MARCH_SHADERS = new Identifier[]{
             INSTANCE.id("post/customsky/aurora"), INSTANCE.id("post/customsky/blackhole"), INSTANCE.id("post/customsky/starfall")};
     @NotNull private static final Identifier[] MARCH_PIPELINE_IDS = new Identifier[]{
@@ -90,10 +101,15 @@ public final class CustomSkyRenderer {
     @NotNull private static final RenderPipeline[] marchPipelines = new RenderPipeline[TYPE_COUNT];
     @Nullable private static RenderPipeline compositePipeline;
     @Nullable private static RenderPipeline bloomPipeline;
+    @Nullable private static RenderPipeline resolvePipeline;
     @Nullable private static GpuBuffer uniformBuffer;
     @Nullable private static GpuBuffer bloomUniformBuffer;
+    /** Полноэкранные буферы неба (для чёрной дыры это ping-pong история resolve). */
     @NotNull private static final GpuTexture[] skyTextures = new GpuTexture[2];
     @NotNull private static final GpuTextureView[] skyTextureViews = new GpuTextureView[2];
+    /** Буфер марша чёрной дыры 1/2 x 1/2 (каждый кадр со своим субпиксельным сдвигом). */
+    @Nullable private static GpuTexture marchHalfTexture;
+    @Nullable private static GpuTextureView marchHalfTextureView;
     @Nullable private static GpuTexture noiseTexture;
     @Nullable private static GpuTextureView noiseTextureView;
     @NotNull private static final GpuTexture[] bloomTextures = new GpuTexture[BLOOM_LEVELS];
@@ -103,9 +119,10 @@ public final class CustomSkyRenderer {
 
     private static int fullWidth = -1;
     private static int fullHeight = -1;
-    private static int marchWidth = -1;
-    private static int marchHeight = -1;
-    private static int currentScale = -1;
+    /** Виртуальный размер источника первого прохода bloom (1/2 для чёрной дыры, как было раньше). */
+    private static int bloomSrcWidth = -1;
+    private static int bloomSrcHeight = -1;
+    private static boolean currentHalfMarch;
     private static int frameIndex;
     private static float taaSequence;
     private static int lastType = -1;
@@ -190,8 +207,9 @@ public final class CustomSkyRenderer {
         RenderPipeline marchPipeline = type == TYPE_USER ? UserSkyManager.activePipeline() : marchPipelines[type];
         // NoiseTex нужен и composite (туманность), поэтому проверяем для всех типов
         if (marchPipeline == null || compositePipeline == null || bloomPipeline == null || uniformBuffer == null
-                || bloomUniformBuffer == null || noiseTextureView == null
-                || !INSTANCE.ensureTargets(renderTarget.textureWidth, renderTarget.textureHeight, INSTANCE.resScale(type))) {
+                || bloomUniformBuffer == null || noiseTextureView == null || (hdr && resolvePipeline == null)
+                || !INSTANCE.ensureTargets(renderTarget.textureWidth, renderTarget.textureHeight, hdr)
+                || (hdr && marchHalfTextureView == null)) {
             return;
         }
         if (lastType != type) {
@@ -222,8 +240,6 @@ public final class CustomSkyRenderer {
         try {
             CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
             INV_VIEW_PROJ.set((Matrix4fc) viewProj).invert();
-            float jitterX = INSTANCE.halton(frameIndex % 8 + 1, 2) - 0.5f;
-            float jitterY = INSTANCE.halton(frameIndex % 8 + 1, 3) - 0.5f;
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 ByteBuffer data = stack.calloc(UNIFORM_SIZE);
                 INV_VIEW_PROJ.get(0, data);
@@ -239,7 +255,8 @@ public final class CustomSkyRenderer {
                 data.putFloat(100, color2G);
                 data.putFloat(104, color2B);
                 data.putFloat(108, type);
-                data.putFloat(112, 0.0f);
+                // фаза субпиксельного сдвига марша чёрной дыры (0..3), resolve знает, какой пиксель свежий
+                data.putFloat(112, (float) (frameIndex & 3));
                 data.putFloat(116, 0.0f);
                 data.putFloat(120, useHistory ? 1.0f : 0.0f);
                 data.putFloat(124, taaSequence);
@@ -257,7 +274,8 @@ public final class CustomSkyRenderer {
             }
 
             String marchName = type == TYPE_USER ? "kimiko:customsky_march_user" : MARCH_PASS_NAMES[type];
-            try (RenderPass pass = encoder.createRenderPass(() -> marchName, skyTextureViews[write], OptionalInt.empty())) {
+            GpuTextureView marchTarget = hdr ? marchHalfTextureView : skyTextureViews[write];
+            try (RenderPass pass = encoder.createRenderPass(() -> marchName, marchTarget, OptionalInt.empty())) {
                 pass.setPipeline(marchPipeline);
                 pass.setUniform("SkyParams", uniformBuffer);
                 if (type != TYPE_USER) {
@@ -265,9 +283,20 @@ public final class CustomSkyRenderer {
                 }
                 if (hdr) {
                     pass.bindTexture("NoiseTex", noiseTextureView, RenderSampler.linearRepeat());
-                    pass.bindTexture("History", skyTextureViews[read], RenderSampler.linear());
                 }
                 pass.draw(0, 6);
+            }
+
+            if (hdr) {
+                // resolve: собираем 1/4-сэмплы этого кадра + репроецированную историю в полное разрешение
+                try (RenderPass pass = encoder.createRenderPass(() -> "kimiko:customsky_resolve_blackhole",
+                        skyTextureViews[write], OptionalInt.empty())) {
+                    pass.setPipeline(resolvePipeline);
+                    pass.setUniform("SkyParams", uniformBuffer);
+                    pass.bindTexture("Current", marchHalfTextureView, RenderSampler.linear());
+                    pass.bindTexture("History", skyTextureViews[read], RenderSampler.linear());
+                    pass.draw(0, 6);
+                }
             }
 
             INSTANCE.buildBloom(encoder, skyTextureViews[write], hdr);
@@ -300,8 +329,10 @@ public final class CustomSkyRenderer {
 
     private void buildBloom(CommandEncoder encoder, GpuTextureView skyView, boolean hdr) {
         GpuTextureView source = skyView;
-        int srcWidth = marchWidth;
-        int srcHeight = marchHeight;
+        // для чёрной дыры источник полноэкранный, но шаг выборки первого прохода как у буфера 1/2:
+        // линейный фильтр усредняет 2x2 -> bloom выглядит и стоит ровно как раньше
+        int srcWidth = bloomSrcWidth;
+        int srcHeight = bloomSrcHeight;
         int levels = hdr ? BLOOM_LEVELS : BLOOM_LEVELS_LDR;
         for (int level = 0; level < levels; ++level) {
             final int current = level;
@@ -344,9 +375,23 @@ public final class CustomSkyRenderer {
                         .withDepthWrite(false)
                         .withCull(false);
                 if (type == TYPE_BLACKHOLE) {
-                    builder.withSampler("NoiseTex").withSampler("History");
+                    builder.withSampler("NoiseTex");
                 }
                 marchPipelines[type] = RenderPipelines.register(builder.build());
+            }
+            if (type == TYPE_BLACKHOLE && resolvePipeline == null) {
+                resolvePipeline = RenderPipelines.register(RenderPipeline.builder(new RenderPipeline.Snippet[0])
+                        .withLocation(RESOLVE_PIPELINE_ID)
+                        .withVertexShader(VERTEX_SHADER)
+                        .withFragmentShader(RESOLVE_SHADER)
+                        .withVertexFormat(VertexFormats.EMPTY, VertexFormat.DrawMode.TRIANGLES)
+                        .withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
+                        .withSampler("Current")
+                        .withSampler("History")
+                        .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+                        .withDepthWrite(false)
+                        .withCull(false)
+                        .build());
             }
             if (compositePipeline == null) {
                 RenderPipeline.Builder builder = RenderPipeline.builder(new RenderPipeline.Snippet[0])
@@ -399,6 +444,7 @@ public final class CustomSkyRenderer {
             }
             compositePipeline = null;
             bloomPipeline = null;
+            resolvePipeline = null;
             this.closeUniform();
             this.closeBloomUniform();
             this.closeNoise();
@@ -436,28 +482,36 @@ public final class CustomSkyRenderer {
         image.close();
     }
 
-    private int resScale(int type) {
-        return type == TYPE_BLACKHOLE ? 2 : 1;
-    }
-
-    private boolean ensureTargets(int width, int height, int scale) {
+    private boolean ensureTargets(int width, int height, boolean halfMarch) {
         GpuDevice device = RenderSystem.tryGetDevice();
         if (device == null) {
             return false;
         }
-        if (skyTextures[0] != null && skyTextures[1] != null && fullWidth == width && fullHeight == height && currentScale == scale) {
+        if (skyTextures[0] != null && skyTextures[1] != null && fullWidth == width && fullHeight == height
+                && currentHalfMarch == halfMarch && (!halfMarch || marchHalfTexture != null)) {
             return true;
         }
         this.closeTargets();
-        int hw = Math.max(1, width / scale);
-        int hh = Math.max(1, height / scale);
+        // небо (и история чёрной дыры) всегда в полном разрешении
         for (int i = 0; i < 2; ++i) {
             final int index = i;
-            skyTextures[i] = device.createTexture(() -> "kimiko:customsky_march" + index, 12, TextureFormat.RGBA8, hw, hh, 1, 1);
+            skyTextures[i] = device.createTexture(() -> "kimiko:customsky_sky" + index, 12, TextureFormat.RGBA8, width, height, 1, 1);
             skyTextureViews[i] = device.createTextureView(skyTextures[i]);
         }
-        int bw = hw;
-        int bh = hh;
+        if (halfMarch) {
+            // округление вверх, чтобы 4 фазы сдвига покрывали и последний столбец/строку при нечётном размере
+            int hw = Math.max(1, (width + 1) / 2);
+            int hh = Math.max(1, (height + 1) / 2);
+            marchHalfTexture = device.createTexture(() -> "kimiko:customsky_march_half", 12, TextureFormat.RGBA8, hw, hh, 1, 1);
+            marchHalfTextureView = device.createTextureView(marchHalfTexture);
+            bloomSrcWidth = Math.max(1, width / 2);
+            bloomSrcHeight = Math.max(1, height / 2);
+        } else {
+            bloomSrcWidth = width;
+            bloomSrcHeight = height;
+        }
+        int bw = bloomSrcWidth;
+        int bh = bloomSrcHeight;
         for (int level = 0; level < BLOOM_LEVELS; ++level) {
             bw = Math.max(1, bw / 2);
             bh = Math.max(1, bh / 2);
@@ -469,20 +523,9 @@ public final class CustomSkyRenderer {
         }
         fullWidth = width;
         fullHeight = height;
-        marchWidth = hw;
-        marchHeight = hh;
-        currentScale = scale;
+        currentHalfMarch = halfMarch;
         historyValid = false;
         return true;
-    }
-
-    private float halton(int index, int base) {
-        float result = 0.0f;
-        float f = 1.0f;
-        for (int i = index; i > 0; i /= base) {
-            result += (f /= (float) base) * (float) (i % base);
-        }
-        return result;
     }
 
     public static void clear() {
@@ -500,6 +543,14 @@ public final class CustomSkyRenderer {
             }
             skyTextures[i] = null;
         }
+        if (marchHalfTextureView != null) {
+            marchHalfTextureView.close();
+        }
+        marchHalfTextureView = null;
+        if (marchHalfTexture != null) {
+            marchHalfTexture.close();
+        }
+        marchHalfTexture = null;
         for (int level = 0; level < BLOOM_LEVELS; ++level) {
             if (bloomTextureViews[level] != null) {
                 bloomTextureViews[level].close();
@@ -514,6 +565,8 @@ public final class CustomSkyRenderer {
         }
         fullWidth = -1;
         fullHeight = -1;
+        bloomSrcWidth = -1;
+        bloomSrcHeight = -1;
         historyValid = false;
     }
 

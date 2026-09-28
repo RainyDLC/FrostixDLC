@@ -41,20 +41,21 @@ import org.jetbrains.annotations.NotNull;
  *  - марш: в пустой оболочке 7 < r < 8 шаг сразу до края диска (с тем же dither);
  *  - sqrt(r2) один раз за шаг вместо двух.
  *
- * v6, шахматный марш:
- *  - каждый кадр маршируется только половина пикселей (шахматка, чётность меняется каждый кадр),
- *    вторая половина берётся из истории TAA с точной репроекцией (небо на бесконечности, репроекция
- *    через prevViewProj без ошибок параллакса). TAA и так смешивает 85% истории, так что каждый пиксель
- *    обновляется раз в 2 кадра — на глаз разницы нет, а самый дорогой проход стал в 2 раза дешевле.
- *    Чётность кадра берётся из знака TAA-джиттера по X (halton base 2: чётный кадр >= 0, нечётный < 0),
- *    поэтому Java-сторона не менялась. Без валидной истории (первый кадр, край экрана) — полный марш.
- *
- * v7, сглаживание краёв дыры и силуэтов объектов (без потери FPS):
- *  - убран edgeDim (ужасная пиксельная черная 60%-кайма вокруг объектов на фоне дыры);
- *  - субпиксельное anti-aliasing сглаживание геометрии мира (4-tap coverage) с ранним discard для 99% пикселей сцены;
- *  - исправлен баг в bicubic фильтре (отрицательные веса B-сплайна давали 2x2 пиксельную сетку по всей дыре и bloom);
- *  - тень чёрной дыры (alpha) теперь тоже фильтруется bicubic и накапливается через TAA;
+ * v7, сглаживание краёв дыры:
+ *  - убран edgeDim (пиксельная чёрная кайма вокруг объектов на фоне дыры);
+ *  - тень чёрной дыры (alpha) накапливается через TAA;
  *  - сглажен порог горизонта событий (fellSmooth) и спад фотонного кольца (esc) без ступенчатого клиппинга.
+ *
+ * v8, полное разрешение без потери FPS (главная причина "пиксельной" дыры):
+ *  - раньше марш шёл в буфер 1/2 x 1/2, а composite растягивал его на экран -> блоки 2x2, лесенка на
+ *    фотонном кольце и зерно диска размером 2x2 (dither был ещё и статичным, TAA его не усреднял);
+ *  - теперь марш всё так же считает 1/4 пикселей (буфер 1/2 x 1/2, та же цена, без дивергенции варпов),
+ *    но каждый кадр со своим субпиксельным сдвигом: фаза 0..3 -> (0,0) (1,1) (1,0) (0,1);
+ *  - новый проход blackhole_resolve (полное разрешение, пара выборок на пиксель) кладёт свежий сэмпл
+ *    ровно в тот пиксель экрана, откуда он посчитан, а остальные берёт из истории с точной репроекцией
+ *    (небо на бесконечности). За 4 кадра каждый пиксель посчитан честно, а не растянут;
+ *  - dither меняется каждый кадр (golden ratio), поэтому зерно диска усредняется, а не стоит сеткой;
+ *  - composite читает уже полноэкранное небо обычной выборкой, bicubic-размытие больше не нужно.
  */
 public final class CustomskyFastShaders {
     private CustomskyFastShaders() {
@@ -63,6 +64,8 @@ public final class CustomskyFastShaders {
     public static void register(@NotNull Map<String, String> sources) {
         sources.put("post/customsky/blackhole.glsl", "//!fragment\n" + BLACKHOLE);
         sources.put("post/customsky/blackhole.fsh", BLACKHOLE);
+        sources.put("post/customsky/blackhole_resolve.glsl", "//!fragment\n" + RESOLVE);
+        sources.put("post/customsky/blackhole_resolve.fsh", RESOLVE);
         sources.put("post/customsky/composite.glsl", "//!fragment\n" + COMPOSITE);
         sources.put("post/customsky/composite.fsh", COMPOSITE);
     }
@@ -73,7 +76,6 @@ public final class CustomskyFastShaders {
             #moj_import <kimiko:theme_wave.glsl>
 
             uniform sampler2D NoiseTex;
-            uniform sampler2D History;
 
             layout(std140) uniform SkyParams {
                 mat4 invViewProj;
@@ -98,7 +100,6 @@ public final class CustomskyFastShaders {
             const float EXPOSURE = 0.024;
             const float THEME_MIX = 0.5;
             const float ZOOM = 2.4;
-            const float TAA_BLEND = 0.85;
             const float SPIN = 0.16;
             const float TAU = 6.28318531;
 
@@ -126,6 +127,8 @@ public final class CustomskyFastShaders {
             float gSpin;
             float gAct;
             float gFlare;
+            // UV полноэкранного пикселя, который считает этот сэмпл (с субпиксельным сдвигом кадра)
+            vec2 gUV;
 
             vec3 hsv2rgb(vec3 c) {
                 vec3 rgb = clamp(abs(mod(c.x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
@@ -191,7 +194,7 @@ public final class CustomskyFastShaders {
                     float hue = fract(axis * 0.159155 + time * 0.02 + t * 0.15);
                     return hsv2rgb(vec3(hue, 0.85, 1.0));
                 }
-                vec2 fragXY = kimikoFragXYFromUV(texCoord);
+                vec2 fragXY = kimikoFragXYFromUV(gUV);
                 vec3 c1 = skyExtra.x > 0.5 ? kimikoClientPrimary(fragXY) : skyColor.rgb;
                 if (mode > 0.5) {
                     vec3 c2 = skyExtra.x > 0.5 ? kimikoClientSecondary(fragXY) : skyColor2.rgb;
@@ -344,40 +347,14 @@ public final class CustomskyFastShaders {
                 return normalize(local);
             }
 
-            vec4 sampleHistory(vec2 uv, vec2 res) {
-                vec2 samplePos = uv * res;
-                vec2 texPos1 = floor(samplePos - 0.5) + 0.5;
-                vec2 f = samplePos - texPos1;
-
-                vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
-                vec2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
-                vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
-                vec2 w3 = f * f * (-0.5 + 0.5 * f);
-
-                vec2 w12 = w1 + w2;
-                vec2 offset12 = w2 / w12;
-
-                vec2 p0 = (texPos1 - 1.0) / res;
-                vec2 p3 = (texPos1 + 2.0) / res;
-                vec2 p12 = (texPos1 + offset12) / res;
-
-                vec4 result = vec4(0.0);
-                result += textureLod(History, vec2(p0.x, p0.y), 0.0) * (w0.x * w0.y);
-                result += textureLod(History, vec2(p12.x, p0.y), 0.0) * (w12.x * w0.y);
-                result += textureLod(History, vec2(p3.x, p0.y), 0.0) * (w3.x * w0.y);
-                result += textureLod(History, vec2(p0.x, p12.y), 0.0) * (w0.x * w12.y);
-                result += textureLod(History, vec2(p12.x, p12.y), 0.0) * (w12.x * w12.y);
-                result += textureLod(History, vec2(p3.x, p12.y), 0.0) * (w3.x * w12.y);
-                result += textureLod(History, vec2(p0.x, p3.y), 0.0) * (w0.x * w3.y);
-                result += textureLod(History, vec2(p12.x, p3.y), 0.0) * (w12.x * w3.y);
-                result += textureLod(History, vec2(p3.x, p3.y), 0.0) * (w3.x * w3.y);
-
-                return clamp(result, vec4(0.0), vec4(1.0));
-            }
-
             void main() {
-                vec2 res = vec2(textureSize(History, 0));
-                vec3 rd = rayDir(texCoord);
+                // v8: буфер 1/2 x 1/2, но каждый кадр сэмпл берётся в центре одного из 4 полноэкранных пикселей
+                // своего квада 2x2 (фаза в taa.x). resolve потом кладёт его ровно в этот пиксель экрана.
+                vec2 fullRes = max(misc.yz, vec2(1.0));
+                int phase = int(taa.x + 0.5) & 3;
+                vec2 jit = phase == 0 ? vec2(0.0) : (phase == 1 ? vec2(1.0) : (phase == 2 ? vec2(1.0, 0.0) : vec2(0.0, 1.0)));
+                gUV = (floor(gl_FragCoord.xy) * 2.0 + jit + 0.5) / fullRes;
+                vec3 rd = rayDir(gUV);
 
                 float time = misc.x;
                 float brightness = misc.w;
@@ -413,7 +390,8 @@ public final class CustomskyFastShaders {
                 vec3 pos = vec3(dot(camWorld, eX), dot(camWorld, eY), dot(camWorld, eZ));
                 vec3 eyevec = toLocal(rd, eX, eY, eZ);
                 vec3 localRd = eyevec;
-                float pixAngle = length(toLocal(rayDir(texCoord + vec2(1.0, 0.0) / res), eX, eY, eZ) - localRd);
+                // фильтр октав по шагу исходной сетки 1/2 -> та же детализация и цена, что и раньше
+                float pixAngle = length(toLocal(rayDir(gUV + vec2(2.0, 0.0) / fullRes), eX, eY, eZ) - localRd);
                 float aa = pixAngle * CAM_DIST * 1.425;
 
                 vec3 color = vec3(0.0);
@@ -429,7 +407,8 @@ public final class CustomskyFastShaders {
                 // PERF: лучи с impact >= IMPACT_CULL и раньше давали ровно 0, поэтому их просто не маршируем.
                 if (impact < IMPACT_CULL && along < 0.0) {
                     float tEnter = -along - sqrt(max(0.0, ENTRY_R * ENTRY_R - impact * impact));
-                    float dither = hash21(gl_FragCoord.xy);
+                    // dither меняется каждый кадр (golden ratio) -> TAA усредняет зерно, а не держит его сеткой
+                    float dither = fract(hash21(gl_FragCoord.xy) + taa.w);
                     vec3 raypos = pos + eyevec * (tEnter + dither * STEP);
                     float r2 = dot(raypos, raypos);
                     float r = sqrt(r2);
@@ -508,23 +487,111 @@ public final class CustomskyFastShaders {
                 color *= brightness;
 
                 vec3 cur = encodeHDR(color);
-
                 float shadowVal = fell * (1.0 - alpha);
+
+                // TAA теперь в blackhole_resolve (полное разрешение); alpha = маска тени
+                fragColor = vec4(max(cur, vec3(0.0)), shadowVal);
+            }
+            """;
+
+    /**
+     * v8: сборка полного разрешения из 1/4-сэмплов. Проход дешёвый (1 texelFetch + 9 выборок истории),
+     * марш остаётся на 1/4 пикселей, поэтому FPS тот же, а картинка без блоков 2x2.
+     */
+    private static final String RESOLVE = """
+            #version 150
+
+            uniform sampler2D Current;
+            uniform sampler2D History;
+
+            layout(std140) uniform SkyParams {
+                mat4 invViewProj;
+                vec4 misc;
+                vec4 skyColor;
+                vec4 skyColor2;
+                vec4 taa;
+                mat4 prevViewProj;
+                vec4 skyExtra;
+                vec4 bhParams;
+            };
+
+            in vec2 texCoord;
+            out vec4 fragColor;
+
+            // свежий сэмпл приходит в пиксель раз в 4 кадра; 0.5 истории на 4 кадра ~ те же 0.85 на кадр, что были
+            const float HISTORY_BLEND = 0.5;
+            const float CLAMP_RANGE = 0.35;
+
+            // Catmull-Rom 9 выборок: резкая репроекция без мыла, при неподвижной камере даёт ровно исходный тексель
+            vec4 sampleHistory(vec2 uv, vec2 res) {
+                vec2 samplePos = uv * res;
+                vec2 texPos1 = floor(samplePos - 0.5) + 0.5;
+                vec2 f = samplePos - texPos1;
+
+                vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+                vec2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+                vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+                vec2 w3 = f * f * (-0.5 + 0.5 * f);
+
+                vec2 w12 = w1 + w2;
+                vec2 offset12 = w2 / w12;
+
+                vec2 p0 = (texPos1 - 1.0) / res;
+                vec2 p3 = (texPos1 + 2.0) / res;
+                vec2 p12 = (texPos1 + offset12) / res;
+
+                vec4 result = vec4(0.0);
+                result += textureLod(History, vec2(p0.x, p0.y), 0.0) * (w0.x * w0.y);
+                result += textureLod(History, vec2(p12.x, p0.y), 0.0) * (w12.x * w0.y);
+                result += textureLod(History, vec2(p3.x, p0.y), 0.0) * (w3.x * w0.y);
+                result += textureLod(History, vec2(p0.x, p12.y), 0.0) * (w0.x * w12.y);
+                result += textureLod(History, vec2(p12.x, p12.y), 0.0) * (w12.x * w12.y);
+                result += textureLod(History, vec2(p3.x, p12.y), 0.0) * (w3.x * w12.y);
+                result += textureLod(History, vec2(p0.x, p3.y), 0.0) * (w0.x * w3.y);
+                result += textureLod(History, vec2(p12.x, p3.y), 0.0) * (w12.x * w3.y);
+                result += textureLod(History, vec2(p3.x, p3.y), 0.0) * (w3.x * w3.y);
+
+                return clamp(result, vec4(0.0), vec4(1.0));
+            }
+
+            void main() {
+                vec2 res = vec2(textureSize(History, 0));
+                ivec2 ip = ivec2(gl_FragCoord.xy);
+                int phase = int(taa.x + 0.5) & 3;
+                ivec2 off = phase == 0 ? ivec2(0, 0) : (phase == 1 ? ivec2(1, 1) : (phase == 2 ? ivec2(1, 0) : ivec2(0, 1)));
+                ivec2 csize = textureSize(Current, 0);
+                vec4 cur = texelFetch(Current, clamp(ip / 2, ivec2(0), csize - 1), 0);
+                bool fresh = (ip.x - (ip.x / 2) * 2) == off.x && (ip.y - (ip.y / 2) * 2) == off.y;
+
+                bool haveHist = false;
+                vec4 hist = vec4(0.0);
                 if (taa.z > 0.5) {
+                    vec2 ndc = texCoord * 2.0 - 1.0;
+                    vec4 pFar = invViewProj * vec4(ndc, 1.0, 1.0);
+                    vec4 pNear = invViewProj * vec4(ndc, -1.0, 1.0);
+                    vec3 rd = normalize(pFar.xyz / pFar.w - pNear.xyz / pNear.w);
                     vec4 pc = prevViewProj * vec4(rd, 0.0);
                     if (pc.w > 1e-5) {
                         vec2 prevUV = pc.xy / pc.w * 0.5 + 0.5;
                         vec2 guard = 1.5 / res;
                         if (all(greaterThan(prevUV, guard)) && all(lessThan(prevUV, 1.0 - guard))) {
-                            vec4 hist = sampleHistory(prevUV, res);
-                            cur = mix(cur, clamp(hist.rgb, cur - 0.35, cur + 0.35), TAA_BLEND);
-                            shadowVal = mix(shadowVal, hist.a, TAA_BLEND);
+                            hist = sampleHistory(prevUV, res);
+                            haveHist = true;
                         }
                     }
                 }
 
-                // alpha = маска тени (сглаженная и TAA-накопленная)
-                fragColor = vec4(max(cur, vec3(0.0)), shadowVal);
+                if (!haveHist) {
+                    // первый кадр / край экрана при повороте: свежий сэмпл или ближайший из этого кадра
+                    fragColor = fresh ? cur : texture(Current, texCoord);
+                    return;
+                }
+                if (fresh) {
+                    vec3 h = clamp(hist.rgb, cur.rgb - CLAMP_RANGE, cur.rgb + CLAMP_RANGE);
+                    fragColor = vec4(mix(cur.rgb, h, HISTORY_BLEND), mix(cur.a, hist.a, HISTORY_BLEND));
+                } else {
+                    fragColor = hist;
+                }
             }
             """;
 
@@ -693,38 +760,6 @@ public final class CustomskyFastShaders {
                 return c / max(1.0 - c, vec3(0.0055));
             }
 
-            vec4 bicubic(sampler2D tex, vec2 uv) {
-                vec2 res = vec2(textureSize(tex, 0));
-                vec2 coord = uv * res - 0.5;
-                vec2 f = fract(coord);
-                vec2 i = floor(coord);
-
-                vec2 f2 = f * f;
-                vec2 f3 = f2 * f;
-
-                vec2 w0 = -f3 + 3.0 * f2 - 3.0 * f + 1.0;
-                vec2 w1 = 3.0 * f3 - 6.0 * f2 + 4.0;
-                vec2 w2 = -3.0 * f3 + 3.0 * f2 + 3.0 * f + 1.0;
-                vec2 w3 = f3;
-
-                vec2 s0 = w0 + w1;
-                vec2 s1 = w2 + w3;
-
-                vec2 f0 = w1 / s0;
-                vec2 f1 = w3 / s1;
-
-                vec2 uv0 = (i - 0.5 + f0) / res;
-                vec2 uv1 = (i + 1.5 + f1) / res;
-
-                vec2 w = s1 / (s0 + s1);
-
-                return mix(
-                    mix(texture(tex, vec2(uv0.x, uv0.y)), texture(tex, vec2(uv1.x, uv0.y)), w.x),
-                    mix(texture(tex, vec2(uv0.x, uv1.y)), texture(tex, vec2(uv1.x, uv1.y)), w.x),
-                    w.y
-                );
-            }
-
             vec3 blackHole() {
                 vec2 ndc = texCoord * 2.0 - 1.0;
                 vec4 pFar = invViewProj * vec4(ndc, 1.0, 1.0);
@@ -735,7 +770,8 @@ public final class CustomskyFastShaders {
                 float cosT = clamp(dot(rd, bhDir), -1.0, 1.0);
                 float theta = acos(cosT);
 
-                vec4 skySample = bicubic(Sky, texCoord);
+                // v8: небо уже в полном разрешении (resolve), bicubic-апскейл больше не нужен
+                vec4 skySample = texture(Sky, texCoord);
                 vec3 color = decodeHDR(skySample.rgb);
                 float shadow = skySample.a;
 
