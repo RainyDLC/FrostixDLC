@@ -1,11 +1,7 @@
 package rtx.kimiko.ui.menu;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import mixin.accessor.GuiGraphicsExtractorAccessor;
 import mods.acountswiher.ru.vidtu.ias.screen.AccountScreen;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -14,99 +10,63 @@ import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.gui.screen.world.SelectWorldScreen;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.sound.PositionedSoundInstance;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import org.joml.Matrix3x2fStack;
+import rtx.kimiko.utils.render.fonts.Fonts;
 
 /**
- * Главное меню "Черная дыра".
- * IDLE   : космос, черная дыра с аккреционным диском, одна кнопка "ИГРАТЬ"
- * SUCK   : засасывание, гравитационное линзирование растет, всё закручивается и падает в горизонт
- * EMERGE : выход в пустоту, Млечный Путь раскручивается из центра
- * MENU   : пустота + Млечный Путь + основные кнопки
+ * Главное меню "Горизонт событий".
+ *
+ * Весь фон считает шейдер ui/mainmenu/space в полном разрешении окна:
+ *  - снаружи: честная трассировка лучей вокруг черной дыры Шварцшильда
+ *    (гравитационное линзирование, аккреционный диск с доплеровским усилением и красным смещением,
+ *    линзированный Млечный Путь и звезды);
+ *  - засасывание: камера падает к горизонту по спирали, пространство искажается, всё гаснет;
+ *  - внутри: пустота и вращающаяся спиральная галактика, по орбите которой крутятся иконки-кнопки.
+ *
+ * Java здесь только считает состояние, хит-тесты и подписи. Формулы позиций иконок
+ * синхронизированы с шейдером (renderInside / galToScreen), не меняй одно без другого.
  */
 public class BlackHoleMenuScreen extends Screen {
 
-    // интро показываем один раз за запуск, после выхода из мира сразу попадаем внутрь
+    private static final long START = System.nanoTime();
     private static boolean introPlayed = false;
 
-    private static final float SUCK_DUR = 2.8f;
-    private static final float EMERGE_DUR = 2.0f;
+    private static final float SUCK_DUR = 3.6f;
+    private static final float UNFOLD_DUR = 2.8f;
 
-    private static final Identifier HOLE_TEX = Identifier.of("kimiko", "menu/black_hole");
-    private static final Identifier GALAXY_TEX = Identifier.of("kimiko", "menu/milky_way");
-    private static final int HOLE_SIZE = 512;
-    private static final float HOLE_RS = 0.16f; // радиус тени в нормализованных координатах текстуры
-    private static final int GAL_W = 1024, GAL_H = 576;
-    private static boolean texturesReady = false;
+    // --- константы шейдера (renderInside) ---
+    private static final float GAL_S = 0.80f;
+    private static final float GAL_COSI = 0.46f;
+    private static final float GAL_ROLL = -0.16f;
+    private static final float GAL_CY = -0.03f;
+    private static final float ICON_R = 0.72f;
+    private static final int ICONS = 5;
+    private static final int PLAY_INDEX = 5;
 
-    private enum Phase { IDLE, SUCK, EMERGE, MENU }
+    private static final String[] LABELS = {"Одиночная игра", "Мультиплеер", "Аккаунты", "Настройки", "Выход"};
+
+    private enum Phase { OUTSIDE, SUCK, INSIDE }
 
     private Phase phase;
     private long phaseStart = System.nanoTime();
-    private final long openTime = System.nanoTime();
     private long lastFrame = System.nanoTime();
 
-    private final Star[] stars = new Star[750];
-    private final DiskParticle[] disk = new DiskParticle[320];
-    private final List<MenuButton> buttons = new ArrayList<>();
-    private float playHover = 0f;
+    private float playHover;
+    private int hovered = -1;
+    private int lastHovered = -1;
+    private float hoverAmt;
+    private float orbitAngle = 0.35f;
+    private final float[] iconX = new float[ICONS];
+    private final float[] iconY = new float[ICONS];
+    private final float[] iconR = new float[ICONS];
 
     public BlackHoleMenuScreen() {
         super(Text.literal("Frostix"));
-        this.phase = introPlayed ? Phase.MENU : Phase.IDLE;
-        Random r = new Random(1337L);
-        for (int i = 0; i < stars.length; i++) {
-            Star s = new Star();
-            s.x = r.nextFloat() * 2f - 1f;
-            s.y = r.nextFloat() * 2f - 1f;
-            s.depth = r.nextFloat();
-            s.bright = 0.25f + r.nextFloat() * 0.75f;
-            s.size = r.nextFloat() < 0.08f ? 2 : 1;
-            s.phase = r.nextFloat() * 6.283f;
-            s.tint = r.nextFloat();
-            stars[i] = s;
-        }
-        for (int i = 0; i < disk.length; i++) {
-            DiskParticle p = new DiskParticle();
-            p.radius = 1.55f + (float) Math.pow(r.nextFloat(), 1.7) * 3.4f;
-            p.angle = r.nextFloat() * 6.283f;
-            p.len = 2f + r.nextFloat() * 6f;
-            p.bright = 0.35f + r.nextFloat() * 0.65f;
-            disk[i] = p;
-        }
-    }
-
-    // ------------------------------------------------------------------ lifecycle
-
-    @Override
-    protected void init() {
-        ensureTextures(this.client);
-        buttons.clear();
-        int bw = 210, bh = 24, gap = 8;
-        String[] labels = {"Одиночная игра", "Мультиплеер", "Аккаунты", "Настройки", "Выход"};
-        Runnable[] actions = {
-            () -> client.setScreen(new SelectWorldScreen(this)),
-            () -> client.setScreen(new MultiplayerScreen(this)),
-            () -> client.setScreen(new AccountScreen(this)),
-            () -> client.setScreen(new OptionsScreen(this, client.options)),
-            () -> client.scheduleStop()
-        };
-        int total = labels.length * bh + (labels.length - 1) * gap;
-        int y0 = (int) (this.height * 0.56f - total / 2f);
-        for (int i = 0; i < labels.length; i++) {
-            MenuButton b = new MenuButton();
-            b.label = labels[i];
-            b.action = actions[i];
-            b.w = bw;
-            b.h = bh;
-            b.x = this.width / 2 - bw / 2;
-            b.y = y0 + i * (bh + gap);
-            b.index = i;
-            buttons.add(b);
+        this.phase = introPlayed ? Phase.INSIDE : Phase.OUTSIDE;
+        if (introPlayed) {
+            // возвращаемся из мира / настроек: галактика уже развернута
+            this.phaseStart = System.nanoTime() - (long) (UNFOLD_DUR * 1.0e9);
         }
     }
 
@@ -115,24 +75,39 @@ public class BlackHoleMenuScreen extends Screen {
 
     @Override
     public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
-        // свой фон, без ванильной панорамы и блюра
     }
+
+    private float phaseTime() { return (System.nanoTime() - phaseStart) / 1.0e9f; }
+    private static float time() { return (float) (((System.nanoTime() - START) / 1.0e9) % 3600.0); }
 
     private void setPhase(Phase p) {
         phase = p;
         phaseStart = System.nanoTime();
     }
 
-    private float now() { return (System.nanoTime() - openTime) / 1.0e9f; }
-    private float phaseTime() { return (System.nanoTime() - phaseStart) / 1.0e9f; }
-
     private void startSuck() {
-        if (phase != Phase.IDLE) return;
+        if (phase != Phase.OUTSIDE) return;
         introPlayed = true;
         setPhase(Phase.SUCK);
+        play(PositionedSoundInstance.ambient(SoundEvents.BLOCK_PORTAL_TRIGGER, 0.6f, 0.5f));
+    }
+
+    private void play(PositionedSoundInstance sound) {
         try {
-            client.getSoundManager().play(PositionedSoundInstance.ambient(SoundEvents.BLOCK_PORTAL_TRIGGER, 0.6f, 0.55f));
-        } catch (Throwable ignored) { }
+            client.getSoundManager().play(sound);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void activate(int i) {
+        play(PositionedSoundInstance.ui(SoundEvents.UI_BUTTON_CLICK, 1.0f));
+        switch (i) {
+            case 0 -> client.setScreen(new SelectWorldScreen(this));
+            case 1 -> client.setScreen(new MultiplayerScreen(this));
+            case 2 -> client.setScreen(new AccountScreen(this));
+            case 3 -> client.setScreen(new OptionsScreen(this, client.options));
+            default -> client.scheduleStop();
+        }
     }
 
     // ------------------------------------------------------------------ input
@@ -140,19 +115,15 @@ public class BlackHoleMenuScreen extends Screen {
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
         double mx = click.x(), my = click.y();
-        if (phase == Phase.IDLE && overPlay(mx, my)) {
+        if (phase == Phase.OUTSIDE && overPlay(mx, my)) {
             startSuck();
             return true;
         }
-        if (phase == Phase.MENU) {
-            for (MenuButton b : buttons) {
-                if (b.appear > 0.9f && b.contains(mx, my)) {
-                    try {
-                        client.getSoundManager().play(PositionedSoundInstance.ui(SoundEvents.UI_BUTTON_CLICK, 1.0f));
-                    } catch (Throwable ignored) { }
-                    b.action.run();
-                    return true;
-                }
+        if (phase == Phase.INSIDE) {
+            int i = iconAt(mx, my);
+            if (i >= 0) {
+                activate(i);
+                return true;
             }
         }
         return super.mouseClicked(click, doubled);
@@ -161,585 +132,153 @@ public class BlackHoleMenuScreen extends Screen {
     @Override
     public boolean keyPressed(KeyInput input) {
         int key = input.key();
-        if (phase == Phase.IDLE && (key == 257 || key == 335 || key == 32)) { // Enter / KP Enter / Space
+        if (phase == Phase.OUTSIDE && (key == 257 || key == 335 || key == 32)) {
             startSuck();
             return true;
         }
         return super.keyPressed(input);
     }
 
+    // ------------------------------------------------------------------ geometry (зеркало шейдера)
+
+    private boolean overPlay(double mx, double my) {
+        float h = this.height;
+        return Math.abs(mx - this.width / 2f) <= 0.125f * h + 0.032f * h * 0.3f
+                && Math.abs(my - 0.83f * h) <= 0.032f * h;
+    }
+
+    private int iconAt(double mx, double my) {
+        int best = -1;
+        double bestD = Double.MAX_VALUE;
+        for (int i = 0; i < ICONS; i++) {
+            double dx = mx - iconX[i], dy = my - iconY[i];
+            double d = Math.sqrt(dx * dx + dy * dy);
+            if (iconR[i] > 1f && d <= iconR[i] * 1.15 && d < bestD) {
+                best = i;
+                bestD = d;
+            }
+        }
+        return best;
+    }
+
+    private void layoutIcons(float p1, float angle) {
+        float e = 1f - (float) Math.pow(1f - clamp01(p1), 3);
+        float scale = 0.03f + (1f - 0.03f) * e;
+        float iconsIn = smoothstep(0.55f, 0.9f, p1);
+        float aspect = this.width / (float) Math.max(1, this.height);
+        float cr = (float) Math.cos(GAL_ROLL), sr = (float) Math.sin(GAL_ROLL);
+        for (int i = 0; i < ICONS; i++) {
+            float a = angle + i * (float) (Math.PI * 2.0 / ICONS);
+            float gx = ICON_R * (float) Math.cos(a);
+            float gy = ICON_R * (float) Math.sin(a);
+            float vx = gx * GAL_S * scale;
+            float vy = gy * GAL_COSI * GAL_S * scale;
+            float qx = cr * vx - sr * vy;
+            float qy = GAL_CY + sr * vx + cr * vy;
+            float persp = 1f - 0.22f * (float) Math.sin(a);
+            float hov = i == hovered ? hoverAmt : 0f;
+            iconX[i] = (qx / aspect + 0.5f) * this.width;
+            iconY[i] = (1f - (qy + 0.5f)) * this.height;
+            iconR[i] = 0.052f * persp * (1f + 0.18f * hov) * iconsIn * this.height;
+        }
+    }
+
     // ------------------------------------------------------------------ render
 
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-        long nowNs = System.nanoTime();
-        float dt = Math.min(0.1f, (nowNs - lastFrame) / 1.0e9f);
-        lastFrame = nowNs;
+        long now = System.nanoTime();
+        float dt = Math.min(0.1f, (now - lastFrame) / 1.0e9f);
+        lastFrame = now;
+        float t = time();
 
-        if (phase == Phase.SUCK && phaseTime() >= SUCK_DUR) setPhase(Phase.EMERGE);
-        if (phase == Phase.EMERGE && phaseTime() >= EMERGE_DUR) setPhase(Phase.MENU);
+        if (phase == Phase.SUCK && phaseTime() >= SUCK_DUR) setPhase(Phase.INSIDE);
 
-        float t = now();
-        float pt = phaseTime();
-        ctx.fill(0, 0, this.width, this.height, 0xFF000000);
+        float p0, p1;
+        int hoverIndex;
+        float hover;
 
-        switch (phase) {
-            case IDLE -> renderOutside(ctx, t, 0f, mouseX, mouseY, dt);
-            case SUCK -> renderOutside(ctx, t, clamp01(pt / SUCK_DUR), mouseX, mouseY, dt);
-            case EMERGE -> renderInside(ctx, t, clamp01(pt / EMERGE_DUR), -1f, mouseX, mouseY, dt);
-            case MENU -> renderInside(ctx, t, 1f, pt, mouseX, mouseY, dt);
+        if (phase == Phase.INSIDE) {
+            p1 = clamp01(phaseTime() / UNFOLD_DUR);
+            float e = 1f - (float) Math.pow(1f - p1, 3);
+            int h = iconAt(mouseX, mouseY);
+            if (h != hovered) {
+                if (h >= 0) play(PositionedSoundInstance.ui(SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, 1.6f, 0.35f));
+                hovered = h;
+                if (h >= 0 && h != lastHovered) hoverAmt = 0f;
+                if (h >= 0) lastHovered = h;
+            }
+            hoverAmt += ((hovered >= 0 ? 1f : 0f) - hoverAmt) * Math.min(1f, dt * 10f);
+            float omega = hovered >= 0 ? 0.02f : 0.09f;
+            orbitAngle += dt * omega;
+            float angle = orbitAngle + 4.0f * (float) Math.pow(1f - e, 3);
+            layoutIcons(p1, angle);
+            p0 = angle;
+            hoverIndex = hovered >= 0 ? hovered : lastHovered;
+            hover = hoverAmt;
+        } else {
+            float s = phase == Phase.SUCK ? clamp01(phaseTime() / SUCK_DUR) : 0f;
+            boolean over = phase == Phase.OUTSIDE && overPlay(mouseX, mouseY);
+            playHover += ((over ? 1f : 0f) - playHover) * Math.min(1f, dt * 10f);
+            p0 = s;
+            p1 = -1f;
+            hoverIndex = PLAY_INDEX;
+            hover = playHover;
+        }
+
+        ((GuiGraphicsExtractorAccessor) ctx).kimiko$getGuiRenderState().addSimpleElement(
+                new SpaceMenuRenderState(ctx.getMatrices(), this.width, this.height, p0, p1, t, hoverIndex, hover));
+
+        if (phase == Phase.INSIDE) {
+            drawInsideText(ctx, p1);
+        } else {
+            drawPlayLabel(ctx, p0);
         }
     }
 
-    // ---------------------------------------------------------- снаружи: черная дыра
-
-    private void renderOutside(DrawContext ctx, float t, float s, int mouseX, int mouseY, float dt) {
-        Matrix3x2fStack m = ctx.getMatrices();
-        float w = this.width, h = this.height;
-        float cx = w / 2f, cy = h * 0.42f;
-        float diag = (float) Math.sqrt(w * w + h * h);
-
-        float grow = 1f + 34f * (float) Math.pow(s, 3.3);
-        float holeDraw = Math.min(w, h) * 0.95f * grow;
-        float shadowPx = holeDraw * 0.5f * HOLE_RS;
-        float einstein = shadowPx * 1.55f;
-
-        // тряска + закручивание всей сцены
-        float shake = s * s * 7f;
-        float sx = (float) (Math.sin(t * 83.0) + Math.sin(t * 47.0)) * 0.5f * shake;
-        float sy = (float) (Math.cos(t * 71.0) + Math.sin(t * 59.0)) * 0.5f * shake;
-        float spin = (float) Math.pow(s, 2.6) * 2.2f;
-
-        m.pushMatrix();
-        m.translate(cx + sx, cy + sy);
-        m.rotate(spin);
-        m.translate(-cx, -cy);
-
-        // слабая туманность на фоне
-        if (texturesReady) {
-            m.pushMatrix();
-            m.translate(cx, cy);
-            float gs = diag / GAL_H * 1.05f;
-            m.scale(gs * (1f + s * 0.6f), gs * (1f + s * 0.6f));
-            m.rotate(0.35f + t * 0.004f);
-            int a = (int) (40 * (1f - s));
-            ctx.drawTexture(RenderPipelines.GUI_TEXTURED, GALAXY_TEX, -GAL_W / 2, -GAL_H / 2, 0f, 0f, GAL_W, GAL_H, GAL_W, GAL_H, argb(a, 255, 255, 255));
-            m.popMatrix();
-        }
-
-        // звезды с линзированием
-        for (Star st : stars) {
-            float bx = st.x * diag * 0.5f;
-            float by = st.y * diag * 0.5f;
-            float r = (float) Math.sqrt(bx * bx + by * by) + 0.001f;
-            float ang = (float) Math.atan2(by, bx);
-
-            // затягивание
-            float pull = clamp01((float) Math.pow(s, 2.0) * (1.2f + st.depth * 1.6f));
-            pull = pull * pull * (3f - 2f * pull);
-            ang += pull * (2.5f + 3f * st.depth) + s * s * (einstein * 2f / (r + 30f));
-
-            // главное изображение (линза выталкивает наружу, кольцо Эйнштейна)
-            float rl = 0.5f * (r + (float) Math.sqrt(r * r + 4f * einstein * einstein));
-            float rf = rl * (1f - pull);
-            float twinkle = 0.75f + 0.25f * (float) Math.sin(t * (1.5f + st.depth * 3f) + st.phase);
-            float alpha = st.bright * twinkle * (1f - smooth(0.85f, 1f, s));
-            if (rf > shadowPx * 1.02f) {
-                float px = cx + (float) Math.cos(ang) * rf;
-                float py = cy + (float) Math.sin(ang) * rf;
-                int col = starColor(st.tint, alpha * (1f + s));
-                float streak = pull * (18f + 60f * st.depth) + s * s * 10f;
-                if (streak > 1.2f) {
-                    float ox = (float) Math.cos(ang - 0.35f * pull) * streak;
-                    float oy = (float) Math.sin(ang - 0.35f * pull) * streak;
-                    line(ctx, px, py, px + ox, py + oy, st.size, col);
-                } else {
-                    dot(ctx, px, py, st.size, col);
-                }
-            }
-            // вторичное изображение с обратной стороны (тонкое кольцо у тени)
-            float r2 = 0.5f * ((float) Math.sqrt(r * r + 4f * einstein * einstein) - r) * (1f - pull);
-            if (r < einstein * 3f && r2 > shadowPx * 1.03f) {
-                float px = cx - (float) Math.cos(ang) * r2;
-                float py = cy - (float) Math.sin(ang) * r2;
-                dot(ctx, px, py, 1, starColor(st.tint, alpha * 0.5f));
-            }
-        }
-
-        // гравитационные волны при засасывании
-        if (s > 0f) {
-            for (int k = 0; k < 4; k++) {
-                float f = frac(s * 2.4f + k / 4f);
-                float rr = (1f - f) * diag * 0.6f + shadowPx;
-                float a = s * (float) Math.sin(f * Math.PI) * 0.35f;
-                ring(ctx, cx, cy, rr, 1.5f, argb((int) (a * 255), 180, 210, 255), 90, t * 3f + k);
-            }
-        }
-
-        // сама черная дыра
-        if (texturesReady) {
-            m.pushMatrix();
-            m.translate(cx, cy);
-            float sc = holeDraw / HOLE_SIZE * (1f + 0.012f * (float) Math.sin(t * 1.3));
-            m.scale(sc, sc);
-            ctx.drawTexture(RenderPipelines.GUI_TEXTURED, HOLE_TEX, -HOLE_SIZE / 2, -HOLE_SIZE / 2, 0f, 0f, HOLE_SIZE, HOLE_SIZE, HOLE_SIZE, HOLE_SIZE, 0xFFFFFFFF);
-            m.popMatrix();
-        }
-
-        // частицы аккреционного диска
-        float spinBoost = 1f + (float) Math.pow(s, 2) * 7f;
-        for (DiskParticle p : disk) {
-            float rr = p.radius * shadowPx;
-            float omega = 1.4f / (float) Math.pow(p.radius, 1.5) * spinBoost;
-            float a = p.angle + (t + s * s * 4f) * omega;
-            float ca = (float) Math.cos(a), sa = (float) Math.sin(a);
-            float px = cx + ca * rr;
-            float py = cy + sa * rr * 0.2f;
-            if (sa < 0f) { // задняя половина прячется за тенью
-                float dx = px - cx, dy = py - cy;
-                if (dx * dx + dy * dy < shadowPx * shadowPx * 1.1f) continue;
-            }
-            float doppler = 1f - 0.55f * ca;
-            float heat = clamp01(1f - (p.radius - 1.55f) / 3.4f);
-            float al = clamp01(p.bright * doppler * (0.55f + 0.45f * heat)) * (1f - smooth(0.9f, 1f, s));
-            int col = heatColor(heat, al);
-            float tx = -sa, ty = ca * 0.2f;
-            float tl = (float) Math.sqrt(tx * tx + ty * ty) + 1e-4f;
-            float len = p.len * (1f + s * 3f) * (grow > 3f ? 3f : grow);
-            line(ctx, px, py, px + tx / tl * len, py + ty / tl * len, 1f, col);
-        }
-
-        m.popMatrix();
-
-        // кнопка ИГРАТЬ
-        renderPlayButton(ctx, t, s, cx, cy, mouseX, mouseY, dt);
-
-        // виньетка + затемнение в конце
-        vignette(ctx, 0.55f + s * 0.45f);
-        float black = smooth(0.78f, 1f, s);
-        if (black > 0f) ctx.fill(0, 0, this.width, this.height, argb((int) (black * 255), 0, 0, 0));
-    }
-
-    private boolean overPlay(double mx, double my) {
-        float bx = this.width / 2f, by = this.height * 0.8f;
-        return Math.abs(mx - bx) <= 95 && Math.abs(my - by) <= 18;
-    }
-
-    private void renderPlayButton(DrawContext ctx, float t, float s, float hx, float hy, int mouseX, int mouseY, float dt) {
-        float bx = this.width / 2f, by = this.height * 0.8f;
-        boolean hover = phase == Phase.IDLE && overPlay(mouseX, mouseY);
-        playHover += ((hover ? 1f : 0f) - playHover) * Math.min(1f, dt * 10f);
-
-        // кнопку тоже засасывает по спирали
-        float k = clamp01(s * 1.7f);
-        float ke = k * k * k;
-        float dx = bx - hx, dy = by - hy;
-        float r0 = (float) Math.sqrt(dx * dx + dy * dy);
-        float a0 = (float) Math.atan2(dy, dx) + ke * 5f;
-        float rr = r0 * (1f - ke);
-        float px = hx + (float) Math.cos(a0) * rr;
-        float py = hy + (float) Math.sin(a0) * rr;
-        float scale = (1f - ke) * (1f + 0.03f * playHover);
-        float stretch = 1f + ke * 2.5f;
-        float alpha = 1f - smooth(0.6f, 1f, k);
-        if (scale <= 0.01f || alpha <= 0.01f) return;
-
-        Matrix3x2fStack m = ctx.getMatrices();
-        m.pushMatrix();
-        m.translate(px, py);
-        m.rotate(a0 - (float) Math.atan2(dy, dx) + ke * 3f);
-        m.scale(scale * stretch, scale / stretch);
-
-        int w = 180, h = 34;
-        float pulse = 0.5f + 0.5f * (float) Math.sin(t * 2.2f);
-        // свечение
-        for (int i = 4; i >= 1; i--) {
-            int g = i * 3;
-            float ga = (0.05f + 0.06f * playHover + 0.02f * pulse) * alpha * (5 - i) / 4f;
-            roundRect(ctx, -w / 2 - g, -h / 2 - g, w / 2 + g, h / 2 + g, argb((int) (ga * 255), 255, 170, 90));
-        }
-        // тело
-        roundRect(ctx, -w / 2, -h / 2, w / 2, h / 2, argb((int) ((0.55f + 0.15f * playHover) * alpha * 255), 8, 6, 10));
-        roundRect(ctx, -w / 2, -h / 2, w / 2, -h / 2 + h / 2, argb((int) ((0.06f + 0.08f * playHover) * alpha * 255), 255, 255, 255));
-        border(ctx, -w / 2, -h / 2, w / 2, h / 2, argb((int) ((0.5f + 0.5f * playHover) * alpha * 255), 255, 205, 150));
-        // блик, пробегающий по кнопке
-        float sweep = frac(t * 0.35f) * (w + 60) - w / 2f - 30;
-        for (int i = 0; i < 18; i++) {
-            float xx = sweep + i;
-            if (xx < -w / 2f + 1 || xx > w / 2f - 1) continue;
-            float la = (float) Math.sin(i / 18f * Math.PI) * 0.12f * alpha;
-            m.pushMatrix();
-            m.translate(xx, -h / 2f + 1);
-            ctx.fill(0, 0, 1, h - 2, argb((int) (la * 255), 255, 255, 255));
-            m.popMatrix();
-        }
-        // текст
-        String label = "И Г Р А Т Ь";
-        m.pushMatrix();
-        m.scale(1.6f, 1.6f);
-        int tw = this.textRenderer.getWidth(label);
-        ctx.drawText(this.textRenderer, label, -tw / 2, -4, argb((int) (alpha * 255), 255, 240, 225), true);
-        m.popMatrix();
-        m.popMatrix();
-
-        if (phase == Phase.IDLE) {
-            String hint = "Enter / клик, чтобы войти";
-            float ha = (0.25f + 0.2f * pulse) * (1f - playHover * 0.5f);
-            ctx.drawCenteredTextWithShadow(this.textRenderer, hint, (int) bx, (int) by + 26, argb((int) (ha * 255), 200, 200, 210));
+    private void drawPlayLabel(DrawContext ctx, float s) {
+        float a = 1f - smoothstep(0f, 0.12f, s);
+        if (a <= 0.01f) return;
+        float size = Math.max(8f, this.height * 0.03f);
+        int c = argb((int) (a * 255), 255, 244, 232);
+        text(ctx, Fonts.SEMIBOLD, "ИГРАТЬ", this.width / 2f, this.height * 0.83f, size, c);
+        if (phase == Phase.OUTSIDE) {
+            float pulse = 0.5f + 0.5f * (float) Math.sin(time() * 2.2f);
+            int hc = argb((int) ((0.25f + 0.2f * pulse) * (1f - playHover * 0.6f) * 255), 200, 205, 220);
+            text(ctx, Fonts.REGULAR, "нажми Enter или кликни", this.width / 2f, this.height * 0.905f, size * 0.55f, hc);
         }
     }
 
-    // ---------------------------------------------------------- внутри: пустота + Млечный Путь
-
-    private void renderInside(DrawContext ctx, float t, float e, float menuTime, int mouseX, int mouseY, float dt) {
-        Matrix3x2fStack m = ctx.getMatrices();
-        float w = this.width, h = this.height;
-        float cx = w / 2f, cy = h / 2f;
-        float diag = (float) Math.sqrt(w * w + h * h);
-        float ee = 1f - (float) Math.pow(1f - e, 3); // easeOutCubic
-
-        // Млечный Путь раскручивается из точки
-        if (texturesReady) {
-            m.pushMatrix();
-            m.translate(cx, cy);
-            float gs = diag / GAL_H * 1.08f * (0.15f + 0.85f * ee);
-            m.rotate(-0.38f + t * 0.006f + (1f - ee) * 2.4f);
-            m.scale(gs, gs);
-            int a = (int) (255 * clamp01(e * 1.4f));
-            ctx.drawTexture(RenderPipelines.GUI_TEXTURED, GALAXY_TEX, -GAL_W / 2, -GAL_H / 2, 0f, 0f, GAL_W, GAL_H, GAL_W, GAL_H, argb(a, 255, 255, 255));
-            m.popMatrix();
+    private void drawInsideText(DrawContext ctx, float p1) {
+        float ta = smoothstep(0.35f, 0.8f, p1);
+        if (ta > 0.01f) {
+            float size = Math.max(14f, this.height * 0.07f);
+            text(ctx, Fonts.EXTRALIGHT, "F R O S T I X", this.width / 2f, this.height * 0.095f, size, argb((int) (ta * 235), 236, 242, 255));
+            text(ctx, Fonts.LIGHT, "по ту сторону горизонта событий", this.width / 2f, this.height * 0.095f + size * 0.85f,
+                    size * 0.26f, argb((int) (ta * 130), 190, 200, 230));
         }
-
-        // дрейфующие звезды: сначала рывок наружу, потом медленное парение
-        float rush = (float) Math.pow(1f - e, 2) * 3.5f;
-        for (Star st : stars) {
-            float ang = (float) Math.atan2(st.y, st.x);
-            float base = (float) Math.sqrt(st.x * st.x + st.y * st.y) / 1.415f;
-            float speed = 0.004f + st.depth * 0.012f;
-            float d = frac(base + t * speed + (1f - ee) * (0.6f + st.depth));
-            float r = d * d * diag * 0.6f;
-            float px = cx + (float) Math.cos(ang) * r;
-            float py = cy + (float) Math.sin(ang) * r;
-            float twinkle = 0.7f + 0.3f * (float) Math.sin(t * (1.2f + st.depth * 2f) + st.phase);
-            float al = st.bright * twinkle * clamp01(d * 4f) * (0.35f + 0.65f * st.depth);
-            int col = starColor(st.tint, al);
-            float streak = rush * (4f + 30f * st.depth) * d;
-            if (streak > 1.2f) {
-                line(ctx, px, py, px - (float) Math.cos(ang) * streak, py - (float) Math.sin(ang) * streak, st.size, col);
-            } else {
-                dot(ctx, px, py, st.size, col);
-            }
-        }
-
-        vignette(ctx, 0.7f);
-
-        // выход из тьмы
-        float black = (float) Math.pow(1f - e, 1.6);
-        if (black > 0.001f) ctx.fill(0, 0, (int) w, (int) h, argb((int) (black * 255), 0, 0, 0));
-
-        if (menuTime < 0f) return;
-
-        // заголовок
-        float ta = clamp01(menuTime / 0.8f);
-        String title = "F R O S T I X";
-        m.pushMatrix();
-        m.translate(cx, h * 0.2f + (1f - ta) * 10f);
-        m.scale(3f, 3f);
-        int tw = this.textRenderer.getWidth(title);
-        for (int i = 3; i >= 1; i--) { // мягкое свечение
-            int ga = (int) (ta * 30 / i);
-            ctx.drawText(this.textRenderer, title, -tw / 2 - i, -4, argb(ga, 150, 180, 255), false);
-            ctx.drawText(this.textRenderer, title, -tw / 2 + i, -4, argb(ga, 150, 180, 255), false);
-        }
-        ctx.drawText(this.textRenderer, title, -tw / 2, -4, argb((int) (ta * 255), 240, 244, 255), true);
-        m.popMatrix();
-        String sub = "по ту сторону горизонта событий";
-        ctx.drawCenteredTextWithShadow(this.textRenderer, sub, (int) cx, (int) (h * 0.2f + 20), argb((int) (ta * 140), 190, 200, 230));
-
-        // кнопки
-        for (MenuButton b : buttons) {
-            b.appear = clamp01((menuTime - 0.25f - b.index * 0.09f) / 0.5f);
-            boolean hov = b.appear > 0.9f && b.contains(mouseX, mouseY);
-            b.hover += ((hov ? 1f : 0f) - b.hover) * Math.min(1f, dt * 12f);
-            renderMenuButton(ctx, b, t);
+        float la = smoothstep(0.7f, 1f, p1);
+        if (la <= 0.01f) return;
+        for (int i = 0; i < ICONS; i++) {
+            if (iconR[i] < 1f) continue;
+            float hov = i == hovered ? hoverAmt : 0f;
+            float size = Math.max(7f, this.height * 0.026f) * (1f + 0.12f * hov);
+            int c = argb((int) (la * (120 + 135 * hov)), (int) (205 + 50 * hov), (int) (215 + 40 * hov), 255);
+            text(ctx, Fonts.MEDIUM, LABELS[i], iconX[i], iconY[i] + iconR[i] * 1.45f + size * 0.6f, size, c);
         }
     }
 
-    private void renderMenuButton(DrawContext ctx, MenuButton b, float t) {
-        if (b.appear <= 0f) return;
-        float a = 1f - (float) Math.pow(1f - b.appear, 3);
-        Matrix3x2fStack m = ctx.getMatrices();
-        m.pushMatrix();
-        m.translate(b.x + b.w / 2f, b.y + b.h / 2f + (1f - a) * 14f);
-        float sc = 0.96f + 0.04f * a + 0.02f * b.hover;
-        m.scale(sc, sc);
-        int hw = b.w / 2, hh = b.h / 2;
-
-        if (b.hover > 0.01f) {
-            for (int i = 3; i >= 1; i--) {
-                int g = i * 2;
-                roundRect(ctx, -hw - g, -hh - g, hw + g, hh + g, argb((int) (b.hover * a * 18 * (4 - i)), 140, 170, 255));
-            }
-        }
-        roundRect(ctx, -hw, -hh, hw, hh, argb((int) (a * (70 + 50 * b.hover)), 12, 14, 24));
-        roundRect(ctx, -hw, -hh, hw, 0, argb((int) (a * (10 + 20 * b.hover)), 255, 255, 255));
-        border(ctx, -hw, -hh, hw, hh, argb((int) (a * (60 + 150 * b.hover)), 170, 190, 255));
-        // акцентная полоска слева растет при наведении
-        int barH = (int) ((b.h - 8) * (0.25f + 0.75f * b.hover));
-        ctx.fill(-hw + 4, -barH / 2, -hw + 6, barH / 2, argb((int) (a * (120 + 135 * b.hover)), 160, 190, 255));
-
-        int tc = argb((int) (a * 255), (int) (205 + 50 * b.hover), (int) (210 + 45 * b.hover), 255);
-        int tw = this.textRenderer.getWidth(b.label);
-        ctx.drawText(this.textRenderer, b.label, -tw / 2 + (int) (b.hover * 3), -4, tc, true);
-        m.popMatrix();
-    }
-
-    // ---------------------------------------------------------- генерация текстур (один раз)
-
-    private static void ensureTextures(MinecraftClient client) {
-        if (texturesReady || client == null) return;
+    /** Векторный шрифт клиента (гладкий на любом масштабе), с откатом на ванильный. */
+    private void text(DrawContext ctx, Fonts font, String s, float cx, float cy, float size, int color) {
         try {
-            NativeImage hole = new NativeImage(HOLE_SIZE, HOLE_SIZE, true);
-            for (int y = 0; y < HOLE_SIZE; y++) {
-                for (int x = 0; x < HOLE_SIZE; x++) {
-                    float u = (x + 0.5f) / HOLE_SIZE * 2f - 1f;
-                    float v = (y + 0.5f) / HOLE_SIZE * 2f - 1f;
-                    hole.setColorArgb(x, y, holePixel(u, v));
-                }
-            }
-            client.getTextureManager().registerTexture(HOLE_TEX, new NativeImageBackedTexture(() -> "kimiko_black_hole", hole));
-
-            NativeImage gal = new NativeImage(GAL_W, GAL_H, true);
-            paintGalaxy(gal);
-            client.getTextureManager().registerTexture(GALAXY_TEX, new NativeImageBackedTexture(() -> "kimiko_milky_way", gal));
-            texturesReady = true;
+            float w = font.width(s, size);
+            font.draw(ctx, s, cx - w / 2f, cy - size / 2f, size, color);
         } catch (Throwable th) {
-            th.printStackTrace();
+            ctx.drawCenteredTextWithShadow(this.textRenderer, s, (int) cx, (int) (cy - 4), color);
         }
     }
 
-    /** Черная дыра в стиле Gargantua: тень, фотонное кольцо, наклонный диск и линзированная задняя часть диска. */
-    private static int holePixel(float u, float v) {
-        float rs = HOLE_RS;
-        float r = (float) Math.sqrt(u * u + v * v);
-        float rn = r / rs;
-        float ang = (float) Math.atan2(v, u);
-        float R = 0, G = 0, B = 0;
-
-        // мягкое свечение вокруг
-        float halo = (float) Math.exp(-Math.pow((rn - 1.0) / 2.2, 2)) * 0.10f;
-        float[] hc = heatRgb(0.35f);
-        R += hc[0] * halo; G += hc[1] * halo; B += hc[2] * halo;
-
-        // линзированная задняя часть диска: арка над и под тенью
-        if (rn > 1.0f) {
-            float band = gauss(rn, 1.32f, 0.22f);
-            float top = v < 0 ? 1.0f : 0.5f;
-            float streak = 0.62f + 0.22f * (float) Math.sin(ang * 7 + rn * 31) + 0.16f * (float) Math.sin(ang * 17 - rn * 67);
-            float dop = 1f - 0.35f * (float) Math.cos(ang);
-            float in = band * top * streak * dop * 1.3f;
-            float[] c = heatRgb(clamp01(1.25f - (rn - 1f)));
-            R += c[0] * in; G += c[1] * in; B += c[2] * in;
-        }
-
-        // фотонное кольцо
-        float photon = gauss(rn, 1.045f, 0.03f) * 2.2f;
-        R += photon; G += photon * 0.92f; B += photon * 0.8f;
-
-        // наклонный диск
-        float incl = 0.2f;
-        float dr = (float) Math.sqrt(u * u + (v / incl) * (v / incl)) / rs;
-        float diskI = 0f;
-        float diskHeat = 0f;
-        if (dr > 1.5f && dr < 5.4f) {
-            float inner = smooth(1.5f, 1.75f, dr);
-            float outer = 1f - smooth(4.2f, 5.4f, dr);
-            float da = (float) Math.atan2(v / incl, u);
-            float streak = 0.6f + 0.2f * (float) Math.sin(da * 9 + dr * 23) + 0.12f * (float) Math.sin(da * 23 - dr * 57) + 0.08f * (float) Math.sin(dr * 91);
-            float dop = 1f - 0.6f * (float) Math.cos(da);
-            diskI = (float) Math.pow(1.6f / dr, 1.5) * inner * outer * streak * dop * 1.8f;
-            diskHeat = clamp01(1.2f - (dr - 1.5f) / 3.2f);
-        }
-
-        boolean inShadow = rn < 1.0f;
-        boolean front = v > 0;
-        float[] dc = heatRgb(diskHeat);
-        if (inShadow) {
-            R = 0; G = 0; B = 0;
-            if (front) { R += dc[0] * diskI; G += dc[1] * diskI; B += dc[2] * diskI; }
-            float edge = smooth(0.94f, 1.0f, rn) * 0.6f; // тонкий край тени
-            R += edge * 0.9f; G += edge * 0.6f; B += edge * 0.35f;
-            return packOpaque(R, G, B, 1f);
-        }
-        R += dc[0] * diskI; G += dc[1] * diskI; B += dc[2] * diskI;
-
-        // тонмаппинг
-        R = 1f - (float) Math.exp(-R * 1.5f);
-        G = 1f - (float) Math.exp(-G * 1.5f);
-        B = 1f - (float) Math.exp(-B * 1.5f);
-        float a = Math.max(R, Math.max(G, B));
-        if (a < 0.002f) return 0;
-        return packOpaque(R / a, G / a, B / a, a);
-    }
-
-    private static void paintGalaxy(NativeImage img) {
-        Random rnd = new Random(42L);
-        float bandAngle = -0.35f;
-        float ca = (float) Math.cos(bandAngle), sa = (float) Math.sin(bandAngle);
-        for (int y = 0; y < GAL_H; y++) {
-            for (int x = 0; x < GAL_W; x++) {
-                float px = (x - GAL_W / 2f) / GAL_H;
-                float py = (y - GAL_H / 2f) / GAL_H;
-                float along = px * ca + py * sa;
-                float across = -px * sa + py * ca;
-                float warp = (fbm(along * 2.2f, 7.1f, 3) - 0.5f) * 0.08f;
-                float d = across + warp;
-
-                float band = (float) Math.exp(-(d * d) / (2 * 0.085f * 0.085f));
-                float clouds = fbm(along * 4.5f + 3.3f, d * 9f, 4);
-                float dens = band * (0.35f + 0.9f * clouds * clouds);
-                float core = (float) Math.exp(-((along - 0.12f) * (along - 0.12f)) / 0.06f) * band;
-
-                // темная пылевая полоса
-                float lane = (float) Math.exp(-((d - 0.008f) * (d - 0.008f)) / (2 * 0.02f * 0.02f));
-                float dust = lane * (0.4f + 0.8f * fbm(along * 9f, d * 30f + 11f, 4));
-                float dim = clamp01(1f - dust * 0.85f);
-
-                float neb = fbm(along * 3f + 20f, d * 5f, 3);
-                float pink = clamp01(neb - 0.55f) * 1.6f * band;
-
-                float R = 0.012f + 0.02f * (1 - Math.abs(py));
-                float G = 0.010f + 0.015f * (1 - Math.abs(py));
-                float B = 0.025f + 0.035f * (1 - Math.abs(py));
-                R += (0.55f * dens + 1.0f * core * 0.7f + 0.65f * pink) * dim * 0.55f;
-                G += (0.62f * dens + 0.8f * core * 0.7f + 0.22f * pink) * dim * 0.55f;
-                B += (0.95f * dens + 0.55f * core * 0.7f + 0.55f * pink) * dim * 0.55f;
-                img.setColorArgb(x, y, packOpaque(tone(R), tone(G), tone(B), 1f));
-            }
-        }
-        // звезды, гуще в полосе
-        for (int i = 0; i < 14000; i++) {
-            int x = rnd.nextInt(GAL_W), y = rnd.nextInt(GAL_H);
-            float px = (x - GAL_W / 2f) / GAL_H, py = (y - GAL_H / 2f) / GAL_H;
-            float across = -px * sa + py * ca;
-            float band = (float) Math.exp(-(across * across) / (2 * 0.12f * 0.12f));
-            if (rnd.nextFloat() > 0.25f + 0.75f * band) continue;
-            float b = (float) Math.pow(rnd.nextFloat(), 3) * 0.9f + 0.1f;
-            float tint = rnd.nextFloat();
-            float r = tint < 0.2f ? 1f : 0.85f, g = 0.9f, bl = tint > 0.7f ? 1f : 0.85f;
-            addPixel(img, x, y, r * b, g * b, bl * b);
-            if (b > 0.75f) {
-                float h = b * 0.35f;
-                addPixel(img, x + 1, y, r * h, g * h, bl * h);
-                addPixel(img, x - 1, y, r * h, g * h, bl * h);
-                addPixel(img, x, y + 1, r * h, g * h, bl * h);
-                addPixel(img, x, y - 1, r * h, g * h, bl * h);
-            }
-        }
-    }
-
-    private static void addPixel(NativeImage img, int x, int y, float r, float g, float b) {
-        if (x < 0 || y < 0 || x >= GAL_W || y >= GAL_H) return;
-        int c = img.getColorArgb(x, y);
-        float cr = ((c >> 16) & 255) / 255f + r;
-        float cg = ((c >> 8) & 255) / 255f + g;
-        float cb = (c & 255) / 255f + b;
-        img.setColorArgb(x, y, packOpaque(Math.min(1, cr), Math.min(1, cg), Math.min(1, cb), 1f));
-    }
-
-    // ---------------------------------------------------------- draw helpers
-
-    private static void dot(DrawContext ctx, float x, float y, int size, int color) {
-        Matrix3x2fStack m = ctx.getMatrices();
-        m.pushMatrix();
-        m.translate(x, y);
-        ctx.fill(0, 0, size, size, color);
-        m.popMatrix();
-    }
-
-    private static void line(DrawContext ctx, float x1, float y1, float x2, float y2, float thick, int color) {
-        float dx = x2 - x1, dy = y2 - y1;
-        float len = (float) Math.sqrt(dx * dx + dy * dy);
-        if (len < 1f) { dot(ctx, x1, y1, Math.max(1, (int) thick), color); return; }
-        Matrix3x2fStack m = ctx.getMatrices();
-        m.pushMatrix();
-        m.translate(x1, y1);
-        m.rotate((float) Math.atan2(dy, dx));
-        m.scale(len, thick);
-        ctx.fill(0, 0, 1, 1, color);
-        m.popMatrix();
-    }
-
-    private static void ring(DrawContext ctx, float cx, float cy, float r, float thick, int color, int segs, float phase) {
-        for (int i = 0; i < segs; i++) {
-            float a1 = (float) (i * Math.PI * 2 / segs) + phase * 0.05f;
-            float a2 = (float) ((i + 0.6f) * Math.PI * 2 / segs) + phase * 0.05f;
-            line(ctx, cx + (float) Math.cos(a1) * r, cy + (float) Math.sin(a1) * r,
-                      cx + (float) Math.cos(a2) * r, cy + (float) Math.sin(a2) * r, thick, color);
-        }
-    }
-
-    private static void roundRect(DrawContext ctx, int x1, int y1, int x2, int y2, int color) {
-        ctx.fill(x1 + 2, y1, x2 - 2, y2, color);
-        ctx.fill(x1, y1 + 2, x1 + 2, y2 - 2, color);
-        ctx.fill(x2 - 2, y1 + 2, x2, y2 - 2, color);
-        ctx.fill(x1 + 1, y1 + 1, x1 + 2, y1 + 2, color);
-        ctx.fill(x2 - 2, y1 + 1, x2 - 1, y1 + 2, color);
-        ctx.fill(x1 + 1, y2 - 2, x1 + 2, y2 - 1, color);
-        ctx.fill(x2 - 2, y2 - 2, x2 - 1, y2 - 1, color);
-    }
-
-    private static void border(DrawContext ctx, int x1, int y1, int x2, int y2, int color) {
-        ctx.fill(x1 + 2, y1, x2 - 2, y1 + 1, color);
-        ctx.fill(x1 + 2, y2 - 1, x2 - 2, y2, color);
-        ctx.fill(x1, y1 + 2, x1 + 1, y2 - 2, color);
-        ctx.fill(x2 - 1, y1 + 2, x2, y2 - 2, color);
-        ctx.fill(x1 + 1, y1 + 1, x1 + 2, y1 + 2, color);
-        ctx.fill(x2 - 2, y1 + 1, x2 - 1, y1 + 2, color);
-        ctx.fill(x1 + 1, y2 - 2, x1 + 2, y2 - 1, color);
-        ctx.fill(x2 - 2, y2 - 2, x2 - 1, y2 - 1, color);
-    }
-
-    private void vignette(DrawContext ctx, float strength) {
-        int a = (int) (clamp01(strength) * 200);
-        int bandH = this.height / 3, bandW = this.width / 4;
-        ctx.fillGradient(0, 0, this.width, bandH, argb(a, 0, 0, 0), 0x00000000);
-        ctx.fillGradient(0, this.height - bandH, this.width, this.height, 0x00000000, argb(a, 0, 0, 0));
-        for (int i = 0; i < bandW; i += 2) { // горизонтальные края
-            int al = (int) (a * Math.pow(1f - i / (float) bandW, 2));
-            ctx.fill(i, 0, i + 2, this.height, argb(al, 0, 0, 0));
-            ctx.fill(this.width - i - 2, 0, this.width - i, this.height, argb(al, 0, 0, 0));
-        }
-    }
-
-    // ---------------------------------------------------------- color / math
-
-    private static int starColor(float tint, float alpha) {
-        int a = (int) (clamp01(alpha) * 255);
-        if (tint < 0.15f) return argb(a, 255, 220, 190);
-        if (tint > 0.75f) return argb(a, 190, 215, 255);
-        return argb(a, 245, 245, 255);
-    }
-
-    private static int heatColor(float h, float alpha) {
-        float[] c = heatRgb(h);
-        return argb((int) (clamp01(alpha) * 255), (int) (clamp01(c[0]) * 255), (int) (clamp01(c[1]) * 255), (int) (clamp01(c[2]) * 255));
-    }
-
-    /** 0 = холодный темно-красный край, 1 = раскаленный бело-желтый центр */
-    private static float[] heatRgb(float h) {
-        h = clamp01(h);
-        float r = clamp01(0.55f + h * 0.6f);
-        float g = clamp01(0.12f + h * h * 0.85f);
-        float b = clamp01(0.03f + (float) Math.pow(h, 3) * 0.75f);
-        return new float[]{r, g, b};
-    }
-
-    private static float tone(float x) { return 1f - (float) Math.exp(-x * 1.6f); }
-
-    private static int packOpaque(float r, float g, float b, float a) {
-        return argb((int) (clamp01(a) * 255), (int) (clamp01(r) * 255), (int) (clamp01(g) * 255), (int) (clamp01(b) * 255));
-    }
+    // ------------------------------------------------------------------ math
 
     private static int argb(int a, int r, int g, int b) {
         a = Math.max(0, Math.min(255, a));
@@ -747,54 +286,9 @@ public class BlackHoleMenuScreen extends Screen {
     }
 
     private static float clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
-    private static float frac(float v) { return v - (float) Math.floor(v); }
-    private static float gauss(float x, float mu, float sigma) { float d = (x - mu) / sigma; return (float) Math.exp(-d * d); }
-    private static float smooth(float e0, float e1, float x) { float k = clamp01((x - e0) / (e1 - e0)); return k * k * (3 - 2 * k); }
 
-    private static float hash(int x, int y) {
-        int h = x * 374761393 + y * 668265263;
-        h = (h ^ (h >>> 13)) * 1274126177;
-        return ((h ^ (h >>> 16)) & 0x7fffffff) / (float) 0x7fffffff;
-    }
-
-    private static float noise(float x, float y) {
-        int xi = (int) Math.floor(x), yi = (int) Math.floor(y);
-        float xf = x - xi, yf = y - yi;
-        float u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
-        float a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
-        return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-    }
-
-    private static float fbm(float x, float y, int oct) {
-        float sum = 0, amp = 0.5f, norm = 0;
-        for (int i = 0; i < oct; i++) {
-            sum += noise(x, y) * amp;
-            norm += amp;
-            x *= 2.03f; y *= 2.03f;
-            amp *= 0.5f;
-        }
-        return sum / norm;
-    }
-
-    // ---------------------------------------------------------- data
-
-    private static final class Star {
-        float x, y, depth, bright, phase, tint;
-        int size;
-    }
-
-    private static final class DiskParticle {
-        float radius, angle, len, bright;
-    }
-
-    private static final class MenuButton {
-        String label;
-        Runnable action;
-        int x, y, w, h, index;
-        float hover, appear;
-
-        boolean contains(double mx, double my) {
-            return mx >= x && mx <= x + w && my >= y && my <= y + h;
-        }
+    private static float smoothstep(float e0, float e1, float x) {
+        float k = clamp01((x - e0) / (e1 - e0));
+        return k * k * (3 - 2 * k);
     }
 }
