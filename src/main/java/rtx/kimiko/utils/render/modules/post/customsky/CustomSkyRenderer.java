@@ -44,6 +44,12 @@ import rtx.kimiko.utils.render.render2d.ThemeWaveUniform;
  *  - для аврор/звездопада/своего шейдера строятся только 3 уровня bloom из 6 —
  *    composite для них читает только Bloom0..2, остальные 3 прохода были впустую;
  *  - сам шейдер чёрной дыры ускорен (см. CustomskyFastShaders).
+ *
+ * Uniform SkyParams (std140):
+ *  0 invViewProj | 64 misc | 80 skyColor | 96 skyColor2 | 112 taa | 128 prevViewProj
+ *  192 skyExtra = (useClientColor, bhPalette, bhTemperature, bhJets)
+ *  208 bhParams = (bhLensing, bhActivity, bhSpin, 0)  <- читают только blackhole/composite,
+ *      остальные шейдеры объявляют блок на 208 байт, буфер больше блока — это нормально.
  */
 public final class CustomSkyRenderer {
     @NotNull
@@ -52,7 +58,7 @@ public final class CustomSkyRenderer {
     private static final int TYPE_BLACKHOLE = 1;
     private static final int TYPE_STARFALL = 2;
     private static final int TYPE_USER = 3;
-    private static final int UNIFORM_SIZE = 208;
+    private static final int UNIFORM_SIZE = 224;
     private static final int BLOOM_LEVELS = 6;
     /** Сколько уровней bloom реально читает composite для не-HDR неба (Bloom0..Bloom2). */
     private static final int BLOOM_LEVELS_LDR = 3;
@@ -191,6 +197,24 @@ public final class CustomSkyRenderer {
         int write = frameIndex & 1;
         int read = 1 - write;
         boolean useHistory = hdr && historyValid;
+
+        // настройки чёрной дыры (дефолты = то, что стоит в модуле по умолчанию)
+        float bhPalette = 2.0f;
+        float bhTemperature = 0.5f;
+        float bhJets = 0.7f;
+        float bhLensing = 1.0f;
+        float bhActivity = 1.0f;
+        float bhSpin = 1.0f;
+        Ambience ambience = Ambience.Companion.getInstance();
+        if (ambience != null) {
+            bhPalette = ambience.bhPaletteIndex();
+            bhTemperature = ambience.bhTemperature();
+            bhJets = ambience.bhJets();
+            bhLensing = ambience.bhLensing();
+            bhActivity = ambience.bhActivity();
+            bhSpin = ambience.bhSpin();
+        }
+
         try {
             CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
             INV_VIEW_PROJ.set((Matrix4fc) viewProj).invert();
@@ -217,6 +241,13 @@ public final class CustomSkyRenderer {
                 data.putFloat(124, taaSequence);
                 PREV_VIEW_PROJ.get(128, data);
                 data.putFloat(192, useClientColor ? 1.0f : 0.0f);
+                data.putFloat(196, bhPalette);
+                data.putFloat(200, bhTemperature);
+                data.putFloat(204, bhJets);
+                data.putFloat(208, bhLensing);
+                data.putFloat(212, bhActivity);
+                data.putFloat(216, bhSpin);
+                data.putFloat(220, 0.0f);
                 data.position(0);
                 encoder.writeToBuffer(uniformBuffer.slice(0L, (long) UNIFORM_SIZE), data);
             }
