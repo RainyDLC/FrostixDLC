@@ -38,6 +38,7 @@ import rtx.kimiko.utils.render.shaders.post.wasted.WastedShaders;
 import rtx.kimiko.utils.render.shaders.ui.batched_blur.BatchedBlurShaders;
 import rtx.kimiko.utils.render.shaders.ui.glass.GlassShaders;
 import rtx.kimiko.utils.render.shaders.ui.glow.GlowShaders;
+import rtx.kimiko.utils.render.shaders.ui.mainmenu.MainMenuShaders;
 import rtx.kimiko.utils.render.shaders.ui.kawase.KawaseShaders;
 import rtx.kimiko.utils.render.shaders.ui.radialglass.RadialglassShaders;
 import rtx.kimiko.utils.render.shaders.ui.sectormask.SectormaskShaders;
@@ -94,5 +95,7 @@ public final class EmbeddedShaders {
         RadialglassShaders.register(SOURCES);
         SectormaskShaders.register(SOURCES);
         ShapeShaders.register(SOURCES);
+        // главное меню: черная дыра + Млечный Путь
+        MainMenuShaders.register(SOURCES);
     }
 }
