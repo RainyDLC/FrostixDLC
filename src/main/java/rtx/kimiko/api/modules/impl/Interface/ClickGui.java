@@ -19,7 +19,7 @@ public final class ClickGui
 extends Module {
     @NotNull
     public static final Companion Companion = new Companion(null);
-    public static final String STYLE_HORIZON = "Чёрная дыра";
+    public static final String STYLE_HORIZON = "Современный";
     public static final String STYLE_CLASSIC = "Классика";
     @JvmField
     @NotNull
@@ -32,7 +32,7 @@ extends Module {
 
     public ClickGui() {
         super("Click GUI", "Открывает клик-меню клиента.", Category.DISPLAY);
-        this.style = (ModeSetting)this.register((Setting)new ModeSetting("Стиль меню", "Чёрная дыра - новое меню в стиле неба Ambience. Классика - прежнее меню.", STYLE_HORIZON, STYLE_HORIZON, STYLE_CLASSIC));
+        this.style = (ModeSetting)this.register((Setting)new ModeSetting("Стиль меню", "Современный - новое чистое меню в одном окне. Классика - прежнее меню.", STYLE_HORIZON, STYLE_HORIZON, STYLE_CLASSIC));
         String[] stringArray = UiScale.LABELS;
         this.scale = (ModeSetting)this.register((Setting)new ModeSetting("Масштаб меню", "Размер клик-меню. Внутри меню: Ctrl + колесо или Ctrl + \"-\" / \"=\".", UiScale.defaultLabel(), Arrays.copyOf(stringArray, stringArray.length)));
         this.setBind(KeyBind.Companion.keyboard(344));
@@ -40,7 +40,7 @@ extends Module {
         this.scale.setChangeListener(() -> ClickGui._init_$lambda$0(this));
     }
 
-    /** true - открывать новое меню Horizon (чёрная дыра), false - классическое UI. */
+    /** true - открывать новое меню (HorizonGui, стиль Frost), false - классическое UI. */
     public boolean useHorizon() {
         return !this.style.is(STYLE_CLASSIC);
     }

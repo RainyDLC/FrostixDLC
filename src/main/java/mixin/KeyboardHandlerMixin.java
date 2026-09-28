@@ -40,13 +40,13 @@ public abstract class KeyboardHandlerMixin {
                 }
             } catch (Throwable ignored) {}
 
-            // пока Horizon ждёт клавишу для бинда, клавиша открытия меню тоже должна уйти в бинд
-            boolean horizonBinding = false;
+            // пока меню ждёт клавишу для бинда или в поиске печатают, клавиша открытия уходит в меню, а не закрывает его
+            boolean menuCapturing = false;
             try {
-                horizonBinding = HorizonGui.isBinding();
+                menuCapturing = HorizonGui.isCapturingKeys();
             } catch (Throwable ignored) {}
 
-            if (!horizonBinding && (keyEvent.key() == 344 || (bind > 0 && keyEvent.key() == bind))) {
+            if (!menuCapturing && (keyEvent.key() == 344 || (bind > 0 && keyEvent.key() == bind))) {
                 try {
                     MinecraftClient mc = MinecraftClient.getInstance();
                     if (mc != null) {

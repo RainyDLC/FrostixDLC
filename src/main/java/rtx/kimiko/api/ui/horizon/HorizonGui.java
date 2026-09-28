@@ -5,20 +5,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Random;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.joml.Matrix3x2fStack;
 import rtx.kimiko.api.modules.Category;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.ModuleManager;
@@ -43,24 +37,17 @@ import rtx.kimiko.utils.render.fonts.Fonts;
 import rtx.kimiko.utils.render.render2d.Render2D;
 
 /**
- * Horizon: клик-меню в стиле чёрной дыры из Ambience.
+ * Frost: чистое клик-меню в одном окне (шапка + категории + модули + настройки).
  *
- * ФИКС "зелёной каши" в центре:
- *  раньше чёрная дыра рисовалась ~1100 кружками Render2D (6 гигантских гало + 280 частиц x4 слоя) плюс 170 звёзд.
- *  У CircleBatch лимит 512 кругов на кадр (BatchOverflow), всё что сверху отбрасывалось, и GUI-батч ломался:
- *  вместо дыры в центре вылезал непонятный цветной квадрат поверх всего.
- *  Теперь центральная дыра - настоящая текстура (Gargantua: тень, фотонное кольцо, наклонный диск,
- *  линзированная дуга), генерируется один раз в фоновом потоке и рисуется одним quad'ом.
- *  Поверх неё анимируются ~44 искры диска, а все круги меню идут через бюджет (fxCircle/fxRing),
- *  так что лимит батча больше не пробивается.
+ * Никаких текстур и фоновых эффектов: фон - мягкое затемнение с лёгким градиентом цвета темы.
+ * Всё рисуется примитивами Render2D, круги идут через бюджет (fxCircle/fxRing),
+ * поэтому CircleBatch (512 кругов на кадр) никогда не переполняется.
  *
- * Анимации: поочерёдный выезд панелей при открытии/закрытии, скользящая подсветка категории,
- * каскадное появление карточек при смене категории/поиска, подъём карточки при наведении,
- * вспышка + волна при вкл/выкл модуля, плавный переход инспектора при выборе модуля,
- * плавные ползунки/цвет, анимация смены значения в селектах, вспышка кнопок, параллакс звёзд,
- * раскрутка диска при открытии, "дыхание" дыры.
+ * Анимации: выезд окна снизу + fade, скользящая подсветка категории, каскад карточек
+ * при смене категории/поиска, плавный вкл/выкл, вспышка при переключении,
+ * плавный переход инспектора, плавные ползунки/цвет.
  *
- * Управление: ЛКМ по карточке - вкл/выкл, ПКМ - настройки в инспекторе, СКМ - назначить бинд
+ * Управление: ЛКМ по карточке - вкл/выкл, ПКМ - настройки справа, СКМ - назначить бинд
  * (Del/Backspace - сброс, Esc - отмена). Поиск: просто начни печатать или Ctrl+F.
  */
 public final class HorizonGui extends BaseScreen {
@@ -80,55 +67,20 @@ public final class HorizonGui extends BaseScreen {
     private static final int K_BUTTON = 11;
     private static final int K_CLASSIC = 12;
     private static final int K_TOGGLE = 13;
+    private static final int K_CLOSE = 14;
 
-    /** Сколько кругов это меню может занять за кадр (у батча 512 на весь GUI-кадр, оставляем запас HUD'у). */
-    private static final int CIRCLE_BUDGET = 330;
+    /** Лимит кругов за кадр (у батча 512 на весь GUI-кадр, оставляем запас HUD'у). */
+    private static final int CIRCLE_BUDGET = 300;
 
-    // палитра дыры фиксированная (как в Ambience), от темы клиента не зависит
-    private static final int HOLE_HOT = 0xFFFFF1DC;
-    private static final int HOLE_WARM = 0xFFFFA246;
-    private static final int HOLE_COOL = 0xFFE0452A;
+    // палитра
+    private static final int C_TEXT = 0xECEFF6;
+    private static final int C_SUB = 0xB4BACB;
+    private static final int C_MUTED = 0x868DA0;
+    private static final int C_DIM = 0x5C6376;
+    private static final int C_DARK = 0x0A0C12;
 
-    private static final float TILT = 0.2f;
-    private static final int SPARKS = 44;
-    private static final float[] P_ANGLE = new float[SPARKS];
-    private static final float[] P_RAD = new float[SPARKS];
-    private static final float[] P_SPEED = new float[SPARKS];
-    private static final float[] P_SIZE = new float[SPARKS];
-    private static final float[] P_ALPHA = new float[SPARKS];
-    private static final int STARS = 80;
-    private static final float[] S_X = new float[STARS];
-    private static final float[] S_Y = new float[STARS];
-    private static final float[] S_SIZE = new float[STARS];
-    private static final float[] S_PHASE = new float[STARS];
-    private static final float[] S_SPEED = new float[STARS];
-
-    // текстура чёрной дыры
-    private static final Identifier HOLE_TEX = Identifier.of("kimiko", "horizon/black_hole");
-    private static final int HOLE_TEX_SIZE = 768;
-    private static final float HOLE_RS = 0.16f; // радиус тени в нормализованных координатах текстуры
-    @Nullable private static volatile int[] holePixels;
-    private static boolean holeGenStarted;
-    private static boolean holeTexReady;
-    private static boolean holeTexFailed;
-
-    static {
-        Random r = new Random(0x5EED1EL);
-        for (int i = 0; i < SPARKS; ++i) {
-            P_ANGLE[i] = r.nextFloat() * 6.2831855f;
-            P_RAD[i] = 1.55f + 2.1f * (float) Math.pow(r.nextFloat(), 1.6);
-            P_SPEED[i] = 0.55f / (float) Math.pow(P_RAD[i] / 1.5f, 1.5);
-            P_SIZE[i] = 0.5f + r.nextFloat() * 0.9f;
-            P_ALPHA[i] = 0.35f + r.nextFloat() * 0.65f;
-        }
-        for (int i = 0; i < STARS; ++i) {
-            S_X[i] = r.nextFloat();
-            S_Y[i] = r.nextFloat();
-            S_SIZE[i] = 0.35f + r.nextFloat() * r.nextFloat() * 1.0f;
-            S_PHASE[i] = r.nextFloat() * 6.2831855f;
-            S_SPEED[i] = 0.6f + r.nextFloat() * 2.2f;
-        }
-    }
+    private static final float HEADER_H = 34.0f;
+    private static final float RADIUS = 12.0f;
 
     private record Hit(float x, float y, float w, float h, int kind, Object ref, int index) {
         boolean contains(float px, float py) {
@@ -153,11 +105,8 @@ public final class HorizonGui extends BaseScreen {
     private long lastNanos;
     private float time;
     private float dt = 0.016f;
-    private float holePhase;
-    private float holeFade;
     private int circles;
 
-    // переходы
     private float catAnim = 1.0f;
     private float inspAnim = 1.0f;
     @Nullable private Object lastCatKey;
@@ -182,11 +131,11 @@ public final class HorizonGui extends BaseScreen {
 
     private int mouseXi;
     private int mouseYi;
-    private int accent = 0xFFFFA24A;
-    private int accent2 = 0xFF7AA8FF;
+    private int accent = 0xFF6FB7FF;
+    private int accent2 = 0xFFA58BFF;
 
     private HorizonGui() {
-        super((Text) Text.literal("Horizon"));
+        super((Text) Text.literal("Frostix"));
     }
 
     public static boolean isOpen() {
@@ -196,6 +145,11 @@ public final class HorizonGui extends BaseScreen {
     /** Пока ждём клавишу для бинда, миксин не должен закрывать меню по клавише открытия. */
     public static boolean isBinding() {
         return INSTANCE.bindingModule != null && isOpen();
+    }
+
+    /** Меню сейчас само принимает ввод (бинд или поиск) - клавиша открытия не должна его закрывать. */
+    public static boolean isCapturingKeys() {
+        return isOpen() && (INSTANCE.bindingModule != null || INSTANCE.searchFocused);
     }
 
     // ------------------------------------------------------------------ lifecycle
@@ -218,6 +172,7 @@ public final class HorizonGui extends BaseScreen {
     public void removed() {
         super.removed();
         this.freshOpen = true;
+        this.closing = false;
         this.dragKind = 0;
         this.dragRef = null;
         this.bindingModule = null;
@@ -257,7 +212,7 @@ public final class HorizonGui extends BaseScreen {
         this.dt = this.lastNanos == 0L ? 0.016f : Math.min(0.1f, (float) (now - this.lastNanos) / 1.0E9f);
         this.lastNanos = now;
         this.time += this.dt;
-        this.openAnim = this.approach(this.openAnim, this.closing ? 0.0f : 1.0f, this.closing ? 11.0f : 6.5f);
+        this.openAnim = this.approach(this.openAnim, this.closing ? 0.0f : 1.0f, this.closing ? 12.0f : 7.0f);
         if (this.closing && this.openAnim < 0.03f) {
             this.finishClose();
             return;
@@ -268,31 +223,32 @@ public final class HorizonGui extends BaseScreen {
         this.hits.clear();
         this.ensureCategory();
         this.trackTransitions();
-        this.catAnim = this.approach(this.catAnim, 1.0f, 5.5f);
-        this.inspAnim = this.approach(this.inspAnim, 1.0f, 8.0f);
+        this.catAnim = this.approach(this.catAnim, 1.0f, 6.0f);
+        this.inspAnim = this.approach(this.inspAnim, 1.0f, 9.0f);
         this.decayPulses();
 
-        Render2D.rect(0.0f, 0.0f, (float) this.width, (float) this.height, col(0x000000, 0.62f * a));
-        this.drawStars(a);
-        float holeR = Math.min(this.width, this.height) * 0.12f * (0.82f + 0.18f * a);
-        this.drawBlackHole(this.width * 0.5f, this.height * 0.5f, holeR, a);
+        this.drawBackdrop(a);
 
-        float pw = Math.min((float) this.width - 28.0f, 680.0f);
-        float ph = Math.min((float) this.height - 28.0f, 392.0f);
-        float px = ((float) this.width - pw) * 0.5f;
-        float py = ((float) this.height - ph) * 0.5f;
-        float gap = 8.0f;
-        float sw = 124.0f;
-        float iw = pw < 600.0f ? 170.0f : 204.0f;
-        float mw = pw - sw - iw - gap * 2.0f;
+        float W = Math.min((float) this.width - 24.0f, 700.0f);
+        float H = Math.min((float) this.height - 24.0f, 400.0f);
+        float X = ((float) this.width - W) * 0.5f;
+        float Y = ((float) this.height - H) * 0.5f + (1.0f - a) * 16.0f;
+        float sw = 118.0f;
+        float iw = W < 600.0f ? 172.0f : 206.0f;
+        float mw = W - sw - iw;
 
-        // панели выезжают по очереди: слева, снизу, справа
-        float pS = this.stagger(0);
-        float pM = this.stagger(1);
-        float pI = this.stagger(2);
-        this.renderSidebar(px - (1.0f - pS) * 28.0f, py, sw, ph, a * pS);
-        this.renderModules(px + sw + gap, py + (1.0f - pM) * 22.0f, mw, ph, a * pM);
-        this.renderInspector(px + sw + gap + mw + gap + (1.0f - pI) * 28.0f, py, iw, ph, a * pI);
+        this.drawWindow(X, Y, W, H, sw, iw, a);
+
+        float pH = this.stagger(0);
+        float pS = this.stagger(1);
+        float pM = this.stagger(2);
+        float pI = this.stagger(3);
+        this.renderHeader(X, Y, W, sw, mw, iw, a * pH);
+        float bodyY = Y + HEADER_H;
+        float bodyH = H - HEADER_H;
+        this.renderSidebar(X, bodyY, sw, bodyH, a * pS);
+        this.renderModules(X + sw, bodyY, mw, bodyH, a * pM);
+        this.renderInspector(X + sw + mw, bodyY, iw, bodyH, a * pI);
 
         if (this.dragKind != 0) {
             this.applyDrag((float) mouseX);
@@ -300,7 +256,7 @@ public final class HorizonGui extends BaseScreen {
     }
 
     private float stagger(int i) {
-        return easeOut(clamp01(this.openAnim * 1.35f - (float) i * 0.14f));
+        return easeOut(clamp01(this.openAnim * 1.4f - (float) i * 0.1f));
     }
 
     private void trackTransitions() {
@@ -318,58 +274,160 @@ public final class HorizonGui extends BaseScreen {
         }
     }
 
+    /** Фон: затемнение + мягкий градиент цвета темы сверху и тёмная виньетка снизу. Без текстур. */
+    private void drawBackdrop(float a) {
+        float w = (float) this.width;
+        float h = (float) this.height;
+        Render2D.rect(0.0f, 0.0f, w, h, col(0x05060A, 0.58f * a));
+        Render2D.rect(0.0f, 0.0f, w, h * 0.55f, 0.0f,
+                col(this.accent, 0.10f * a), col(this.accent2, 0.10f * a), col(this.accent2, 0.0f), col(this.accent, 0.0f));
+        Render2D.rect(0.0f, h * 0.55f, w, h * 0.45f, 0.0f,
+                col(0x000000, 0.0f), col(0x000000, 0.0f), col(0x000000, 0.35f * a), col(0x000000, 0.35f * a));
+    }
+
+    private void drawWindow(float x, float y, float w, float h, float sw, float iw, float a) {
+        if (a <= 0.01f) {
+            return;
+        }
+        // тень
+        Render2D.rect(x - 4.0f, y + 2.0f, w + 8.0f, h + 8.0f, RADIUS + 4.0f, col(0x000000, 0.22f * a));
+        if (a > 0.2f) {
+            Render2D.blur(x, y, w, h, RADIUS);
+        }
+        Render2D.rect(x, y, w, h, RADIUS, col(0x12151E, 0.93f * a), col(0x12151E, 0.93f * a), col(0x0C0E15, 0.95f * a), col(0x0C0E15, 0.95f * a));
+        // шапка и боковые колонки чуть темнее
+        int tint = col(0x000000, 0.16f * a);
+        Render2D.rect(x, y, w, HEADER_H, RADIUS, RADIUS, 0.0f, 0.0f, tint, tint, tint, tint);
+        Render2D.rect(x, y + HEADER_H, sw, h - HEADER_H, 0.0f, 0.0f, 0.0f, RADIUS, tint, tint, tint, tint);
+        int tint2 = col(0x000000, 0.10f * a);
+        Render2D.rect(x + w - iw, y + HEADER_H, iw, h - HEADER_H, 0.0f, 0.0f, RADIUS, 0.0f, tint2, tint2, tint2, tint2);
+        // разделители
+        int div = col(0xFFFFFF, 0.06f * a);
+        Render2D.line(x, y + HEADER_H, x + w, y + HEADER_H, 0.6f, div);
+        Render2D.line(x + sw, y + HEADER_H, x + sw, y + h, 0.6f, div);
+        Render2D.line(x + w - iw, y + HEADER_H, x + w - iw, y + h, 0.6f, div);
+        Render2D.outline(x, y, w, h, RADIUS, 0.8f, col(0xFFFFFF, 0.09f * a));
+        // тонкая акцентная линия по верхней кромке, плавно гаснет к краям
+        float lx = x + RADIUS * 2.0f;
+        float lw = (w - RADIUS * 4.0f) * 0.5f;
+        Render2D.rect(lx, y, lw, 1.0f, 0.0f, col(this.accent, 0.0f), col(this.accent, 0.9f * a), col(this.accent, 0.9f * a), col(this.accent, 0.0f));
+        Render2D.rect(lx + lw, y, lw, 1.0f, 0.0f, col(this.accent2, 0.9f * a), col(this.accent2, 0.0f), col(this.accent2, 0.0f), col(this.accent2, 0.9f * a));
+    }
+
+    private void renderHeader(float x, float y, float w, float sw, float mw, float iw, float a) {
+        if (a <= 0.01f) {
+            return;
+        }
+        // логотип
+        float lx = x + 12.0f;
+        float ly = y + 10.0f;
+        Render2D.rect(lx, ly, 14.0f, 14.0f, 4.5f, col(this.accent, a), col(this.accent2, a), col(this.accent2, a), col(this.accent, a));
+        float fw = Fonts.MEDIUM.width("F", 8.0f);
+        Fonts.MEDIUM.draw("F", lx + (14.0f - fw) * 0.5f, ly + 3.2f, 8.0f, col(C_DARK, a));
+        Render2D.text(Fonts.MEDIUM, "Frostix", lx + 20.0f, y + 9.5f, 8.5f,
+                col(0xFFFFFF, a), col(this.accent, a), col(this.accent, a), col(0xFFFFFF, a));
+        Fonts.MEDIUM.draw("client menu", lx + 20.0f, y + 20.5f, 5.0f, col(C_MUTED, 0.8f * a));
+
+        // поиск
+        float sx = x + sw + 10.0f;
+        float sy = y + 8.0f;
+        float sW = mw - 20.0f;
+        float sH = 18.0f;
+        float fa = this.anim("search_focus", this.searchFocused, 12.0f);
+        float sh = this.anim("search_hov", this.inside(sx, sy, sW, sH), 12.0f);
+        Render2D.rect(sx, sy, sW, sH, 6.0f, col(0xFFFFFF, (0.04f + 0.02f * sh + 0.02f * fa) * a));
+        Render2D.outline(sx, sy, sW, sH, 6.0f, 0.7f, lerpColor(col(0xFFFFFF, (0.07f + 0.04f * sh) * a), col(this.accent, 0.8f * a), fa));
+        float lensX = sx + 10.0f;
+        int lensC = lerpColor(col(C_MUTED, 0.9f * a), col(this.accent, a), fa);
+        this.fxRing(lensX, sy + 8.3f, 3.0f, 0.9f, lensC);
+        Render2D.line(lensX + 2.2f, sy + 10.5f, lensX + 4.3f, sy + 12.6f, 1.0f, lensC);
+        boolean placeholder = this.search.isEmpty() && !this.searchFocused;
+        float phA = this.anim("search_ph", placeholder, 10.0f);
+        float textW = sW - 28.0f;
+        if (phA > 0.01f) {
+            Fonts.MEDIUM.draw(fit("Поиск модулей...", 6.0f, textW), sx + 19.0f + (1.0f - phA) * 5.0f, sy + 6.0f, 6.0f, col(C_MUTED, 0.85f * phA * a));
+        }
+        if (!placeholder) {
+            String shown = tail(this.search, 6.0f, textW);
+            Fonts.MEDIUM.draw(shown, sx + 19.0f, sy + 6.0f, 6.0f, col(C_TEXT, a * (1.0f - phA)));
+            if (this.searchFocused) {
+                float blink = 0.5f + 0.5f * (float) Math.cos(this.time * 6.0f);
+                float cx = sx + 19.0f + Fonts.MEDIUM.width(shown, 6.0f) + 1.0f;
+                Render2D.rect(cx, sy + 4.5f, 0.8f, 9.0f, col(this.accent, blink * a));
+            }
+        }
+        String hint = "Ctrl+F";
+        float hw = Fonts.MEDIUM.width(hint, 4.8f) + 6.0f;
+        if (sW > 140.0f && phA > 0.01f) {
+            Render2D.rect(sx + sW - hw - 5.0f, sy + 4.5f, hw, 9.0f, 3.0f, col(0xFFFFFF, 0.06f * phA * a));
+            Fonts.MEDIUM.draw(hint, sx + sW - hw - 2.0f, sy + 6.6f, 4.8f, col(C_MUTED, 0.9f * phA * a));
+        }
+        this.hits.add(new Hit(sx, sy, sW, sH, K_SEARCH, null, 0));
+
+        // справа: активные модули + закрыть
+        ModuleManager mm = ModuleManager.Companion.get();
+        float rx = x + w - iw + 12.0f;
+        float pulse = 0.5f + 0.5f * (float) Math.sin(this.time * 3.0f);
+        this.fxCircle(rx + 3.0f, y + 17.0f, 2.4f + pulse * 1.6f, col(this.accent, 0.18f * (1.0f - pulse * 0.5f) * a));
+        this.fxCircle(rx + 3.0f, y + 17.0f, 1.8f, col(this.accent, a));
+        Fonts.MEDIUM.draw("Активно: " + mm.getEnabled().size(), rx + 10.0f, y + 14.0f, 6.0f, col(C_SUB, 0.9f * a));
+
+        float cs = 16.0f;
+        float cx = x + w - 10.0f - cs;
+        float cy = y + (HEADER_H - cs) * 0.5f;
+        float ch = this.anim("close_hov", this.inside(cx, cy, cs, cs), 14.0f);
+        Render2D.rect(cx, cy, cs, cs, 5.0f, col(0xFF5A6A, 0.85f * ch * a));
+        int xc = lerpColor(col(C_MUTED, a), col(0xFFFFFF, a), ch);
+        float m = 5.2f;
+        Render2D.line(cx + m, cy + m, cx + cs - m, cy + cs - m, 1.0f, xc);
+        Render2D.line(cx + cs - m, cy + m, cx + m, cy + cs - m, 1.0f, xc);
+        this.hits.add(new Hit(cx, cy, cs, cs, K_CLOSE, null, 0));
+    }
+
     private void renderSidebar(float x, float y, float w, float h, float a) {
         if (a <= 0.01f) {
             return;
         }
-        this.glass(x, y, w, h, 10.0f, a);
-        this.drawMiniHole(x + 19.0f, y + 21.0f, 6.0f, a);
-        Render2D.text(Fonts.MEDIUM, "FROSTIX", x + 33.0f, y + 13.0f, 9.0f,
-                col(0xFFFFFF, a), col(this.accent, a), col(this.accent, a), col(0xFFFFFF, a));
-        Fonts.MEDIUM.draw("event horizon", x + 33.0f, y + 24.0f, 5.0f, col(0xB8B4C8, 0.55f * a));
-        Render2D.line(x + 10.0f, y + 38.0f, x + w - 10.0f, y + 38.0f, 0.6f, col(0xFFFFFF, 0.07f * a));
+        Fonts.MEDIUM.draw("КАТЕГОРИИ", x + 12.0f, y + 10.0f, 4.8f, col(C_DIM, a));
 
         ModuleManager mm = ModuleManager.Companion.get();
         List<Category> cats = this.categories();
+        float top = y + 20.0f;
+        float rowH = 21.0f;
+        float step = 23.0f;
         int selIdx = this.search.isEmpty() && this.category != null ? cats.indexOf(this.category) : -1;
-        float selTarget = y + 46.0f + (float) Math.max(0, selIdx) * 24.0f;
+        float selTarget = top + (float) Math.max(0, selIdx) * step;
         if (this.catSelY < 0.0f) {
             this.catSelY = selTarget;
         }
-        this.catSelY = this.approach(this.catSelY, selTarget, 15.0f);
+        this.catSelY = this.approach(this.catSelY, selTarget, 16.0f);
         float selVis = this.anim("cat_sel_vis", selIdx >= 0, 10.0f);
         if (selVis > 0.01f) {
-            // одна подсветка, которая плавно скользит к выбранной категории
             float hy = this.catSelY;
-            Render2D.rect(x + 6.0f, hy, w - 12.0f, 21.0f, 7.0f,
-                    col(this.accent, 0.24f * selVis * a), col(this.accent2, 0.05f * selVis * a),
-                    col(this.accent2, 0.05f * selVis * a), col(this.accent, 0.24f * selVis * a));
-            Render2D.outline(x + 6.0f, hy, w - 12.0f, 21.0f, 7.0f, 0.6f, col(this.accent, 0.35f * selVis * a));
-            float moving = clamp01(Math.abs(selTarget - hy) / 24.0f);
-            float bar = 11.0f * (1.0f + moving * 0.6f);
-            Render2D.rect(x + 6.0f, hy + 10.5f - bar * 0.5f, 2.0f, bar, 1.0f, col(this.accent, selVis * a));
+            Render2D.rect(x + 7.0f, hy, w - 14.0f, rowH, 6.0f,
+                    col(this.accent, 0.16f * selVis * a), col(this.accent, 0.04f * selVis * a),
+                    col(this.accent, 0.04f * selVis * a), col(this.accent, 0.16f * selVis * a));
+            float moving = clamp01(Math.abs(selTarget - hy) / step);
+            float bar = 10.0f * (1.0f + moving * 0.5f);
+            Render2D.rect(x + 7.0f, hy + rowH * 0.5f - bar * 0.5f, 2.2f, bar, 1.1f, col(this.accent, selVis * a));
         }
 
-        float cy = y + 46.0f;
+        float cy = top;
         for (Category c : cats) {
             boolean sel = c == this.category && this.search.isEmpty();
-            boolean hov = this.inside(x + 6.0f, cy, w - 12.0f, 21.0f);
+            boolean hov = this.inside(x + 7.0f, cy, w - 14.0f, rowH);
             float sa = this.anim("cat_sel_" + c.name(), sel, 10.0f);
             float ha = this.anim("cat_hov_" + c.name(), hov, 12.0f);
             if (ha > 0.01f && sa < 0.99f) {
-                Render2D.rect(x + 6.0f, cy, w - 12.0f, 21.0f, 7.0f, col(0xFFFFFF, 0.045f * ha * (1.0f - sa) * a));
+                Render2D.rect(x + 7.0f, cy, w - 14.0f, rowH, 6.0f, col(0xFFFFFF, 0.045f * ha * (1.0f - sa) * a));
             }
-            float shift = ha * 1.5f + sa * 1.5f;
-            float ix = x + 18.0f + shift;
-            float iy = cy + 10.5f;
-            float lit = Math.max(sa, ha);
-            Fonts.KIMIKO.msdf(icon(c), ix - 3.5f, iy - 3.5f, 7.0f, lerpColor(col(0x9A96AA, a), col(0xFFFFFF, a), lit));
-            if (sa > 0.01f) {
-                float oa = this.time * 2.6f;
-                this.fxCircle(ix + (float) Math.cos(oa) * 7.0f, iy + (float) Math.sin(oa) * 2.6f, 1.1f, col(this.accent, sa * a));
-            }
-            Fonts.MEDIUM.draw(c.getDisplayName(), x + 30.0f + shift, cy + 7.0f, 6.8f,
-                    lerpColor(col(0xA8A4B8, a), col(0xFFFFFF, a), Math.max(sa, ha * 0.6f)));
+            float shift = ha * 1.2f + sa * 1.5f;
+            float ix = x + 19.0f + shift;
+            float iy = cy + rowH * 0.5f;
+            Fonts.KIMIKO.msdf(icon(c), ix - 3.5f, iy - 3.5f, 7.0f,
+                    lerpColor(col(C_MUTED, a), col(this.accent, a), sa));
+            Fonts.MEDIUM.draw(fit(c.getDisplayName(), 6.6f, w - 60.0f), x + 30.0f + shift, cy + 7.2f, 6.6f,
+                    lerpColor(col(C_SUB, 0.85f * a), col(0xFFFFFF, a), Math.max(sa, ha * 0.6f)));
             List<Module> list = mm.getByCategory(c);
             int on = 0;
             for (Module m : list) {
@@ -377,78 +435,52 @@ public final class HorizonGui extends BaseScreen {
                     ++on;
                 }
             }
-            String cnt = on + "/" + list.size();
-            float cw = Fonts.MEDIUM.width(cnt, 5.0f);
-            Fonts.MEDIUM.draw(cnt, x + w - 12.0f - cw, cy + 8.0f, 5.0f, on > 0 ? col(this.accent, 0.9f * a) : col(0x77738A, 0.6f * a));
-            this.hits.add(new Hit(x + 6.0f, cy, w - 12.0f, 21.0f, K_CAT, c, 0));
-            cy += 24.0f;
+            String cnt = String.valueOf(on);
+            float cw = Math.max(10.0f, Fonts.MEDIUM.width(cnt, 4.8f) + 6.0f);
+            float bx = x + w - 12.0f - cw;
+            if (on > 0) {
+                Render2D.rect(bx, cy + 6.0f, cw, 9.0f, 4.5f, col(this.accent, (0.18f + 0.12f * sa) * a));
+                Fonts.MEDIUM.draw(cnt, bx + (cw - Fonts.MEDIUM.width(cnt, 4.8f)) * 0.5f, cy + 8.2f, 4.8f, col(this.accent, a));
+            } else {
+                Fonts.MEDIUM.draw(cnt, bx + (cw - Fonts.MEDIUM.width(cnt, 4.8f)) * 0.5f, cy + 8.2f, 4.8f, col(C_DIM, 0.8f * a));
+            }
+            this.hits.add(new Hit(x + 7.0f, cy, w - 14.0f, rowH, K_CAT, c, 0));
+            cy += step;
         }
 
-        float fy = y + h - 44.0f;
-        Render2D.line(x + 10.0f, fy, x + w - 10.0f, fy, 0.6f, col(0xFFFFFF, 0.07f * a));
-        float pulse = 0.5f + 0.5f * (float) Math.sin(this.time * 3.0f);
-        this.fxCircle(x + 14.0f, fy + 11.0f, 2.2f + pulse * 1.4f, col(this.accent, 0.2f * (1.0f - pulse * 0.5f) * a));
-        this.fxCircle(x + 14.0f, fy + 11.0f, 1.6f, col(this.accent, a));
-        Fonts.MEDIUM.draw("Активно: " + mm.getEnabled().size(), x + 21.0f, fy + 8.0f, 5.8f, col(0xE8E6F0, 0.85f * a));
-
-        boolean ch = this.inside(x + 8.0f, fy + 20.0f, w - 16.0f, 16.0f);
+        // внизу: переход на классическое меню
+        float by = y + h - 26.0f;
+        boolean ch = this.inside(x + 8.0f, by, w - 16.0f, 16.0f);
         float cha = this.anim("classic_hov", ch, 12.0f);
-        Render2D.rect(x + 8.0f, fy + 20.0f, w - 16.0f, 16.0f, 6.0f, col(0xFFFFFF, (0.04f + 0.05f * cha) * a));
-        Render2D.outline(x + 8.0f, fy + 20.0f, w - 16.0f, 16.0f, 6.0f, 0.6f,
-                lerpColor(col(0xFFFFFF, 0.08f * a), col(this.accent, 0.5f * a), cha));
+        Render2D.rect(x + 8.0f, by, w - 16.0f, 16.0f, 5.0f, col(0xFFFFFF, (0.035f + 0.045f * cha) * a));
+        Render2D.outline(x + 8.0f, by, w - 16.0f, 16.0f, 5.0f, 0.6f,
+                lerpColor(col(0xFFFFFF, 0.07f * a), col(this.accent, 0.55f * a), cha));
         String cl = "Классический вид";
-        float clw = Fonts.MEDIUM.width(cl, 5.5f);
-        Fonts.MEDIUM.draw(cl, x + (w - clw) * 0.5f, fy + 25.0f - cha * 0.5f, 5.5f, col(0xCFCBDD, (0.7f + 0.3f * cha) * a));
-        this.hits.add(new Hit(x + 8.0f, fy + 20.0f, w - 16.0f, 16.0f, K_CLASSIC, null, 0));
+        float clw = Fonts.MEDIUM.width(cl, 5.4f);
+        Fonts.MEDIUM.draw(cl, x + (w - clw) * 0.5f, by + 5.2f, 5.4f, col(C_SUB, (0.7f + 0.3f * cha) * a));
+        this.hits.add(new Hit(x + 8.0f, by, w - 16.0f, 16.0f, K_CLASSIC, null, 0));
     }
 
     private void renderModules(float x, float y, float w, float h, float a) {
         if (a <= 0.01f) {
             return;
         }
-        this.glass(x, y, w, h, 10.0f, a);
-
-        float sx = x + 10.0f;
-        float sy = y + 10.0f;
-        float sW = w - 20.0f;
-        float sH = 18.0f;
-        float fa = this.anim("search_focus", this.searchFocused, 12.0f);
-        Render2D.rect(sx, sy, sW, sH, 9.0f, col(0xFFFFFF, (0.045f + 0.03f * fa) * a));
-        Render2D.outline(sx, sy, sW, sH, 9.0f, 0.7f, lerpColor(col(0xFFFFFF, 0.08f * a), col(this.accent, 0.7f * a), fa));
-        float lensX = sx + 11.0f + fa * 0.8f;
-        this.fxRing(lensX, sy + 8.3f, 3.2f, 1.0f, lerpColor(col(0xCFCBDD, 0.7f * a), col(this.accent, a), fa));
-        Render2D.line(lensX + 2.3f, sy + 10.6f, lensX + 4.5f, sy + 12.8f, 1.0f, lerpColor(col(0xCFCBDD, 0.7f * a), col(this.accent, a), fa));
-        boolean placeholder = this.search.isEmpty() && !this.searchFocused;
-        float phA = this.anim("search_ph", placeholder, 10.0f);
-        if (phA > 0.01f) {
-            Fonts.MEDIUM.draw("Поиск модулей  (Ctrl+F)", sx + 21.0f + (1.0f - phA) * 6.0f, sy + 6.0f, 6.0f, col(0x8C889C, 0.8f * phA * a));
-        }
-        if (!placeholder) {
-            Fonts.MEDIUM.draw(this.search, sx + 21.0f, sy + 6.0f, 6.0f, col(0xFFFFFF, a * (1.0f - phA)));
-        }
-        if (this.searchFocused) {
-            float blink = 0.5f + 0.5f * (float) Math.cos(this.time * 6.0f);
-            float cx = sx + 21.0f + Fonts.MEDIUM.width(this.search, 6.0f) + 1.0f;
-            Render2D.rect(cx, sy + 4.5f, 0.8f, 9.0f, col(this.accent, blink * a));
-        }
-        this.hits.add(new Hit(sx, sy, sW, sH, K_SEARCH, null, 0));
-
         List<Module> mods = this.visibleModules();
         float tA = easeOut(clamp01(this.catAnim * 2.0f));
-        String title = this.search.isEmpty() && this.category != null ? this.category.getDisplayName() : "Результаты";
-        float tX = x + 12.0f + (1.0f - tA) * 8.0f;
-        Fonts.MEDIUM.draw(title, tX, y + 36.0f, 9.5f, col(0xFFFFFF, a * tA));
-        float tw = Fonts.MEDIUM.width(title, 9.5f);
-        this.fxCircle(tX + 5.0f + tw, y + 41.5f, 1.1f + 0.6f * (1.0f - tA), col(this.accent, 0.8f * a * tA));
-        Fonts.MEDIUM.draw(mods.size() + " " + plural(mods.size()), tX + 9.0f + tw, y + 38.5f, 6.0f, col(0x8C889C, 0.9f * a * tA));
+        String title = this.search.isEmpty() && this.category != null ? this.category.getDisplayName() : "Результаты поиска";
+        float tX = x + 12.0f + (1.0f - tA) * 6.0f;
+        Fonts.MEDIUM.draw(title, tX, y + 10.0f, 8.5f, col(0xFFFFFF, a * tA));
+        float tw = Fonts.MEDIUM.width(title, 8.5f);
+        String cnt = mods.size() + " " + plural(mods.size());
+        Fonts.MEDIUM.draw(cnt, tX + tw + 6.0f, y + 12.4f, 5.6f, col(C_MUTED, 0.9f * a * tA));
 
-        this.gridX = x + 8.0f;
-        this.gridY = y + 54.0f;
-        this.gridW = w - 16.0f;
-        this.gridH = h - 62.0f;
-        int cols = this.gridW > 300.0f ? 2 : 1;
+        this.gridX = x + 10.0f;
+        this.gridY = y + 28.0f;
+        this.gridW = w - 20.0f;
+        this.gridH = h - 36.0f;
+        int cols = this.gridW > 290.0f ? 2 : 1;
         float gap = 6.0f;
-        float cardH = 40.0f;
+        float cardH = 38.0f;
         float cardW = (this.gridW - gap * (float) (cols - 1)) / (float) cols;
         int rows = (mods.size() + cols - 1) / cols;
         float content = Math.max(0.0f, (float) rows * (cardH + gap) - gap);
@@ -456,7 +488,7 @@ public final class HorizonGui extends BaseScreen {
         this.moduleScrollTarget = clamp(this.moduleScrollTarget, 0.0f, this.moduleScrollMax);
         this.moduleScroll = this.approach(this.moduleScroll, this.moduleScrollTarget, 16.0f);
 
-        Render2D.pushScissor(this.ctx, this.gridX, this.gridY, this.gridW, this.gridH);
+        Render2D.pushScissor(this.ctx, this.gridX - 2.0f, this.gridY, this.gridW + 4.0f, this.gridH);
         int firstVisible = -1;
         for (int i = 0; i < mods.size(); ++i) {
             int c = i % cols;
@@ -469,103 +501,83 @@ public final class HorizonGui extends BaseScreen {
             if (firstVisible < 0) {
                 firstVisible = i;
             }
-            // каскадное появление карточек
             int order = Math.min(i - firstVisible, 16);
-            float ca = easeOut(clamp01(this.catAnim * 1.8f - (float) order * 0.07f));
+            float ca = easeOut(clamp01(this.catAnim * 1.8f - (float) order * 0.06f));
             if (ca <= 0.01f) {
                 continue;
             }
-            this.renderCard(mods.get(i), cx, cy + (1.0f - ca) * 12.0f, cardW, cardH, a * ca);
+            this.renderCard(mods.get(i), cx, cy + (1.0f - ca) * 10.0f, cardW, cardH, a * ca);
         }
         Render2D.popScissor(this.ctx);
 
         if (this.moduleScrollMax > 0.5f) {
-            boolean overGrid = this.inside(this.gridX, this.gridY, this.gridW + 8.0f, this.gridH);
+            boolean overGrid = this.inside(this.gridX, this.gridY, this.gridW + 10.0f, this.gridH);
             float sbA = this.anim("mod_sb", overGrid || Math.abs(this.moduleScroll - this.moduleScrollTarget) > 0.5f, 8.0f);
             float thumb = Math.max(18.0f, this.gridH * this.gridH / content);
             float ty = this.gridY + (this.gridH - thumb) * (this.moduleScroll / this.moduleScrollMax);
-            Render2D.rect(x + w - 4.5f, ty, 1.6f, thumb, 0.8f, col(this.accent, (0.25f + 0.45f * sbA) * a));
+            Render2D.rect(x + w - 5.0f, ty, 2.0f, thumb, 1.0f, col(0xFFFFFF, (0.10f + 0.20f * sbA) * a));
         }
         if (mods.isEmpty()) {
-            float bob = (float) Math.sin(this.time * 1.8f) * 2.0f;
-            String e1 = "Пусто";
-            String e2 = "даже свет отсюда не выбрался";
-            Fonts.MEDIUM.draw(e1, x + (w - Fonts.MEDIUM.width(e1, 8.0f)) * 0.5f, y + h * 0.5f - 8.0f + bob, 8.0f, col(0xFFFFFF, 0.8f * a * tA));
-            Fonts.MEDIUM.draw(e2, x + (w - Fonts.MEDIUM.width(e2, 5.5f)) * 0.5f, y + h * 0.5f + 3.0f + bob, 5.5f, col(0x8C889C, 0.9f * a * tA));
+            String e1 = "Ничего не найдено";
+            String e2 = this.search.isEmpty() ? "в этой категории пусто" : "попробуй другой запрос";
+            float my = this.gridY + this.gridH * 0.5f;
+            Fonts.MEDIUM.draw(e1, x + (w - Fonts.MEDIUM.width(e1, 7.5f)) * 0.5f, my - 8.0f, 7.5f, col(C_TEXT, 0.85f * a * tA));
+            Fonts.MEDIUM.draw(e2, x + (w - Fonts.MEDIUM.width(e2, 5.5f)) * 0.5f, my + 3.0f, 5.5f, col(C_MUTED, 0.9f * a * tA));
         }
     }
 
-    private void renderCard(Module m, float x, float y0, float w, float h, float a) {
+    private void renderCard(Module m, float x, float y, float w, float h, float a) {
         boolean on = m.isEnabled();
         boolean inGrid = (float) this.mouseYi >= this.gridY && (float) this.mouseYi <= this.gridY + this.gridH;
-        boolean hov = inGrid && this.inside(x, y0, w, h);
+        boolean hov = inGrid && this.inside(x, y, w, h);
         String key = m.getName();
-        float ta = this.anim(key + "#t", on, 9.0f);
+        float ta = this.anim(key + "#t", on, 10.0f);
         float ha = this.anim(key + "#h", hov, 14.0f);
         float sa = this.anim(key + "#s", m == this.selected, 12.0f);
         float tp = this.pulse("tg#" + key);
         boolean binding = m == this.bindingModule;
-        float y = y0 - ha * 1.5f; // подъём при наведении
 
-        if (ta > 0.01f || ha > 0.01f) {
-            float glow = 0.07f * ta + 0.04f * ha;
-            Render2D.rect(x - 1.5f, y - 1.5f, w + 3.0f, h + 3.0f, 9.5f, col(this.accent, glow * a));
-        }
-        Render2D.rect(x, y, w, h, 8.0f, col(0xFFFFFF, (0.035f + 0.035f * ha) * a));
+        Render2D.rect(x, y, w, h, 7.0f, col(0xFFFFFF, (0.03f + 0.03f * ha) * a));
         if (ta > 0.01f) {
-            Render2D.rect(x, y, w, h, 8.0f, col(this.accent, 0.18f * ta * a), col(this.accent, 0.0f),
-                    col(this.accent, 0.0f), col(this.accent, 0.10f * ta * a));
+            Render2D.rect(x, y, w, h, 7.0f, col(this.accent, 0.13f * ta * a), col(this.accent, 0.02f * ta * a),
+                    col(this.accent, 0.02f * ta * a), col(this.accent, 0.13f * ta * a));
         }
         if (tp > 0.01f) {
-            // вспышка при переключении
-            Render2D.rect(x, y, w, h, 8.0f, col(on ? this.accent : 0xFFFFFF, 0.22f * tp * a));
+            Render2D.rect(x, y, w, h, 7.0f, col(on ? this.accent : 0xFFFFFF, 0.18f * tp * a));
         }
-        int outline = lerpColor(col(0xFFFFFF, (0.06f + 0.05f * ha) * a), col(this.accent, 0.55f * a), ta);
-        Render2D.outline(x, y, w, h, 8.0f, 0.7f, outline);
-        if (sa > 0.01f) {
-            Render2D.outline(x, y, w, h, 8.0f, 0.9f, col(this.accent2, 0.7f * sa * a), col(this.accent2, 0.15f * sa * a),
-                    col(this.accent2, 0.15f * sa * a), col(this.accent2, 0.7f * sa * a));
+        int outline = lerpColor(col(0xFFFFFF, (0.05f + 0.05f * ha) * a), col(this.accent, 0.40f * a), ta);
+        outline = lerpColor(outline, col(this.accent2, 0.85f * a), sa);
+        Render2D.outline(x, y, w, h, 7.0f, 0.7f, outline);
+
+        // акцентная полоска слева растёт при включении
+        float barH = (h - 16.0f) * ta;
+        if (barH > 0.5f) {
+            Render2D.rect(x + 5.0f, y + (h - barH) * 0.5f, 2.2f, barH, 1.1f, col(this.accent, a));
         }
 
-        // мини-сингулярность: чёрная тень + фотонное кольцо, у включённого модуля по орбите бегает частица
-        float scx = x + 13.0f;
-        float scy = y + h * 0.5f;
-        if (ta > 0.01f) {
-            this.fxCircle(scx, scy, 7.5f, col(this.accent, 0.12f * ta * a));
-        }
-        this.fxCircle(scx, scy, 4.6f, col(0x000000, 0.9f * a));
-        this.fxRing(scx, scy, 5.0f + ha * 0.4f, 0.9f, lerpColor(col(0x6E6A80, 0.6f * a), col(this.accent, a), ta));
-        if (ta > 0.01f) {
-            float oa = this.time * (3.2f + 2.0f * ha) + (float) (key.hashCode() & 0xFF) * 0.1f;
-            this.fxCircle(scx + (float) Math.cos(oa) * 7.0f, scy + (float) Math.sin(oa) * 2.4f, 1.0f, col(0xFFF3E6, ta * a));
-        }
-        if (tp > 0.01f) {
-            // ударная волна от сингулярности
-            this.fxRing(scx, scy, 5.0f + (1.0f - tp) * 18.0f, 0.4f + tp, col(on ? this.accent : 0xFFFFFF, 0.85f * tp * a));
-        }
-
-        float tx = x + 25.0f + ha * 1.0f;
-        float textW = w - 25.0f - 34.0f;
-        Fonts.MEDIUM.draw(fit(m.getDisplayName(), 7.2f, textW), tx, y + 9.0f, 7.2f, col(0xFFFFFF, (0.78f + 0.22f * Math.max(ta, ha)) * a));
+        float tx = x + 13.0f + ha * 0.8f;
+        float textW = w - 13.0f - 34.0f;
+        Fonts.MEDIUM.draw(fit(m.getDisplayName(), 7.0f, textW), tx, y + 8.5f, 7.0f,
+                lerpColor(col(C_SUB, a), col(0xFFFFFF, a), Math.max(ta, ha)));
         if (binding) {
             float p = 0.6f + 0.4f * (float) Math.sin(this.time * 6.0f);
-            Fonts.MEDIUM.draw(fit("Нажми клавишу (Del - сброс)", 5.2f, textW + 20.0f), tx, y + 22.0f, 5.2f, col(this.accent, p * a));
+            Fonts.MEDIUM.draw(fit("Нажми клавишу (Del - сброс)", 5.2f, textW + 22.0f), tx, y + 21.5f, 5.2f, col(this.accent, p * a));
         } else {
-            Fonts.MEDIUM.draw(fit(m.getDisplayDescription(), 5.2f, textW), tx, y + 22.0f, 5.2f, col(0x8C889C, (0.8f + 0.2f * ha) * a));
+            Fonts.MEDIUM.draw(fit(m.getDisplayDescription(), 5.2f, textW), tx, y + 21.5f, 5.2f, col(C_MUTED, (0.8f + 0.2f * ha) * a));
         }
 
-        this.drawSwitch(x + w - 26.0f, y + 9.0f, 18.0f, 9.0f, ta, a, tp);
+        this.drawSwitch(x + w - 26.0f, y + 8.0f, 17.0f, 9.0f, ta, a, tp);
         KeyBind bind = m.getBind();
         if (bind != null && bind.isBound()) {
             String bk = bind.getDisplayName();
-            float bw = Fonts.MEDIUM.width(bk, 4.8f) + 6.0f;
+            float bw = Fonts.MEDIUM.width(bk, 4.6f) + 6.0f;
             float bx = x + w - 8.0f - bw;
-            Render2D.rect(bx, y + h - 13.0f, bw, 8.0f, 4.0f, col(0xFFFFFF, (0.06f + 0.04f * ha) * a));
-            Fonts.MEDIUM.draw(bk, bx + 3.0f, y + h - 11.4f, 4.8f, col(0xBDB9CC, 0.9f * a));
+            Render2D.rect(bx, y + h - 13.0f, bw, 8.0f, 3.0f, col(0xFFFFFF, (0.06f + 0.04f * ha) * a));
+            Fonts.MEDIUM.draw(bk, bx + 3.0f, y + h - 11.2f, 4.6f, col(C_SUB, 0.9f * a));
         }
 
-        float hy = Math.max(y0, this.gridY);
-        float hb = Math.min(y0 + h, this.gridY + this.gridH);
+        float hy = Math.max(y, this.gridY);
+        float hb = Math.min(y + h, this.gridY + this.gridH);
         if (hb > hy) {
             this.hits.add(new Hit(x, hy, w, hb - hy, K_MODULE, m, 0));
         }
@@ -575,25 +587,27 @@ public final class HorizonGui extends BaseScreen {
         if (a0 <= 0.01f) {
             return;
         }
-        this.glass(x0, y, w, h, 10.0f, a0);
         float ia = easeOut(this.inspAnim);
         float a = a0 * ia;
-        float x = x0 + (1.0f - ia) * 10.0f; // контент плавно въезжает при смене модуля
+        float x = x0 + (1.0f - ia) * 8.0f;
         Module m = this.selected;
         if (m == null) {
-            float bob = (float) Math.sin(this.time * 1.6f) * 2.0f;
-            float hcx = x0 + w * 0.5f;
-            float hcy = y + h * 0.5f - 22.0f + bob;
-            if (!this.drawHoleTexture(hcx, hcy, 12.0f, a)) {
-                this.drawMiniHole(hcx, hcy, 12.0f, a);
+            float cx = x0 + w * 0.5f;
+            float cy = y + h * 0.5f - 20.0f;
+            float bob = (float) Math.sin(this.time * 1.6f) * 1.5f;
+            Render2D.rect(cx - 14.0f, cy - 14.0f + bob, 28.0f, 28.0f, 8.0f, col(0xFFFFFF, 0.05f * a));
+            Render2D.outline(cx - 14.0f, cy - 14.0f + bob, 28.0f, 28.0f, 8.0f, 0.7f, col(this.accent, 0.45f * a));
+            // три точки "настроек"
+            for (int i = 0; i < 3; ++i) {
+                float ph = 0.5f + 0.5f * (float) Math.sin(this.time * 3.0f - (float) i * 0.7f);
+                this.fxCircle(cx - 6.0f + (float) i * 6.0f, cy + bob, 1.5f + ph * 0.5f, col(this.accent, (0.45f + 0.55f * ph) * a));
             }
-            this.drawSparks(hcx, hcy, 12.0f, a, 14);
             String t1 = "Выбери модуль";
             String t2 = "ПКМ по карточке - настройки";
             String t3 = "СКМ - назначить бинд";
-            Fonts.MEDIUM.draw(t1, x0 + (w - Fonts.MEDIUM.width(t1, 7.0f)) * 0.5f, y + h * 0.5f + 16.0f, 7.0f, col(0xFFFFFF, 0.85f * a));
-            Fonts.MEDIUM.draw(t2, x0 + (w - Fonts.MEDIUM.width(t2, 5.2f)) * 0.5f, y + h * 0.5f + 28.0f, 5.2f, col(0x8C889C, 0.9f * a));
-            Fonts.MEDIUM.draw(t3, x0 + (w - Fonts.MEDIUM.width(t3, 5.2f)) * 0.5f, y + h * 0.5f + 36.0f, 5.2f, col(0x8C889C, 0.9f * a));
+            Fonts.MEDIUM.draw(t1, x0 + (w - Fonts.MEDIUM.width(t1, 7.0f)) * 0.5f, cy + 22.0f, 7.0f, col(C_TEXT, 0.9f * a));
+            Fonts.MEDIUM.draw(t2, x0 + (w - Fonts.MEDIUM.width(t2, 5.2f)) * 0.5f, cy + 34.0f, 5.2f, col(C_MUTED, 0.9f * a));
+            Fonts.MEDIUM.draw(t3, x0 + (w - Fonts.MEDIUM.width(t3, 5.2f)) * 0.5f, cy + 42.0f, 5.2f, col(C_MUTED, 0.9f * a));
             return;
         }
 
@@ -603,45 +617,44 @@ public final class HorizonGui extends BaseScreen {
         float onA = this.anim("insp_on#" + m.getName(), on, 10.0f);
         float tp = this.pulse("tg#" + m.getName());
         String st = on ? "ВКЛ" : "ВЫКЛ";
-        float stw = Fonts.MEDIUM.width(st, 5.0f) + 8.0f;
+        float stw = Fonts.MEDIUM.width(st, 5.0f) + 10.0f;
         float stx = x + w - 12.0f - stw;
-        boolean stHov = this.inside(stx, cy, stw, 10.0f);
+        boolean stHov = this.inside(stx, cy, stw, 11.0f);
         float stHa = this.anim("insp_st_hov", stHov, 12.0f);
-        Fonts.MEDIUM.draw(fit(m.getDisplayName(), 9.0f, w - 30.0f - stw), cx, cy, 9.0f, col(0xFFFFFF, a));
+        Fonts.MEDIUM.draw(fit(m.getDisplayName(), 8.5f, w - 30.0f - stw), cx, cy + 1.0f, 8.5f, col(0xFFFFFF, a));
         if (tp > 0.01f) {
-            Render2D.rect(stx - 2.0f * tp, cy - 2.0f * tp, stw + 4.0f * tp, 10.0f + 4.0f * tp, 5.0f + 2.0f * tp, col(this.accent, 0.3f * tp * a));
+            Render2D.rect(stx - 2.0f * tp, cy - 2.0f * tp, stw + 4.0f * tp, 11.0f + 4.0f * tp, 5.5f + 2.0f * tp, col(this.accent, 0.3f * tp * a));
         }
-        Render2D.rect(stx, cy, stw, 10.0f, 5.0f, lerpColor(col(0xFFFFFF, (0.08f + 0.05f * stHa) * a), col(this.accent, (0.85f + 0.15f * stHa) * a), onA));
-        Fonts.MEDIUM.draw(st, stx + 4.0f, cy + 2.6f, 5.0f, lerpColor(col(0xBDB9CC, a), col(0x0A0810, a), onA));
-        this.hits.add(new Hit(stx, cy, stw, 10.0f, K_TOGGLE, m, 0));
+        Render2D.rect(stx, cy, stw, 11.0f, 5.5f, lerpColor(col(0xFFFFFF, (0.07f + 0.05f * stHa) * a), col(this.accent, (0.85f + 0.15f * stHa) * a), onA));
+        Fonts.MEDIUM.draw(st, stx + 5.0f, cy + 3.0f, 5.0f, lerpColor(col(C_SUB, a), col(C_DARK, a), onA));
+        this.hits.add(new Hit(stx, cy, stw, 11.0f, K_TOGGLE, m, 0));
 
-        float ly = cy + 15.0f;
-        List<String> lines = this.wrap(m.getDisplayDescription(), 5.4f, w - 24.0f);
+        float ly = cy + 16.0f;
+        List<String> lines = this.wrap(m.getDisplayDescription(), 5.3f, w - 24.0f);
         for (int i = 0; i < Math.min(3, lines.size()); ++i) {
             float la = easeOut(clamp01(this.inspAnim * 2.0f - (float) i * 0.2f));
-            Fonts.MEDIUM.draw(lines.get(i), cx + (1.0f - la) * 4.0f, ly, 5.4f, col(0x9A96AA, 0.9f * a0 * la));
+            Fonts.MEDIUM.draw(lines.get(i), cx + (1.0f - la) * 4.0f, ly, 5.3f, col(C_MUTED, 0.95f * a0 * la));
             ly += 8.0f;
         }
 
         float by = ly + 4.0f;
-        Fonts.MEDIUM.draw("Бинд", cx, by + 3.5f, 6.0f, col(0xBDB9CC, 0.8f * a));
+        Fonts.MEDIUM.draw("Бинд", cx, by + 3.6f, 6.0f, col(C_SUB, 0.85f * a));
         boolean binding = this.bindingModule == m;
         KeyBind bind = m.getBind();
         String bk = binding ? "..." : (bind != null && bind.isBound() ? bind.getDisplayName() : "нет");
-        float bwT = Math.max(26.0f, Fonts.MEDIUM.width(bk, 5.5f) + 12.0f);
+        float bwT = Math.max(28.0f, Fonts.MEDIUM.width(bk, 5.5f) + 14.0f);
         float bw = this.smooth("insp_bind_w", bwT, 14.0f);
         float bx = x + w - 12.0f - bw;
         boolean bHov = this.inside(bx, by, bw, 13.0f);
         float bHa = this.anim("insp_bind_hov", bHov, 12.0f);
         float bp = binding ? 0.5f + 0.5f * (float) Math.sin(this.time * 6.0f) : 0.0f;
-        Render2D.rect(bx, by, bw, 13.0f, 6.5f, lerpColor(col(0xFFFFFF, (0.06f + 0.05f * bHa) * a), col(this.accent, 0.5f * a), bp));
-        Render2D.outline(bx, by, bw, 13.0f, 6.5f, 0.6f, lerpColor(col(0xFFFFFF, 0.1f * a), col(this.accent, 0.6f * a), Math.max(bHa, bp)));
-        Fonts.MEDIUM.draw(bk, bx + (bw - Fonts.MEDIUM.width(bk, 5.5f)) * 0.5f, by + 3.6f, 5.5f, col(0xFFFFFF, 0.9f * a));
+        Render2D.rect(bx, by, bw, 13.0f, 5.0f, lerpColor(col(0xFFFFFF, (0.05f + 0.05f * bHa) * a), col(this.accent, 0.45f * a), bp));
+        Render2D.outline(bx, by, bw, 13.0f, 5.0f, 0.6f, lerpColor(col(0xFFFFFF, 0.09f * a), col(this.accent, 0.65f * a), Math.max(bHa, bp)));
+        Fonts.MEDIUM.draw(bk, bx + (bw - Fonts.MEDIUM.width(bk, 5.5f)) * 0.5f, by + 3.7f, 5.5f, col(C_TEXT, a));
         this.hits.add(new Hit(bx, by, bw, 13.0f, K_BIND, m, 0));
 
         float dy = by + 19.0f;
-        float lineW = (w - 20.0f) * ia;
-        Render2D.line(x0 + 10.0f, dy, x0 + 10.0f + lineW, dy, 0.6f, col(0xFFFFFF, 0.07f * a0));
+        Render2D.line(x0 + 10.0f, dy, x0 + 10.0f + (w - 20.0f) * ia, dy, 0.6f, col(0xFFFFFF, 0.06f * a0));
 
         this.inspX = x0;
         this.inspY = dy + 5.0f;
@@ -657,11 +670,10 @@ public final class HorizonGui extends BaseScreen {
             if (s instanceof PositionSettings || !s.isVisible()) {
                 continue;
             }
-            // настройки появляются каскадом
             float ra = easeOut(clamp01(this.inspAnim * 1.8f - (float) Math.min(shown, 12) * 0.06f));
             float appear = this.anim("vis#" + System.identityHashCode(s), true, 10.0f);
             float rowA = a0 * ra * appear;
-            float rh = this.renderSetting(s, x0 + 10.0f + (1.0f - ra) * 8.0f, ry, w - 20.0f, rowA);
+            float rh = this.renderSetting(s, x0 + 11.0f + (1.0f - ra) * 6.0f, ry, w - 22.0f, rowA);
             ry += rh + 4.0f;
             ++shown;
         }
@@ -673,11 +685,11 @@ public final class HorizonGui extends BaseScreen {
             float sbA = this.anim("insp_sb", over || Math.abs(this.settingsScroll - this.settingsScrollTarget) > 0.5f, 8.0f);
             float thumb = Math.max(16.0f, this.inspH * this.inspH / contentH);
             float ty = this.inspY + (this.inspH - thumb) * (this.settingsScroll / this.settingsScrollMax);
-            Render2D.rect(x0 + w - 4.5f, ty, 1.6f, thumb, 0.8f, col(this.accent2, (0.25f + 0.45f * sbA) * a0));
+            Render2D.rect(x0 + w - 5.0f, ty, 2.0f, thumb, 1.0f, col(0xFFFFFF, (0.10f + 0.20f * sbA) * a0));
         }
         if (shown == 0) {
             String t = "Нет настроек";
-            Fonts.MEDIUM.draw(t, x0 + (w - Fonts.MEDIUM.width(t, 6.0f)) * 0.5f, this.inspY + 16.0f, 6.0f, col(0x8C889C, 0.9f * a));
+            Fonts.MEDIUM.draw(t, x0 + (w - Fonts.MEDIUM.width(t, 6.0f)) * 0.5f, this.inspY + 16.0f, 6.0f, col(C_MUTED, 0.9f * a));
         }
     }
 
@@ -686,9 +698,9 @@ public final class HorizonGui extends BaseScreen {
         int id = System.identityHashCode(s);
         if (s instanceof SeparatorSetting) {
             String t = name.toUpperCase(Locale.ROOT);
-            Fonts.MEDIUM.draw(t, x, y + 4.0f, 5.2f, col(this.accent2, 0.85f * a));
-            float tw = Fonts.MEDIUM.width(t, 5.2f) + 4.0f;
-            Render2D.line(x + tw, y + 7.0f, x + tw + (w - tw) * clamp01(a), y + 7.0f, 0.6f, col(0xFFFFFF, 0.08f * a));
+            Fonts.MEDIUM.draw(t, x, y + 4.0f, 5.0f, col(this.accent, 0.9f * a));
+            float tw = Fonts.MEDIUM.width(t, 5.0f) + 4.0f;
+            Render2D.line(x + tw, y + 6.8f, x + tw + (w - tw) * clamp01(a), y + 6.8f, 0.6f, col(0xFFFFFF, 0.07f * a));
             return 13.0f;
         }
         if (s instanceof BooleanSetting b) {
@@ -696,8 +708,8 @@ public final class HorizonGui extends BaseScreen {
             float t = this.anim(s, v, 12.0f);
             float p = this.pulse("set#" + id);
             this.rowHover(x, y, w, 16.0f, a, "row#" + id);
-            Fonts.MEDIUM.draw(fit(name, 6.2f, w - 26.0f), x + 2.0f, y + 4.5f, 6.2f, col(0xE8E6F0, (0.75f + 0.25f * t) * a));
-            this.drawSwitch(x + w - 18.0f, y + 3.8f, 16.0f, 8.5f, t, a, p);
+            Fonts.MEDIUM.draw(fit(name, 6.0f, w - 26.0f), x + 2.0f, y + 4.8f, 6.0f, lerpColor(col(C_SUB, a), col(C_TEXT, a), t));
+            this.drawSwitch(x + w - 17.0f, y + 3.8f, 15.0f, 8.5f, t, a, p);
             this.addHit(x, y, w, 16.0f, K_BOOL, s, 0);
             return 16.0f;
         }
@@ -707,12 +719,12 @@ public final class HorizonGui extends BaseScreen {
             boolean dragging = this.dragRef == s;
             float p0 = this.smooth("r0#" + id, clamp01(r.getMinProgress()), dragging ? 30.0f : 14.0f);
             float p1 = this.smooth("r1#" + id, clamp01(r.getMaxProgress()), dragging ? 30.0f : 14.0f);
-            Render2D.rect(x, y + 13.0f, w, 3.0f, 1.5f, col(0xFFFFFF, 0.08f * a));
-            Render2D.rect(x + w * p0, y + 13.0f, Math.max(3.0f, w * (p1 - p0)), 3.0f, 1.5f,
+            Render2D.rect(x, y + 13.5f, w, 2.5f, 1.25f, col(0xFFFFFF, 0.08f * a));
+            Render2D.rect(x + w * p0, y + 13.5f, Math.max(2.5f, w * (p1 - p0)), 2.5f, 1.25f,
                     col(this.accent, a), col(this.accent2, a), col(this.accent2, a), col(this.accent, a));
             float kh = this.anim("kn#" + id, dragging || this.inside(x - 3.0f, y + 8.0f, w + 6.0f, 12.0f), 12.0f);
-            this.knob(x + w * p0, y + 14.5f, a, kh);
-            this.knob(x + w * p1, y + 14.5f, a, kh);
+            this.knob(x + w * p0, y + 14.75f, a, kh);
+            this.knob(x + w * p1, y + 14.75f, a, kh);
             this.addHit(x - 3.0f, y + 8.0f, w + 6.0f, 12.0f, K_RANGE, s, 0);
             return 21.0f;
         }
@@ -720,19 +732,20 @@ public final class HorizonGui extends BaseScreen {
             this.sliderHeader(name, sl.isInteger() ? String.valueOf(Math.round(sl.getValue())) : fmt(sl.getValue(), sl.getIncrement()), x, y, w, a);
             boolean dragging = this.dragRef == s;
             float p = this.smooth("sl#" + id, clamp01(sl.getProgress()), dragging ? 30.0f : 14.0f);
-            Render2D.rect(x, y + 13.0f, w, 3.0f, 1.5f, col(0xFFFFFF, 0.08f * a));
-            Render2D.rect(x, y + 13.0f, Math.max(3.0f, w * p), 3.0f, 1.5f,
+            Render2D.rect(x, y + 13.5f, w, 2.5f, 1.25f, col(0xFFFFFF, 0.08f * a));
+            Render2D.rect(x, y + 13.5f, Math.max(2.5f, w * p), 2.5f, 1.25f,
                     col(this.accent, a), col(this.accent2, a), col(this.accent2, a), col(this.accent, a));
             float kh = this.anim("kn#" + id, dragging || this.inside(x - 3.0f, y + 8.0f, w + 6.0f, 12.0f), 12.0f);
-            this.knob(x + w * p, y + 14.5f, a, kh);
+            this.knob(x + w * p, y + 14.75f, a, kh);
             this.addHit(x - 3.0f, y + 8.0f, w + 6.0f, 12.0f, K_SLIDER, s, 0);
             return 21.0f;
         }
         if (s instanceof ColorSetting c) {
-            Fonts.MEDIUM.draw(fit(name, 6.2f, w - 16.0f), x + 2.0f, y + 2.0f, 6.2f, col(0xE8E6F0, 0.9f * a));
+            Fonts.MEDIUM.draw(fit(name, 6.0f, w - 20.0f), x + 2.0f, y + 2.0f, 6.0f, col(C_TEXT, 0.9f * a));
             float cp = this.pulse("set#" + id);
-            this.fxCircle(x + w - 5.0f, y + 5.0f, 4.2f + cp * 1.2f, col(c.getColorOpaque(), a));
-            this.fxRing(x + w - 5.0f, y + 5.0f, 4.4f + cp * 1.2f, 0.6f, col(0xFFFFFF, 0.25f * a));
+            float sw = 12.0f + cp * 2.0f;
+            Render2D.rect(x + w - sw, y + 0.5f - cp, sw, 8.0f + cp * 2.0f, 3.0f, col(c.getColorOpaque(), a));
+            Render2D.outline(x + w - sw, y + 0.5f - cp, sw, 8.0f + cp * 2.0f, 3.0f, 0.6f, col(0xFFFFFF, 0.25f * a));
             float seg = w / 6.0f;
             int[] stops = new int[]{0xFFFF3B3B, 0xFFFFE53B, 0xFF3BFF6A, 0xFF3BE8FF, 0xFF3B55FF, 0xFFE53BFF, 0xFFFF3B3B};
             for (int i = 0; i < 6; ++i) {
@@ -750,14 +763,14 @@ public final class HorizonGui extends BaseScreen {
             return 21.0f;
         }
         if (s instanceof MultiSelectSetting ms) {
-            Fonts.MEDIUM.draw(fit(name, 6.2f, w), x + 2.0f, y + 2.0f, 6.2f, col(0xE8E6F0, 0.9f * a));
+            Fonts.MEDIUM.draw(fit(name, 6.0f, w), x + 2.0f, y + 2.0f, 6.0f, col(C_TEXT, 0.9f * a));
             float cx = x;
             float cy = y + 12.0f;
             List<String> opts = ms.getOptions();
             for (int i = 0; i < opts.size(); ++i) {
                 String o = opts.get(i);
-                String label = fit(o, 5.4f, w - 10.0f);
-                float tw = Fonts.MEDIUM.width(label, 5.4f) + 10.0f;
+                String label = fit(o, 5.3f, w - 10.0f);
+                float tw = Fonts.MEDIUM.width(label, 5.3f) + 10.0f;
                 if (cx + tw > x + w && cx > x) {
                     cx = x;
                     cy += 14.0f;
@@ -766,10 +779,10 @@ public final class HorizonGui extends BaseScreen {
                 float t = this.anim(s.getName() + "#" + o + "#" + id, sel, 12.0f);
                 float hv = this.anim("mh#" + id + "#" + i, this.inside(cx, cy, tw, 11.0f), 14.0f);
                 float cp = this.pulse("ms#" + id + "#" + i);
-                float grow = cp * 1.5f;
-                Render2D.rect(cx - grow, cy - grow, tw + grow * 2.0f, 11.0f + grow * 2.0f, 5.5f + grow,
-                        lerpColor(col(0xFFFFFF, (0.06f + 0.05f * hv) * a), col(this.accent, 0.8f * a), t));
-                Fonts.MEDIUM.draw(label, cx + 5.0f, cy + 3.0f, 5.4f, lerpColor(col(0xBDB9CC, a), col(0x0A0810, a), t));
+                float grow = cp * 1.2f;
+                Render2D.rect(cx - grow, cy - grow, tw + grow * 2.0f, 11.0f + grow * 2.0f, 4.0f + grow,
+                        lerpColor(col(0xFFFFFF, (0.05f + 0.05f * hv) * a), col(this.accent, 0.85f * a), t));
+                Fonts.MEDIUM.draw(label, cx + 5.0f, cy + 3.0f, 5.3f, lerpColor(col(C_SUB, a), col(C_DARK, a), t));
                 this.addHit(cx, cy, tw, 11.0f, K_MULTI, s, i);
                 cx += tw + 4.0f;
             }
@@ -778,22 +791,21 @@ public final class HorizonGui extends BaseScreen {
         if (s instanceof SelectSetting sel) {
             this.rowHover(x, y, w, 16.0f, a, "row#" + id);
             String v = sel.getDisplaySelected();
-            float vwT = Math.min(w * 0.55f, Fonts.MEDIUM.width(v, 5.6f) + 20.0f);
+            float vwT = Math.min(w * 0.55f, Fonts.MEDIUM.width(v, 5.5f) + 20.0f);
             float vw = this.smooth("selw#" + id, vwT, 14.0f);
-            String vf = fit(v, 5.6f, vw - 20.0f);
+            String vf = fit(v, 5.5f, vw - 20.0f);
             float sp = this.pulse("sel#" + id);
             Float dirF = this.smoothVals.get("seldir#" + id);
             float dir = dirF == null ? 1.0f : dirF;
-            Fonts.MEDIUM.draw(fit(name, 6.2f, w - vw - 6.0f), x + 2.0f, y + 4.5f, 6.2f, col(0xE8E6F0, 0.9f * a));
+            Fonts.MEDIUM.draw(fit(name, 6.0f, w - vw - 6.0f), x + 2.0f, y + 4.8f, 6.0f, col(C_TEXT, 0.9f * a));
             float vx = x + w - vw;
             boolean hv = this.inside(vx, y + 2.0f, vw, 12.0f);
             float ha = this.anim("selh#" + id, hv, 12.0f);
-            Render2D.rect(vx, y + 2.0f, vw, 12.0f, 6.0f, col(0xFFFFFF, (0.06f + 0.04f * ha) * a));
-            Render2D.outline(vx, y + 2.0f, vw, 12.0f, 6.0f, 0.6f, col(this.accent, (0.3f + 0.3f * ha + 0.4f * sp) * a));
-            Fonts.MEDIUM.draw("<", vx + 4.0f - ha * 0.8f - (dir < 0 ? sp * 1.5f : 0.0f), y + 5.0f, 5.6f, col(this.accent, 0.8f * a));
-            Fonts.MEDIUM.draw(">", vx + vw - 8.0f + ha * 0.8f + (dir > 0 ? sp * 1.5f : 0.0f), y + 5.0f, 5.6f, col(this.accent, 0.8f * a));
-            // новое значение въезжает со стороны, куда листали
-            Fonts.MEDIUM.draw(vf, vx + (vw - Fonts.MEDIUM.width(vf, 5.6f)) * 0.5f + sp * 5.0f * dir, y + 5.0f, 5.6f, col(0xFFFFFF, a * (1.0f - sp * 0.7f)));
+            Render2D.rect(vx, y + 2.0f, vw, 12.0f, 4.5f, col(0xFFFFFF, (0.05f + 0.04f * ha) * a));
+            Render2D.outline(vx, y + 2.0f, vw, 12.0f, 4.5f, 0.6f, lerpColor(col(0xFFFFFF, 0.08f * a), col(this.accent, 0.7f * a), Math.max(ha * 0.6f, sp)));
+            Fonts.MEDIUM.draw("<", vx + 4.0f - ha * 0.8f - (dir < 0 ? sp * 1.5f : 0.0f), y + 5.0f, 5.5f, col(this.accent, 0.85f * a));
+            Fonts.MEDIUM.draw(">", vx + vw - 8.0f + ha * 0.8f + (dir > 0 ? sp * 1.5f : 0.0f), y + 5.0f, 5.5f, col(this.accent, 0.85f * a));
+            Fonts.MEDIUM.draw(vf, vx + (vw - Fonts.MEDIUM.width(vf, 5.5f)) * 0.5f + sp * 4.0f * dir, y + 5.0f, 5.5f, col(0xFFFFFF, a * (1.0f - sp * 0.7f)));
             this.addHit(x, y, w, 16.0f, K_SELECT, s, 0);
             return 16.0f;
         }
@@ -801,280 +813,37 @@ public final class HorizonGui extends BaseScreen {
             boolean hov = this.inside(x, y, w, 15.0f);
             float ha = this.anim(s, hov, 12.0f);
             float bp = this.pulse("set#" + id);
-            Render2D.rect(x, y - ha * 0.6f, w, 15.0f, 7.5f, col(this.accent, (0.22f + 0.18f * ha + 0.35f * bp) * a), col(this.accent2, (0.10f + 0.1f * ha) * a),
-                    col(this.accent2, (0.10f + 0.1f * ha) * a), col(this.accent, (0.22f + 0.18f * ha + 0.35f * bp) * a));
-            Render2D.outline(x, y - ha * 0.6f, w, 15.0f, 7.5f, 0.6f, col(this.accent, (0.45f + 0.3f * ha) * a));
+            Render2D.rect(x, y, w, 15.0f, 5.0f, col(this.accent, (0.16f + 0.14f * ha + 0.35f * bp) * a));
+            Render2D.outline(x, y, w, 15.0f, 5.0f, 0.6f, col(this.accent, (0.40f + 0.3f * ha) * a));
             String label = btn.getDisplayLabel();
             if (label == null || label.isEmpty()) {
                 label = btn.getLabel();
             }
             String text = label == null || label.isEmpty() ? name : name + ": " + label;
-            text = fit(text, 5.8f, w - 10.0f);
-            Fonts.MEDIUM.draw(text, x + (w - Fonts.MEDIUM.width(text, 5.8f)) * 0.5f, y + 4.6f - ha * 0.6f, 5.8f, col(0xFFFFFF, a));
+            text = fit(text, 5.7f, w - 10.0f);
+            Fonts.MEDIUM.draw(text, x + (w - Fonts.MEDIUM.width(text, 5.7f)) * 0.5f, y + 4.7f, 5.7f, col(0xFFFFFF, a));
             this.addHit(x, y, w, 15.0f, K_BUTTON, s, 0);
             return 15.0f;
         }
         if (s instanceof TextSetting ts) {
             String v = ts.getText() == null ? "" : ts.getText();
-            float vw = Math.min(w * 0.5f, Fonts.MEDIUM.width(v, 5.4f));
-            Fonts.MEDIUM.draw(fit(name, 6.2f, w - vw - 6.0f), x + 2.0f, y + 4.5f, 6.2f, col(0xE8E6F0, 0.9f * a));
-            String vf = fit(v, 5.4f, w * 0.5f);
-            Fonts.MEDIUM.draw(vf, x + w - Fonts.MEDIUM.width(vf, 5.4f), y + 5.0f, 5.4f, col(0x9A96AA, a));
+            float vw = Math.min(w * 0.5f, Fonts.MEDIUM.width(v, 5.3f));
+            Fonts.MEDIUM.draw(fit(name, 6.0f, w - vw - 6.0f), x + 2.0f, y + 4.8f, 6.0f, col(C_TEXT, 0.9f * a));
+            String vf = fit(v, 5.3f, w * 0.5f);
+            Fonts.MEDIUM.draw(vf, x + w - Fonts.MEDIUM.width(vf, 5.3f), y + 5.2f, 5.3f, col(C_MUTED, a));
             return 16.0f;
         }
         if (s instanceof BindSetting bs) {
             KeyBind kb = bs.getValue();
             String v = kb != null && kb.isBound() ? kb.getDisplayName() : "нет";
-            Fonts.MEDIUM.draw(fit(name, 6.2f, w - 40.0f), x + 2.0f, y + 4.5f, 6.2f, col(0xE8E6F0, 0.9f * a));
-            float vw = Fonts.MEDIUM.width(v, 5.4f) + 10.0f;
-            Render2D.rect(x + w - vw, y + 2.0f, vw, 12.0f, 6.0f, col(0xFFFFFF, 0.06f * a));
-            Fonts.MEDIUM.draw(v, x + w - vw + 5.0f, y + 5.2f, 5.4f, col(0xBDB9CC, a));
+            Fonts.MEDIUM.draw(fit(name, 6.0f, w - 40.0f), x + 2.0f, y + 4.8f, 6.0f, col(C_TEXT, 0.9f * a));
+            float vw = Fonts.MEDIUM.width(v, 5.3f) + 10.0f;
+            Render2D.rect(x + w - vw, y + 2.0f, vw, 12.0f, 4.5f, col(0xFFFFFF, 0.06f * a));
+            Fonts.MEDIUM.draw(v, x + w - vw + 5.0f, y + 5.3f, 5.3f, col(C_SUB, a));
             return 16.0f;
         }
-        Fonts.MEDIUM.draw(fit(name, 6.2f, w), x + 2.0f, y + 3.5f, 6.2f, col(0xE8E6F0, 0.8f * a));
+        Fonts.MEDIUM.draw(fit(name, 6.0f, w), x + 2.0f, y + 3.5f, 6.0f, col(C_TEXT, 0.8f * a));
         return 14.0f;
-    }
-
-    // ------------------------------------------------------------------ black hole
-
-    private void drawStars(float a) {
-        float mx = ((float) this.mouseXi / Math.max(1.0f, (float) this.width) - 0.5f);
-        float my = ((float) this.mouseYi / Math.max(1.0f, (float) this.height) - 0.5f);
-        for (int i = 0; i < STARS; ++i) {
-            float tw = 0.5f + 0.5f * (float) Math.sin(this.time * S_SPEED[i] + S_PHASE[i]);
-            float depth = S_SIZE[i];
-            // лёгкий дрейф + параллакс от мыши
-            float sx = S_X[i] * (float) this.width + (float) Math.sin(this.time * 0.07f + S_PHASE[i]) * 3.0f - mx * 10.0f * depth;
-            float sy = S_Y[i] * (float) this.height + (float) Math.cos(this.time * 0.05f + S_PHASE[i]) * 2.0f - my * 10.0f * depth;
-            this.fxCircle(sx, sy, S_SIZE[i], col(0xFFFFFF, (0.1f + 0.45f * tw) * a));
-        }
-    }
-
-    private void drawBlackHole(float cx, float cy, float R, float a) {
-        if (a <= 0.01f || R <= 0.5f) {
-            return;
-        }
-        // диск раскручивается быстрее, пока меню открывается
-        this.holePhase += this.dt * (1.0f + (1.0f - a) * 5.0f);
-        if (!this.drawHoleTexture(cx, cy, R, a)) {
-            // запасной вариант, пока текстура генерируется: 3 круга, а не тысяча
-            this.fxCircle(cx, cy, R * 1.6f, col(HOLE_WARM, 0.05f * a));
-            this.fxCircle(cx, cy, R * 1.02f, col(0x000000, a));
-            this.fxRing(cx, cy, R * 1.045f, Math.max(0.8f, R / 40.0f), col(HOLE_HOT, 0.9f * a));
-        }
-        this.drawSparks(cx, cy, R, a, SPARKS);
-    }
-
-    /** Рисует сгенерированную текстуру дыры так, что радиус тени = R. false - текстура ещё не готова. */
-    private boolean drawHoleTexture(float cx, float cy, float R, float a) {
-        ensureHoleTexture();
-        if (!holeTexReady || this.ctx == null) {
-            return false;
-        }
-        this.holeFade = this.approach(this.holeFade, 1.0f, 3.0f);
-        float fade = a * this.holeFade;
-        if (fade <= 0.01f) {
-            return true;
-        }
-        float breathe = 1.0f + 0.015f * (float) Math.sin(this.time * 1.3f);
-        float drawSize = R / (0.5f * HOLE_RS) * breathe;
-        int s = HOLE_TEX_SIZE;
-        Matrix3x2fStack m = this.ctx.getMatrices();
-        m.pushMatrix();
-        m.translate(cx, cy);
-        float sc = drawSize / (float) s;
-        m.scale(sc, sc);
-        this.ctx.drawTexture(RenderPipelines.GUI_TEXTURED, HOLE_TEX, -s / 2, -s / 2, 0.0f, 0.0f, s, s, s, s, col(0xFFFFFF, fade));
-        m.popMatrix();
-        return true;
-    }
-
-    /** Живые искры аккреционного диска поверх текстуры (кеплерово вращение + доплер). */
-    private void drawSparks(float cx, float cy, float R, float a, int count) {
-        float px = Math.max(0.45f, R / 55.0f);
-        int n = Math.min(count, SPARKS);
-        float shadow2 = R * R * 1.1f;
-        for (int i = 0; i < n; ++i) {
-            float th = P_ANGLE[i] + this.holePhase * P_SPEED[i];
-            float s = (float) Math.sin(th);
-            float c = (float) Math.cos(th);
-            float r = P_RAD[i] * R;
-            float sx = cx + c * r;
-            float sy = cy + s * r * TILT;
-            if (s < 0.0f) {
-                float dx = sx - cx;
-                float dy = sy - cy;
-                if (dx * dx + dy * dy < shadow2) {
-                    continue; // задняя половина прячется за тенью
-                }
-            }
-            float dop = 0.5f - 0.5f * c;
-            float al = P_ALPHA[i] * (0.3f + 0.7f * dop) * a;
-            float size = P_SIZE[i] * px * (0.8f + 0.4f * dop);
-            this.fxCircle(sx, sy, size, col(sparkColor(i), al));
-        }
-    }
-
-    private void drawMiniHole(float cx, float cy, float r, float a) {
-        float breathe = 0.9f + 0.1f * (float) Math.sin(this.time * 1.7f);
-        this.fxCircle(cx, cy, r * 1.9f, col(HOLE_WARM, 0.09f * a * breathe));
-        this.fxCircle(cx, cy, r * 1.02f, col(0x000000, a));
-        this.fxRing(cx, cy, r * 1.1f, Math.max(0.8f, r / 7.0f), col(HOLE_HOT, 0.9f * a));
-        float oa = this.time * 2.2f;
-        this.fxCircle(cx + (float) Math.cos(oa) * r * 1.8f, cy + (float) Math.sin(oa) * r * 0.45f, Math.max(0.7f, r / 7.0f), col(HOLE_WARM, a));
-    }
-
-    private static int sparkColor(int i) {
-        float t = (P_RAD[i] - 1.55f) / 2.1f;
-        if (t < 0.35f) {
-            return lerpColor(HOLE_HOT, HOLE_WARM, t / 0.35f);
-        }
-        return lerpColor(HOLE_WARM, HOLE_COOL, (t - 0.35f) / 0.65f);
-    }
-
-    // ---------------------------------------------------- генерация текстуры (один раз, в фоне)
-
-    private static void ensureHoleTexture() {
-        if (holeTexReady || holeTexFailed) {
-            return;
-        }
-        if (!holeGenStarted) {
-            holeGenStarted = true;
-            Thread t = new Thread(() -> {
-                try {
-                    int n = HOLE_TEX_SIZE;
-                    int[] px = new int[n * n];
-                    for (int y = 0; y < n; ++y) {
-                        for (int x = 0; x < n; ++x) {
-                            float u = ((float) x + 0.5f) / (float) n * 2.0f - 1.0f;
-                            float v = ((float) y + 0.5f) / (float) n * 2.0f - 1.0f;
-                            px[y * n + x] = holePixel(u, v);
-                        }
-                    }
-                    holePixels = px;
-                } catch (Throwable th) {
-                    th.printStackTrace();
-                    holeTexFailed = true;
-                }
-            }, "Frostix-Horizon-BlackHole");
-            t.setDaemon(true);
-            t.start();
-            return;
-        }
-        int[] px = holePixels;
-        if (px == null) {
-            return;
-        }
-        holePixels = null;
-        try {
-            int n = HOLE_TEX_SIZE;
-            NativeImage img = new NativeImage(n, n, true);
-            for (int y = 0; y < n; ++y) {
-                for (int x = 0; x < n; ++x) {
-                    img.setColorArgb(x, y, px[y * n + x]);
-                }
-            }
-            MinecraftClient.getInstance().getTextureManager().registerTexture(HOLE_TEX,
-                    new NativeImageBackedTexture(() -> "frostix_horizon_black_hole", img));
-            holeTexReady = true;
-        } catch (Throwable th) {
-            th.printStackTrace();
-            holeTexFailed = true;
-        }
-    }
-
-    /** Чёрная дыра в стиле Gargantua: тень, фотонное кольцо, наклонный диск и линзированная задняя часть диска. */
-    private static int holePixel(float u, float v) {
-        float rs = HOLE_RS;
-        float r = (float) Math.sqrt(u * u + v * v);
-        float rn = r / rs;
-        float ang = (float) Math.atan2(v, u);
-        float R = 0.0f, G = 0.0f, B = 0.0f;
-
-        // мягкое свечение вокруг, гаснет к краю текстуры
-        float edgeFade = 1.0f - hSmooth(0.75f, 1.0f, r);
-        float halo = (float) Math.exp(-Math.pow((rn - 1.0) / 2.2, 2)) * 0.10f * edgeFade;
-        float[] hc = heatRgb(0.35f);
-        R += hc[0] * halo; G += hc[1] * halo; B += hc[2] * halo;
-
-        // линзированная задняя часть диска: арка над и под тенью
-        if (rn > 1.0f) {
-            float band = hGauss(rn, 1.32f, 0.22f);
-            float top = v < 0.0f ? 1.0f : 0.5f;
-            float streak = 0.62f + 0.22f * (float) Math.sin(ang * 7.0f + rn * 31.0f) + 0.16f * (float) Math.sin(ang * 17.0f - rn * 67.0f);
-            float dop = 1.0f - 0.35f * (float) Math.cos(ang);
-            float in = band * top * streak * dop * 1.3f;
-            float[] c = heatRgb(clamp01(1.25f - (rn - 1.0f)));
-            R += c[0] * in; G += c[1] * in; B += c[2] * in;
-        }
-
-        // фотонное кольцо
-        float photon = hGauss(rn, 1.045f, 0.03f) * 2.2f;
-        R += photon; G += photon * 0.92f; B += photon * 0.8f;
-
-        // наклонный диск
-        float incl = 0.2f;
-        float dr = (float) Math.sqrt(u * u + (v / incl) * (v / incl)) / rs;
-        float diskI = 0.0f;
-        float diskHeat = 0.0f;
-        if (dr > 1.5f && dr < 5.4f) {
-            float inner = hSmooth(1.5f, 1.75f, dr);
-            float outer = 1.0f - hSmooth(4.2f, 5.4f, dr);
-            float da = (float) Math.atan2(v / incl, u);
-            float streak = 0.6f + 0.2f * (float) Math.sin(da * 9.0f + dr * 23.0f) + 0.12f * (float) Math.sin(da * 23.0f - dr * 57.0f) + 0.08f * (float) Math.sin(dr * 91.0f);
-            float dop = 1.0f - 0.6f * (float) Math.cos(da);
-            diskI = (float) Math.pow(1.6f / dr, 1.5) * inner * outer * streak * dop * 1.8f;
-            diskHeat = clamp01(1.2f - (dr - 1.5f) / 3.2f);
-        }
-
-        boolean inShadow = rn < 1.0f;
-        boolean front = v > 0.0f;
-        float[] dc = heatRgb(diskHeat);
-        if (inShadow) {
-            R = 0.0f; G = 0.0f; B = 0.0f;
-            if (front) { R += dc[0] * diskI; G += dc[1] * diskI; B += dc[2] * diskI; }
-            float edge = hSmooth(0.94f, 1.0f, rn) * 0.6f; // тонкий край тени
-            R += edge * 0.9f; G += edge * 0.6f; B += edge * 0.35f;
-            return packArgb(R, G, B, 1.0f);
-        }
-        R += dc[0] * diskI; G += dc[1] * diskI; B += dc[2] * diskI;
-
-        // тонмаппинг
-        R = 1.0f - (float) Math.exp(-R * 1.5f);
-        G = 1.0f - (float) Math.exp(-G * 1.5f);
-        B = 1.0f - (float) Math.exp(-B * 1.5f);
-        float al = Math.max(R, Math.max(G, B));
-        if (al < 0.002f) {
-            return 0;
-        }
-        return packArgb(R / al, G / al, B / al, al);
-    }
-
-    /** 0 = холодный тёмно-красный край, 1 = раскалённый бело-жёлтый центр */
-    private static float[] heatRgb(float h) {
-        h = clamp01(h);
-        float r = clamp01(0.55f + h * 0.6f);
-        float g = clamp01(0.12f + h * h * 0.85f);
-        float b = clamp01(0.03f + (float) Math.pow(h, 3) * 0.75f);
-        return new float[]{r, g, b};
-    }
-
-    private static int packArgb(float r, float g, float b, float a) {
-        int ai = Math.round(clamp01(a) * 255.0f);
-        int ri = Math.round(clamp01(r) * 255.0f);
-        int gi = Math.round(clamp01(g) * 255.0f);
-        int bi = Math.round(clamp01(b) * 255.0f);
-        return ai << 24 | ri << 16 | gi << 8 | bi;
-    }
-
-    private static float hGauss(float x, float mu, float sigma) {
-        float d = (x - mu) / sigma;
-        return (float) Math.exp(-d * d);
-    }
-
-    private static float hSmooth(float e0, float e1, float x) {
-        float k = clamp01((x - e0) / (e1 - e0));
-        return k * k * (3.0f - 2.0f * k);
     }
 
     // ------------------------------------------------------------------ widgets
@@ -1096,48 +865,36 @@ public final class HorizonGui extends BaseScreen {
         Render2D.circleOutline(x, y, r, thickness, color);
     }
 
-    private void glass(float x, float y, float w, float h, float r, float a) {
-        if (a > 0.2f) {
-            Render2D.blur(x, y, w, h, r);
-        }
-        Render2D.rect(x, y, w, h, r, col(0x0E0C18, 0.70f * a), col(0x0E0C18, 0.70f * a), col(0x060509, 0.82f * a), col(0x060509, 0.82f * a));
-        Render2D.outline(x, y, w, h, r, 0.8f, col(this.accent, 0.32f * a), col(this.accent2, 0.14f * a), col(0xFFFFFF, 0.04f * a), col(this.accent, 0.10f * a));
-        // блик, медленно пробегающий по верхней кромке
-        float sweep = (this.time * 0.12f) % 1.0f;
-        float sx = x + r + (w - r * 2.0f) * sweep;
-        Render2D.line(x + r, y + 0.6f, x + w - r, y + 0.6f, 0.5f, col(0xFFFFFF, 0.07f * a));
-        Render2D.line(Math.max(x + r, sx - 18.0f), y + 0.6f, Math.min(x + w - r, sx + 18.0f), y + 0.6f, 0.6f, col(0xFFFFFF, 0.10f * a));
-    }
-
     private void drawSwitch(float x, float y, float w, float h, float t, float a, float pulse) {
-        Render2D.rect(x, y, w, h, h * 0.5f, lerpColor(col(0xFFFFFF, 0.10f * a), col(this.accent, 0.85f * a), t));
-        float kr = h * 0.5f - 1.5f;
-        // кнопка слегка "растягивается" в движении
+        Render2D.rect(x, y, w, h, h * 0.5f, lerpColor(col(0xFFFFFF, 0.10f * a), col(this.accent, 0.9f * a), t));
+        if (pulse > 0.01f) {
+            Render2D.outline(x - pulse * 1.5f, y - pulse * 1.5f, w + pulse * 3.0f, h + pulse * 3.0f, h * 0.5f + pulse * 1.5f, 0.6f, col(this.accent, 0.6f * pulse * a));
+        }
+        float kr = h * 0.5f - 1.4f;
         float moving = 4.0f * t * (1.0f - t);
         float kx = x + h * 0.5f + (w - h) * t;
         float ky = y + h * 0.5f;
-        if (t > 0.01f || pulse > 0.01f) {
-            this.fxCircle(kx, ky, h * (0.9f + 0.5f * pulse), col(this.accent, (0.2f * t + 0.25f * pulse) * a));
-        }
-        this.fxCircle(kx, ky, kr + moving * 0.6f, col(0xFFFFFF, a));
+        this.fxCircle(kx, ky, kr + moving * 0.5f, lerpColor(col(0xD8DCE6, a), col(0xFFFFFF, a), t));
     }
 
     private void knob(float x, float y, float a, float hover) {
-        this.fxCircle(x, y, 5.0f + hover * 1.5f, col(this.accent, (0.18f + 0.14f * hover) * a));
-        this.fxCircle(x, y, 3.0f + hover * 0.5f, col(0xFFFFFF, a));
+        if (hover > 0.01f) {
+            this.fxCircle(x, y, 5.0f + hover * 1.2f, col(this.accent, 0.22f * hover * a));
+        }
+        this.fxCircle(x, y, 3.2f + hover * 0.4f, col(0xFFFFFF, a));
     }
 
     private void sliderHeader(String name, String val, float x, float y, float w, float a) {
-        float vw = Fonts.MEDIUM.width(val, 5.6f);
-        Fonts.MEDIUM.draw(fit(name, 6.2f, w - vw - 6.0f), x + 2.0f, y + 2.0f, 6.2f, col(0xE8E6F0, 0.9f * a));
-        Fonts.MEDIUM.draw(val, x + w - vw, y + 2.5f, 5.6f, col(this.accent, 0.95f * a));
+        float vw = Fonts.MEDIUM.width(val, 5.5f);
+        Fonts.MEDIUM.draw(fit(name, 6.0f, w - vw - 6.0f), x + 2.0f, y + 2.0f, 6.0f, col(C_TEXT, 0.9f * a));
+        Fonts.MEDIUM.draw(val, x + w - vw, y + 2.5f, 5.5f, col(this.accent, 0.95f * a));
     }
 
     private void rowHover(float x, float y, float w, float h, float a, Object key) {
         boolean hov = this.inside(x, y, w, h) && (float) this.mouseYi >= this.inspY && (float) this.mouseYi <= this.inspY + this.inspH;
         float ha = this.anim(key, hov, 14.0f);
         if (ha > 0.01f) {
-            Render2D.rect(x - 3.0f, y, w + 6.0f, h, 5.0f, col(0xFFFFFF, 0.035f * ha * a));
+            Render2D.rect(x - 3.0f, y, w + 6.0f, h, 4.0f, col(0xFFFFFF, 0.035f * ha * a));
         }
     }
 
@@ -1262,6 +1019,7 @@ public final class HorizonGui extends BaseScreen {
                 this.kick("set#" + System.identityHashCode(h.ref()));
             }
             case K_CLASSIC -> MinecraftClient.getInstance().setScreen(UI.INSTANCE);
+            case K_CLOSE -> this.close();
             default -> {
             }
         }
@@ -1430,8 +1188,8 @@ public final class HorizonGui extends BaseScreen {
     }
 
     private void refreshColors() {
-        int p = 0xFFFFA24A;
-        int s = 0xFF7AA8FF;
+        int p = 0xFF6FB7FF;
+        int s = 0xFFA58BFF;
         try {
             InterfaceModule iface = InterfaceModule.Companion.getInstance();
             if (iface != null) {
@@ -1477,7 +1235,6 @@ public final class HorizonGui extends BaseScreen {
         return v;
     }
 
-    /** Плавно ведёт произвольное значение к цели (ползунки, ширины и т.п.). */
     private float smooth(Object key, float target, float speed) {
         Float cur = this.smoothVals.get(key);
         float v = cur == null ? target : this.approach(cur, target, speed);
@@ -1485,7 +1242,6 @@ public final class HorizonGui extends BaseScreen {
         return v;
     }
 
-    /** Одноразовый импульс 1 -> 0 (вспышки, волны при клике). */
     private void kick(Object key) {
         this.pulses.put(key, 1.0f);
     }
@@ -1526,6 +1282,18 @@ public final class HorizonGui extends BaseScreen {
             t = t.substring(0, t.length() - 1);
         }
         return t.trim() + "..";
+    }
+
+    /** Хвост строки, который влезает в ширину (для поля поиска, чтобы курсор не уезжал за край). */
+    private static String tail(@Nullable String s, float size, float maxW) {
+        if (s == null) {
+            return "";
+        }
+        String t = s;
+        while (t.length() > 1 && Fonts.MEDIUM.width(t, size) > maxW) {
+            t = t.substring(1);
+        }
+        return t;
     }
 
     private List<String> wrap(@Nullable String text, float size, float maxW) {
