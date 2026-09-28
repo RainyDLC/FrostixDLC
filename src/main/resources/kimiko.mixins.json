@@ -103,6 +103,7 @@
     "compat.IrisRenderingPipelineHandsMixin"
   ],
   "client": [
+    "BlackHoleTitleScreenMixin",
     "AnimatedChatHeaderMixin",
     "RecentChatPersistMixin",
     "CustomPetEntityRenderDispatcherMixin",
