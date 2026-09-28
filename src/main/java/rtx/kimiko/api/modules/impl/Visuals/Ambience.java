@@ -1,41 +1,7 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  kotlin.Metadata
- *  kotlin.collections.CollectionsKt
- *  kotlin.jvm.JvmStatic
- *  kotlin.jvm.internal.DefaultConstructorMarker
- *  kotlin.jvm.internal.Intrinsics
- *  net.minecraft.world.attribute.EnvironmentAttributeInterpolator
- *  net.minecraft.world.attribute.EnvironmentAttributes
- *  net.minecraft.world.biome.Biome.Precipitation
- *  net.minecraft.util.math.Vec3d
- *  net.minecraft.network.packet.Packet
- *  net.minecraft.network.packet.s2c.play.GameStateChangeS2CPacket
- *  net.minecraft.network.packet.s2c.play.GameStateChangeS2CPacket.Reason
- *  net.minecraft.client.gl.Framebuffer
- *  net.minecraft.network.packet.s2c.play.WorldTimeUpdateS2CPacket
- *  net.minecraft.util.math.MathHelper
- *  net.minecraft.client.render.Camera
- *  net.minecraft.client.gui.screen.Screen
- *  net.minecraft.client.util.math.MatrixStack
- *  net.minecraft.client.render.VertexConsumerProvider.Immediate
- *  net.minecraft.block.enums.CameraSubmersionType
- *  net.minecraft.client.world.ClientWorld
- *  net.minecraft.client.world.ClientWorld.Properties
- *  net.minecraft.client.render.GameRenderer
- *  org.jetbrains.annotations.NotNull
- *  org.jetbrains.annotations.Nullable
- *  org.joml.Matrix4f
- *  org.joml.Matrix4fc
- */
 package rtx.kimiko.api.modules.impl.Visuals;
 
 import java.awt.Color;
 import java.util.List;
-import kotlin.Metadata;
-import kotlin.collections.CollectionsKt;
 import kotlin.jvm.JvmStatic;
 import kotlin.jvm.internal.DefaultConstructorMarker;
 import kotlin.jvm.internal.Intrinsics;
@@ -88,7 +54,6 @@ import sigil.protect.Level;
 import sigil.protect.Protect;
 
 @Feature(value={"fullbright", "timechanger", "weather"})
-@Metadata(mv={2, 4, 0}, k=1, xi=48, d1={"\u0000\u00f0\u0001\n\u0002\u0018\u0002\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0010\u000b\n\u0002\b\u0002\n\u0002\u0010\u0002\n\u0000\n\u0002\u0010\u000e\n\u0002\b\u0003\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0004\n\u0002\u0010\u0007\n\u0002\b\u000b\n\u0002\u0010\b\n\u0002\b\n\n\u0002\u0010\t\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0003\n\u0002\u0018\u0002\n\u0002\b\u0003\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\b\u0006\n\u0002\u0018\u0002\n\u0002\b\b\n\u0002\u0018\u0002\n\u0002\u0018\u0002\n\u0002\b\u0005\n\u0002\u0018\u0002\n\u0002\b\u0004\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\b\b\n\u0002\u0018\u0002\n\u0002\b\u0003\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\b\u0004\n\u0002\u0018\u0002\n\u0002\b\u0003\n\u0002\u0018\u0002\n\u0002\b$\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\b\u0007\n\u0002\u0010\u0014\n\u0002\b\u000f\n\u0002\u0018\u0002\n\u0002\b\u0003\b\u0007\u0018\u0000 \u00b7\u00012\u00020\u0001:\u0002\u00b7\u0001B\u0007\u00a2\u0006\u0004\b\u0002\u0010\u0003J\u000f\u0010\u0005\u001a\u00020\u0004H\u0002\u00a2\u0006\u0004\b\u0005\u0010\u0006J\r\u0010\b\u001a\u00020\u0007\u00a2\u0006\u0004\b\b\u0010\u0003J\r\u0010\n\u001a\u00020\t\u00a2\u0006\u0004\b\n\u0010\u000bJ'\u0010\u0011\u001a\u00020\u00072\u0006\u0010\f\u001a\u00020\tH\u0007b\u000e\b\r\u0012\n\b\u000e\u0012\u0006\b\n0\u000f8\u0010\u00a2\u0006\u0004\b\u0011\u0010\u0012J\u000f\u0010\u0013\u001a\u00020\u0007H\u0002\u00a2\u0006\u0004\b\u0013\u0010\u0003J\r\u0010\u0015\u001a\u00020\u0014\u00a2\u0006\u0004\b\u0015\u0010\u0016J\r\u0010\u0017\u001a\u00020\u0014\u00a2\u0006\u0004\b\u0017\u0010\u0016J\r\u0010\u0018\u001a\u00020\u0004\u00a2\u0006\u0004\b\u0018\u0010\u0006J\r\u0010\u0019\u001a\u00020\u0014\u00a2\u0006\u0004\b\u0019\u0010\u0016J\r\u0010\u001a\u001a\u00020\u0014\u00a2\u0006\u0004\b\u001a\u0010\u0016J\r\u0010\u001b\u001a\u00020\u0014\u00a2\u0006\u0004\b\u001b\u0010\u0016J\r\u0010\u001c\u001a\u00020\u0004\u00a2\u0006\u0004\b\u001c\u0010\u0006J\r\u0010\u001d\u001a\u00020\u0004\u00a2\u0006\u0004\b\u001d\u0010\u0006J\r\u0010\u001e\u001a\u00020\u0004\u00a2\u0006\u0004\b\u001e\u0010\u0006J\u000f\u0010\u001f\u001a\u00020\u0014H\u0016\u00a2\u0006\u0004\b\u001f\u0010\u0016J\r\u0010!\u001a\u00020 \u00a2\u0006\u0004\b!\u0010\"J\r\u0010#\u001a\u00020\u0014\u00a2\u0006\u0004\b#\u0010\u0016J\r\u0010$\u001a\u00020\u0014\u00a2\u0006\u0004\b$\u0010\u0016J\r\u0010%\u001a\u00020 \u00a2\u0006\u0004\b%\u0010\"J\r\u0010&\u001a\u00020\u0004\u00a2\u0006\u0004\b&\u0010\u0006J\r\u0010'\u001a\u00020 \u00a2\u0006\u0004\b'\u0010\"J\r\u0010(\u001a\u00020 \u00a2\u0006\u0004\b(\u0010\"J\r\u0010)\u001a\u00020 \u00a2\u0006\u0004\b)\u0010\"J\r\u0010*\u001a\u00020\u0014\u00a2\u0006\u0004\b*\u0010\u0016J\r\u0010,\u001a\u00020+\u00a2\u0006\u0004\b,\u0010-J!\u00102\u001a\u00020\u00072\b\u0010/\u001a\u0004\u0018\u00010.2\b\u00101\u001a\u0004\u0018\u000100\u00a2\u0006\u0004\b2\u00103J!\u00106\u001a\u0004\u0018\u000104H\u0007b\u000e\b\r\u0012\n\b\u000e\u0012\u0006\b\n0\u000f85\u00a2\u0006\u0004\b6\u00107J5\u0010?\u001a\u00020\u00072\b\u00109\u001a\u0004\u0018\u0001082\b\u0010;\u001a\u0004\u0018\u00010:2\b\u0010<\u001a\u0004\u0018\u00010:2\b\u0010>\u001a\u0004\u0018\u00010=\u00a2\u0006\u0004\b?\u0010@J=\u0010B\u001a\u00020\u00072\b\u00109\u001a\u0004\u0018\u0001082\b\u0010;\u001a\u0004\u0018\u00010:2\b\u0010<\u001a\u0004\u0018\u00010:2\b\u0010>\u001a\u0004\u0018\u00010=2\u0006\u0010A\u001a\u00020\u0014\u00a2\u0006\u0004\bB\u0010CJ\u0015\u0010F\u001a\u00020\u00072\u0006\u0010E\u001a\u00020D\u00a2\u0006\u0004\bF\u0010GJ\u0015\u0010H\u001a\u00020\u00072\u0006\u0010E\u001a\u00020D\u00a2\u0006\u0004\bH\u0010GJ\u0017\u0010I\u001a\u00020\u00142\u0006\u0010/\u001a\u00020.H\u0002\u00a2\u0006\u0004\bI\u0010JJ\r\u0010K\u001a\u00020\u0004\u00a2\u0006\u0004\bK\u0010\u0006J\u001f\u0010L\u001a\u00020\u0007H\u0015b\u000e\b\r\u0012\n\b\u000e\u0012\u0006\b\n0\u000f8\u0010\u00a2\u0006\u0004\bL\u0010\u0003J\u001b\u0010O\u001a\u00020\u00072\u0006\u0010E\u001a\u00020MH\u0007b\u0002\bN\u00a2\u0006\u0004\bO\u0010PJ\u000f\u0010Q\u001a\u00020\u0004H\u0002\u00a2\u0006\u0004\bQ\u0010\u0006J\u001f\u0010R\u001a\u00020\u00072\u0006\u0010/\u001a\u00020.2\u0006\u00101\u001a\u000200H\u0002\u00a2\u0006\u0004\bR\u00103J\u000f\u0010S\u001a\u00020\u0007H\u0002\u00a2\u0006\u0004\bS\u0010\u0003J'\u0010W\u001a\u00020\u00072\u0006\u0010U\u001a\u00020TH\u0003b\u000e\b\r\u0012\n\b\u000e\u0012\u0006\b\n0\u000f8V\u00a2\u0006\u0004\bW\u0010XR\u0014\u0010Z\u001a\u00020Y8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bZ\u0010[R\u0014\u0010]\u001a\u00020\\8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b]\u0010^R\u0014\u0010`\u001a\u00020_8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b`\u0010aR\u0014\u0010b\u001a\u00020Y8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bb\u0010[R\u0014\u0010c\u001a\u00020\\8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bc\u0010^R\u0014\u0010d\u001a\u00020Y8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bd\u0010[R\u0014\u0010e\u001a\u00020_8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\be\u0010aR\u0014\u0010f\u001a\u00020_8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bf\u0010aR\u0014\u0010g\u001a\u00020Y8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bg\u0010[R\u0014\u0010i\u001a\u00020h8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bi\u0010jR\u0014\u0010k\u001a\u00020\\8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bk\u0010^R\u0014\u0010m\u001a\u00020l8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bm\u0010nR\u0014\u0010p\u001a\u00020o8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bp\u0010qR\u0014\u0010r\u001a\u00020\\8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\br\u0010^R\u0014\u0010s\u001a\u00020h8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bs\u0010jR\u0014\u0010u\u001a\u00020t8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bu\u0010vR\u0014\u0010w\u001a\u00020t8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\bw\u0010vR\u0014\u0010y\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\by\u0010zR\u0014\u0010{\u001a\u00020Y8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b{\u0010[R\u0014\u0010|\u001a\u00020h8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b|\u0010jR\u0014\u0010}\u001a\u00020\\8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b}\u0010^R\u0014\u0010~\u001a\u00020t8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b~\u0010vR\u0014\u0010\u007f\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b\u007f\u0010zR\u0016\u0010\u0080\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0080\u0001\u0010zR\u0016\u0010\u0081\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0081\u0001\u0010zR\u0016\u0010\u0082\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0082\u0001\u0010zR\u0016\u0010\u0083\u0001\u001a\u00020Y8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0083\u0001\u0010[R\u0016\u0010\u0084\u0001\u001a\u00020h8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0084\u0001\u0010jR\u0016\u0010\u0085\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0085\u0001\u0010zR\u0016\u0010\u0086\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0086\u0001\u0010zR\u0016\u0010\u0087\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0087\u0001\u0010zR\u0016\u0010\u0088\u0001\u001a\u00020Y8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0088\u0001\u0010[R\u0016\u0010\u0089\u0001\u001a\u00020h8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0089\u0001\u0010jR\u0016\u0010\u008a\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u008a\u0001\u0010zR\u0016\u0010\u008b\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u008b\u0001\u0010zR\u0016\u0010\u008c\u0001\u001a\u00020\\8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u008c\u0001\u0010^R\u0016\u0010\u008d\u0001\u001a\u00020Y8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u008d\u0001\u0010[R\u0016\u0010\u008e\u0001\u001a\u00020h8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u008e\u0001\u0010jR\u0016\u0010\u008f\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u008f\u0001\u0010zR\u0016\u0010\u0090\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0090\u0001\u0010zR\u0016\u0010\u0091\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0091\u0001\u0010zR\u0016\u0010\u0092\u0001\u001a\u00020h8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0092\u0001\u0010jR\u0016\u0010\u0093\u0001\u001a\u00020Y8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0093\u0001\u0010[R\u0016\u0010\u0094\u0001\u001a\u00020h8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0094\u0001\u0010jR\u0016\u0010\u0095\u0001\u001a\u00020\\8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0095\u0001\u0010^R\u0016\u0010\u0096\u0001\u001a\u00020t8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0096\u0001\u0010vR\u0016\u0010\u0097\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0097\u0001\u0010zR\u0016\u0010\u0098\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0098\u0001\u0010zR\u0016\u0010\u0099\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u0099\u0001\u0010zR\u0016\u0010\u009a\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u009a\u0001\u0010zR\u0016\u0010\u009b\u0001\u001a\u00020x8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u009b\u0001\u0010zR\u0016\u0010\u009c\u0001\u001a\u00020h8\u0002X\u0082\u0004\u00a2\u0006\u0007\n\u0005\b\u009c\u0001\u0010jR\u0018\u0010\u009e\u0001\u001a\u00030\u009d\u00018\u0002X\u0082\u0004\u00a2\u0006\b\n\u0006\b\u009e\u0001\u0010\u009f\u0001R\u0018\u0010\u00a1\u0001\u001a\u00030\u00a0\u00018\u0002X\u0082\u0004\u00a2\u0006\b\n\u0006\b\u00a1\u0001\u0010\u00a2\u0001R\u0019\u0010\u00a3\u0001\u001a\u00020+8\u0002@\u0002X\u0082\u000e\u00a2\u0006\b\n\u0006\b\u00a3\u0001\u0010\u00a4\u0001R\u0019\u0010\u00a5\u0001\u001a\u00020+8\u0002@\u0002X\u0082\u000e\u00a2\u0006\b\n\u0006\b\u00a5\u0001\u0010\u00a4\u0001R\u0017\u0010\u00a6\u0001\u001a\u00020:8\u0002X\u0082\u0004\u00a2\u0006\b\n\u0006\b\u00a6\u0001\u0010\u00a7\u0001R\u0018\u0010\u00a9\u0001\u001a\u00030\u00a8\u00018\u0002X\u0082\u0004\u00a2\u0006\b\n\u0006\b\u00a9\u0001\u0010\u00aa\u0001R\u0017\u0010«\u0001\u001a\u00020:8\u0002X\u0082\u0004\u00a2\u0006\b\n\u0006\b«\u0001\u0010\u00a7\u0001R\u0017\u0010\u00ac\u0001\u001a\u00020:8\u0002X\u0082\u0004\u00a2\u0006\b\n\u0006\b\u00ac\u0001\u0010\u00a7\u0001R\u0018\u0010\u00ad\u0001\u001a\u00030\u00a8\u00018\u0002X\u0082\u0004\u00a2\u0006\b\n\u0006\b\u00ad\u0001\u0010\u00aa\u0001R\u0019\u0010\u00ae\u0001\u001a\u00020\u00048\u0002@\u0002X\u0082\u000e\u00a2\u0006\b\n\u0006\b\u00ae\u0001\u0010\u00af\u0001R\u0019\u0010\u00b0\u0001\u001a\u00020\u00048\u0002@\u0002X\u0082\u000e\u00a2\u0006\b\n\u0006\b\u00b0\u0001\u0010\u00af\u0001R\u0019\u0010\u00b1\u0001\u001a\u00020\u00148\u0002@\u0002X\u0082\u000e\u00a2\u0006\b\n\u0006\b\u00b1\u0001\u0010\u00b2\u0001R\u0019\u0010\u00b3\u0001\u001a\u00020\u00148\u0002@\u0002X\u0082\u000e\u00a2\u0006\b\n\u0006\b\u00b3\u0001\u0010\u00b2\u0001R\u001b\u0010\u00b4\u0001\u001a\u0004\u0018\u00010.8\u0002@\u0002X\u0082\u000e\u00a2\u0006\b\n\u0006\b\u00b4\u0001\u0010\u00b5\u0001R\u0019\u0010\u00b6\u0001\u001a\u00020+8\u0002@\u0002X\u0082\u000e\u00a2\u0006\b\n\u0006\b\u00b6\u0001\u0010\u00a4\u0001\u00ca\u0001\u001f\b\u00b8\u0001\u0012\u001a\b\u000e\u0012\u0016\b\fJ\u0005\b\b(\u00b9\u0001J\u0005\b\b(\u00ba\u0001J\u0004\b\b(c\u00a8\u0006»\u0001"}, d2={"Lrtx/kimiko/api/modules/impl/Visuals/Ambience;", "Lrtx/kimiko/api/modules/Module;", "<init>", "()V", "", "userSkyVisible", "()Z", "", "refreshUserShaderOptions", "", "userSkyShaderName", "()Ljava/lang/String;", "name", "Lsigil/protect/Protect;", "value", "Lsigil/protect/Level;", "CROWN", "applyUserShader", "(Ljava/lang/String;)V", "openShaderEditor", "", "getBrightnessValue", "()F", "getSaturationFactor", "isWindActive", "getWindGrassStrength", "getWindLeavesStrength", "getWindSpeed", "hasWindGusts", "isCustomSkyActive", "isCustomFogActive", "fadeOutSeconds", "", "fogColorRGB", "()I", "fogDistanceFactor", "fogSkyEndFactor", "skyTypeIndex", "skyUsesClientColor", "skyColorRGB", "skyColor2RGB", "skyGradientMode", "skyBrightness", "", "getInternalTime", "()J", "Lnet/minecraft/ClientWorld;", "level", "Lnet/minecraft/ClientWorld$Properties;", "levelData", "syncWeather", "(Lnet/minecraft/ClientWorld;Lnet/minecraft/ClientWorld$Properties;)V", "Lnet/minecraft/Biome$Precipitation;", "MAX", "getForcedPrecipitation", "()Lnet/minecraft/Biome$Precipitation;", "Lnet/minecraft/Framebuffer;", "renderTarget", "Lorg/joml/Matrix4f;", "positionMatrix", "projectionMatrix", "Lnet/minecraft/Camera;", "camera", "onAfterWorldFog", "(Lnet/minecraft/Framebuffer;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lnet/minecraft/Camera;)V", "partialTick", "onAfterWorldWetWorld", "(Lnet/minecraft/Framebuffer;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lnet/minecraft/Camera;F)V", "Lrtx/kimiko/api/events/impl/render/WorldRenderEvent;", "event", "renderRainfall", "(Lrtx/kimiko/api/events/impl/render/WorldRenderEvent;)V", "renderFireflies", "fireflyPresence", "(Lnet/minecraft/ClientWorld;)F", "shouldHideVanillaWeather", "onDisable", "Lrtx/kimiko/api/events/impl/network/PacketEvent;", "Lrtx/kimiko/api/events/EventHandler;", "onPacket", "(Lrtx/kimiko/api/events/impl/network/PacketEvent;)V", "shouldForcePrecipitation", "restoreWeather", "clearWeatherSnapshot", "Lnet/minecraft/GameStateChangeS2CPacket;", "packet", "STD", "updateCachedWeather", "(Lnet/minecraft/GameStateChangeS2CPacket;)V", "Lrtx/kimiko/api/modules/settings/impl/SeparatorSetting;", "timeSeparator", "Lrtx/kimiko/api/modules/settings/impl/SeparatorSetting;", "Lrtx/kimiko/api/modules/settings/impl/ModeSetting;", "mode", "Lrtx/kimiko/api/modules/settings/impl/ModeSetting;", "Lrtx/kimiko/api/modules/settings/impl/NumberSetting;", "customTime", "Lrtx/kimiko/api/modules/settings/impl/NumberSetting;", "weatherSeparator", "weather", "lightSeparator", "saturation", "brightness", "skySeparator", "Lrtx/kimiko/api/modules/settings/impl/BooleanSetting;", "customSky", "Lrtx/kimiko/api/modules/settings/impl/BooleanSetting;", "skyType", "Lrtx/kimiko/api/modules/settings/impl/SelectSetting;", "userShader", "Lrtx/kimiko/api/modules/settings/impl/SelectSetting;", "Lrtx/kimiko/api/modules/settings/impl/ButtonSetting;", "shaderEditor", "Lrtx/kimiko/api/modules/settings/impl/ButtonSetting;", "skyColorMode", "skySecondColor", "Lrtx/kimiko/api/modules/settings/impl/ColorSetting;", "skyColor", "Lrtx/kimiko/api/modules/settings/impl/ColorSetting;", "skyColor2", "Lrtx/kimiko/api/modules/settings/impl/SliderSetting;", "skyBrightnessLevel", "Lrtx/kimiko/api/modules/settings/impl/SliderSetting;", "fogSeparator", "customFog", "fogColorMode", "fogColor", "fogDensity", "fogBase", "fogPressed", "fogSkyHaze", "rainFxSeparator", "customRain", "rainRipples", "rainDropDensity", "rainDropSpeed", "wetWorldSeparator", "wetWorld", "wetReflection", "wetAmount", "wetQuality", "windSeparator", "wind", "windGrassStrength", "windLeavesStrength", "windSpeed", "windGusts", "firefliesSeparator", "fireflies", "fireflyColorMode", "fireflyColor", "fireflyCount", "fireflyRadius", "fireflySize", "fireflyGlow", "fireflySpeed", "fireflyNightOnly", "Lrtx/kimiko/api/modules/impl/Visuals/rain/RainfallRenderer;", "rainfall", "Lrtx/kimiko/api/modules/impl/Visuals/rain/RainfallRenderer;", "Lrtx/kimiko/api/modules/impl/Visuals/fireflies/FireflyField;", "fireflyField", "Lrtx/kimiko/api/modules/impl/Visuals/fireflies/FireflyField;", "lastFireflyNanos", "J", "lastRainfallNanos", "fogInvViewProj", "Lorg/joml/Matrix4f;", "", "fogUniform", "[F", "wetViewProj", "wetInvViewProj", "wetUniform", "weatherOverrideActive", "Z", "cachedServerRaining", "cachedServerRainLevel", "F", "cachedServerThunderLevel", "weatherSnapshotLevel", "Lnet/minecraft/ClientWorld;", "lastShaderScanMs", "Companion", "Lrtx/kimiko/api/liteapi/Feature;", "fullbright", "timechanger", "rtx.kimiko:kimiko"})
 public final class Ambience
 extends Module {
     @NotNull
@@ -129,6 +94,18 @@ extends Module {
     private final ColorSetting skyColor2;
     @NotNull
     private final SliderSetting skyBrightnessLevel;
+    @NotNull
+    private final ModeSetting bhPalette;
+    @NotNull
+    private final SliderSetting bhTemperature;
+    @NotNull
+    private final SliderSetting bhSpin;
+    @NotNull
+    private final SliderSetting bhActivity;
+    @NotNull
+    private final SliderSetting bhLensing;
+    @NotNull
+    private final SliderSetting bhJets;
     @NotNull
     private final SeparatorSetting fogSeparator;
     @NotNull
@@ -238,6 +215,12 @@ extends Module {
     @NotNull
     private static final String NO_SHADERS = "Нет шейдеров";
     private static final long SHADER_RESCAN_MS = 1200L;
+    @NotNull
+    private static final String BH_PALETTE_THEME = "Тема";
+    @NotNull
+    private static final String BH_PALETTE_REAL = "Реальная";
+    @NotNull
+    private static final String BH_PALETTE_MIXED = "Смешанная";
 
     public Ambience() {
         super("Ambience", "Изменяет время, погоду и атмосферу мира.", Category.VISUALS);
@@ -262,6 +245,13 @@ extends Module {
         this.skyColor = (ColorSetting)this.register((Setting)new ColorSetting("Цвет неба 1", "Основной цвет неба.", new Color(90, 255, 150, 255)).visibleWhen(() -> Ambience.skyColor$lambda$0(this)));
         this.skyColor2 = (ColorSetting)this.register((Setting)new ColorSetting("Цвет неба 2", "Второй цвет неба.", new Color(120, 90, 255, 255)).visibleWhen(() -> Ambience.skyColor2$lambda$0(this)));
         this.skyBrightnessLevel = (SliderSetting)this.register((Setting)new SliderSetting("Яркость неба", "Насколько ярко светится кастомное небо.").range(10.0f, 200.0f).increment(1.0f).setValue(100.0f).visible(() -> Ambience.skyBrightnessLevel$lambda$0(this)));
+        stringArray = new String[]{BH_PALETTE_THEME, BH_PALETTE_REAL, BH_PALETTE_MIXED};
+        this.bhPalette = (ModeSetting)this.register((Setting)new ModeSetting("Палитра дыры", "Тема — цвета клиента. Реальная — физика: температура газа, доплер, красное смещение. Смешанная — реальная физика с оттенком темы.", BH_PALETTE_MIXED, stringArray).visibleWhen(() -> Ambience.bhVisible(this)));
+        this.bhTemperature = (SliderSetting)this.register((Setting)new SliderSetting("Температура диска", "Холоднее — красно-оранжевый газ, горячее — бело-голубой.").range(0.0f, 100.0f).increment(1.0f).setValue(50.0f).visible(() -> Ambience.bhTemperature$lambda$0(this)));
+        this.bhSpin = (SliderSetting)this.register((Setting)new SliderSetting("Скорость вращения", "Как быстро вращается аккреционный диск.").range(0.0f, 200.0f).increment(1.0f).setValue(100.0f).visible(() -> Ambience.bhVisible(this)));
+        this.bhActivity = (SliderSetting)this.register((Setting)new SliderSetting("Активность", "Вспышки, горячие пятна, мерцание кольца и пульсации джетов.").range(0.0f, 200.0f).increment(1.0f).setValue(100.0f).visible(() -> Ambience.bhVisible(this)));
+        this.bhLensing = (SliderSetting)this.register((Setting)new SliderSetting("Линзирование звёзд", "Насколько сильно дыра искривляет свет звёзд в кольцо Эйнштейна.").range(0.0f, 200.0f).increment(1.0f).setValue(100.0f).visible(() -> Ambience.bhVisible(this)));
+        this.bhJets = (SliderSetting)this.register((Setting)new SliderSetting("Джеты", "Релятивистские струи плазмы из полюсов. 0 — выключены.").range(0.0f, 200.0f).increment(1.0f).setValue(70.0f).visible(() -> Ambience.bhVisible(this)));
         this.fogSeparator = (SeparatorSetting)this.register((Setting)new SeparatorSetting("Туман"));
         this.customFog = (BooleanSetting)this.register((Setting)new BooleanSetting("Кастомный туман", "Свой объёмный туман со слоями, не зависящий от освещения мира.", true));
         stringArray = new String[]{"Тема", "Свой"};
@@ -500,6 +490,37 @@ extends Module {
 
     public final float skyBrightness() {
         return this.skyBrightnessLevel.getFloat() / 100.0f;
+    }
+
+    /** 0 = тема, 1 = реальная, 2 = смешанная. */
+    public final int bhPaletteIndex() {
+        if (this.bhPalette.is(BH_PALETTE_THEME)) {
+            return 0;
+        }
+        if (this.bhPalette.is(BH_PALETTE_REAL)) {
+            return 1;
+        }
+        return 2;
+    }
+
+    public final float bhTemperature() {
+        return this.bhTemperature.getFloat() / 100.0f;
+    }
+
+    public final float bhSpin() {
+        return this.bhSpin.getFloat() / 100.0f;
+    }
+
+    public final float bhActivity() {
+        return this.bhActivity.getFloat() / 100.0f;
+    }
+
+    public final float bhLensing() {
+        return this.bhLensing.getFloat() / 100.0f;
+    }
+
+    public final float bhJets() {
+        return this.bhJets.getFloat() / 100.0f;
     }
 
     public final long getInternalTime() {
@@ -870,6 +891,14 @@ extends Module {
         return this$0.customSky.getValue();
     }
 
+    private static final Boolean bhVisible(Ambience this$0) {
+        return this$0.customSky.getValue() && this$0.skyType.is("Чёрная дыра");
+    }
+
+    private static final Boolean bhTemperature$lambda$0(Ambience this$0) {
+        return this$0.customSky.getValue() && this$0.skyType.is("Чёрная дыра") && !this$0.bhPalette.is(BH_PALETTE_THEME);
+    }
+
     private static final Boolean fogColorMode$lambda$0(Ambience this$0) {
         return this$0.customFog.getValue();
     }
@@ -976,7 +1005,6 @@ extends Module {
         return Companion.getInstance();
     }
 
-    @Metadata(mv={2, 4, 0}, k=1, xi=48, d1={"\u0000>\n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0000\n\u0002\u0010\u000b\n\u0002\b\u0002\n\u0002\u0010\u0007\n\u0002\b\u0002\n\u0002\u0010\u000e\n\u0002\b\b\n\u0002\u0010\t\n\u0002\b\b\b\u0086\u0003\u0018\u00002\u00020\u0001B\t\b\u0002\u00a2\u0006\u0004\b\u0002\u0010\u0003J\u0015\u0010\u0006\u001a\u0004\u0018\u00010\u0004H\u0007b\u0002\b\u0005\u00a2\u0006\u0004\b\u0006\u0010\u0007J\u0017\u0010\u000b\u001a\u00020\n2\u0006\u0010\t\u001a\u00020\bH\u0002\u00a2\u0006\u0004\b\u000b\u0010\fR\u0014\u0010\u000e\u001a\u00020\r8\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u000e\u0010\u000fR\u0014\u0010\u0011\u001a\u00020\u00108\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u0011\u0010\u0012R\u0014\u0010\u0013\u001a\u00020\u00108\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u0013\u0010\u0012R\u0014\u0010\u0014\u001a\u00020\u00108\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u0014\u0010\u0012R\u0014\u0010\u0015\u001a\u00020\r8\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u0015\u0010\u000fR\u0014\u0010\u0016\u001a\u00020\r8\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u0016\u0010\u000fR\u0014\u0010\u0017\u001a\u00020\r8\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u0017\u0010\u000fR\u0014\u0010\u0018\u001a\u00020\r8\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u0018\u0010\u000fR\u0014\u0010\u001a\u001a\u00020\u00198\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u001a\u0010\u001bR\u0014\u0010\u001c\u001a\u00020\u00198\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u001c\u0010\u001bR\u0014\u0010\u001d\u001a\u00020\u00198\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u001d\u0010\u001bR\u0014\u0010\u001e\u001a\u00020\u00198\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u001e\u0010\u001bR\u0014\u0010\u001f\u001a\u00020\u00108\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u001f\u0010\u0012R\u0014\u0010 \u001a\u00020\u00198\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b \u0010\u001b\u00a8\u0006!"}, d2={"Lrtx/kimiko/api/modules/impl/Visuals/Ambience.Companion;", "", "<init>", "()V", "Lrtx/kimiko/api/modules/impl/Visuals/Ambience;", "Lkotlin/jvm/JvmStatic;", "getInstance", "()Lrtx/kimiko/api/modules/impl/Visuals/Ambience;", "Lnet/minecraft/GameStateChangeS2CPacket$Reason;", "type", "", "isWeatherPacket", "(Lnet/minecraft/GameStateChangeS2CPacket$Reason;)Z", "", "FOG_LAYERS", "F", "", "WET_QUALITY_LOW", "Ljava/lang/String;", "WET_QUALITY_MEDIUM", "WET_QUALITY_HIGH", "WET_GLOSS", "WET_HIT_THICKNESS", "WET_MAX_DISTANCE", "FIREFLY_BASE_SIZE", "", "FIREFLY_DAWN_START", "J", "FIREFLY_DAWN_END", "FIREFLY_DUSK_START", "FIREFLY_DUSK_END", "NO_SHADERS", "SHADER_RESCAN_MS", "rtx.kimiko:kimiko"})
     public static final class Companion {
         private Companion() {
         }
@@ -996,4 +1024,3 @@ extends Module {
         }
     }
 }
-
