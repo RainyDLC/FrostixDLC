@@ -43,7 +43,10 @@ import rtx.kimiko.utils.render.render2d.ThemeWaveUniform;
  *    на пикселях с геометрией, а там в буфере и так уже лежит сцена;
  *  - для аврор/звездопада/своего шейдера строятся только 3 уровня bloom из 6 —
  *    composite для них читает только Bloom0..2, остальные 3 прохода были впустую;
- *  - сам шейдер чёрной дыры ускорен (см. CustomskyFastShaders).
+ *  - сам шейдер чёрной дыры ускорен (см. CustomskyFastShaders);
+ *  - v5: composite получает NoiseTex (туманность чёрной дыры берёт шум из текстуры, а не из 8 хешей
+ *    на каждый value-noise на полном разрешении). Текстура шума 256x256 создаётся один раз для всех типов неба,
+ *    потому что composite общий и сэмплер должен быть привязан всегда.
  *
  * Uniform SkyParams (std140):
  *  0 invViewProj | 64 misc | 80 skyColor | 96 skyColor2 | 112 taa | 128 prevViewProj
@@ -185,8 +188,9 @@ public final class CustomSkyRenderer {
         boolean hdr = type == TYPE_BLACKHOLE;
         INSTANCE.init(type);
         RenderPipeline marchPipeline = type == TYPE_USER ? UserSkyManager.activePipeline() : marchPipelines[type];
+        // NoiseTex нужен и composite (туманность), поэтому проверяем для всех типов
         if (marchPipeline == null || compositePipeline == null || bloomPipeline == null || uniformBuffer == null
-                || bloomUniformBuffer == null || (hdr && noiseTextureView == null)
+                || bloomUniformBuffer == null || noiseTextureView == null
                 || !INSTANCE.ensureTargets(renderTarget.textureWidth, renderTarget.textureHeight, INSTANCE.resScale(type))) {
             return;
         }
@@ -278,6 +282,7 @@ public final class CustomSkyRenderer {
                 for (int level = 0; level < BLOOM_LEVELS; ++level) {
                     pass.bindTexture("Bloom" + level, bloomTextureViews[level], RenderSampler.linear());
                 }
+                pass.bindTexture("NoiseTex", noiseTextureView, RenderSampler.linearRepeat());
                 pass.draw(0, 6);
             }
 
@@ -355,6 +360,7 @@ public final class CustomSkyRenderer {
                 for (int level = 0; level < BLOOM_LEVELS; ++level) {
                     builder.withSampler("Bloom" + level);
                 }
+                builder.withSampler("NoiseTex");
                 compositePipeline = RenderPipelines.register(builder.withBlend(BlendFunction.TRANSLUCENT)
                         .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
                         .withDepthWrite(false)
@@ -384,9 +390,8 @@ public final class CustomSkyRenderer {
                 this.closeUniform();
                 uniformBuffer = RenderSystem.getDevice().createBuffer(() -> "kimiko:customsky_uniforms", 136, (long) UNIFORM_SIZE);
             }
-            if (type == TYPE_BLACKHOLE) {
-                this.ensureNoiseTexture();
-            }
+            // composite общий для всех типов и читает NoiseTex -> текстура нужна всегда (256x256, создаётся один раз)
+            this.ensureNoiseTexture();
         } catch (Throwable throwable) {
             disabledAfterError = true;
             for (int i = 0; i < TYPE_COUNT; ++i) {

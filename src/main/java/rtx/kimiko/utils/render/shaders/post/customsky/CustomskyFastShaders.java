@@ -33,7 +33,15 @@ import org.jetbrains.annotations.NotNull;
  *  - анаморфный блик вдоль плоскости диска;
  *  - тонмаппинг с сохранением оттенка + немного насыщенности: яркий диск не выгорает в плоский белый;
  *  - дефолтная температура диска чуть теплее (золото -> бело-голубой).
- *  Стоимость: туманность и блик только в composite на пикселях неба, марш почти не подорожал.
+ *
+ * v5, PERF без потери качества:
+ *  - composite (полное разрешение!): туманность = 4 fbm x 5 октав = 20 value-noise на пиксель, каждый был
+ *    8 хешей + 7 mix. Теперь это одна выборка из NoiseTex (тот же сглаженный value noise, что и в диске):
+ *    туманность стала в разы дешевле, вид тот же;
+ *  - марш: лучи с прицельным параметром > 7.25 не маршируются вообще. Они не доходят ни до диска (r <= 7),
+ *    ни до дымки (r < 6), изгиб у них << порога фотонного кольца, так что результат и раньше был ровно 0;
+ *  - марш: в пустой оболочке 7 < r < 8 шаг сразу до края диска (с тем же dither), а не по 0.08 в слое диска;
+ *  - sqrt(r2) один раз за шаг вместо двух.
  */
 public final class CustomskyFastShaders {
     private CustomskyFastShaders() {
@@ -84,6 +92,11 @@ public final class CustomskyFastShaders {
             const float R_FINE = 2.5;
             const float Y_BAND = 0.30;
             const float STEP_MAX = 0.45;
+
+            // за DISC_OUTER ничего не рисуется (GasDisc: r > 7 -> return, Haze: r > 6 -> return)
+            const float DISC_OUTER = 7.0;
+            // лучи с прицельным параметром больше этого не доходят до r < 7 даже с учётом изгиба (~0.02)
+            const float IMPACT_CULL = 7.25;
 
             const float DISC_INNER = 0.55;
             const float DISC_WIDTH = 5.3;
@@ -188,7 +201,7 @@ public final class CustomskyFastShaders {
             void GasDisc(inout vec3 color, inout float alpha, vec3 pos, float distFromCenter, float time, vec3 mainColor,
                          float aa, vec3 eyevec) {
                 float distFromDisc = pos.y;
-                if (distFromCenter > 7.0 || abs(distFromDisc) > DISC_BAND) {
+                if (distFromCenter > DISC_OUTER || abs(distFromDisc) > DISC_BAND) {
                     return;
                 }
                 float radialGradient = 1.0 - clamp((distFromCenter - DISC_INNER) / DISC_WIDTH * 0.5, 0.0, 1.0);
@@ -402,21 +415,29 @@ public final class CustomskyFastShaders {
                 float impact = length(cross(pos, eyevec));
                 float along = dot(pos, eyevec);
 
-                if (impact < ENTRY_R && along < 0.0) {
+                // PERF: лучи с impact >= IMPACT_CULL и раньше давали ровно 0 (не доходят до диска/дымки,
+                // изгиб ~0.03 рад << порога фотонного кольца 0.9), поэтому их просто не маршируем.
+                if (impact < IMPACT_CULL && along < 0.0) {
                     float tEnter = -along - sqrt(max(0.0, ENTRY_R * ENTRY_R - impact * impact));
                     float dither = fract(hash21(gl_FragCoord.xy) + taa.w);
                     vec3 raypos = pos + eyevec * (tEnter + dither * STEP);
                     float r2 = dot(raypos, raypos);
+                    float r = sqrt(r2);
                     float bandEdge = Y_BAND + dither * STEP;
+                    // край пустой оболочки с тем же dither, чтобы сетка сэмплов в диске не выстраивалась в кольца
+                    float shellEdge = DISC_OUTER + dither * STEP;
                     float traveled = 0.0;
 
                     for (int i = 0; i < ITERATIONS; i++) {
-                        float sd = sqrt(r2);
+                        float sd = r;
 
                         float s = STEP;
                         if (sd > R_FINE) {
                             float ay = abs(raypos.y);
                             float sy = ay > bandEdge ? 0.9 * (ay - bandEdge) / max(abs(eyevec.y), 0.25) : 0.0;
+                            // PERF: при r > 7 ничего не рисуется, можно шагать до края диска даже внутри слоя
+                            // (|raypos + s*e| >= sd - s >= shellEdge, т.е. в диск не перескочим)
+                            sy = max(sy, sd - shellEdge);
                             s = clamp(min(sd - R_FINE, sy), STEP, STEP_MAX);
                         }
                         s = min(s, FAR - traveled);
@@ -427,7 +448,7 @@ public final class CustomskyFastShaders {
                         traveled += s;
 
                         r2 = dot(raypos, raypos);
-                        float r = sqrt(r2);
+                        r = sqrt(r2);
                         GasDisc(color, alpha, raypos, r, time, mainColor, aa, eyevec);
                         Haze(color, raypos, r2, alpha, hazeColor, w);
 
@@ -504,6 +525,7 @@ public final class CustomskyFastShaders {
             uniform sampler2D Bloom3;
             uniform sampler2D Bloom4;
             uniform sampler2D Bloom5;
+            uniform sampler2D NoiseTex;
 
             layout(std140) uniform SkyParams {
                 mat4 invViewProj;
@@ -547,20 +569,15 @@ public final class CustomskyFastShaders {
                 return vec3(p ^ (p >> 16U)) * (1.0 / vec3(0xffffffffU));
             }
 
-            float hash13(vec3 p) {
-                p = fract(p * 0.1031);
-                p += dot(p, p.zyx + 31.32);
-                return fract((p.x + p.y) * p.z);
-            }
-
+            // PERF v5: сглаженный value noise [0..1] одной выборкой из NoiseTex (G = R со сдвигом 37,17 по z-слою)
+            // вместо 8 хешей + 7 mix. Тот же тип шума, та же гладкость, но в разы дешевле на полном разрешении.
             float vnoise(vec3 x) {
-                vec3 i = floor(x);
+                vec3 p = floor(x);
                 vec3 f = fract(x);
                 f = f * f * (3.0 - 2.0 * f);
-                return mix(mix(mix(hash13(i), hash13(i + vec3(1, 0, 0)), f.x),
-                               mix(hash13(i + vec3(0, 1, 0)), hash13(i + vec3(1, 1, 0)), f.x), f.y),
-                           mix(mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), f.x),
-                               mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+                vec2 uv = (p.xy + vec2(37.0, 17.0) * p.z) + f.xy;
+                vec2 rg = textureLod(NoiseTex, (uv + 0.5) / 256.0, 0.0).yx;
+                return mix(rg.x, rg.y, f.z);
             }
 
             float fbm(vec3 p) {
