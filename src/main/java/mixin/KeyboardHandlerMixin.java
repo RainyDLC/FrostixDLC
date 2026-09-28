@@ -15,6 +15,7 @@ import rtx.kimiko.api.events.impl.input.KeyPressEvent;
 import rtx.kimiko.api.modules.ModuleManager;
 import rtx.kimiko.api.modules.impl.Interface.ClickGui;
 import rtx.kimiko.api.ui.UI;
+import rtx.kimiko.api.ui.horizon.HorizonGui;
 import rtx.kimiko.api.voice.VoiceBindManager;
 import rtx.kimiko.utils.sounds.Sounds;
 
@@ -28,8 +29,9 @@ public abstract class KeyboardHandlerMixin {
             } catch (Throwable ignored) {}
 
             int bind = 344;
+            ClickGui clickGui = null;
             try {
-                ClickGui clickGui = ClickGui.getInstance();
+                clickGui = ClickGui.getInstance();
                 if (clickGui == null && ModuleManager.get() != null) {
                     clickGui = ModuleManager.get().get(ClickGui.class);
                 }
@@ -38,10 +40,21 @@ public abstract class KeyboardHandlerMixin {
                 }
             } catch (Throwable ignored) {}
 
-            if (keyEvent.key() == 344 || (bind > 0 && keyEvent.key() == bind)) {
+            // пока Horizon ждёт клавишу для бинда, клавиша открытия меню тоже должна уйти в бинд
+            boolean horizonBinding = false;
+            try {
+                horizonBinding = HorizonGui.isBinding();
+            } catch (Throwable ignored) {}
+
+            if (!horizonBinding && (keyEvent.key() == 344 || (bind > 0 && keyEvent.key() == bind))) {
                 try {
                     MinecraftClient mc = MinecraftClient.getInstance();
                     if (mc != null) {
+                        if (mc.currentScreen == HorizonGui.INSTANCE) {
+                            HorizonGui.INSTANCE.close();
+                            ci.cancel();
+                            return;
+                        }
                         if (mc.currentScreen == UI.INSTANCE) {
                             UI.INSTANCE.close();
                             ci.cancel();
@@ -50,7 +63,11 @@ public abstract class KeyboardHandlerMixin {
                         boolean isBlocked = (mc.currentScreen instanceof ChatScreen
                                 || mc.currentScreen instanceof HandledScreen);
                         if (!isBlocked) {
-                            mc.setScreen((Screen)UI.INSTANCE);
+                            boolean horizon = true;
+                            try {
+                                horizon = clickGui == null || clickGui.useHorizon();
+                            } catch (Throwable ignored) {}
+                            mc.setScreen(horizon ? (Screen)HorizonGui.INSTANCE : (Screen)UI.INSTANCE);
                             try {
                                 Sounds.play("gui_open");
                             } catch (Throwable ignored) {}
