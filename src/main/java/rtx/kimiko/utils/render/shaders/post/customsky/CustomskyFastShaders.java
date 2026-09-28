@@ -21,8 +21,19 @@ import org.jetbrains.annotations.NotNull;
  *    с бегущими сгустками плазмы;
  *  - Скорость вращения, Активность (вспышки, горячие пятна, мерцание кольца, пульсации джетов),
  *    Линзирование звёзд.
- *  Стоимость: blackbody считается только если палитра не "Тема" и только на шагах внутри диска;
- *  джеты — аналитические, несколько ALU-операций в composite на пиксель.
+ *
+ * v4, "вау"-проход:
+ *  - настоящая чёрная тень: blackhole пишет маску захваченных лучей в alpha, composite гасит в ней bloom;
+ *  - тонкое фотонное кольцо по реальному углу отклонения луча + доплер-асимметрия и мерцание;
+ *  - глубокий космос за дырой: млечный путь с пылевыми прожилками и цветная туманность (fbm),
+ *    линзируется вместе со звёздами -> кольцо Эйнштейна;
+ *  - звёзды трёх спектральных классов, яркие с дифракционными лучами;
+ *  - джеты: спиральные жгуты вместо полос, фиолетовый хвост, начинаются от кольца, выровнены по
+ *    видимому центру дыры (камера марша чуть над диском, центр смещён от bhDir);
+ *  - анаморфный блик вдоль плоскости диска;
+ *  - тонмаппинг с сохранением оттенка + немного насыщенности: яркий диск не выгорает в плоский белый;
+ *  - дефолтная температура диска чуть теплее (золото -> бело-голубой).
+ *  Стоимость: туманность и блик только в composite на пикселях неба, марш почти не подорожал.
  */
 public final class CustomskyFastShaders {
     private CustomskyFastShaders() {
@@ -222,7 +233,6 @@ public final class CustomskyFastShaders {
                 float band = noise(discCoord(csBand, rad, 1.35)) * 0.5 + 0.5;
                 float grain = noise(discCoord(csBand, rad + 70.0, 3.46)) * 0.5 + 0.5;
 
-                // палитра темы (как было)
                 vec3 litT = vec3(0.0);
                 vec3 radT = vec3(1.0);
                 vec3 texT = vec3(0.0);
@@ -234,7 +244,6 @@ public final class CustomskyFastShaders {
                     vec3 tc = mix(vec3(0.95, 0.55, 0.26), vec3(0.42, 0.60, 1.0), band) * (0.45 + 0.80 * grain);
                     texT = tc * tc * 4.0;
                 }
-                // реальная палитра: температура газа + доплер + гравитационное красное смещение
                 vec3 litR = vec3(0.0);
                 vec3 texR = vec3(0.0);
                 if (gThemeW < 0.999) {
@@ -346,7 +355,7 @@ public final class CustomskyFastShaders {
 
                 float palette = skyExtra.y;
                 gThemeW = palette < 0.5 ? 1.0 : (palette < 1.5 ? 0.0 : 0.35);
-                gTin = mix(4000.0, 18000.0, clamp(skyExtra.z, 0.0, 1.0));
+                gTin = mix(3200.0, 16000.0, clamp(skyExtra.z, 0.0, 1.0));
                 gAct = max(bhParams.y, 0.0);
                 gSpin = max(bhParams.z, 0.0);
 
@@ -372,7 +381,6 @@ public final class CustomskyFastShaders {
                     ringColor = mix(mix(vec3(1.0), blackbody(gTin * 0.8), 0.7), ringColor, gThemeW);
                 }
 
-                // редкие вспышки горячего пятна (~раз в 27 c)
                 float fl = 0.5 + 0.5 * sin(time * 0.23);
                 fl *= fl; fl *= fl; fl *= fl; fl *= fl;
                 gFlare = 1.0 + 1.6 * fl * gAct;
@@ -388,6 +396,9 @@ public final class CustomskyFastShaders {
                 float alpha = 0.0;
                 float captured = 0.0;
 
+                vec3 eye0 = eyevec;
+                float fell = 0.0;
+                float rmin = 1e3;
                 float impact = length(cross(pos, eyevec));
                 float along = dot(pos, eyevec);
 
@@ -421,6 +432,7 @@ public final class CustomskyFastShaders {
                         Haze(color, raypos, r2, alpha, hazeColor, w);
 
                         captured = max(captured, 1.0 - smoothstep(0.32, 0.85, r));
+                        rmin = min(rmin, r);
                         if (alpha > 0.995) {
                             break;
                         }
@@ -428,6 +440,7 @@ public final class CustomskyFastShaders {
                             break;
                         }
                         if (r2 < 0.0625) {
+                            fell = 1.0;
                             break;
                         }
                         if (traveled >= FAR - 1e-4) {
@@ -441,12 +454,22 @@ public final class CustomskyFastShaders {
                 float rq = clamp(captured * (1.0 - captured) * 4.0, 0.0, 1.0);
                 float rq2 = rq * rq;
                 float ring6 = rq2 * rq2 * rq2;
-                float ringCore = ring6 * ring6 * rq2;
                 float ringAng = atan(localRd.y, localRd.x);
                 float ringSide = localRd.x / max(length(localRd.xy), 1e-4);
                 float shimmer = 1.0 - 0.12 * gAct + 0.12 * gAct * sin(ringAng * 5.0 - time * 1.3) * sin(ringAng * 3.0 + time * 0.7);
-                float ringI = (ring6 * 0.6 + ringCore * 0.55) * (1.0 + 0.4 * ringSide) * shimmer;
-                color += ringColor * ringI * (1.0 - alpha);
+                // мягкое гало вокруг тени (как раньше, но слабее, чтобы тень была глубже)
+                color += ringColor * (ring6 * 0.30) * (1.0 + 0.4 * ringSide) * shimmer * (1.0 - alpha);
+
+                // фотонное кольцо: лучи, которые обогнули дыру почти по кругу и вырвались, дают тонкое яркое кольцо
+                float bend = acos(clamp(dot(eye0, eyevec), -1.0, 1.0));
+                float esc = 1.0 - fell;
+                float pr = clamp((bend - 0.9) / 1.35, 0.0, 1.0);
+                float photon = pr * pr * pr * esc;          // тонкое яркое кольцо у самого края тени
+                float sub = pr * esc * 0.18;                // мягкий ореол вокруг него
+                float beam = 1.0 + 0.85 * ringSide;                    // доплер: приближающаяся сторона ярче
+                float flick = 1.0 + 0.18 * gAct * sin(ringAng * 7.0 - time * 2.2) * sin(ringAng * 2.0 + time * 0.9);
+                vec3 photonCol = mix(ringColor, vec3(1.0), 0.35);
+                color += photonCol * (photon * 1.9 + sub) * beam * flick * (1.0 - alpha);
 
                 color *= brightness;
 
@@ -465,8 +488,8 @@ public final class CustomskyFastShaders {
                 }
 
                 cur += (fract(hash21(gl_FragCoord.xy + 13.7) + taa.w) - 0.5) / 255.0;
-
-                fragColor = vec4(max(cur, vec3(0.0)), 1.0);
+                // alpha = маска тени (для composite: там гасим bloom, чтобы тень была по-настоящему чёрной)
+                fragColor = vec4(max(cur, vec3(0.0)), fell * (1.0 - alpha));
             }
             """;
 
@@ -499,12 +522,80 @@ public final class CustomskyFastShaders {
             const float BLOOM_STRENGTH = 0.13;
             const float STAR_LENS_E2 = 0.035;
             const float STAR_SWIRL = 0.010;
+            const float NEBULA = 1.0;
+            const float INCL = 0.10;
+            const float ZOOM = 2.4;
+
+            vec3 gJetAxis;
+
+            // видимый центр дыры: камера марша чуть над диском, поэтому центр смещён от bhDir
+            vec3 holeCenter(vec3 bhDir) {
+                vec3 upRef = vec3(0.0, 1.0, 0.0);
+                vec3 tang = normalize(upRef - dot(upRef, bhDir) * bhDir);
+                vec3 eY = normalize(tang * cos(INCL) - bhDir * sin(INCL));
+                vec3 eX = normalize(cross(eY, bhDir));
+                vec3 eZ = cross(eX, eY);
+                vec3 c = normalize(eY * (-ZOOM * sin(INCL)) + eZ * cos(INCL));
+                gJetAxis = normalize(eY - dot(eY, c) * c);
+                return c;
+            }
 
             vec3 nmzHash33(vec3 q) {
                 uvec3 p = uvec3(ivec3(q));
                 p = p * uvec3(374761393U, 1103515245U, 668265263U) + p.zxy + p.yzx;
                 p = p.yzx * (p.zxy ^ (p >> 3U));
                 return vec3(p ^ (p >> 16U)) * (1.0 / vec3(0xffffffffU));
+            }
+
+            float hash13(vec3 p) {
+                p = fract(p * 0.1031);
+                p += dot(p, p.zyx + 31.32);
+                return fract((p.x + p.y) * p.z);
+            }
+
+            float vnoise(vec3 x) {
+                vec3 i = floor(x);
+                vec3 f = fract(x);
+                f = f * f * (3.0 - 2.0 * f);
+                return mix(mix(mix(hash13(i), hash13(i + vec3(1, 0, 0)), f.x),
+                               mix(hash13(i + vec3(0, 1, 0)), hash13(i + vec3(1, 1, 0)), f.x), f.y),
+                           mix(mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), f.x),
+                               mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+            }
+
+            float fbm(vec3 p) {
+                float v = 0.0;
+                float a = 0.5;
+                for (int i = 0; i < 5; i++) {
+                    v += a * vnoise(p);
+                    p = p * 2.03 + vec3(1.7, 9.2, 4.1);
+                    a *= 0.5;
+                }
+                return v;
+            }
+
+            // глубокий космос: млечный путь с пылевыми прожилками + цветные облака туманности
+            vec3 nebula(vec3 dir, float time, vec3 themeA, vec3 themeB, float themeW) {
+                vec3 gN = normalize(vec3(0.25, 0.35, -0.90));
+                float gl = dot(dir, gN);
+                float band = exp(-gl * gl * 9.0);
+                vec3 q = dir * 2.6 + vec3(0.0, 0.0, time * 0.004);
+                float warp = fbm(q * 1.3);
+                float n = fbm(q + warp * 1.4);
+                float n2 = fbm(q * 2.4 + 11.0 + warp);
+                float dust = smoothstep(0.42, 0.72, fbm(q * 3.4 + 5.0 + warp * 0.8));
+
+                vec3 cA = mix(vec3(0.95, 0.42, 0.62), themeA, themeW);
+                vec3 cB = mix(vec3(0.25, 0.48, 1.00), themeB, themeW);
+                vec3 cC = vec3(1.00, 0.72, 0.45);
+
+                float cloud = smoothstep(0.40, 0.85, n);
+                vec3 col = mix(cB, cA, smoothstep(0.35, 0.75, n2)) * cloud * cloud * 0.20;
+                col += cC * pow(max(n - 0.45, 0.0) * 2.0, 3.0) * 0.06;
+                vec3 milky = mix(vec3(0.60, 0.62, 0.75), cC, 0.35) * band * (0.35 + 0.65 * n) * 0.12;
+                col += milky;
+                col *= 1.0 - dust * (0.55 + 0.4 * band);
+                return col;
             }
 
             vec3 bhStars(vec3 dir, float time) {
@@ -516,11 +607,14 @@ public final class CustomskyFastShaders {
                     vec3 id = floor(p);
                     vec3 q = fract(p) - 0.5;
                     vec3 rn = nmzHash33(id);
-                    float core = smoothstep(0.30, 0.0, length(q));
+                    float dq = length(q);
+                    float core = smoothstep(0.30, 0.0, dq);
                     float hit = step(rn.x, dens);
-                    float tw = 0.78 + 0.22 * sin(time * (0.6 + rn.z * 1.3) + rn.y * 47.0);
-                    vec3 tint = mix(vec3(1.0, 0.74, 0.50), vec3(0.72, 0.86, 1.0), rn.y);
-                    c += hit * core * core * tint * (0.35 + 0.65 * rn.z) * tw * amp;
+                    float tw = 0.72 + 0.28 * sin(time * (0.6 + rn.z * 1.3) + rn.y * 47.0);
+                    vec3 tint = rn.y < 0.33 ? vec3(1.0, 0.70, 0.45) : (rn.y < 0.8 ? vec3(0.95, 0.95, 1.0) : vec3(0.62, 0.78, 1.0));
+                    float bright = step(0.82, rn.z) * step(float(i), 1.5);
+                    float spikes = bright * (exp(-abs(q.x) * 60.0) + exp(-abs(q.y) * 60.0)) * smoothstep(0.5, 0.0, dq) * 0.35;
+                    c += hit * (core * core + spikes) * tint * (0.35 + 0.65 * rn.z) * (1.0 + bright * 1.5) * tw * amp;
                     p = p * 1.63 + 17.0;
                     dens *= 0.62;
                     amp *= 0.78;
@@ -530,8 +624,7 @@ public final class CustomskyFastShaders {
 
             // релятивистские джеты вдоль оси диска (аналитически, в касательной плоскости к направлению на дыру)
             vec3 jetGlow(vec3 rd, vec3 bhDir, float cosT, float theta, float time) {
-                vec3 upRef = vec3(0.0, 1.0, 0.0);
-                vec3 jd = normalize(upRef - dot(upRef, bhDir) * bhDir);
+                vec3 jd = gJetAxis;
                 vec3 sd = cross(bhDir, jd);
                 vec3 p = rd / cosT - bhDir;
                 float u = dot(p, sd);
@@ -542,13 +635,16 @@ public final class CustomskyFastShaders {
                 float uu = u * u / (w * w);
                 float core = exp(-uu);
                 float halo = exp(-uu * 0.0625) * 0.18;
-                float len = exp(-av * 3.2) * smoothstep(0.015, 0.06, av);
+                float len = exp(-av * 3.2) * smoothstep(0.09, 0.20, av);
 
                 float act = max(bhParams.y, 0.0);
-                float knots = 0.6 + 0.4 * sin(av * 70.0 - time * (3.0 + 2.0 * act)) * sin(av * 29.0 - time * 1.7 + 1.3);
+                // спиральные жгуты плазмы вместо полосатых сгустков
+                float helix = 0.5 + 0.5 * sin(u / w * 2.2 + av * 38.0 - time * (2.2 + 1.5 * act));
+                float knots = 0.55 + 0.45 * smoothstep(0.2, 0.9, sin(av * 16.0 - time * (1.4 + act)) * 0.5 + 0.5);
                 float flick = 1.0 + 0.15 * act * sin(time * 2.1 + v * 9.0);
-                // ближний джет (к камере) ярче, дальний тусклее и прячется за тенью
                 float beam = v > 0.0 ? 1.0 : 0.4 * smoothstep(0.10, 0.17, theta);
+                core *= 0.65 + 0.35 * helix;
+                halo = exp(-uu * 0.03) * 0.22 + halo * 0.5;
 
                 float I = (core * knots * flick + halo) * len * beam;
 
@@ -557,7 +653,7 @@ public final class CustomskyFastShaders {
                 float palette = skyExtra.y;
                 float themeW = palette < 0.5 ? 1.0 : (palette < 1.5 ? 0.0 : 0.35);
                 vec3 col = mix(realCol, themeCol, themeW);
-                // горячее белое ядро у основания
+                col = mix(col, vec3(0.75, 0.45, 1.0), smoothstep(0.05, 0.4, av) * 0.45 * (1.0 - themeW));
                 col = mix(col, vec3(1.0), core * exp(-av * 12.0) * 0.6);
                 return col * I * 0.9;
             }
@@ -613,11 +709,12 @@ public final class CustomskyFastShaders {
                 vec4 pNear = invViewProj * vec4(ndc, -1.0, 1.0);
                 vec3 rd = normalize(pFar.xyz / pFar.w - pNear.xyz / pNear.w);
 
-                vec3 bhDir = normalize(vec3(0.34, 0.62, 0.71));
+                vec3 bhDir = holeCenter(normalize(vec3(0.34, 0.62, 0.71)));
                 float cosT = clamp(dot(rd, bhDir), -1.0, 1.0);
                 float theta = acos(cosT);
 
                 vec3 color = decodeHDR(bicubic(Sky, texCoord));
+                float shadow = texture(Sky, texCoord).a;
 
                 vec3 bloom = decodeHDR(bicubic(Bloom0, texCoord)) * 1.00;
                 bloom += decodeHDR(bicubic(Bloom1, texCoord)) * 1.00;
@@ -626,20 +723,46 @@ public final class CustomskyFastShaders {
                 bloom += decodeHDR(bicubic(Bloom4, texCoord)) * 0.80;
                 bloom += decodeHDR(bicubic(Bloom5, texCoord)) * 0.65;
 
-                color += bloom * BLOOM_STRENGTH;
+                // внутри тени bloom почти гасим: горизонт событий должен быть чёрным провалом
+                color += bloom * BLOOM_STRENGTH * (1.0 - 0.85 * shadow);
+                color *= 1.0 - 0.6 * shadow;
 
                 float jets = skyExtra.w;
                 if (jets > 0.001 && cosT > 0.5) {
-                    color += jetGlow(rd, bhDir, cosT, theta, misc.x) * (jets * misc.w);
+                    color += jetGlow(rd, bhDir, cosT, theta, misc.x) * (jets * misc.w * (1.0 - 0.9 * shadow));
                 }
 
-                color = pow(color, vec3(1.5));
-                color = color / (1.0 + color);
-                color = pow(color, vec3(1.0 / 1.5));
-                color = color * color * (3.0 - 2.0 * color);
-                color = pow(color, vec3(1.3, 1.20, 1.0));
-                color = clamp(color * 1.01, 0.0, 1.0);
+                // анаморфный блик: тонкая горизонтальная полоса света через ядро, как в кино
+                if (cosT > 0.2) {
+                    vec3 jd = gJetAxis;
+                    vec3 sdir = cross(bhDir, jd);
+                    vec3 p = rd / cosT - bhDir;
+                    float su = dot(p, sdir);
+                    float sv = dot(p, jd);
+                    float streak = exp(-sv * sv * 9000.0) * exp(-abs(su) * 5.0) * smoothstep(0.05, 0.14, abs(su));
+                    float pulse = 0.85 + 0.15 * sin(misc.x * 0.7);
+                    vec3 streakCol = mix(vec3(0.55, 0.70, 1.0), skyColor.rgb, skyExtra.y < 0.5 ? 0.6 : 0.2);
+                    color += streakCol * streak * 0.9 * pulse * misc.w;
+                }
+
+                // тонмаппинг с сохранением оттенка: яркие места не выгорают в плоский белый
+                float peak = max(max(color.r, color.g), color.b);
+                vec3 hue = color / max(peak, 1e-5);
+                float tp = pow(peak, 1.5);
+                tp = tp / (1.0 + tp);
+                tp = pow(tp, 1.0 / 1.5);
+                tp = tp * tp * (3.0 - 2.0 * tp);
+                vec3 filmic = pow(color, vec3(1.5));
+                filmic = filmic / (1.0 + filmic);
+                filmic = pow(filmic, vec3(1.0 / 1.5));
+                filmic = filmic * filmic * (3.0 - 2.0 * filmic);
+                color = mix(filmic, hue * tp, 0.55);
+                color = pow(max(color, vec3(0.0)), vec3(1.22, 1.14, 1.0));
+                color = clamp(color * 1.02, 0.0, 1.0);
                 color = pow(color, vec3(0.7 / 2.2));
+                // чуть больше насыщенности, чтобы диск переливался цветом, а не был просто белым
+                float gray = dot(color, vec3(0.299, 0.587, 0.114));
+                color = clamp(mix(vec3(gray), color, 1.18), 0.0, 1.0);
 
                 float lum = dot(color, vec3(0.299, 0.587, 0.114));
                 float starMask = smoothstep(0.10, 0.17, theta) * clamp(1.0 - lum * 2.4, 0.0, 1.0) * misc.w;
@@ -659,9 +782,16 @@ public final class CustomskyFastShaders {
                         rdL = rdL * cp + cross(bhDir, rdL) * sp + bhDir * (dot(bhDir, rdL) * (1.0 - cp));
                         mag = clamp(1.0 + 0.5 * e2 / (th * th), 1.0, 2.2);
                     }
-                    color += bhStars(rdL, misc.x) * (starMask * mag);
+                    float neb = NEBULA;
+                    vec3 bg = bhStars(rdL, misc.x);
+                    if (neb > 0.001) {
+                        float palette = skyExtra.y;
+                        float themeW = palette < 0.5 ? 1.0 : (palette < 1.5 ? 0.0 : 0.35);
+                        bg += nebula(rdL, misc.x, skyColor.rgb, skyColor2.rgb, themeW) * neb;
+                    }
+                    // кольцо Эйнштейна: фон вокруг дыры усилен линзой
+                    color += bg * (starMask * mag);
                 }
-
                 return color;
             }
 
