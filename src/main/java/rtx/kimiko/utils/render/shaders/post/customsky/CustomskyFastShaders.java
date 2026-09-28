@@ -378,27 +378,6 @@ public final class CustomskyFastShaders {
             void main() {
                 vec2 res = vec2(textureSize(History, 0));
                 vec3 rd = rayDir(texCoord);
-                vec3 rdJitter = rayDir(texCoord + taa.xy / res);
-
-                // PERF v6: шахматный марш. Половина пикселей в этом кадре берётся из истории с точной
-                // репроекцией неба (оно на бесконечности), вторая половина маршируется. Чётность кадра = знак
-                // TAA-джиттера по X (halton base 2). Без валидной истории/за краем — обычный полный марш.
-                if (taa.z > 0.5) {
-                    int parity = taa.x < -1e-4 ? 1 : 0;
-                    ivec2 fc = ivec2(gl_FragCoord.xy);
-                    if (((fc.x + fc.y) & 1) == parity) {
-                        vec4 hc = prevViewProj * vec4(rdJitter, 0.0);
-                        if (hc.w > 1e-5) {
-                            vec2 prevUV = hc.xy / hc.w * 0.5 + 0.5;
-                            vec2 guard = 1.5 / res;
-                            if (all(greaterThan(prevUV, guard)) && all(lessThan(prevUV, 1.0 - guard))) {
-                                vec4 hist = sampleHistory(prevUV, res);
-                                fragColor = hist;
-                                return;
-                            }
-                        }
-                    }
-                }
 
                 float time = misc.x;
                 float brightness = misc.w;
@@ -432,8 +411,8 @@ public final class CustomskyFastShaders {
 
                 vec3 camWorld = -bhDir * CAM_DIST;
                 vec3 pos = vec3(dot(camWorld, eX), dot(camWorld, eY), dot(camWorld, eZ));
-                vec3 eyevec = toLocal(rdJitter, eX, eY, eZ);
-                vec3 localRd = toLocal(rd, eX, eY, eZ);
+                vec3 eyevec = toLocal(rd, eX, eY, eZ);
+                vec3 localRd = eyevec;
                 float pixAngle = length(toLocal(rayDir(texCoord + vec2(1.0, 0.0) / res), eX, eY, eZ) - localRd);
                 float aa = pixAngle * CAM_DIST * 1.425;
 
@@ -450,7 +429,7 @@ public final class CustomskyFastShaders {
                 // PERF: лучи с impact >= IMPACT_CULL и раньше давали ровно 0, поэтому их просто не маршируем.
                 if (impact < IMPACT_CULL && along < 0.0) {
                     float tEnter = -along - sqrt(max(0.0, ENTRY_R * ENTRY_R - impact * impact));
-                    float dither = fract(hash21(gl_FragCoord.xy) + taa.w);
+                    float dither = hash21(gl_FragCoord.xy);
                     vec3 raypos = pos + eyevec * (tEnter + dither * STEP);
                     float r2 = dot(raypos, raypos);
                     float r = sqrt(r2);
@@ -532,7 +511,7 @@ public final class CustomskyFastShaders {
 
                 float shadowVal = fell * (1.0 - alpha);
                 if (taa.z > 0.5) {
-                    vec4 pc = prevViewProj * vec4(rdJitter, 0.0);
+                    vec4 pc = prevViewProj * vec4(rd, 0.0);
                     if (pc.w > 1e-5) {
                         vec2 prevUV = pc.xy / pc.w * 0.5 + 0.5;
                         vec2 guard = 1.5 / res;
@@ -544,7 +523,6 @@ public final class CustomskyFastShaders {
                     }
                 }
 
-                cur += (fract(hash21(gl_FragCoord.xy + 13.7) + taa.w) - 0.5) / 255.0;
                 // alpha = маска тени (сглаженная и TAA-накопленная)
                 fragColor = vec4(max(cur, vec3(0.0)), shadowVal);
             }
@@ -761,12 +739,12 @@ public final class CustomskyFastShaders {
                 vec3 color = decodeHDR(skySample.rgb);
                 float shadow = skySample.a;
 
-                vec3 bloom = decodeHDR(bicubic(Bloom0, texCoord).rgb) * 1.00;
-                bloom += decodeHDR(bicubic(Bloom1, texCoord).rgb) * 1.00;
-                bloom += decodeHDR(bicubic(Bloom2, texCoord).rgb) * 1.00;
-                bloom += decodeHDR(bicubic(Bloom3, texCoord).rgb) * 0.90;
-                bloom += decodeHDR(bicubic(Bloom4, texCoord).rgb) * 0.80;
-                bloom += decodeHDR(bicubic(Bloom5, texCoord).rgb) * 0.65;
+                vec3 bloom = decodeHDR(texture(Bloom0, texCoord).rgb) * 1.00;
+                bloom += decodeHDR(texture(Bloom1, texCoord).rgb) * 1.00;
+                bloom += decodeHDR(texture(Bloom2, texCoord).rgb) * 1.00;
+                bloom += decodeHDR(texture(Bloom3, texCoord).rgb) * 0.90;
+                bloom += decodeHDR(texture(Bloom4, texCoord).rgb) * 0.80;
+                bloom += decodeHDR(texture(Bloom5, texCoord).rgb) * 0.65;
 
                 // внутри тени bloom почти гасим: горизонт событий должен быть чёрным провалом
                 color += bloom * BLOOM_STRENGTH * (1.0 - 0.85 * shadow);
@@ -841,22 +819,8 @@ public final class CustomskyFastShaders {
             }
 
             void main() {
-                // Быстрый discard пикселей, гарантированно покрытых геометрией мира
-                float centerDepth = texture(DepthTex, texCoord).r;
-                if (centerDepth < 0.999) {
-                    discard;
-                }
-
-                // Субпиксельное anti-aliasing сглаживание силуэтов геометрии на фоне неба
-                vec2 dt = 1.0 / vec2(textureSize(DepthTex, 0));
-                vec2 off = dt * 0.35;
-                float d0 = texture(DepthTex, texCoord + vec2(-off.x, -off.y)).r;
-                float d1 = texture(DepthTex, texCoord + vec2( off.x, -off.y)).r;
-                float d2 = texture(DepthTex, texCoord + vec2(-off.x,  off.y)).r;
-                float d3 = texture(DepthTex, texCoord + vec2( off.x,  off.y)).r;
-
-                float coverage = (step(0.9999, d0) + step(0.9999, d1) + step(0.9999, d2) + step(0.9999, d3)) * 0.25;
-                if (coverage <= 0.0) {
+                float depth = texture(DepthTex, texCoord).r;
+                if (depth < 0.9999) {
                     discard;
                 }
 
@@ -871,7 +835,7 @@ public final class CustomskyFastShaders {
                     result = sky + bloom * 0.34;
                 }
 
-                fragColor = vec4(result, coverage);
+                fragColor = vec4(result, 1.0);
             }
             """;
 }

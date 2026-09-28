@@ -239,8 +239,8 @@ public final class CustomSkyRenderer {
                 data.putFloat(100, color2G);
                 data.putFloat(104, color2B);
                 data.putFloat(108, type);
-                data.putFloat(112, hdr ? jitterX : 0.0f);
-                data.putFloat(116, hdr ? jitterY : 0.0f);
+                data.putFloat(112, 0.0f);
+                data.putFloat(116, 0.0f);
                 data.putFloat(120, useHistory ? 1.0f : 0.0f);
                 data.putFloat(124, taaSequence);
                 PREV_VIEW_PROJ.get(128, data);
