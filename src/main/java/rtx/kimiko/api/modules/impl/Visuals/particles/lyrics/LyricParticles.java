@@ -197,7 +197,7 @@ public final class LyricParticles {
         for (int index = this.held.size() - 1; -1 < index; --index) {
             Held piece = this.held.get(index);
             boolean expired = options.getFall() ? piece.getShattered() || time >= piece.getDeath() + 1600L : time >= piece.getDeath();
-            if (!expired && time >= piece.getSpawn() - 1000L) continue;
+            if (!expired && time >= piece.getSpawn() - 500L) continue;
             this.held.remove(index);
         }
         this.stepDebris(delta, options);
@@ -257,13 +257,12 @@ public final class LyricParticles {
         if (this.fragments.isEmpty()) {
             return;
         }
-        if (this.lastIndex >= 0 && this.lastIndex < this.fragments.size() && time < this.fragments.get(this.lastIndex).getStartMillis() - 1000L) {
+        if (this.lastIndex >= 0 && this.lastIndex < this.fragments.size() && time < this.fragments.get(this.lastIndex).getStartMillis() - 500L) {
             this.held.clear();
             this.lastIndex = -1;
         }
         int alive = Math.max(1, options.getLimit());
-        long leadIn = words ? 300L : 650L;
-        while (this.lastIndex + 1 < this.fragments.size() && time >= (candidate = this.fragments.get(next = this.lastIndex + 1)).getStartMillis() - leadIn) {
+        while (this.lastIndex + 1 < this.fragments.size() && time >= (candidate = this.fragments.get(next = this.lastIndex + 1)).getStartMillis()) {
             this.lastIndex = next;
             Timing timing = LyricParticles.Companion.timing(candidate, this.handoff(next), words);
             if (time >= timing.getDeath()) continue;
@@ -687,11 +686,12 @@ public final class LyricParticles {
             float inCascade = this.clamp(span * 0.3f, bounds[2], bounds[3]);
             float outTime = this.clamp(span * 0.24f, bounds[4], bounds[5]);
             float outCascade = this.clamp(span * 0.26f, bounds[6], bounds[7]);
-            long entrance = (long)Math.round(inTime + inCascade);
-            long spawn = fragment.getStartMillis() - entrance;
+            long spawn = fragment.getStartMillis();
             int exit = Math.round(outTime + outCascade);
-            long visibleEnd = words ? Math.min(Math.max(fragment.getEndMillis() + 140L, fragment.getStartMillis() + 650L), fragment.getStartMillis() + 2600L) : Math.min(handoff - (long)exit, fragment.getStartMillis() + 7000L);
-            visibleEnd = Math.max(visibleEnd, fragment.getStartMillis());
+            long entrance = spawn + (long)Math.round(inTime + inCascade);
+            long keepUntil = Math.max(fragment.getEndMillis(), handoff - (long)exit);
+            long visibleEnd = words ? Math.min(Math.max(fragment.getEndMillis() + 140L, spawn + 650L), spawn + 2600L) : Math.min(keepUntil, spawn + 7000L);
+            visibleEnd = Math.max(visibleEnd, entrance);
             return new Timing(spawn, visibleEnd, visibleEnd + (long)exit, inTime, inCascade, outTime, outCascade);
         }
 
