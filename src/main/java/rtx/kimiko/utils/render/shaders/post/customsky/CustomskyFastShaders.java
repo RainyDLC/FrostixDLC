@@ -36,12 +36,18 @@ import org.jetbrains.annotations.NotNull;
  *
  * v5, PERF без потери качества:
  *  - composite (полное разрешение!): туманность = 4 fbm x 5 октав = 20 value-noise на пиксель, каждый был
- *    8 хешей + 7 mix. Теперь это одна выборка из NoiseTex (тот же сглаженный value noise, что и в диске):
- *    туманность стала в разы дешевле, вид тот же;
- *  - марш: лучи с прицельным параметром > 7.25 не маршируются вообще. Они не доходят ни до диска (r <= 7),
- *    ни до дымки (r < 6), изгиб у них << порога фотонного кольца, так что результат и раньше был ровно 0;
- *  - марш: в пустой оболочке 7 < r < 8 шаг сразу до края диска (с тем же dither), а не по 0.08 в слое диска;
+ *    8 хешей + 7 mix. Теперь это одна выборка из NoiseTex (тот же сглаженный value noise, что и в диске);
+ *  - марш: лучи с прицельным параметром > 7.25 не маршируются вообще (результат и раньше был ровно 0);
+ *  - марш: в пустой оболочке 7 < r < 8 шаг сразу до края диска (с тем же dither);
  *  - sqrt(r2) один раз за шаг вместо двух.
+ *
+ * v6, шахматный марш:
+ *  - каждый кадр маршируется только половина пикселей (шахматка, чётность меняется каждый кадр),
+ *    вторая половина берётся из истории TAA с точной репроекцией (небо на бесконечности, репроекция
+ *    через prevViewProj без ошибок параллакса). TAA и так смешивает 85% истории, так что каждый пиксель
+ *    обновляется раз в 2 кадра — на глаз разницы нет, а самый дорогой проход стал в 2 раза дешевле.
+ *    Чётность кадра берётся из знака TAA-джиттера по X (halton base 2: чётный кадр >= 0, нечётный < 0),
+ *    поэтому Java-сторона не менялась. Без валидной истории (первый кадр, край экрана) — полный марш.
  */
 public final class CustomskyFastShaders {
     private CustomskyFastShaders() {
@@ -363,6 +369,30 @@ public final class CustomskyFastShaders {
             }
 
             void main() {
+                vec2 res = vec2(textureSize(History, 0));
+                vec3 rd = rayDir(texCoord);
+
+                // PERF v6: шахматный марш. Половина пикселей в этом кадре берётся из истории с точной
+                // репроекцией неба (оно на бесконечности), вторая половина маршируется. Чётность кадра = знак
+                // TAA-джиттера по X (halton base 2). Без валидной истории/за краем — обычный полный марш.
+                if (taa.z > 0.5) {
+                    int parity = taa.x < -1e-4 ? 1 : 0;
+                    ivec2 fc = ivec2(gl_FragCoord.xy);
+                    if (((fc.x + fc.y) & 1) == parity) {
+                        vec4 hc = prevViewProj * vec4(rd, 0.0);
+                        if (hc.w > 1e-5) {
+                            vec2 prevUV = hc.xy / hc.w * 0.5 + 0.5;
+                            vec2 guard = 1.5 / res;
+                            if (all(greaterThan(prevUV, guard)) && all(lessThan(prevUV, 1.0 - guard))) {
+                                vec3 hist = sampleHistory(prevUV, res);
+                                float histShadow = textureLod(History, prevUV, 0.0).a;
+                                fragColor = vec4(hist, histShadow);
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 float time = misc.x;
                 float brightness = misc.w;
 
@@ -372,9 +402,6 @@ public final class CustomskyFastShaders {
                 gAct = max(bhParams.y, 0.0);
                 gSpin = max(bhParams.z, 0.0);
 
-                vec2 res = vec2(textureSize(History, 0));
-
-                vec3 rd = rayDir(texCoord);
                 vec3 rdJitter = rayDir(texCoord + taa.xy / res);
 
                 vec3 bhDir = normalize(vec3(0.34, 0.62, 0.71));
@@ -415,8 +442,7 @@ public final class CustomskyFastShaders {
                 float impact = length(cross(pos, eyevec));
                 float along = dot(pos, eyevec);
 
-                // PERF: лучи с impact >= IMPACT_CULL и раньше давали ровно 0 (не доходят до диска/дымки,
-                // изгиб ~0.03 рад << порога фотонного кольца 0.9), поэтому их просто не маршируем.
+                // PERF: лучи с impact >= IMPACT_CULL и раньше давали ровно 0, поэтому их просто не маршируем.
                 if (impact < IMPACT_CULL && along < 0.0) {
                     float tEnter = -along - sqrt(max(0.0, ENTRY_R * ENTRY_R - impact * impact));
                     float dither = fract(hash21(gl_FragCoord.xy) + taa.w);
@@ -435,8 +461,7 @@ public final class CustomskyFastShaders {
                         if (sd > R_FINE) {
                             float ay = abs(raypos.y);
                             float sy = ay > bandEdge ? 0.9 * (ay - bandEdge) / max(abs(eyevec.y), 0.25) : 0.0;
-                            // PERF: при r > 7 ничего не рисуется, можно шагать до края диска даже внутри слоя
-                            // (|raypos + s*e| >= sd - s >= shellEdge, т.е. в диск не перескочим)
+                            // при r > 7 ничего не рисуется, можно шагать до края диска даже внутри слоя
                             sy = max(sy, sd - shellEdge);
                             s = clamp(min(sd - R_FINE, sy), STEP, STEP_MAX);
                         }
@@ -569,8 +594,7 @@ public final class CustomskyFastShaders {
                 return vec3(p ^ (p >> 16U)) * (1.0 / vec3(0xffffffffU));
             }
 
-            // PERF v5: сглаженный value noise [0..1] одной выборкой из NoiseTex (G = R со сдвигом 37,17 по z-слою)
-            // вместо 8 хешей + 7 mix. Тот же тип шума, та же гладкость, но в разы дешевле на полном разрешении.
+            // PERF v5: сглаженный value noise [0..1] одной выборкой из NoiseTex вместо 8 хешей + 7 mix
             float vnoise(vec3 x) {
                 vec3 p = floor(x);
                 vec3 f = fract(x);
