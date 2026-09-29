@@ -645,9 +645,6 @@ implements GuiCapture.Source {
 
             // Dark focus dimming / vignette
             Render2D.rect(fullX, fullY, fullW, fullH, 0.0f, UI.Companion.color(4, 5, 8, 70, dimDrawAlpha));
-
-            // Halftone dot matrix
-            Render2D.halftoneRect(fullX, fullY, fullW, fullH, 0.0f, UI.Companion.color(0, 0, 0, 0, dimDrawAlpha), UI.Companion.color(255, 255, 255, 13, dimDrawAlpha), 1.0f, 6.0f);
         }
         if (Companion.guiCaptureActive()) {
             Render2D.flush();

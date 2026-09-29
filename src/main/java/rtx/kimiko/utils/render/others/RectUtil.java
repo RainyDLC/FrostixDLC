@@ -223,19 +223,10 @@ public final class RectUtil {
         float blur = module == null ? 18.0f : module.rectBackdropBlur.getFloat();
         float a = Math.max(0.0f, Math.min(1.0f, alpha));
         if (a > 0.01f) {
-            float[] radii = new float[]{r, r, r, r};
-            // Layer 1: Wide deep ambient drop shadow into the blurred world
-            BuiltGlow ambientShadow = new BuiltGlow(x, y, width, height, radii, 0xFF010204, 0.95f, 48.0f, 0.82f * a);
-            Render2D.glow(ambientShadow);
-
-            // Layer 2: Close dense drop shadow for clear window elevation and contrast
-            BuiltGlow midShadow = new BuiltGlow(x, y, width, height, radii, 0xFF020408, 1.30f, 24.0f, 0.90f * a);
-            Render2D.glow(midShadow);
-
-            // Layer 3: Subtle ambient glow halo (deep navy/accent aura)
-            int accent = module == null ? 0xFF14243A : (0xFF000000 | module.clientPrimaryColor());
-            BuiltGlow halo = new BuiltGlow(x, y, width, height, radii, accent, 0.70f, 32.0f, 0.35f * a);
-            Render2D.glow(halo);
+            // Soft ambient drop shadow around the window for elevation and depth without atlas / pipeline artifacts
+            Render2D.rect(x - 8.0f, y - 5.0f, width + 16.0f, height + 16.0f, r + 7.0f, RectUtil.matteArgb(0, 0, 0, 16.0f * a));
+            Render2D.rect(x - 4.0f, y - 2.5f, width + 8.0f, height + 10.0f, r + 4.0f, RectUtil.matteArgb(0, 0, 0, 28.0f * a));
+            Render2D.rect(x - 1.5f, y, width + 3.0f, height + 4.5f, r + 1.5f, RectUtil.matteArgb(0, 0, 0, 44.0f * a));
         }
         // Deep obsidian matte glass surface
         RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.95f, 10, 12, 17, 226.0f, 26.0f);
@@ -248,9 +239,9 @@ public final class RectUtil {
         float blur = module == null ? 18.0f : module.rectBackdropBlur.getFloat();
         float a = Math.max(0.0f, Math.min(1.0f, alpha));
         if (a > 0.01f) {
-            float[] radii = new float[]{r, r, r, r};
-            BuiltGlow shadow = new BuiltGlow(x, y, width, height, radii, 0xFF010205, 1.15f, 22.0f, 0.82f * a);
-            Render2D.glow(shadow);
+            // Soft elevation shadow for popups / dropdowns
+            Render2D.rect(x - 4.0f, y - 2.0f, width + 8.0f, height + 8.0f, r + 3.0f, RectUtil.matteArgb(0, 0, 0, 24.0f * a));
+            Render2D.rect(x - 1.5f, y, width + 3.0f, height + 4.0f, r + 1.5f, RectUtil.matteArgb(0, 0, 0, 38.0f * a));
         }
         RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.75f, 11, 13, 18, 222.0f, 28.0f);
     }
