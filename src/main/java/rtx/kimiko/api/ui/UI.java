@@ -627,35 +627,20 @@ implements GuiCapture.Source {
         float h = 290.0f;
         float x = Companion.panelX();
         float y = Companion.panelY();
-        float dimZoom = Math.max(0.01f, Render2DCoordinateSpace.uiZoom());
-        float dimCenterX = Position.Companion.screenWidth() * 0.5f;
-        float dimCenterY = Position.Companion.screenHeight() * 0.5f;
-        float dimHalfW = dimCenterX / dimZoom + 8.0f;
-        float dimHalfH = dimCenterY / dimZoom + 8.0f;
         float shatterFade = Companion.guiCaptureActive() && GuiShatterAnimation.isActive() ? 1.0f - Math.min(1.0f, Math.max(0.0f, Companion.guiShatterProgress())) : 1.0f;
         float dimDrawAlpha = dimAlpha * shatterFade;
         if (dimDrawAlpha > 0.002f) {
-            float fullW = dimHalfW * 2.0f;
-            float fullH = dimHalfH * 2.0f;
-            float fullX = dimCenterX - dimHalfW;
-            float fullY = dimCenterY - dimHalfH;
+            // True fullscreen rect (no zoom math — the old math left uncovered strips at the edges).
+            float sw = Position.Companion.screenWidth();
+            float sh = Position.Companion.screenHeight();
 
-            // Make sure the blur backdrop is fresh so the fullscreen blur never samples a stale/empty target
-            BlurFramebuffer.getInstance().recaptureBackdrop();
+            // Custom matte backdrop blur: samples the world snapshot captured before GUI render
+            // (see BlurFramebuffer.captureWorldSnapshot), so the background is a real blurred
+            // world instead of black.
+            Render2D.blur(Render2D.blurBuilder().rectangle(0.0f, 0.0f, sw, sh).radius(0.0f).blurRadius(20.0f * dimDrawAlpha).smoothness(1.0f).color(UI.Companion.color(255, 255, 255, 255, dimDrawAlpha)).build());
 
-            // Fullscreen backdrop blur
-            Render2D.blur(Render2D.blurBuilder().rectangle(fullX, fullY, fullW, fullH).radius(0.0f).blurRadius(18.0f * dimDrawAlpha).smoothness(1.0f).color(UI.Companion.color(255, 255, 255, 255, dimDrawAlpha)).build());
-
-            // Dark focus dimming / vignette
-            Render2D.rect(fullX, fullY, fullW, fullH, 0.0f, UI.Companion.color(4, 5, 8, 70, dimDrawAlpha));
-        }
-        if (Companion.guiCaptureActive()) {
-            Render2D.flush();
-            Render2D.beginFrame(graphics);
-            Intrinsics.checkNotNull((Object)graphics, (String)"null cannot be cast to non-null type mixin.accessor.GuiGraphicsExtractorAccessor");
-            GuiRenderState rs = ((GuiGraphicsExtractorAccessor)graphics).kimiko$getGuiRenderState();
-            rs.createNewRootLayer();
-            rs.applyBlur();
+            // Matte dimming: dark frosted tint, slightly transparent so the blur shows through.
+            Render2D.rect(0.0f, 0.0f, sw, sh, 0.0f, UI.Companion.color(4, 5, 8, 70, dimDrawAlpha));
         }
         this.moduleList.resetCardBlur();
         this.themesRenderer.resetCardBlur();
