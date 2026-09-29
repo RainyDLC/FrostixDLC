@@ -106,6 +106,15 @@ public abstract class GuiRendererMixin {
     @Inject(method={"render(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V"}, at={@At(value="HEAD")})
     private void kimiko$beginBlurFrame(CallbackInfo ci) {
         RenderProfiler.beginFrame();
+        // Snapshot the world framebuffer before any GUI draws: this is the source
+        // for the fullscreen matte backdrop blur (mainTarget is cleared later).
+        try {
+            net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
+            if (mc != null) {
+                BlurFramebuffer.getInstance().captureWorldSnapshot(mc.getFramebuffer());
+            }
+        } catch (RuntimeException ignored) {
+        }
         BlurFramebuffer.getInstance().beginGuiFrame();
         GlowRenderer.getInstance().beginGuiFrame();
         EngineFrame.beginGuiFrame();

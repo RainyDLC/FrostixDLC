@@ -38,6 +38,7 @@ import rtx.kimiko.api.ui.settings.SettingsFactory;
 import rtx.kimiko.api.ui.settings.impl.SeparatorSetting;
 import rtx.kimiko.utils.animations.Decelerate;
 import rtx.kimiko.utils.animations.Direction;
+import rtx.kimiko.utils.render.fonts.Fonts;
 import rtx.kimiko.utils.render.others.RectUtil;
 import rtx.kimiko.utils.render.others.RoundedScissor;
 import rtx.kimiko.utils.render.render2d.Render2D;
@@ -76,6 +77,37 @@ public final class SettingsPopup {
     private static final float TOP_PAD = 7.0f;
     private static final float BOTTOM_PAD = 7.0f;
     private static final float EDGE = 4.0f;
+    private static final float INDEX_GUTTER = 14.0f;
+
+    private final float rowX() {
+        return this.px + 5.0f + INDEX_GUTTER;
+    }
+
+    private final float rowW() {
+        return this.width - 10.0f - INDEX_GUTTER;
+    }
+
+    private final float gutterX() {
+        return this.px + 5.0f;
+    }
+
+    /**
+     * Lab-terminal frame: targeting brackets at the popup corners.
+     */
+    private final void drawFrameBrackets(float x, float y, float w, float h, float alpha) {
+        float arm = 9.0f;
+        float inset = 2.5f;
+        int color = new Color(255, 255, 255, Math.max(0, Math.min(255, Math.round(120.0f * alpha)))).getRGB();
+        float t = 1.2f;
+        Render2D.line(x + inset, y + inset, x + inset + arm, y + inset, t, color);
+        Render2D.line(x + inset, y + inset, x + inset, y + inset + arm, t, color);
+        Render2D.line(x + w - inset - arm, y + inset, x + w - inset, y + inset, t, color);
+        Render2D.line(x + w - inset, y + inset, x + w - inset, y + inset + arm, t, color);
+        Render2D.line(x + inset, y + h - inset - arm, x + inset, y + h - inset, t, color);
+        Render2D.line(x + inset, y + h - inset, x + inset + arm, y + h - inset, t, color);
+        Render2D.line(x + w - inset - arm, y + h - inset, x + w - inset, y + h - inset, t, color);
+        Render2D.line(x + w - inset, y + h - inset - arm, x + w - inset, y + h - inset, t, color);
+    }
 
     public SettingsPopup() {
         this.anim.setMs(220);
@@ -177,7 +209,7 @@ public final class SettingsPopup {
         for (Setting setting : this.widgets) {
             pref = Math.max(pref, setting.preferredWidth());
         }
-        this.width = RangesKt.coerceIn((float)(pref + 10.0f + 4.0f), (float)110.0f, (float)180.0f);
+        this.width = RangesKt.coerceIn((float)(pref + 10.0f + 4.0f + INDEX_GUTTER), (float)110.0f, (float)180.0f);
         this.anchorY = anchorYIn;
         this.px = Position.Companion.clampX(anchorX + 2.5f, this.width);
         this.layout();
@@ -309,21 +341,33 @@ public final class SettingsPopup {
         RectUtil.drawMatteWindow(this.px, drawY, this.width, this.height, 8.0f, a);
         float windowRadius = RectUtil.clientWindowRadius(8.0f, this.width, this.height);
         Render2D.outline(this.px, drawY, this.width, this.height, windowRadius, 0.6f, SettingsPopup.Companion.rgba(255, 255, 255, (float)24 * a));
+        this.drawFrameBrackets(this.px, drawY, this.width, this.height, a);
         float bodyY = drawY + this.topPad();
         float clipInset = tilted ? (float)Math.abs(Math.sin(Math.toRadians(tilt))) * this.width : 0.0f;
         RoundedScissor.push(graphics, this.px, bodyY, this.width, this.bodyViewH, 0.0f, 0.0f, 0.0f, 0.0f);
         Render2D.pushScissor(graphics, this.px, bodyY - clipInset, this.width, this.bodyViewH + clipInset * 2.0f);
         float yy = bodyY - this.scroll;
+        int rowIndex = 0;
+        int sepColor = new Color(255, 255, 255, Math.max(0, Math.min(255, Math.round(14.0f * a)))).getRGB();
         for (Setting setting : this.widgets) {
             if (!setting.isVisible()) continue;
             float sh = setting.height();
             if (yy + sh >= bodyY - 6.0f && yy <= bodyY + this.bodyViewH + 6.0f) {
                 try {
-                    setting.render(this.px + 5.0f, yy, this.width - 10.0f, a);
+                    if (!(setting instanceof SeparatorSetting)) {
+                        ++rowIndex;
+                        String num = rowIndex < 10 ? "0" + rowIndex : String.valueOf(rowIndex);
+                        int numColor = new Color(255, 255, 255, Math.max(0, Math.min(255, Math.round(80.0f * a)))).getRGB();
+                        Fonts.MEDIUM.draw(num, this.gutterX(), yy + (sh - 6.0f) * 0.5f - 0.5f, 6.0f, numColor);
+                    }
+                    setting.render(this.rowX(), yy, this.rowW(), a);
+                    Render2D.line(this.rowX(), yy + sh + 2.0f, this.rowX() + this.rowW(), yy + sh + 2.0f, 0.6f, sepColor);
                 }
                 catch (Throwable throwable) {
                     this.handleWidgetFailure(setting, throwable);
                 }
+            } else if (!(setting instanceof SeparatorSetting)) {
+                ++rowIndex;
             }
             yy += sh + 4.0f;
         }
@@ -351,7 +395,7 @@ public final class SettingsPopup {
             if (!setting.isVisible()) continue;
             if (setting.hasOverlay()) {
                 try {
-                    setting.renderOverlay(graphics, this.px + 5.0f, oy, this.width - 10.0f, a);
+                    setting.renderOverlay(graphics, this.rowX(), oy, this.rowW(), a);
                 }
                 catch (Throwable throwable) {
                     this.handleWidgetFailure(setting, throwable);
@@ -384,7 +428,7 @@ public final class SettingsPopup {
             if (!setting.isVisible()) continue;
             if (setting.isOverlayOpen()) {
                 anyOverlay = true;
-                if (setting.clickOverlay(this.px + 5.0f, oy, this.width - 10.0f, mx, my)) {
+                if (setting.clickOverlay(this.rowX(), oy, this.rowW(), mx, my)) {
                     return true;
                 }
             }
@@ -408,7 +452,7 @@ public final class SettingsPopup {
                 float sh = setting.height();
                 if (my >= yy && my < yy + sh) {
                     boolean handled;
-                    if (setting instanceof SeparatorSetting || !(handled = setting.click(this.px + 5.0f, yy, this.width - 10.0f, mx, my))) break;
+                    if (setting instanceof SeparatorSetting || !(handled = setting.click(this.rowX(), yy, this.rowW(), mx, my))) break;
                     if (setting.isOverlayOpen()) {
                         this.closeOtherOverlays(setting);
                     }
@@ -436,7 +480,7 @@ public final class SettingsPopup {
             if (!setting.isVisible()) continue;
             float sh = setting.height();
             if (my >= yy && my < yy + sh) {
-                setting.middleClick(this.px + 5.0f, yy, this.width - 10.0f, mx, my);
+                setting.middleClick(this.rowX(), yy, this.rowW(), mx, my);
                 return true;
             }
             yy += sh + 4.0f;
@@ -451,7 +495,7 @@ public final class SettingsPopup {
         float oy = this.bodyY() - this.scroll;
         for (Setting setting : this.widgets) {
             if (!setting.isVisible()) continue;
-            if (setting.isOverlayOpen() && setting.scrollOverlay(this.px + 5.0f, oy, this.width - 10.0f, mx, my, delta)) {
+            if (setting.isOverlayOpen() && setting.scrollOverlay(this.rowX(), oy, this.rowW(), mx, my, delta)) {
                 return true;
             }
             oy += setting.height() + 4.0f;

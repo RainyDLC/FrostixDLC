@@ -139,6 +139,14 @@ implements AutoCloseable {
     private float worldGlobalBlurRadius;
     @Nullable
     private Region worldGlobalRegion;
+    /**
+     * Snapshot of the world framebuffer captured at the start of GUI render
+     * (before any GUI draws). Used as the source for the fullscreen backdrop blur,
+     * because minecraft.getFramebuffer() is already cleared/black by the time
+     * prepareGuiDraw() runs.
+     */
+    @Nullable
+    private SimpleFramebuffer worldSnapshot;
     @NotNull
     private final ArrayList<SimpleFramebuffer[]> downPool = new ArrayList(64);
     @NotNull
@@ -429,9 +437,15 @@ implements AutoCloseable {
         SimpleFramebuffer global = this.globalResult;
         boolean globalChainUpdated = false;
         if (this.globalBlurReady && global != null) {
-            long sig = BlurFramebuffer.Companion.chainSig(0, 0, mainTarget.textureWidth, mainTarget.textureHeight, this.globalBlurRadius, global.textureWidth, global.textureHeight, System.identityHashCode(mainTarget));
+            // Prefer the world snapshot captured before GUI render: at this point
+            // mainTarget is already cleared/black, so blurring it paints black.
+            Framebuffer backdropSource = this.getWorldSnapshot();
+            if (backdropSource == null) {
+                backdropSource = mainTarget;
+            }
+            long sig = BlurFramebuffer.Companion.chainSig(0, 0, backdropSource.textureWidth, backdropSource.textureHeight, this.globalBlurRadius, global.textureWidth, global.textureHeight, System.identityHashCode(backdropSource));
             if (fresh || sig != this.globalChainSig || this.globalRecaptured) {
-                this.renderBlurChain(64, mainTarget, global, new Region(0, 0, mainTarget.textureWidth, mainTarget.textureHeight), this.globalBlurRadius);
+                this.renderBlurChain(64, backdropSource, global, new Region(0, 0, backdropSource.textureWidth, backdropSource.textureHeight), this.globalBlurRadius);
                 this.globalChainSig = sig;
                 this.globalRecaptured = false;
                 globalChainUpdated = true;
@@ -608,6 +622,49 @@ implements AutoCloseable {
         this.renderBlurChain(64, mainTarget, global, new Region(0, 0, mainTarget.textureWidth, mainTarget.textureHeight), this.globalBlurRadius);
         RenderProfiler.end(scope);
         this.globalRecaptured = true;
+    }
+
+    /**
+     * Captures the current main framebuffer into the world snapshot texture.
+     * Must be called at the start of GUI render (HEAD of GuiRenderer.render),
+     * while the framebuffer still holds the rendered world and before any GUI draws.
+     */
+    public final void captureWorldSnapshot(@Nullable Framebuffer source) {
+        if (source == null || source.getColorAttachment() == null || source.getColorAttachmentView() == null) {
+            return;
+        }
+        int w = source.textureWidth;
+        int h = source.textureHeight;
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+        SimpleFramebuffer snapshot = this.worldSnapshot;
+        if (snapshot == null) {
+            snapshot = new SimpleFramebuffer("kimiko_blur_world_snapshot", w, h, false);
+            this.worldSnapshot = snapshot;
+        } else if (snapshot.textureWidth != w || snapshot.textureHeight != h) {
+            snapshot.resize(w, h);
+        }
+        if (snapshot.getColorAttachment() == null || snapshot.getColorAttachmentView() == null) {
+            return;
+        }
+        try {
+            RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(
+                source.getColorAttachment(), snapshot.getColorAttachment(),
+                0, 0, 0, 0, 0, w, h);
+        } catch (RuntimeException ignored) {
+            // Snapshot failed; prepareGuiDraw() will fall back to mainTarget.
+        }
+    }
+
+    /** Returns the captured world snapshot, or null if none was captured yet. */
+    @Nullable
+    public final SimpleFramebuffer getWorldSnapshot() {
+        SimpleFramebuffer snapshot = this.worldSnapshot;
+        if (snapshot == null || snapshot.getColorAttachmentView() == null) {
+            return null;
+        }
+        return snapshot;
     }
 
     public final void recaptureWorldBackdrop() {

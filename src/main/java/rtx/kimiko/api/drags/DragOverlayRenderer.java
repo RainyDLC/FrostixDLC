@@ -25,7 +25,6 @@ import rtx.kimiko.api.drags.DragSystem;
 import rtx.kimiko.api.drags.Draggable;
 import rtx.kimiko.api.drags.Position;
 import rtx.kimiko.api.lang.I18n;
-import rtx.kimiko.api.modules.impl.Interface.InterfaceModule;
 import rtx.kimiko.utils.color.ColorEngine;
 import rtx.kimiko.utils.render.fonts.Fonts;
 import rtx.kimiko.utils.render.others.RectUtil;
@@ -37,17 +36,9 @@ public final class DragOverlayRenderer {
     public static final DragOverlayRenderer INSTANCE = new DragOverlayRenderer();
     private static final float CANCEL_TEXT_SIZE = 6.0f;
     private static final float SNAP_STRENGTH = 20.0f;
-    private static final float DASH_ON = 3.9f;
-    private static final float DASH_OFF = 3.25f;
-    private static final int MAX_DASHES = 256;
-    private static final float LINE_THICKNESS = 1.5f;
-    private static final float DASH_FADE_NEAR = 0.15f;
-    private static final float SNAP_RADIUS = 6.0f;
-    private static final int RING_COUNT = 3;
-    private static final float RIPPLE_PERIOD_MS = 1000.0f;
-    private static final float RING_GROW = 2.5f;
-    private static final float RING_BASE_THICKNESS = 1.2f;
-    private static final float RING_RADIUS = 3.0f;
+    // Hologram overlay state.
+    private static long holoStartNs = 0L;
+    private static boolean holoWasActive = false;
 
     private DragOverlayRenderer() {
     }
@@ -61,9 +52,9 @@ public final class DragOverlayRenderer {
         Intrinsics.checkNotNullParameter((Object)graphics, (String)"graphics");
         Intrinsics.checkNotNullParameter((Object)drag, (String)"drag");
         if (overlayAlpha <= 0.1f || drag.getAnimX$rtx_kimiko_kimiko() == null) {
+            holoWasActive = false;
             return;
         }
-        float cornerOffset = -1.5f;
         DragLerpAnim dragLerpAnim = drag.getAnimX$rtx_kimiko_kimiko();
         Intrinsics.checkNotNull((Object)dragLerpAnim);
         float xA = dragLerpAnim.getTo();
@@ -76,9 +67,18 @@ public final class DragOverlayRenderer {
         DragLerpAnim dragLerpAnim4 = drag.getAnimY2$rtx_kimiko_kimiko();
         Intrinsics.checkNotNull((Object)dragLerpAnim4);
         float y = dragLerpAnim4.getAnim();
-        int dashColor = ColorEngine.multAlpha(-1, overlayAlpha);
-        this.drawCornerStretch(x, y, liveWidth, liveHeight, xA, yA, anchorWidth, anchorHeight, cornerOffset, dashColor, 1.5f);
-        this.drawLandingRipple(x, y, liveWidth, liveHeight, overlayAlpha);
+        long nowNs = System.nanoTime();
+        if (!holoWasActive) {
+            holoStartNs = nowNs;
+        }
+        holoWasActive = true;
+        float appearT = Math.min(1.0f, (float)(nowNs - holoStartNs) / 350000000.0f);
+        float appearE = 1.0f - (1.0f - appearT) * (1.0f - appearT) * (1.0f - appearT);
+        float breathe = 0.72f + 0.28f * (float)Math.sin((float)(System.currentTimeMillis() % 1200L) / 1200.0f * ((float)Math.PI * 2.0f));
+        this.drawAnchorGhost(xA, yA, anchorWidth, anchorHeight, overlayAlpha);
+        this.drawHoloBrackets(x, y, liveWidth, liveHeight, overlayAlpha, appearE, breathe);
+        this.drawScanline(x, y, liveWidth, liveHeight, overlayAlpha);
+        this.drawCoordsChip(x, y, liveWidth, liveHeight, overlayAlpha);
         this.drawCancelHint(x, y, liveWidth, liveHeight, overlayAlpha);
         float snapLineX = drag.getSnapLineX$rtx_kimiko_kimiko();
         if (!Float.isNaN(snapLineX)) {
@@ -170,38 +170,74 @@ public final class DragOverlayRenderer {
         drag.setTargetY(Position.Companion.clampY(drag.getTargetY(), height, margin));
     }
 
-    private final void drawCornerStretch(float x, float y, float liveWidth, float liveHeight, float xA, float yA, float anchorWidth, float anchorHeight, float offset, int color, float thickness) {
+    /**
+     * Hologram drag overlay: ghost of the anchor slot, animated targeting brackets,
+     * a sweeping scanline and a live coordinate readout.
+     */
+    private final void drawAnchorGhost(float xA, float yA, float w, float h, float overlayAlpha) {
+        int color = ColorEngine.multAlpha(-1, overlayAlpha * 0.32f);
         if (ColorEngine.alpha(color) <= 0) {
             return;
         }
-        this.dash(x + offset, y + offset, xA, yA, thickness, color);
-        this.dash(x + liveWidth - offset, y + offset, xA + anchorWidth, yA, thickness, color);
-        this.dash(x + liveWidth - offset, y + liveHeight - offset, xA + anchorWidth, yA + anchorHeight, thickness, color);
-        this.dash(x + offset, y + liveHeight - offset, xA, yA + anchorHeight, thickness, color);
+        Render2D.outline(xA, yA, w, h, 4.0f, 1.0f, color);
+        Render2D.line(xA, yA, xA + w, yA + h, 1.0f, ColorEngine.multAlpha(-1, overlayAlpha * 0.14f));
+        Render2D.line(xA + w, yA, xA, yA + h, 1.0f, ColorEngine.multAlpha(-1, overlayAlpha * 0.14f));
     }
 
-    private final void dash(float x1, float y1, float x2, float y2, float thickness, int color) {
-        Render2D.dashedLine(x1, y1, x2, y2, thickness, color, 3.9f, 3.25f, 256, 0.15f, 0.15f);
-    }
-
-    private final void drawLandingRipple(float xA, float yA, float width, float height, float overlayAlpha) {
-        InterfaceModule module;
-        float phase = (float)(System.currentTimeMillis() % 1000L) / 1000.0f;
-        InterfaceModule interfaceModule = module = InterfaceModule.Companion.getInstance();
-        float ringRadius = interfaceModule == null ? 3.0f : interfaceModule.rectCornerRadius.getFloat();
-        for (int i = 0; i < 3; ++i) {
-            float grow = 2.5f * (float)i;
-            float left = xA - grow;
-            float top = yA - grow;
-            float w = width + grow * 2.0f;
-            float h = height + grow * 2.0f;
-            float thickness = 1.2f;
-            float ringPhase = phase - (float)i / 3.0f;
-            float wave = 0.5f + 0.5f * (float)Math.sin(ringPhase * ((float)Math.PI * 2));
-            int color = ColorEngine.multAlpha(-1, overlayAlpha * wave);
-            if (ColorEngine.alpha(color) <= 0) continue;
-            Render2D.outline(left, top, w, h, ringRadius + grow, thickness, color);
+    private final void drawHoloBrackets(float x, float y, float w, float h, float overlayAlpha, float appear, float breathe) {
+        float arm = Math.min(14.0f, Math.min(w, h) * 0.33f) * appear;
+        if (arm < 1.0f) {
+            return;
         }
+        int color = ColorEngine.multAlpha(-1, overlayAlpha * 0.9f * breathe);
+        if (ColorEngine.alpha(color) <= 0) {
+            return;
+        }
+        float t = 1.4f;
+        Render2D.line(x, y, x + arm, y, t, color);
+        Render2D.line(x, y, x, y + arm, t, color);
+        Render2D.line(x + w - arm, y, x + w, y, t, color);
+        Render2D.line(x + w, y, x + w, y + arm, t, color);
+        Render2D.line(x, y + h - arm, x, y + h, t, color);
+        Render2D.line(x, y + h, x + arm, y + h, t, color);
+        Render2D.line(x + w - arm, y + h, x + w, y + h, t, color);
+        Render2D.line(x + w, y + h - arm, x + w, y + h, t, color);
+        float dotR = 1.6f * appear;
+        Render2D.circle(x, y, dotR, color);
+        Render2D.circle(x + w, y, dotR, color);
+        Render2D.circle(x, y + h, dotR, color);
+        Render2D.circle(x + w, y + h, dotR, color);
+    }
+
+    private final void drawScanline(float x, float y, float w, float h, float overlayAlpha) {
+        if (h < 6.0f) {
+            return;
+        }
+        float phase = (float)(System.currentTimeMillis() % 1400L) / 1400.0f;
+        float sy = y + 2.0f + phase * (h - 4.0f);
+        int clear = ColorEngine.multAlpha(-1, 0.0f);
+        int band = ColorEngine.multAlpha(-1, overlayAlpha * 0.13f);
+        Render2D.rect(x + 1.0f, sy - 7.0f, w - 2.0f, 7.0f, 0.0f, clear, clear, band, band);
+        Render2D.rect(x + 1.0f, sy, w - 2.0f, 7.0f, 0.0f, band, band, clear, clear);
+        int lineColor = ColorEngine.multAlpha(-1, overlayAlpha * 0.55f);
+        if (ColorEngine.alpha(lineColor) > 0) {
+            Render2D.line(x + 2.0f, sy, x + w - 2.0f, sy, 1.2f, lineColor);
+        }
+    }
+
+    private final void drawCoordsChip(float x, float y, float w, float h, float overlayAlpha) {
+        String text = "X " + Math.round(x) + "  Y " + Math.round(y);
+        float textW = Fonts.MEDIUM.width(text, 6.0f);
+        float padX = 7.0f;
+        float chipW = textW + padX * 2.0f;
+        float chipH = 13.0f;
+        float chipX = x;
+        float chipY = y - chipH - 6.0f;
+        if (chipY < 2.0f) {
+            chipY = y + h + 6.0f;
+        }
+        RectUtil.drawClientRect(chipX, chipY, chipW, chipH, Math.min(6.0f, chipH * 0.5f), overlayAlpha);
+        Fonts.MEDIUM.draw(text, chipX + padX, chipY + (chipH - 6.0f) * 0.5f - 0.5f, 6.0f, ColorEngine.multAlpha(-1, overlayAlpha));
     }
 }
 
