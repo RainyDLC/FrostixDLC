@@ -308,18 +308,19 @@ public final class EmotionWheel {
         float designSize = extent * 2.0f;
         float guiPerDesign = Render2DCoordinateSpace.guiIndependentScale();
         float modelScale = Render2DCoordinateSpace.toGui(modelHeight) / 1.46f;
-        float sweep = 360.0f / (float)this.emotionsList.size();
+        int sectors = this.sectorCount();
+        float sweep = 360.0f / (float)sectors;
         float cellWidthDesign = Math.max(this.sectorArc(ringMid, sweep - 2.6f), modelScale / guiPerDesign * 1.8f);
         float cellHeightDesign = band + modelScale / guiPerDesign * 0.9f;
         float cellWidth = cellWidthDesign * guiPerDesign;
         float cellHeight = cellHeightDesign * guiPerDesign;
-        int columns = (int)Math.ceil(Math.sqrt(this.emotionsList.size()));
-        int rows = (int)Math.ceil((double)this.emotionsList.size() / (double)columns);
+        int columns = (int)Math.ceil(Math.sqrt(sectors));
+        int rows = (int)Math.ceil((double)sectors / (double)columns);
         int x0 = Render2DCoordinateSpace.toGuiInt(designX);
         int y0 = Render2DCoordinateSpace.toGuiInt(designY);
         int x1 = x0 + Math.max(1, Math.round(cellWidth * (float)columns));
         int y1 = y0 + Math.max(1, Math.round(cellHeight * (float)rows));
-        EmotionPreviewState state = new EmotionPreviewState(this.emotionsList, time, ringMid, modelScale, 0.38f, 54.0f * scale, 132.0f * scale, (float)Math.toRadians(2.6f), 9.0f * scale, hoverPeak > 0.02f ? hoverIndex : -1, hoverPeak * 3.5f * scale, hoverPeak * scale, 1.0f + hoverPeak * 0.1f, alpha, designX, designY, designSize, cellWidth, cellHeight, cellWidthDesign, cellHeightDesign, columns, rows, new Matrix3x2f((Matrix3x2fc)graphics.getMatrices()), x0, y0, x1, y1, ScissorUtil.current());
+        EmotionPreviewState state = new EmotionPreviewState(this.emotionsList, time, ringMid, modelScale, 0.38f, 54.0f * scale, 132.0f * scale, (float)Math.toRadians(2.6f), 9.0f * scale, hoverPeak > 0.02f ? hoverIndex : -1, hoverPeak * 3.5f * scale, hoverPeak * scale, 1.0f + hoverPeak * 0.1f, alpha, designX, designY, designSize, cellWidth, cellHeight, cellWidthDesign, cellHeightDesign, columns, rows, new Matrix3x2f((Matrix3x2fc)graphics.getMatrices()), x0, y0, x1, y1, ScissorUtil.current(), sectors);
         Intrinsics.checkNotNull((Object)graphics, (String)"null cannot be cast to non-null type mixin.accessor.GuiGraphicsExtractorAccessor");
         ((GuiGraphicsExtractorAccessor)graphics).kimiko$getGuiRenderState().addSpecialElement((SpecialGuiElementRenderState)state);
     }

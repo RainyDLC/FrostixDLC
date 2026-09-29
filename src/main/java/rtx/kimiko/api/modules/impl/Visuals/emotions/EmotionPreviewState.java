@@ -74,6 +74,9 @@ implements SpecialGuiElementRenderState {
     public final int columns;
     @JvmField
     public final int rows;
+    /** Количество секторов колеса (включая сектор создания) — для маски превью. */
+    @JvmField
+    public final int sectorCount;
     @NotNull
     private final Matrix3x2f poseVal;
     private final int x0Val;
@@ -85,7 +88,7 @@ implements SpecialGuiElementRenderState {
     @NotNull
     private final ScreenRect boundsVal;
 
-    public EmotionPreviewState(@NotNull List<EmotionAnim> emotions, float time, float ringRadius, float modelScale, float modelDrop, float innerRadius, float outerRadius, float gapRadians, float corner, int hoverIndex, float hoverGrow, float hoverShrink, float hoverZoom, float alpha, float designX, float designY, float designSize, float cellWidth, float cellHeight, float cellWidthDesign, float cellHeightDesign, int columns, int rows, @NotNull Matrix3x2f poseVal, int x0Val, int y0Val, int x1Val, int y1Val, @Nullable ScreenRect scissorAreaVal) {
+    public EmotionPreviewState(@NotNull List<EmotionAnim> emotions, float time, float ringRadius, float modelScale, float modelDrop, float innerRadius, float outerRadius, float gapRadians, float corner, int hoverIndex, float hoverGrow, float hoverShrink, float hoverZoom, float alpha, float designX, float designY, float designSize, float cellWidth, float cellHeight, float cellWidthDesign, float cellHeightDesign, int columns, int rows, @NotNull Matrix3x2f poseVal, int x0Val, int y0Val, int x1Val, int y1Val, @Nullable ScreenRect scissorAreaVal, int sectorCount) {
         Intrinsics.checkNotNullParameter(emotions, (String)"emotions");
         Intrinsics.checkNotNullParameter((Object)poseVal, (String)"poseVal");
         this.emotions = emotions;
@@ -111,6 +114,7 @@ implements SpecialGuiElementRenderState {
         this.cellHeightDesign = cellHeightDesign;
         this.columns = columns;
         this.rows = rows;
+        this.sectorCount = sectorCount;
         this.poseVal = poseVal;
         this.x0Val = x0Val;
         this.y0Val = y0Val;
