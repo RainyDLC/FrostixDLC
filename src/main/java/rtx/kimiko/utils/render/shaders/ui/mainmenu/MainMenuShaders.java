@@ -510,34 +510,72 @@ vec3 renderInside(vec2 q, float ang, float p1, float t, float aa, float aspect) 
     return col;
 }
 
+float sdPlay(vec2 p) {
+    p.x += 0.05;
+    vec2 p0 = vec2(-0.20, -0.30);
+    vec2 p1 = vec2(0.28, 0.0);
+    vec2 p2 = vec2(-0.20, 0.30);
+    vec2 e0 = p1 - p0, e1 = p2 - p1, e2 = p0 - p2;
+    vec2 v0 = p - p0, v1 = p - p1, v2 = p - p2;
+    vec2 pq0 = v0 - e0 * clamp(dot(v0, e0) / dot(e0, e0), 0.0, 1.0);
+    vec2 pq1 = v1 - e1 * clamp(dot(v1, e1) / dot(e1, e1), 0.0, 1.0);
+    vec2 pq2 = v2 - e2 * clamp(dot(v2, e2) / dot(e2, e2), 0.0, 1.0);
+    float s = sign(e0.x * e2.y - e0.y * e2.x);
+    vec2 d = min(min(vec2(dot(pq0, pq0), s * (v0.x * e0.y - v0.y * e0.x)),
+                     vec2(dot(pq1, pq1), s * (v1.x * e1.y - v1.y * e1.x))),
+                     vec2(dot(pq2, pq2), s * (v2.x * e2.y - v2.y * e2.x)));
+    return -sqrt(d.x) * sign(d.y) - 0.035;
+}
+
 // ------------------------------------------------------------ play button (outside)
 
 vec3 playButton(vec3 col, vec2 q, float s, float aa, float t, float hov, vec2 holeScreen) {
     float k = smoothstep(0.0, 0.35, s);
-    vec2 c = mix(vec2(0.0, -0.33), holeScreen, k * k);
+    if (k >= 0.999) return col;
+    vec2 c = mix(vec2(0.0, -0.32), holeScreen, k * k);
     float sc = 1.0 - k;
     if (sc <= 0.001) return col;
     vec2 p = (q - c) / sc;
     p = rot2(k * 2.5) * p;
     float aap = aa / sc;
-    vec2 hs = vec2(0.125, 0.032) * (1.0 + 0.03 * hov);
-    float d = sdBox(p, hs, hs.y);
-    float fill = 1.0 - smoothstep(-aap, aap, d);
-    float border = 1.0 - smoothstep(0.0, aap * 1.4, abs(d) - 0.0011);
-    float glow = exp(-max(d, 0.0) * (70.0 - 30.0 * hov)) * step(0.0, d);
-    float pulse = 0.5 + 0.5 * sin(t * 2.2);
-    vec3 warm = vec3(1.0, 0.66, 0.36);
 
-    vec3 inner = col * 0.35 + vec3(0.02, 0.016, 0.014);
-    inner += warm * 0.05 * (1.0 + hov);
-    inner += vec3(1.0) * 0.06 * smoothstep(0.0, hs.y, p.y) * (0.6 + 0.4 * hov);
-    float sweepX = fract(t * 0.23) * 0.6 - 0.3;
-    inner += vec3(1.0, 0.9, 0.8) * exp(-pow((p.x - sweepX - p.y * 0.8) / 0.012, 2.0)) * 0.08;
+    // Glass orb icon button (matching the Milky Way style)
+    float R = 0.052 * (1.0 + 0.15 * hov);
+    vec2 lp = p / R;
+    float d = length(lp);
+    float aaL = aap / R;
+    vec3 tint = vec3(0.65, 0.80, 1.0);
+    float fade = 1.0 - k;
 
-    vec3 outc = mix(col, inner, fill);
-    outc += mix(vec3(1.0, 0.85, 0.7), vec3(1.0), hov) * border * (0.45 + 0.5 * hov);
-    outc += warm * glow * (0.12 + 0.05 * pulse + 0.3 * hov);
-    return mix(col, outc, 1.0 - k);
+    // Outer glow
+    col += tint * exp(-max(d - 1.0, 0.0) * 2.6) * (0.06 + 0.28 * hov) * step(1.0, d) * fade;
+
+    float cover = (1.0 - smoothstep(1.0 - aaL, 1.0 + aaL, d)) * fade;
+    if (cover > 0.0) {
+        float nz = sqrt(max(1.0 - d * d, 0.0));
+        vec3 nrm = vec3(lp, nz);
+        float fres = pow(1.0 - nz, 2.5);
+        vec3 L = normalize(vec3(-0.45, 0.6, 0.65));
+        float spec = pow(max(dot(reflect(-L, nrm), vec3(0.0, 0.0, 1.0)), 0.0), 36.0);
+        vec3 orb = col * 0.28 + vec3(0.012, 0.016, 0.03);
+        orb += tint * fres * (0.55 + 1.1 * hov);
+        orb += vec3(1.0) * spec * 0.55;
+        orb += tint * 0.05 * (1.0 - d) * (1.0 + hov);
+
+        float gd = sdPlay(lp * 1.30);
+        float glyph = 1.0 - smoothstep(-aaL * 1.30, aaL * 1.30, gd);
+        vec3 gcol = mix(vec3(0.85, 0.90, 1.0), vec3(1.0), hov) * (1.1 + 0.9 * hov);
+        orb = mix(orb, gcol, glyph);
+
+        col = mix(col, orb, cover);
+    }
+
+    // Hover orbit ring
+    float ringR = 1.28 + 0.05 * sin(t * 3.5);
+    float ringD = abs(d - ringR) - 0.018;
+    col += tint * hov * (1.0 - smoothstep(0.0, aaL * 1.5, ringD)) * 0.9 * fade;
+
+    return col;
 }
 
 // ------------------------------------------------------------ main

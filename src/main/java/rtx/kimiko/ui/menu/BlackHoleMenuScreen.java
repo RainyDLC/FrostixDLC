@@ -143,8 +143,12 @@ public class BlackHoleMenuScreen extends Screen {
 
     private boolean overPlay(double mx, double my) {
         float h = this.height;
-        return Math.abs(mx - this.width / 2f) <= 0.125f * h + 0.032f * h * 0.3f
-                && Math.abs(my - 0.83f * h) <= 0.032f * h;
+        float cx = this.width / 2f;
+        float cy = h * 0.82f;
+        float r = 0.058f * h;
+        double dx = mx - cx;
+        double dy = my - cy;
+        return dx * dx + dy * dy <= (double) (r * r);
     }
 
     private int iconAt(double mx, double my) {
@@ -239,14 +243,13 @@ public class BlackHoleMenuScreen extends Screen {
     private void drawPlayLabel(DrawContext ctx, float s) {
         float a = 1f - smoothstep(0f, 0.12f, s);
         if (a <= 0.01f) return;
-        float size = Math.max(8f, this.height * 0.03f);
-        int c = argb((int) (a * 255), 255, 244, 232);
-        text(ctx, Fonts.SEMIBOLD, "ИГРАТЬ", this.width / 2f, this.height * 0.83f, size, c);
-        if (phase == Phase.OUTSIDE) {
-            float pulse = 0.5f + 0.5f * (float) Math.sin(time() * 2.2f);
-            int hc = argb((int) ((0.25f + 0.2f * pulse) * (1f - playHover * 0.6f) * 255), 200, 205, 220);
-            text(ctx, Fonts.REGULAR, "нажми Enter или кликни", this.width / 2f, this.height * 0.905f, size * 0.55f, hc);
-        }
+        float h = this.height;
+        float cx = this.width / 2f;
+        float cy = h * 0.82f;
+        float r = 0.052f * h * (1f + 0.15f * playHover);
+        float size = Math.max(7f, h * 0.026f) * (1f + 0.12f * playHover);
+        int c = argb((int) (a * (120 + 135 * playHover)), (int) (205 + 50 * playHover), (int) (215 + 40 * playHover), 255);
+        text(ctx, Fonts.MEDIUM, "ИГРАТЬ", cx, cy + r * 1.45f + size * 0.6f, size, c);
     }
 
     private void drawInsideText(DrawContext ctx, float p1) {
