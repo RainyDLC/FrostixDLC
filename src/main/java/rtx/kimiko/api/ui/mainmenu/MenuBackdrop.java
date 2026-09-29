@@ -124,7 +124,6 @@ public final class MenuBackdrop {
         INSTANCE.drawCursorLight(mouseX, mouseY, alpha);
         INSTANCE.drawAtmosphere(w, h, dt, alpha);
         INSTANCE.drawVignette(w, h, alpha);
-        INSTANCE.drawGrain(w, h, alpha);
     }
 
     private final void drawLayer(MenuBackground background, float w, float h, float alpha) {
