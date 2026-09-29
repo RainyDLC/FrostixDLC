@@ -36,18 +36,13 @@ public class MainMenuScreen extends BaseScreen {
         "Выйти"
     };
 
-    // Vector Icon Glyphs from Fonts.MAINMENU
-    // 'a' = Globe (Multiplayer)
-    // 'b' = Gamepad (Singleplayer)
-    // 'c' = Account / Profile
-    // 'd' = Settings / Gear
-    // 'e' = Power / Exit
-    private static final String[] ACTION_ICONS_GLYPH = {
-        "a",
-        "b",
-        "c",
-        "d",
-        "e"
+    // Dedicated Button Icons (Earth globe, Gamepad, User Profile, Settings Gear, Power/Exit)
+    private static final String[] ACTION_ICONS = {
+        "icons/earth.png",
+        "icons/gamepad.png",
+        "icons/people.png",
+        "icons/settings.png",
+        "icons/exit.png"
     };
 
     // Animation & State
@@ -84,6 +79,11 @@ public class MainMenuScreen extends BaseScreen {
     protected void init() {
         super.init();
         lastFrameTime = System.nanoTime();
+        // Pre-warm icon textures
+        for (String icon : ACTION_ICONS) {
+            Render2D.imageReady(icon);
+        }
+        Render2D.imageReady("icons/settings.png");
     }
 
     @Override
@@ -104,13 +104,16 @@ public class MainMenuScreen extends BaseScreen {
         // 2. Top-Left Player Profile Card
         renderPlayerCard(mx, my, dt);
 
-        // 3. Top-Right Atmospheric Time Widget & Gear Button
-        renderTopRightWidgets(mx, my, dt, cfg);
+        // 3. Top-Center Minimalist Time Widget (Time only, centered at top)
+        renderTopCenterClock(cfg);
 
-        // 4. Left Hero Title & Subtitle (Matching reference)
+        // 4. Top-Right Settings Gear Button
+        renderGearButton(mx, my, dt);
+
+        // 5. Left Hero Title & Subtitle (Matching reference)
         renderHeroBlock(cfg);
 
-        // 5. Main Buttons (Frosted Matte Glass)
+        // 6. Main Buttons (Frosted Matte Glass, identical styling, no solid blue)
         renderButtons(mx, my, dt, cfg);
 
         // 6. Free Move Banner / Grid
@@ -174,9 +177,32 @@ public class MainMenuScreen extends BaseScreen {
     }
 
     /* =========================================================================
-     * TOP-RIGHT: Atmospheric Time Widget & Gear Button
+     * TOP-CENTER: Minimalist Time Widget (Time only, centered at top)
      * ========================================================================= */
-    private void renderTopRightWidgets(float mx, float my, float dt, MenuConfig cfg) {
+    private void renderTopCenterClock(MenuConfig cfg) {
+        if (!cfg.showClock) return;
+
+        String timeStr = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+        float textW = Fonts.BOLD.width(timeStr, 8.5f);
+        float padX = 14.0f;
+        float clockW = textW + padX * 2.0f;
+        float clockH = 26.0f;
+        float clockX = (width - clockW) * 0.5f;
+        float clockY = 18.0f;
+
+        // Frosted Matte Translucent Glass Pill
+        Render2D.rect(clockX, clockY, clockW, clockH, 8.0f, 0x420E1825);
+        Render2D.rect(clockX + 2.0f, clockY + 1.0f, clockW - 4.0f, 1.0f, 0.5f, 0x1AFFFFFF);
+        Render2D.outline(clockX, clockY, clockW, clockH, 8.0f, 0.85f, 0x2AFFFFFF);
+
+        // Crisp White Time Text (Vertically and horizontally centered)
+        Fonts.BOLD.draw(timeStr, clockX + (clockW - textW) * 0.5f, clockY + 8.5f, 8.5f, 0xFFFFFFFF);
+    }
+
+    /* =========================================================================
+     * TOP-RIGHT: Gear Settings Button
+     * ========================================================================= */
+    private void renderGearButton(float mx, float my, float dt) {
         float rightMargin = 24.0f;
         float gearSize = 32.0f;
         float gearX = width - rightMargin - gearSize;
@@ -192,45 +218,16 @@ public class MainMenuScreen extends BaseScreen {
         int gearOutline = settingsOpen || gearHover ? 0xCC68B1FF : 0x2AFFFFFF;
         Render2D.outline(gearX, gearY, gearSize, gearSize, 8.0f, 0.85f, gearOutline);
 
-        // Gear Icon (Vector MSDF glyph 'd')
-        float rotDeg = gearHoverAnim * 50.0f;
+        // Real Gear Icon (from icons/settings.png, smooth rotation on hover)
+        float iconSize = 16.0f;
+        float iconX = gearX + (gearSize - iconSize) * 0.5f;
+        float iconY = gearY + (gearSize - iconSize) * 0.5f;
+        float rotDeg = gearHoverAnim * 60.0f;
+        int gearColor = settingsOpen ? 0xFFFFFFFF : lerpColor(0xCCB8D4EE, 0xFFFFFFFF, gearHoverAnim);
         if (gearHoverAnim > 0.01f) {
-            Fonts.MAINMENU.msdf("d", gearX + 11.5f, gearY + 11.5f, 9.0f, 0xFFFFFFFF, rotDeg, gearX + 16.0f, gearY + 16.0f);
+            Render2D.rotatedImage("icons/settings.png", iconX, iconY, iconSize, 0.0f, rotDeg, gearX + gearSize * 0.5f, gearY + gearSize * 0.5f, gearColor);
         } else {
-            Fonts.MAINMENU.draw("d", gearX + 11.5f, gearY + 11.5f, 9.0f, 0xFFFFFFFF);
-        }
-
-        // Time Widget
-        if (cfg.showClock) {
-            float widgetW = 166.0f;
-            float widgetH = 32.0f;
-            float widgetX = gearX - widgetW - 10.0f;
-            float widgetY = 18.0f;
-
-            Render2D.rect(widgetX, widgetY, widgetW, widgetH, 8.0f, 0x420E1825);
-            Render2D.rect(widgetX + 2.0f, widgetY + 1.0f, widgetW - 4.0f, 1.0f, 0.5f, 0x1AFFFFFF);
-            Render2D.outline(widgetX, widgetY, widgetW, widgetH, 8.0f, 0.85f, 0x2AFFFFFF);
-
-            // Clock
-            String timeStr = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
-            Fonts.BOLD.draw(timeStr, widgetX + 10.0f, widgetY + 11.0f, 8.2f, 0xFFFFFFFF);
-
-            // Day phase indicators: "Восход  День  Закат  Ночь"
-            int currentPhase = MenuBackdrop.getRealTimePhase();
-
-            String[] phases = {"Восход", "День", "Закат", "Ночь"};
-            float phaseStartX = widgetX + 56.0f;
-            float phaseSpacing = 27.0f;
-
-            for (int p = 0; p < phases.length; p++) {
-                boolean active = (p == currentPhase);
-                float px = phaseStartX + p * phaseSpacing;
-                if (active) {
-                    Render2D.rect(px - 3.0f, widgetY + 8.0f, 25.0f, 16.0f, 4.0f, 0x553B82F6);
-                    Render2D.outline(px - 3.0f, widgetY + 8.0f, 25.0f, 16.0f, 4.0f, 0.7f, 0xAA60A5FA);
-                }
-                Fonts.MEDIUM.draw(phases[p], px, widgetY + 12.0f, 4.6f, active ? 0xFFFFFFFF : 0x7598AFC7);
-            }
+            Render2D.image("icons/settings.png", iconX, iconY, iconSize, iconSize, 0.0f, gearColor);
         }
     }
 
@@ -272,28 +269,18 @@ public class MainMenuScreen extends BaseScreen {
             // Slide right slightly on hover (+3px)
             float renderX = bx + anim * 3.0f;
 
-            // 1. MATTE TRANSLUCENT FILL
-            int fill;
-            if (i == 0) {
-                // Multiplayer button: featured with vibrant royal azure glass from screenshot!
-                int baseBlue = 0xCC1E5CE0;
-                int hoverBlue = 0xEE2A6DF5;
-                fill = lerpColor(baseBlue, hoverBlue, anim);
-            } else {
-                // Other buttons: frosted matte translucent acrylic
-                int baseGlass = 0x48101C2B;
-                int hoverGlass = 0x751E3249;
-                fill = lerpColor(baseGlass, hoverGlass, anim);
-            }
+            // 1. MATTE TRANSLUCENT FILL (Same sleek frosted matte acrylic for all buttons, no solid blue)
+            int baseGlass = 0x48101C2B;
+            int hoverGlass = 0x751E3249;
+            int fill = lerpColor(baseGlass, hoverGlass, anim);
             Render2D.rect(renderX, by, bw, bh, 7.0f, fill);
 
-            // 2. SPECULAR TOP BEVEL HIGHLIGHT (Creates authentic glass look)
-            int specularCol = (i == 0) ? 0x35FFFFFF : 0x18FFFFFF;
-            Render2D.rect(renderX + 2.0f, by + 1.0f, bw - 4.0f, 1.0f, 0.5f, specularCol);
+            // 2. SPECULAR TOP BEVEL HIGHLIGHT (Creates authentic frosted glass look)
+            Render2D.rect(renderX + 2.0f, by + 1.0f, bw - 4.0f, 1.0f, 0.5f, 0x18FFFFFF);
 
             // 3. FROSTED GLASS OUTLINE
-            int baseOutline = (i == 0) ? 0x7770A8FF : 0x2AFFFFFF;
-            int hoverOutline = (i == 0) ? 0xFFB0D5FF : 0xCC68B1FF;
+            int baseOutline = 0x2AFFFFFF;
+            int hoverOutline = 0xCC68B1FF;
             if (cfg.freeMove && draggingButton == i) {
                 hoverOutline = 0xFF00E5FF;
             }
@@ -307,17 +294,24 @@ public class MainMenuScreen extends BaseScreen {
                 Render2D.rect(renderX + 2.0f, by + 4.5f, 2.5f, bh - 9.0f, 1.25f, pillColor);
             }
 
-            // 5. VECTOR MSDF GLYPH ICON (Crisp, sharp, no background texture bleed!)
-            String glyph = ACTION_ICONS_GLYPH[i];
-            float iconX = renderX + 9.0f;
-            float iconY = by + 11.0f;
-            int iconColor = (i == 0) ? 0xFFFFFFFF : lerpColor(0xCCB8D4EE, 0xFFFFFFFF, anim);
-            Fonts.MAINMENU.draw(glyph, iconX, iconY, 6.8f, iconColor);
+            // 5. ICON: Crisp dedicated icon (Earth globe, Gamepad, User Profile, Settings Gear, Power/Exit)
+            float iconSize = (i >= 3) ? 12.0f : 13.0f;
+            float iconX = renderX + (i >= 3 ? 8.5f : 10.5f);
+            float iconY = by + (bh - iconSize) * 0.5f;
+            int iconColor = lerpColor(0xCCB8D4EE, 0xFFFFFFFF, anim);
+
+            if (i == 3 && anim > 0.01f) {
+                // Subtle 45-degree micro-rotation on settings hover
+                float rotDeg = anim * 45.0f;
+                Render2D.rotatedImage(ACTION_ICONS[i], iconX, iconY, iconSize, 0.0f, rotDeg, iconX + iconSize * 0.5f, iconY + iconSize * 0.5f, iconColor);
+            } else {
+                Render2D.image(ACTION_ICONS[i], iconX, iconY, iconSize, iconSize, 0.0f, iconColor);
+            }
 
             // 6. TEXT
-            float textX = renderX + 24.0f;
+            float textX = renderX + (i >= 3 ? 25.0f : 30.0f);
             float textY = by + bh * 0.5f - 3.0f;
-            int textColor = (i == 0) ? 0xFFFFFFFF : lerpColor(0xEEEDF4FA, 0xFFFFFFFF, anim);
+            int textColor = lerpColor(0xEEEDF4FA, 0xFFFFFFFF, anim);
             Fonts.SEMIBOLD.draw(ACTION_TITLES[i], textX, textY, 5.6f, textColor);
 
             // Free move drag handle indicator
@@ -527,7 +521,7 @@ public class MainMenuScreen extends BaseScreen {
         boolean clkHover = hit(mouseX, mouseY, mx + 14.0f, clockY, mw - 28.0f, 22.0f);
         Render2D.rect(mx + 14.0f, clockY, mw - 28.0f, 22.0f, 5.0f, cfg.showClock ? 0x662A64B0 : (clkHover ? 0x44203652 : 0x22142236));
         Render2D.outline(mx + 14.0f, clockY, mw - 28.0f, 22.0f, 5.0f, 0.7f, cfg.showClock ? 0xCC68B1FF : 0x3368B1FF);
-        Fonts.SEMIBOLD.draw("Виджет времени и суток: " + (cfg.showClock ? "ВКЛ" : "ВЫКЛ"), mx + 22.0f, clockY + 7.5f, 5.2f, 0xFFFFFFFF);
+        Fonts.SEMIBOLD.draw("Виджет времени: " + (cfg.showClock ? "ВКЛ" : "ВЫКЛ"), mx + 22.0f, clockY + 7.5f, 5.2f, 0xFFFFFFFF);
     }
 
     /* =========================================================================

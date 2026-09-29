@@ -19,7 +19,7 @@ public class MenuConfig {
     public String customBackgroundName = "";
     public float backgroundBlur = 0.0f;
     public float backgroundDarkness = 0.22f;
-    public boolean particlesEnabled = true;
+    public boolean particlesEnabled = false;
     public int particleCount = 70;
     public boolean mouseParallax = true;
     public boolean freeMove = false;
