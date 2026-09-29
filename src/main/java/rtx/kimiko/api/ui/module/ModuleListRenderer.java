@@ -57,7 +57,6 @@ import rtx.kimiko.api.ui.ClientLanguage;
 import rtx.kimiko.api.ui.ScrollBar;
 import rtx.kimiko.api.ui.UI;
 import rtx.kimiko.api.ui.settings.RenderHelper;
-import rtx.kimiko.api.ui.theme.AccentGradient;
 import rtx.kimiko.api.ui.theme.ClientAccent;
 import rtx.kimiko.utils.animations.Animation;
 import rtx.kimiko.utils.animations.Decelerate;
@@ -548,12 +547,6 @@ public final class ModuleListRenderer {
             text.setCardAlpha(cardAlpha);
             text.setCardLift(cardLift);
             text.setFillTop(ModuleListRenderer.Companion.rgba(255, 255, 255, (2.0f + 4.0f * hoverT) * cardAlpha));
-            text.setFillBottom(ModuleListRenderer.Companion.rgba(255, 255, 255, 0.0f));
-            text.setHasAccent(enableT > 0.01f);
-            if (text.getHasAccent()) {
-                text.setAccentA(ClientAccent.gradientAAt(44.0f * enableT * cardAlpha, cardSampleX, cardSampleY));
-                text.setAccentB(ClientAccent.gradientBAt(14.0f * enableT * cardAlpha, cardSampleX, cardSampleY));
-            }
             float topAlpha = (30.0f + 22.0f * hoverT) * cardAlpha + (78.0f * cardAlpha - (30.0f + 22.0f * hoverT) * cardAlpha) * enableT;
             float bottomAlpha = (10.0f + 8.0f * hoverT) * cardAlpha + (52.0f * cardAlpha - (10.0f + 8.0f * hoverT) * cardAlpha) * enableT;
             text.setOutlineTop(ClientAccent.accentAt(120.0f * enableT * cardAlpha, cardSampleX, cardSampleY));
@@ -694,11 +687,7 @@ public final class ModuleListRenderer {
             entry = this.cardTexts.get(index);
             if (entry.getModule() == null) continue;
             ModuleListRenderer.Companion.pushCardPose(g, entry);
-            Render2D.rect(entry.getCardX(), entry.getCardY(), entry.getCardWidth(), entry.getCardHeight(), 6.0f, entry.getRadiusTopRight(), entry.getRadiusBottomRight(), 6.0f, entry.getFillTop(), entry.getFillTop(), entry.getFillBottom(), entry.getFillBottom());
-            if (entry.getHasAccent()) {
-                Render2D.rect(entry.getCardX(), entry.getCardY(), entry.getCardWidth(), entry.getCardHeight(), 6.0f, entry.getRadiusTopRight(), entry.getRadiusBottomRight(), 6.0f, entry.getAccentA(), entry.getAccentB(), entry.getAccentB(), entry.getAccentA());
-                AccentGradient.fillVertical(entry.getCardX() + 2.5f, entry.getCardY() + entry.getCardHeight() * 0.22f, 1.8f, entry.getCardHeight() * 0.56f, 0.9f, 235.0f * entry.getEnableT() * entry.getCardAlpha());
-            }
+            Render2D.rect(entry.getCardX(), entry.getCardY(), entry.getCardWidth(), entry.getCardHeight(), 6.0f, entry.getRadiusTopRight(), entry.getRadiusBottomRight(), 6.0f, entry.getFillTop(), entry.getFillTop(), entry.getFillTop(), entry.getFillTop());
             ModuleListRenderer.Companion.popCardPose(g, entry);
         }
         n = this.cardTextCount;
@@ -706,7 +695,7 @@ public final class ModuleListRenderer {
             entry = this.cardTexts.get(index);
             if (entry.getModule() == null || entry.getEnableT() <= 0.01f) continue;
             ModuleListRenderer.Companion.pushCardPose(g, entry);
-            Render2D.outlineClient(entry.getCardX(), entry.getCardY(), entry.getCardWidth(), entry.getCardHeight(), 6.0f, entry.getRadiusTopRight(), entry.getRadiusBottomRight(), 6.0f, 0.6f, entry.getOutlineTop(), entry.getOutlineTop(), entry.getOutlineBottom(), entry.getOutlineBottom(), entry.getOutlineStrength());
+            Render2D.outlineClient(entry.getCardX(), entry.getCardY(), entry.getCardWidth(), entry.getCardHeight(), 6.0f, entry.getRadiusTopRight(), entry.getRadiusBottomRight(), 6.0f, 0.6f, entry.getOutlineTop(), entry.getOutlineTop(), entry.getOutlineTop(), entry.getOutlineTop(), entry.getOutlineStrength());
             ModuleListRenderer.Companion.popCardPose(g, entry);
         }
         n = this.cardTextCount;
@@ -1407,7 +1396,7 @@ public final class ModuleListRenderer {
             float hoverT = hover ? 1.0f : 0.0f;
             Render2D.rect(x0, py, pw, ph, rad, this.rgba(255, 255, 255, (15.0f + 9.0f * hoverT) * alpha));
             if (t > 0.004f) {
-                AccentGradient.fillHorizontal(x0, py, pw, ph, rad, 255.0f * t * alpha);
+                Render2D.rect(x0, py, pw, ph, rad, ClientAccent.accentAt(255.0f * t * alpha, x0, py));
             }
             float kd = ph - 2.4f;
             float kx = x0 + 1.2f + t * (pw - kd - 2.4f);

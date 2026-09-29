@@ -650,16 +650,6 @@ implements GuiCapture.Source {
         if (!(this.parallaxX == 0.0f) || !(this.parallaxY == 0.0f)) {
             graphics.getMatrices().translate(this.parallaxX, this.parallaxY);
         }
-        // Soft accent glow around the main panel (reference screenshot style)
-        InterfaceModule glowModule = InterfaceModule.Companion.getInstance();
-        if (glowModule != null) {
-            int accent = glowModule.clientPrimaryColorAt(x + w * 0.5f, y + h * 0.5f);
-            int glowR = (accent >> 16) & 0xFF;
-            int glowG = (accent >> 8) & 0xFF;
-            int glowB = accent & 0xFF;
-            Render2D.rect(x - 18.0f, y - 14.0f, w + 36.0f, h + 28.0f, 24.0f, UI.Companion.color(glowR, glowG, glowB, 14, screenAlpha));
-            Render2D.rect(x - 9.0f, y - 7.0f, w + 18.0f, h + 14.0f, 19.0f, UI.Companion.color(glowR, glowG, glowB, 26, screenAlpha));
-        }
         RectUtil.drawMatteWindow(x, y, w, h, 14.0f, screenAlpha, 0.0f);
         Render2D.rect(x + 110.0f, y + 8.0f, 0.7f, h - 16.0f, 0.0f, UI.Companion.color(255, 255, 255, 13, screenAlpha));
         InterfaceModule ifaceModule = InterfaceModule.Companion.getInstance();
