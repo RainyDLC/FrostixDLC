@@ -139,11 +139,11 @@ public class MainMenuScreen extends BaseScreen {
         float cardH = 32.0f;
         boolean hover = hit(mx, my, cardX, cardY, cardW, cardH);
 
-        // Frosted Glass
-        Render2D.blur(cardX, cardY, cardW, cardH, 8.0f, 14.0f);
-        int fill = hover ? 0x481E324A : 0x2A121F2E;
+        // Frosted Matte Acrylic Glass
+        int fill = hover ? 0x65162436 : 0x420E1825;
         Render2D.rect(cardX, cardY, cardW, cardH, 8.0f, fill);
-        int outlineCol = hover ? 0x885EA8FF : 0x33FFFFFF;
+        Render2D.rect(cardX + 2.0f, cardY + 1.0f, cardW - 4.0f, 1.0f, 0.5f, 0x1AFFFFFF);
+        int outlineCol = hover ? 0x9068B1FF : 0x2AFFFFFF;
         Render2D.outline(cardX, cardY, cardW, cardH, 8.0f, 0.85f, outlineCol);
 
         // Player Head
@@ -186,63 +186,46 @@ public class MainMenuScreen extends BaseScreen {
         boolean gearHover = hit(mx, my, gearX, gearY, gearSize, gearSize);
         gearHoverAnim += ((gearHover || settingsOpen ? 1.0f : 0.0f) - gearHoverAnim) * Math.min(1.0f, dt * 10.0f);
 
-        Render2D.blur(gearX, gearY, gearSize, gearSize, 8.0f, 14.0f);
-        int gearFill = settingsOpen ? 0x882A6BFF : (gearHover ? 0x50223A5C : 0x2A121F2E);
+        int gearFill = settingsOpen ? 0x992563EB : (gearHover ? 0x651C3048 : 0x420E1825);
         Render2D.rect(gearX, gearY, gearSize, gearSize, 8.0f, gearFill);
-        int gearOutline = settingsOpen || gearHover ? 0xCC68B1FF : 0x36FFFFFF;
+        Render2D.rect(gearX + 2.0f, gearY + 1.0f, gearSize - 4.0f, 1.0f, 0.5f, 0x1AFFFFFF);
+        int gearOutline = settingsOpen || gearHover ? 0xCC68B1FF : 0x2AFFFFFF;
         Render2D.outline(gearX, gearY, gearSize, gearSize, 8.0f, 0.85f, gearOutline);
 
-        // Gear Icon (Smoothly rotates slightly on hover)
-        float rotDeg = gearHoverAnim * 35.0f;
-        Render2D.imageUv(
-            ICON_SETTINGS,
-            gearX + 8.0f,
-            gearY + 8.0f,
-            16.0f,
-            16.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            1.0f,
-            1.0f,
-            0xFFFFFFFF,
-            rotDeg,
-            gearX + 16.0f,
-            gearY + 16.0f
-        );
+        // Gear Icon (Vector MSDF glyph 'd' with rotation)
+        float rotDeg = gearHoverAnim * 50.0f;
+        Fonts.MAINMENU.draw("d", gearX + 11.5f, gearY + 11.5f, 9.0f, 0xFFFFFFFF, rotDeg, gearX + 16.0f, gearY + 16.0f);
 
         // Time Widget
         if (cfg.showClock) {
-            float widgetW = 160.0f;
+            float widgetW = 166.0f;
             float widgetH = 32.0f;
             float widgetX = gearX - widgetW - 10.0f;
             float widgetY = 18.0f;
 
-            Render2D.blur(widgetX, widgetY, widgetW, widgetH, 8.0f, 14.0f);
-            Render2D.rect(widgetX, widgetY, widgetW, widgetH, 8.0f, 0x2A121F2E);
-            Render2D.outline(widgetX, widgetY, widgetW, widgetH, 8.0f, 0.85f, 0x33FFFFFF);
+            Render2D.rect(widgetX, widgetY, widgetW, widgetH, 8.0f, 0x420E1825);
+            Render2D.rect(widgetX + 2.0f, widgetY + 1.0f, widgetW - 4.0f, 1.0f, 0.5f, 0x1AFFFFFF);
+            Render2D.outline(widgetX, widgetY, widgetW, widgetH, 8.0f, 0.85f, 0x2AFFFFFF);
 
             // Clock
             String timeStr = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
             Fonts.BOLD.draw(timeStr, widgetX + 10.0f, widgetY + 11.0f, 8.2f, 0xFFFFFFFF);
 
             // Day phase indicators: "Восход  День  Закат  Ночь"
-            int hour = LocalTime.now().getHour();
-            int currentPhase = (hour >= 5 && hour < 11) ? 0 : (hour >= 11 && hour < 17) ? 1 : (hour >= 17 && hour < 22) ? 2 : 3;
+            int currentPhase = MenuBackdrop.getRealTimePhase();
 
             String[] phases = {"Восход", "День", "Закат", "Ночь"};
-            float phaseStartX = widgetX + 54.0f;
-            float phaseSpacing = 26.0f;
+            float phaseStartX = widgetX + 56.0f;
+            float phaseSpacing = 27.0f;
 
             for (int p = 0; p < phases.length; p++) {
                 boolean active = (p == currentPhase);
                 float px = phaseStartX + p * phaseSpacing;
                 if (active) {
-                    Render2D.rect(px - 3.0f, widgetY + 8.0f, 24.0f, 16.0f, 4.0f, 0x445EA8FF);
-                    Render2D.outline(px - 3.0f, widgetY + 8.0f, 24.0f, 16.0f, 4.0f, 0.7f, 0x995EA8FF);
+                    Render2D.rect(px - 3.0f, widgetY + 8.0f, 25.0f, 16.0f, 4.0f, 0x553B82F6);
+                    Render2D.outline(px - 3.0f, widgetY + 8.0f, 25.0f, 16.0f, 4.0f, 0.7f, 0xAA60A5FA);
                 }
-                Fonts.MEDIUM.draw(phases[p], px, widgetY + 12.0f, 4.6f, active ? 0xFFFFFFFF : 0x8898AFC7);
+                Fonts.MEDIUM.draw(phases[p], px, widgetY + 12.0f, 4.6f, active ? 0xFFFFFFFF : 0x7598AFC7);
             }
         }
     }
@@ -285,27 +268,28 @@ public class MainMenuScreen extends BaseScreen {
             // Slide right slightly on hover (+3px)
             float renderX = bx + anim * 3.0f;
 
-            // 1. OPTICAL BLUR (Real frosted glass effect!)
-            Render2D.blur(renderX, by, bw, bh, 7.0f, 16.0f);
-
-            // 2. MATTE TRANSLUCENT FILL
+            // 1. MATTE TRANSLUCENT FILL
             int fill;
             if (i == 0) {
-                // Multiplayer button: featured with bright vibrant modern blue in screenshot!
-                int baseBlue = 0xBB2762E4;
-                int hoverBlue = 0xEE3978FF;
+                // Multiplayer button: featured with vibrant royal azure glass from screenshot!
+                int baseBlue = 0xCC1E5CE0;
+                int hoverBlue = 0xEE2A6DF5;
                 fill = lerpColor(baseBlue, hoverBlue, anim);
             } else {
                 // Other buttons: frosted matte translucent acrylic
-                int baseGlass = 0x2E142032;
-                int hoverGlass = 0x55284062;
+                int baseGlass = 0x48101C2B;
+                int hoverGlass = 0x751E3249;
                 fill = lerpColor(baseGlass, hoverGlass, anim);
             }
             Render2D.rect(renderX, by, bw, bh, 7.0f, fill);
 
+            // 2. SPECULAR TOP BEVEL HIGHLIGHT (Creates authentic glass look)
+            int specularCol = (i == 0) ? 0x35FFFFFF : 0x18FFFFFF;
+            Render2D.rect(renderX + 2.0f, by + 1.0f, bw - 4.0f, 1.0f, 0.5f, specularCol);
+
             // 3. FROSTED GLASS OUTLINE
-            int baseOutline = 0x36FFFFFF;
-            int hoverOutline = (i == 0) ? 0xFF99CCFF : 0xCC68B1FF;
+            int baseOutline = (i == 0) ? 0x7770A8FF : 0x2AFFFFFF;
+            int hoverOutline = (i == 0) ? 0xFFB0D5FF : 0xCC68B1FF;
             if (cfg.freeMove && draggingButton == i) {
                 hoverOutline = 0xFF00E5FF;
             }
@@ -314,21 +298,23 @@ public class MainMenuScreen extends BaseScreen {
 
             // 4. LEFT ACCENT GLOW PILL ON HOVER
             if (anim > 0.02f) {
-                int pillColor = (Math.max(0, Math.min(255, (int) (anim * 230.0f))) << 24) | 0x64ABFF;
+                int pillAlpha = Math.max(0, Math.min(255, (int) (anim * 240.0f)));
+                int pillColor = (pillAlpha << 24) | 0x64ABFF;
                 Render2D.rect(renderX + 2.0f, by + 4.5f, 2.5f, bh - 9.0f, 1.25f, pillColor);
             }
 
-            // 5. ICON
-            float iconSize = 13.0f;
+            // 5. VECTOR MSDF GLYPH ICON (Crisp, sharp, no background texture bleed!)
+            String glyph = ACTION_ICONS_GLYPH[i];
             float iconX = renderX + 9.0f;
-            float iconY = by + (bh - iconSize) * 0.5f;
-            Render2D.image(ACTION_ICONS[i], iconX, iconY, iconSize, iconSize, 0.0f, 0xFFFFFFFF);
+            float iconY = by + 11.0f;
+            int iconColor = (i == 0) ? 0xFFFFFFFF : lerpColor(0xCCB8D4EE, 0xFFFFFFFF, anim);
+            Fonts.MAINMENU.draw(glyph, iconX, iconY, 6.8f, iconColor);
 
             // 6. TEXT
-            float textX = renderX + 28.0f;
-            float textY = by + bh * 0.5f - 3.1f;
+            float textX = renderX + 24.0f;
+            float textY = by + bh * 0.5f - 3.0f;
             int textColor = (i == 0) ? 0xFFFFFFFF : lerpColor(0xEEEDF4FA, 0xFFFFFFFF, anim);
-            Fonts.SEMIBOLD.draw(ACTION_TITLES[i], textX, textY, 5.8f, textColor);
+            Fonts.SEMIBOLD.draw(ACTION_TITLES[i], textX, textY, 5.6f, textColor);
 
             // Free move drag handle indicator
             if (cfg.freeMove) {
@@ -355,9 +341,9 @@ public class MainMenuScreen extends BaseScreen {
         float bx = (width - bw) * 0.5f;
         float by = 18.0f;
 
-        Render2D.blur(bx, by, bw, 28.0f, 6.0f, 12.0f);
-        Render2D.rect(bx, by, bw, 28.0f, 6.0f, 0x7716263B);
-        Render2D.outline(bx, by, bw, 28.0f, 6.0f, 0.8f, 0xAA5EA8FF);
+        Render2D.rect(bx, by, bw, 28.0f, 6.0f, 0x88142336);
+        Render2D.rect(bx + 2.0f, by + 1.0f, bw - 4.0f, 1.0f, 0.5f, 0x22FFFFFF);
+        Render2D.outline(bx, by, bw, 28.0f, 6.0f, 0.85f, 0xCC5EA8FF);
 
         Fonts.SEMIBOLD.draw("✏️ РЕЖИМ ПЕРЕМЕЩЕНИЯ", bx + 12.0f, by + 10.0f, 5.6f, 0xFF4DA6FF);
         Fonts.REGULAR.draw("Перетаскивай кнопки мышью", bx + 118.0f, by + 10.0f, 5.2f, 0xFFD8E7F8);
@@ -382,9 +368,9 @@ public class MainMenuScreen extends BaseScreen {
         float modalY = 56.0f;
 
         // Frosted Glass Window
-        Render2D.blur(modalX, modalY, mw, mh, 10.0f, 20.0f);
-        Render2D.rect(modalX, modalY, mw, mh, 10.0f, 0x55121F30);
-        Render2D.outline(modalX, modalY, mw, mh, 10.0f, 0.85f, 0x666EA6E6);
+        Render2D.rect(modalX, modalY, mw, mh, 10.0f, 0xE5101C2B);
+        Render2D.rect(modalX + 2.0f, modalY + 1.0f, mw - 4.0f, 1.0f, 0.5f, 0x22FFFFFF);
+        Render2D.outline(modalX, modalY, mw, mh, 10.0f, 0.85f, 0x556EA6E6);
 
         // Modal Header
         Fonts.BOLD.draw("Настройки главного меню", modalX + 14.0f, modalY + 14.0f, 7.5f, 0xFFF0F6FF);
@@ -425,52 +411,45 @@ public class MainMenuScreen extends BaseScreen {
     }
 
     private void renderTabBackground(float mx, float cy, float mw, float mouseX, float mouseY, MenuConfig cfg) {
-        String[] presetNames = {
-            "Закатная долина (Референс)",
-            "Одиночный мир",
-            "Сетевая арена",
-            "Frostix 4K",
-            "Свой фон (Папка)"
-        };
-
         Fonts.MEDIUM.draw("Выбор заднего фона:", mx + 14.0f, cy, 5.2f, 0xCCADC6E2);
 
-        // Cycle through presets
+        // Cycle through presets button
         float btnY = cy + 10.0f;
-        boolean pnlHover = hit(mouseX, mouseY, mx + 14.0f, btnY, mw - 28.0f, 22.0f);
-        Render2D.blur(mx + 14.0f, btnY, mw - 28.0f, 22.0f, 5.0f, 10.0f);
-        Render2D.rect(mx + 14.0f, btnY, mw - 28.0f, 22.0f, 5.0f, pnlHover ? 0x552C4C74 : 0x33182B42);
-        Render2D.outline(mx + 14.0f, btnY, mw - 28.0f, 22.0f, 5.0f, 0.7f, pnlHover ? 0x996DA6EA : 0x336DA6EA);
+        boolean pnlHover = hit(mouseX, mouseY, mx + 14.0f, btnY, mw - 28.0f, 24.0f);
+        Render2D.rect(mx + 14.0f, btnY, mw - 28.0f, 24.0f, 5.0f, pnlHover ? 0x652C4C74 : 0x40182B42);
+        Render2D.outline(mx + 14.0f, btnY, mw - 28.0f, 24.0f, 5.0f, 0.7f, pnlHover ? 0x996DA6EA : 0x336DA6EA);
 
-        String currentName = presetNames[Math.max(0, Math.min(presetNames.length - 1, cfg.backgroundPreset))];
-        if (cfg.backgroundPreset == 4 && cfg.customBackgroundName != null && !cfg.customBackgroundName.isBlank()) {
+        String currentName = MenuBackdrop.PRESET_NAMES[Math.max(0, Math.min(MenuBackdrop.PRESET_NAMES.length - 1, cfg.backgroundPreset))];
+        if (cfg.backgroundPreset == 6 && cfg.customBackgroundName != null && !cfg.customBackgroundName.isBlank()) {
             currentName = "Свой: " + cfg.customBackgroundName;
         }
-        Fonts.SEMIBOLD.draw(truncate(currentName, 26), mx + 22.0f, btnY + 7.5f, 5.4f, 0xFFFFFFFF);
-        Fonts.BOLD.draw(">", mx + mw - 26.0f, btnY + 7.0f, 6.0f, 0xCC6DA6EA);
+        Fonts.SEMIBOLD.draw(truncate(currentName, 26), mx + 22.0f, btnY + 8.0f, 5.4f, 0xFFFFFFFF);
+        Fonts.BOLD.draw(">", mx + mw - 26.0f, btnY + 7.5f, 6.0f, 0xCC6DA6EA);
+
+        // If Auto preset is active, show the currently detected real-life phase!
+        if (cfg.backgroundPreset == 0) {
+            int phase = MenuBackdrop.getRealTimePhase();
+            String[] phaseDescriptions = {
+                "Утро (Восход) • 05:00-11:00",
+                "День (Солнечно) • 11:00-18:00",
+                "Закат (Золотой час) • 18:00-22:00",
+                "Ночь (Звезды) • 22:00-05:00"
+            };
+            Fonts.REGULAR.draw("Сейчас в реале: " + phaseDescriptions[phase], mx + 14.0f, btnY + 28.0f, 4.4f, 0xFF60A5FA);
+        }
 
         // Open folder button
-        float folderBtnY = btnY + 28.0f;
+        float folderBtnY = btnY + (cfg.backgroundPreset == 0 ? 38.0f : 30.0f);
         boolean fHover = hit(mouseX, mouseY, mx + 14.0f, folderBtnY, mw - 28.0f, 22.0f);
         Render2D.rect(mx + 14.0f, folderBtnY, mw - 28.0f, 22.0f, 5.0f, fHover ? 0x552C4C74 : 0x33182B42);
         Render2D.outline(mx + 14.0f, folderBtnY, mw - 28.0f, 22.0f, 5.0f, 0.7f, fHover ? 0x996DA6EA : 0x336DA6EA);
         Fonts.MEDIUM.draw("📁 Открыть папку .minecraft/frostix", mx + 22.0f, folderBtnY + 7.5f, 5.2f, 0xFFFFFFFF);
 
-        // Background blur slider / adjustment
-        float blurY = folderBtnY + 30.0f;
-        Fonts.MEDIUM.draw("Размытие фона (Блюр): " + (int) cfg.backgroundBlur + "px", mx + 14.0f, blurY, 5.2f, 0xCCADC6E2);
-
-        float barY = blurY + 10.0f;
-        float barW = mw - 28.0f;
-        Render2D.rect(mx + 14.0f, barY, barW, 6.0f, 3.0f, 0x441A2A3E);
-        float progress = cfg.backgroundBlur / 25.0f;
-        Render2D.rect(mx + 14.0f, barY, barW * progress, 6.0f, 3.0f, 0xEE4D94FF);
-        Render2D.circle(mx + 14.0f + barW * progress, barY + 3.0f, 5.0f, 0xFFFFFFFF);
-
         // Darkness / vignette slider
-        float darkY = barY + 16.0f;
+        float darkY = folderBtnY + 30.0f;
         Fonts.MEDIUM.draw("Затемнение фона: " + (int) (cfg.backgroundDarkness * 100.0f) + "%", mx + 14.0f, darkY, 5.2f, 0xCCADC6E2);
 
+        float barW = mw - 28.0f;
         float darkBarY = darkY + 10.0f;
         Render2D.rect(mx + 14.0f, darkBarY, barW, 6.0f, 3.0f, 0x441A2A3E);
         float darkProgress = cfg.backgroundDarkness / 0.8f;
@@ -601,29 +580,22 @@ public class MainMenuScreen extends BaseScreen {
             if (settingsTab == 0) {
                 // Background preset cycle button
                 float btnY = contentY + 10.0f;
-                if (hit(mx, my, modalX + 14.0f, btnY, mw - 28.0f, 22.0f)) {
+                if (hit(mx, my, modalX + 14.0f, btnY, mw - 28.0f, 24.0f)) {
                     cycleBackgroundPreset(cfg);
                     SoundManager.playSound(SoundManager.BUTTON_CLICK, 1.0f, 1.0f);
                     return true;
                 }
                 // Open folder button
-                float folderBtnY = btnY + 28.0f;
+                float folderBtnY = btnY + (cfg.backgroundPreset == 0 ? 38.0f : 30.0f);
                 if (hit(mx, my, modalX + 14.0f, folderBtnY, mw - 28.0f, 22.0f)) {
                     MenuConfig.openBackgroundsFolder();
                     SoundManager.playSound(SoundManager.BUTTON_CLICK, 1.0f, 1.0f);
                     return true;
                 }
-                // Blur slider
-                float barY = folderBtnY + 40.0f;
-                float barW = mw - 28.0f;
-                if (hit(mx, my, modalX + 14.0f, barY - 4.0f, barW, 14.0f)) {
-                    float p = Math.max(0.0f, Math.min(1.0f, (mx - (modalX + 14.0f)) / barW));
-                    cfg.backgroundBlur = p * 25.0f;
-                    cfg.save();
-                    return true;
-                }
                 // Darkness slider
-                float darkBarY = barY + 26.0f;
+                float darkY = folderBtnY + 30.0f;
+                float barW = mw - 28.0f;
+                float darkBarY = darkY + 10.0f;
                 if (hit(mx, my, modalX + 14.0f, darkBarY - 4.0f, barW, 14.0f)) {
                     float p = Math.max(0.0f, Math.min(1.0f, (mx - (modalX + 14.0f)) / barW));
                     cfg.backgroundDarkness = p * 0.8f;
@@ -812,12 +784,9 @@ public class MainMenuScreen extends BaseScreen {
 
     private void cycleBackgroundPreset(MenuConfig cfg) {
         List<String> customs = MenuConfig.listCustomBackgrounds();
-        int maxPresets = 4;
-        if (!customs.isEmpty()) {
-            maxPresets = 5;
-        }
+        int maxPresets = customs.isEmpty() ? (MenuBackdrop.PRESET_COUNT - 1) : MenuBackdrop.PRESET_COUNT;
         cfg.backgroundPreset = (cfg.backgroundPreset + 1) % maxPresets;
-        if (cfg.backgroundPreset == 4 && !customs.isEmpty()) {
+        if (cfg.backgroundPreset == (MenuBackdrop.PRESET_COUNT - 1) && !customs.isEmpty()) {
             cfg.customBackgroundName = customs.get(0);
         }
         MenuBackdrop.invalidate();
