@@ -315,7 +315,7 @@ public final class MenuSettings {
         blurValue = 0.58f;
         dimValue = 0.5f;
         vignetteValue = 0.55f;
-        grainValue = 0.0f;
+        grainValue = 0.28f;
         parallaxValue = 0.5f;
         driftValue = true;
         atmosphereValue = Atmosphere.DUST;
