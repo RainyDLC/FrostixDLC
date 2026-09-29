@@ -60,6 +60,8 @@ import net.minecraft.client.gui.Click;
 import net.minecraft.text.Text;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.util.DefaultSkinHelper;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.MutableText;
@@ -633,7 +635,19 @@ implements GuiCapture.Source {
         float shatterFade = Companion.guiCaptureActive() && GuiShatterAnimation.isActive() ? 1.0f - Math.min(1.0f, Math.max(0.0f, Companion.guiShatterProgress())) : 1.0f;
         float dimDrawAlpha = dimAlpha * shatterFade;
         if (dimDrawAlpha > 0.002f) {
-            Render2D.rect(dimCenterX - dimHalfW, dimCenterY - dimHalfH, dimHalfW * 2.0f, dimHalfH * 2.0f, 0.0f, UI.Companion.color(0, 0, 0, 60, dimDrawAlpha));
+            float fullW = dimHalfW * 2.0f;
+            float fullH = dimHalfH * 2.0f;
+            float fullX = dimCenterX - dimHalfW;
+            float fullY = dimCenterY - dimHalfH;
+
+            // Fullscreen backdrop blur
+            Render2D.blur(Render2D.blurBuilder().rectangle(fullX, fullY, fullW, fullH).radius(0.0f).blurRadius(18.0f * dimDrawAlpha).smoothness(1.0f).color(UI.Companion.color(255, 255, 255, 255, dimDrawAlpha)).build());
+
+            // Dark focus dimming / vignette
+            Render2D.rect(fullX, fullY, fullW, fullH, 0.0f, UI.Companion.color(4, 5, 8, 70, dimDrawAlpha));
+
+            // Halftone dot matrix
+            Render2D.halftoneRect(fullX, fullY, fullW, fullH, 0.0f, UI.Companion.color(0, 0, 0, 0, dimDrawAlpha), UI.Companion.color(255, 255, 255, 13, dimDrawAlpha), 1.0f, 6.0f);
         }
         if (Companion.guiCaptureActive()) {
             Render2D.flush();
@@ -651,14 +665,12 @@ implements GuiCapture.Source {
         if (!(this.parallaxX == 0.0f) || !(this.parallaxY == 0.0f)) {
             graphics.getMatrices().translate(this.parallaxX, this.parallaxY);
         }
-        RectUtil.drawMatteWindow(x, y, w, h, 12.0f, screenAlpha, 6.0f);
-        float panelR = 12.0f;
-        RenderHelper.drawPanelBg(x + 5.0f, y + 5.0f, 110.0f, h - 10.0f, panelR, 0.0f, 0.0f, panelR, screenAlpha);
+        RectUtil.drawMatteWindow(x, y, w, h, 14.0f, screenAlpha, 0.0f);
+        Render2D.rect(x + 110.0f, y + 8.0f, 0.7f, h - 16.0f, 0.0f, UI.Companion.color(255, 255, 255, 13, screenAlpha));
         InterfaceModule ifaceModule = InterfaceModule.Companion.getInstance();
         float themesTarget = ifaceModule == null || ifaceModule.isThemeClientColor() ? 1.0f : 0.0f;
         this.themesRowT += (themesTarget - this.themesRowT) * (1.0f - (float)Math.exp(-frameDt * 10.0f));
-        this.renderCategoryPanel(graphics, x + 5.0f, y + 2.0f, h, screenAlpha);
-        RenderHelper.drawPanelBg(x + 117.0f, y + 5.0f, w - 122.0f, 280.0f, 0.0f, panelR, panelR, 0.0f, screenAlpha);
+        this.renderCategoryPanel(graphics, x, y, h, screenAlpha);
         this.updateCategoryCrossfade(frameDt);
         this.updateEventsSubAnim(frameDt);
         float catAlpha = screenAlpha * this.categoryT;
@@ -710,6 +722,7 @@ implements GuiCapture.Source {
             float hideOffset = -stripH * (1.0f - this.headerVisibleT);
             float headerAlpha = screenAlpha * this.headerVisibleT;
             Render2D.pushScissor(graphics, stripX, stripY, stripW, stripH);
+            float panelR = 14.0f;
             RoundedScissor.push(graphics, stripX, stripY - 4.0f, stripW, stripH + 8.0f, 0.0f, panelR, 0.0f, 0.0f);
             float moduleAlpha = headerAlpha * (1.0f - this.configsHeaderT);
             if (moduleAlpha > 0.004f) {
@@ -844,26 +857,46 @@ implements GuiCapture.Source {
         float fieldH = 14.0f;
         float panelH = ModuleListRenderer.HEADER_OFFSET - 4.0f;
         float fieldY = areaY + (panelH - fieldH) * 0.5f;
-        float avSize = 18.0f;
-        float avX = areaX + areaW - pad - avSize;
-        float avY = areaY + (panelH - avSize) * 0.5f;
-        this.renderDiscordAvatar(graphics, avX, avY, avSize, alpha);
-        String name = UI.Companion.profileName();
-        String roleLabel = UI.Companion.profileRole();
-        float nameSize = 6.5f;
-        float roleSize = 5.0f;
-        float nameW = Fonts.MEDIUM.width(name, nameSize);
-        float roleW = Fonts.MEDIUM.width(roleLabel, roleSize);
-        float textRight = avX - 5.0f;
-        float nameTop = avY + (avSize - (nameSize + 1.0f + roleSize)) * 0.5f;
-        Fonts.MEDIUM.draw(name, textRight - nameW, nameTop, nameSize, UI.Companion.color(255, 255, 255, 230, alpha));
-        Fonts.MEDIUM.draw(roleLabel, textRight - roleW, nameTop + nameSize + 1.0f, roleSize, ClientAccent.accentSoftAt(195.0f * alpha, textRight - roleW, nameTop + nameSize + 1.0f));
-        float profLeft = textRight - Math.max(nameW, roleW);
-        float fieldX = areaX + pad;
+
+        // Breadcrumbs on left: Client / <Icon> <Category> ★
+        float breadcrumbX = areaX + 4.0f;
+        float breadcrumbY = areaY + panelH * 0.5f - 3.2f;
+
+        String cIconKimiko = "л";
+        float cIconSize = 7.0f;
+        AccentGradient.msdfIcon(Fonts.I2, cIconKimiko, breadcrumbX, breadcrumbY + 0.5f, cIconSize, 140.0f * alpha, 0.2f);
+        float clientIconW = Fonts.I2.msdfWidth(cIconKimiko, cIconSize);
+        breadcrumbX += clientIconW + 4.0f;
+
+        Fonts.MEDIUM.draw("Client", breadcrumbX, breadcrumbY, 6.2f, UI.Companion.color(255, 255, 255, 130, alpha));
+        float clientW = Fonts.MEDIUM.width("Client", 6.2f);
+        breadcrumbX += clientW + 5.0f;
+
+        Fonts.REGULAR.draw("/", breadcrumbX, breadcrumbY, 6.2f, UI.Companion.color(255, 255, 255, 60, alpha));
+        float slashW = Fonts.REGULAR.width("/", 6.2f);
+        breadcrumbX += slashW + 5.0f;
+
+        if (cat != null) {
+            String catIcon = String.valueOf(UI.Companion.iconChar(cat));
+            float catIconW = Fonts.KIMIKO.msdfWidth(catIcon, 6.2f);
+            AccentGradient.msdfIcon(Fonts.KIMIKO, catIcon, breadcrumbX, breadcrumbY + 0.5f, 6.2f, 255.0f * alpha, 0.5f);
+            breadcrumbX += catIconW + 4.0f;
+
+            Fonts.MEDIUM.draw(cat.getDisplayName(), breadcrumbX, breadcrumbY, 6.2f, UI.Companion.color(255, 255, 255, 245, alpha));
+            float catNameW = Fonts.MEDIUM.width(cat.getDisplayName(), 6.2f);
+            breadcrumbX += catNameW + 6.0f;
+
+            // Star
+            Fonts.MEDIUM.draw("★", breadcrumbX, breadcrumbY - 0.5f, 5.8f, UI.Companion.color(255, 255, 255, 110, alpha));
+        }
+
+        // Search & Header buttons on right
         float btnW = this.headerButtons.width(fieldH);
-        float btnX = profLeft - pad - btnW;
-        float fieldW = Math.max(60.0f, btnX - 5.0f - fieldX);
-        this.search.render(graphics, fieldX, fieldY, fieldW, fieldH, alpha, Position.Companion.mouseX(), Position.Companion.mouseY(), dt);
+        float btnX = areaX + areaW - pad - btnW;
+        float searchW = 135.0f;
+        float searchX = btnX - 6.0f - searchW;
+
+        this.search.render(graphics, searchX, fieldY, searchW, fieldH, alpha, Position.Companion.mouseX(), Position.Companion.mouseY(), dt);
         this.headerButtons.setActiveA(this.messenger.isOpen());
         this.headerButtons.render(graphics, btnX, fieldY, fieldH, alpha, Position.Companion.mouseX(), Position.Companion.mouseY(), dt);
     }
@@ -894,11 +927,10 @@ implements GuiCapture.Source {
     private final void renderCategoryPanel(DrawContext graphics, float x, float y, float h, float alpha) {
         float panelX = x;
         float panelW = 110.0f;
-        float left = panelX + 9.0f;
+        float left = panelX + 11.0f;
         int catCount = MAIN_CATEGORIES.length + OTHER_CATEGORIES.length;
-        float brandCardTop = y + 3.0f;
-        float brandCardH = 26.0f;
-        RenderHelper.drawPanelBg(panelX, brandCardTop, panelW, brandCardH, 12.0f, 0.0f, 0.0f, 0.0f, alpha);
+        float brandCardTop = y + 7.0f;
+        float brandCardH = 22.0f;
         float brandCY = brandCardTop + brandCardH * 0.5f;
         String bIcon = "x";
         float bIconSize = 14.0f;
@@ -1029,6 +1061,59 @@ implements GuiCapture.Source {
             AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.85f);
             Fonts.MEDIUM.draw(cat.getDisplayName(), subIconX + iconW3 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
         }
+
+        // Profile Card at bottom-left of sidebar
+        float profCardX = panelX + 7.0f;
+        float profCardW = panelW - 14.0f;
+        float profCardH = 26.0f;
+        float profCardY = y + h - profCardH - 7.0f;
+
+        float mx = Position.Companion.mouseX();
+        float my = Position.Companion.mouseY();
+        boolean profHover = mx >= profCardX && mx <= profCardX + profCardW && my >= profCardY && my <= profCardY + profCardH;
+        if (profHover) {
+            Render2D.rect(profCardX, profCardY, profCardW, profCardH, 6.0f, UI.Companion.color(255, 255, 255, 10, alpha));
+        }
+
+        // Avatar: Discord avatar or player skin
+        float avSize = 19.0f;
+        float avX = profCardX + 3.5f;
+        float avY = profCardY + (profCardH - avSize) * 0.5f;
+        float avRadius = 4.0f;
+        String discTex = DiscordAvatar.texture();
+        if (discTex != null && Render2D.imageReady(discTex)) {
+            Render2D.image(discTex, avX, avY, avSize, avSize, avRadius, UI.Companion.color(255, 255, 255, 255, alpha));
+        } else {
+            try {
+                MinecraftClient mc = MinecraftClient.getInstance();
+                java.util.UUID uuid = (mc.getSession() != null && mc.getSession().getUuidOrNull() != null) ? mc.getSession().getUuidOrNull() : java.util.UUID.randomUUID();
+                Identifier skinId = DefaultSkinHelper.getSkinTextures(uuid).body().texturePath();
+                String skinTex = skinId.toString();
+                if (Render2D.imageReady(skinTex)) {
+                    Render2D.imageUvNearest(skinTex, avX, avY, avSize, avRadius, avRadius, avRadius, avRadius, 0.5f, 0.125f, 0.125f, 0.25f, 0.25f, UI.Companion.color(255, 255, 255, 255, alpha));
+                    Render2D.imageUvNearest(skinTex, avX, avY, avSize, avRadius, avRadius, avRadius, avRadius, 0.5f, 0.625f, 0.125f, 0.75f, 0.25f, UI.Companion.color(255, 255, 255, 255, alpha));
+                } else {
+                    Render2D.rect(avX, avY, avSize, avSize, avRadius, UI.Companion.color(30, 42, 58, 200, alpha));
+                }
+            } catch (Throwable ignored) {
+                Render2D.rect(avX, avY, avSize, avSize, avRadius, UI.Companion.color(30, 42, 58, 200, alpha));
+            }
+        }
+        Render2D.outline(avX, avY, avSize, avSize, avRadius, 0.6f, UI.Companion.color(255, 255, 255, 25, alpha));
+
+        // Name and Role
+        String name = UI.Companion.profileName();
+        String role = UI.Companion.profileRole();
+        float textX = avX + avSize + 5.0f;
+        Fonts.SEMIBOLD.draw(name, textX, profCardY + 4.5f, 5.8f, UI.Companion.color(255, 255, 255, 240, alpha));
+        Fonts.REGULAR.draw(role, textX, profCardY + 14.5f, 4.8f, UI.Companion.color(140, 155, 175, 175, alpha));
+
+        // Three vertical dots options icon
+        float dotX = profCardX + profCardW - 5.0f;
+        float dotStartY = profCardY + (profCardH - 9.0f) * 0.5f;
+        Render2D.rect(dotX, dotStartY, 1.4f, 1.4f, 0.7f, UI.Companion.color(255, 255, 255, 110, alpha));
+        Render2D.rect(dotX, dotStartY + 3.8f, 1.4f, 1.4f, 0.7f, UI.Companion.color(255, 255, 255, 110, alpha));
+        Render2D.rect(dotX, dotStartY + 7.6f, 1.4f, 1.4f, 0.7f, UI.Companion.color(255, 255, 255, 110, alpha));
     }
 
     /*
@@ -1206,11 +1291,11 @@ implements GuiCapture.Source {
     }
 
     private final Category categoryButtonAt(float x, float y, float mx, float my) {
-        float panelX = x + 5.0f;
+        float panelX = x;
         float panelW = 110.0f;
         float hitX0 = panelX + 4.0f;
         float hitX1 = panelX + panelW - 4.0f;
-        float colY = y + 2.0f;
+        float colY = y;
         float subStartY = colY + 34.0f + 20.0f + 4.0f;
         int n = MAIN_CATEGORIES.length;
         for (int i = 0; i < n; ++i) {
@@ -1236,11 +1321,11 @@ implements GuiCapture.Source {
     }
 
     private final int eventsSubAt(float x, float y, float mx, float my) {
-        float panelX = x + 5.0f;
+        float panelX = x;
         float panelW = 110.0f;
         float hitX0 = panelX + 4.0f;
         float hitX1 = panelX + panelW - 4.0f;
-        float colY = y + 2.0f;
+        float colY = y;
         float subStartY = colY + 34.0f + 20.0f + 4.0f;
         float eventsHeaderTop = subStartY + (float)MAIN_CATEGORIES.length * 18.0f + 3.0f;
         float eSubStartY = eventsHeaderTop + 20.0f + 4.0f;

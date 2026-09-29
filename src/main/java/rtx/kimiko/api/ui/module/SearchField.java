@@ -157,8 +157,8 @@ public final class SearchField {
         float glow = Math.max(this.hoverT, this.focusT);
         int accentRgb = ClientAccent.accentAt(255.0f, x + width * 0.5f, y + height * 0.5f) & 0xFFFFFF;
         float pillR = height * 0.5f;
-        Render2D.rect(x, y, width, height, pillR, SearchField.Companion.col(0, 0, 0, ((float)66 + (float)16 * glow) * alpha));
-        Render2D.outline(x, y, width, height, pillR, 0.7f, SearchField.Companion.col(255, 255, 255, ((float)16 + (float)10 * glow) * alpha));
+        Render2D.rect(x, y, width, height, pillR, SearchField.Companion.col(14, 17, 23, ((float)110 + (float)30 * glow) * alpha));
+        Render2D.outline(x, y, width, height, pillR, 0.7f, SearchField.Companion.col(255, 255, 255, ((float)16 + (float)14 * glow) * alpha));
         if (this.focusT > 0.02f) {
             Render2D.outline(x, y, width, height, pillR, 0.8f, ClientAccent.accentAt(150.0f * this.focusT * alpha, x + width * 0.5f, y + height * 0.5f));
         }
@@ -173,7 +173,8 @@ public final class SearchField {
             Fonts.KIMIKO.msdf(this.iconGlyph, iconX, iconY, iconSize, iconA << 24 | iconRgb);
             this.textStartX = iconX + iconSize + 4.0f;
         }
-        float innerRight = x + width - 5.0f - this.rightPadding;
+        float shortcutW = (!this.typing && this.text.length() == 0) ? 36.0f : 0.0f;
+        float innerRight = x + width - 5.0f - this.rightPadding - shortcutW;
         this.textVisibleW = Math.max(4.0f, innerRight - this.textStartX);
         this.updateXOffset();
         float baseX = this.textStartX - this.xOffset;
@@ -239,6 +240,15 @@ public final class SearchField {
             }
         }
         Render2D.popScissor(g);
+        if (!this.typing && this.text.length() == 0) {
+            String sc = "CTRL + F";
+            float scSize = 5.0f;
+            float scW = Fonts.REGULAR.width(sc, scSize);
+            float scX = x + width - 17.0f - scW;
+            float scY = y + (height - scSize) * 0.5f;
+            Fonts.REGULAR.draw(sc, scX, scY, scSize, SearchField.Companion.col(255, 255, 255, 75.0f * alpha));
+            Fonts.KIMIKO.msdf("w", x + width - 12.0f, y + (height - 6.0f) * 0.5f + 0.3f, 6.0f, SearchField.Companion.col(255, 255, 255, 80.0f * alpha));
+        }
         String string = this.text.substring(0, this.cursorPosition);
         Intrinsics.checkNotNullExpressionValue((Object)string, (String)"substring(...)");
         float targetCursorX = SearchField.Companion.w(string);

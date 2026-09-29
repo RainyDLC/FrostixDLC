@@ -221,7 +221,24 @@ public final class RectUtil {
         float r = (module == null ? radius : module.rectCornerRadius.getFloat()) + radiusBonus;
         r = Math.max(0.0f, Math.min(r, Math.min(width, height) * 0.5f));
         float blur = module == null ? 18.0f : module.rectBackdropBlur.getFloat();
-        RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.85f, 13, 14, 18, 176.0f, 26.0f);
+        float a = Math.max(0.0f, Math.min(1.0f, alpha));
+        if (a > 0.01f) {
+            float[] radii = new float[]{r, r, r, r};
+            // Layer 1: Wide deep ambient drop shadow into the blurred world
+            BuiltGlow ambientShadow = new BuiltGlow(x, y, width, height, radii, 0xFF010204, 0.95f, 48.0f, 0.82f * a);
+            Render2D.glow(ambientShadow);
+
+            // Layer 2: Close dense drop shadow for clear window elevation and contrast
+            BuiltGlow midShadow = new BuiltGlow(x, y, width, height, radii, 0xFF020408, 1.30f, 24.0f, 0.90f * a);
+            Render2D.glow(midShadow);
+
+            // Layer 3: Subtle ambient glow halo (deep navy/accent aura)
+            int accent = module == null ? 0xFF14243A : (0xFF000000 | module.clientPrimaryColor());
+            BuiltGlow halo = new BuiltGlow(x, y, width, height, radii, accent, 0.70f, 32.0f, 0.35f * a);
+            Render2D.glow(halo);
+        }
+        // Deep obsidian matte glass surface
+        RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.95f, 10, 12, 17, 226.0f, 26.0f);
     }
 
     /** Popups / dropdowns / messenger inside the ClickGUI. */
@@ -229,7 +246,13 @@ public final class RectUtil {
         float r = RectUtil.clientWindowRadius(radius, width, height);
         InterfaceModule module = InterfaceModule.Companion.getInstance();
         float blur = module == null ? 18.0f : module.rectBackdropBlur.getFloat();
-        RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.7f, 11, 12, 16, 208.0f, 30.0f);
+        float a = Math.max(0.0f, Math.min(1.0f, alpha));
+        if (a > 0.01f) {
+            float[] radii = new float[]{r, r, r, r};
+            BuiltGlow shadow = new BuiltGlow(x, y, width, height, radii, 0xFF010205, 1.15f, 22.0f, 0.82f * a);
+            Render2D.glow(shadow);
+        }
+        RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.75f, 11, 13, 18, 222.0f, 28.0f);
     }
 
     /** Module / config / theme card: flat matte tile, no per-card blur. */
