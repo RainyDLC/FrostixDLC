@@ -24,7 +24,7 @@ import net.minecraft.text.MutableText;
 import org.jetbrains.annotations.NotNull;
 import rtx.kimiko.IMinecraft;
 import rtx.kimiko.api.modules.impl.Visuals.Emotions;
-import rtx.kimiko.api.modules.impl.Visuals.emotions.Emotion;
+import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionAnim;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionPlayback;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionWheel;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionWheelOverlay;
@@ -46,12 +46,12 @@ extends BaseScreen {
     private boolean dismissed;
     private static final long STICKY_WINDOW_MS = 190L;
 
-    public EmotionWheelScreen(@NotNull Emotions module, @NotNull List<Emotion> emotions) {
+    public EmotionWheelScreen(@NotNull Emotions module, @NotNull List<EmotionAnim> emotions) {
         super((Text)Text.literal("Эмоции"));
         Intrinsics.checkNotNullParameter((Object)module, (String)"module");
         Intrinsics.checkNotNullParameter(emotions, (String)"emotions");
         this.module = module;
-        this.wheel = new EmotionWheel(emotions);
+        this.wheel = new EmotionWheel(emotions, true);
         this.openedAt = System.currentTimeMillis();
     }
 
@@ -110,7 +110,12 @@ extends BaseScreen {
         if (this.dismissed) {
             return;
         }
-        Emotion selected = this.wheel.hoveredEmotion();
+        if (this.wheel.isCreateHovered()) {
+            this.dismiss();
+            IMinecraft.mc.setScreen(new EmotionEditorScreen(this.module));
+            return;
+        }
+        EmotionAnim selected = this.wheel.hoveredEmotion();
         if (selected != null) {
             this.module.playEmotion(selected);
         } else {
@@ -134,7 +139,11 @@ extends BaseScreen {
     public boolean mouseClicked(@NotNull Click event, boolean doubleClick) {
         Intrinsics.checkNotNullParameter((Object)event, (String)"event");
         if (event.button() == 1) {
+            EmotionAnim hovered = this.wheel.hoveredEmotion();
             this.dismiss();
+            if (hovered instanceof CustomEmotion) {
+                IMinecraft.mc.setScreen(new EmotionEditorScreen(this.module, (CustomEmotion) hovered));
+            }
             return true;
         }
         if (event.button() == 0) {

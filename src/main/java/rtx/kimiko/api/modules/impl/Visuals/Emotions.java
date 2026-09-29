@@ -46,6 +46,7 @@ import rtx.kimiko.api.modules.Category;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.ModuleManager;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.Emotion;
+import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionAnim;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionPlayback;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionRemoteState;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionSyncClient;
@@ -133,7 +134,7 @@ extends Module {
         return this.menuKey.isBound() && this.menuKey.getValue().isDown(window);
     }
 
-    public final void playEmotion(@NotNull Emotion emotion) {
+    public final void playEmotion(@NotNull EmotionAnim emotion) {
         Intrinsics.checkNotNullParameter((Object)((Object)emotion), (String)"emotion");
         EmotionPlayback.setSpeed(this.speed.getFloat());
         EmotionPlayback.setLooping(this.looping.getValue());
@@ -143,18 +144,19 @@ extends Module {
     }
 
     @NotNull
-    public final List<Emotion> wheel() {
-        List selected = new ArrayList();
+    public final List<EmotionAnim> wheel() {
+        List<EmotionAnim> selected = new ArrayList<>();
         for (Emotion emotion : Emotion.values()) {
             if (!this.wheelEmotions.is(emotion.displayName())) continue;
             selected.add(emotion);
         }
+        selected.addAll(CustomEmotionStore.get().all());
         return selected;
     }
 
     @EventHandler
     public final void onTick(@NotNull TickEvent event) {
-        List<Emotion> wheel;
+        List<EmotionAnim> wheel;
         Intrinsics.checkNotNullParameter((Object)event, (String)"event");
         if (!event.isPre()) {
             return;
@@ -221,7 +223,8 @@ extends Module {
         String string = level.getRegistryKey().getValue().toString();
         Intrinsics.checkNotNullExpressionValue((Object)string, (String)"toString(...)");
         String world = string;
-        this.sync.setLocalState(identity, name, world, EmotionPlayback.active(), this.localStartedAt, this.speed.getFloat(), this.looping.getValue());
+        EmotionAnim current = EmotionPlayback.active();
+        this.sync.setLocalState(identity, name, world, current instanceof Emotion ? (Emotion) current : null, this.localStartedAt, this.speed.getFloat(), this.looping.getValue());
         long now = System.currentTimeMillis();
         if (!this.sync.isConnected() && !this.sync.isConnecting() && now >= this.nextConnectAt) {
             this.sync.connect(SYNC_HOST, 32123);
