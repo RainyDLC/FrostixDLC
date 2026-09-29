@@ -929,13 +929,13 @@ implements GuiCapture.Source {
         float brandCY = brandCardTop + brandCardH * 0.5f;
         String bIcon = "x";
         float bIconSize = 14.0f;
-        float brandSize = 14.299999f;
+        float brandSize = 12.5f;
         float brandGap = 7.7999997f;
         float bIconW = bIconSize;
-        float brandTextW = Fonts.SMALL_PIXEL.msdfWidth(MainWindow.CLIENT_NAME_UPPER, brandSize);
+        float brandTextW = Fonts.MANASCO.msdfWidth(MainWindow.CLIENT_NAME_UPPER, brandSize);
         float brandStartX = panelX + (panelW - (bIconW + brandGap + brandTextW)) * 0.5f;
         LogoToy.renderSocket(graphics, brandStartX, brandCY - bIconSize * 0.5f + 0.5f, bIconSize, alpha);
-        Fonts.SMALL_PIXEL.msdf(MainWindow.CLIENT_NAME_UPPER, brandStartX + bIconW + brandGap, brandCY - brandSize * 0.5f + 0.5f, brandSize, UI.Companion.color(255, 255, 255, 255, alpha));
+        Fonts.MANASCO.msdf(MainWindow.CLIENT_NAME_UPPER, brandStartX + bIconW + brandGap, brandCY - brandSize * 0.5f + 0.5f, brandSize, UI.Companion.color(255, 255, 255, 255, alpha));
         float headerTop = y + 34.0f;
         float hcY = headerTop + 10.0f;
         Double d = this.modulesHeaderAnim.getOutput();

@@ -44,6 +44,11 @@ public final class LogoToy {
     private static final int STATE_HELD = 1;
     private static final int STATE_FREE = 2;
     private static final int STATE_RETURNING = 3;
+    private static final int STATE_ORBIT = 4;
+    private static final float ORBIT_TIME = 0.9f;
+    private static final float ORBIT_TURNS = 1.25f;
+    private static final float ORBIT_RADIUS = 34.0f;
+    private static final float ORBIT_CLICK_MAX_MOVE = 10.0f;
     private static final float FLY_SCALE = 4.6f;
     private static final float GRAVITY = 1000.0f;
     private static final float AIR_DRAG = 0.55f;
@@ -113,6 +118,15 @@ public final class LogoToy {
     private static long lastBounceMs;
     private static float floorY;
     private static boolean resting;
+    // Orbital sling: click (no drag) launches the logo into a decaying orbit around its socket.
+    private static float orbitT;
+    private static float orbitAngle;
+    private static float orbitRadius;
+    private static float orbitDir;
+    private static float orbitCX;
+    private static float orbitCY;
+    private static float holdStartX;
+    private static float holdStartY;
     @NotNull
     private static final LogoTrail trail;
     @NotNull
@@ -159,6 +173,7 @@ public final class LogoToy {
         shattering = false;
         shatterT = 0.0f;
         resting = false;
+        orbitT = 0.0f;
         trail.clear();
     }
 
@@ -351,6 +366,13 @@ public final class LogoToy {
         if (state != 1) {
             return;
         }
+        // A press without dragging is a click: launch the orbital sling instead of a throw.
+        float movedX = x - holdStartX;
+        float movedY = y - holdStartY;
+        if ((float)Math.sqrt(movedX * movedX + movedY * movedY) <= ORBIT_CLICK_MAX_MOVE) {
+            LogoToy.beginOrbit();
+            return;
+        }
         float dx = socketCenterX - x;
         float dy = socketCenterY - y;
         if ((float)Math.sqrt(dx * dx + dy * dy) <= 40.0f) {
@@ -392,6 +414,49 @@ public final class LogoToy {
         }
     }
 
+    /**
+     * Orbital sling: the logo pops off its socket, spirals around it while spinning,
+     * then elastic-snaps back home. Triggered by a click (press + release without drag).
+     */
+    private static void beginOrbit() {
+        state = STATE_ORBIT;
+        resting = false;
+        orbitT = 0.0f;
+        orbitCX = socketCenterX;
+        orbitCY = socketCenterY;
+        orbitRadius = ORBIT_RADIUS;
+        orbitAngle = (float)Math.atan2(y - socketCenterY, x - socketCenterX);
+        // Orbit direction depends on which half of the icon was clicked.
+        orbitDir = x >= socketCenterX ? 1.0f : -1.0f;
+        vx = 0.0f;
+        vy = 0.0f;
+        spinVel = 0.0f;
+        squash = 0.35f;
+        squashVel = 0.0f;
+        squashAxisX = 0.0f;
+        squashAxisY = 1.0f;
+        trail.burst(x, y, 14, 200.0f, 0.0f, 0.0f, (float)Math.PI * 2.0f);
+        Sounds.play("logo_bounce");
+    }
+
+    private final void updateOrbit(float dt) {
+        hoverT += (0.0f - hoverT) * (1.0f - (float)Math.exp(-dt * 10.0f));
+        orbitT += dt;
+        float t = Math.min(1.0f, orbitT / ORBIT_TIME);
+        float ang = orbitAngle + orbitDir * t * ORBIT_TURNS * ((float)Math.PI * 2.0f);
+        float r = orbitRadius * (float)Math.exp(-2.6f * orbitT);
+        x = orbitCX + (float)Math.cos(ang) * r;
+        y = orbitCY + (float)Math.sin(ang) * r * 0.72f;
+        spin += orbitDir * 540.0f * dt;
+        float scaleTarget = 1.0f + 0.22f * (float)Math.sin((float)Math.PI * t);
+        scale += (scaleTarget - scale) * (1.0f - (float)Math.exp(-dt * 14.0f));
+        vx = (x - prevX) / dt;
+        vy = (y - prevY) / dt;
+        if (t >= 1.0f) {
+            LogoToy.returnHome();
+        }
+    }
+
     @JvmStatic
     public static final void update(float dt, boolean interactive) {
         if (!socketReady) {
@@ -427,6 +492,10 @@ public final class LogoToy {
             }
             case 3: {
                 INSTANCE.updateReturning(step);
+                break;
+            }
+            case 4: {
+                INSTANCE.updateOrbit(step);
                 break;
             }
             default: {
@@ -627,6 +696,8 @@ public final class LogoToy {
     private final void beginHold(float mouseX, float mouseY) {
         state = 1;
         resting = false;
+        holdStartX = x;
+        holdStartY = y;
         grabDX = x - mouseX;
         grabDY = y - mouseY;
         heldSpinBase = spin;
