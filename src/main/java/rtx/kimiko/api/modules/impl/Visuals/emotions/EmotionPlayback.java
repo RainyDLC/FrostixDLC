@@ -290,7 +290,7 @@ public final class EmotionPlayback {
             return new RemotePlayback(emotion, startedAt, speed, looping);
         }
 
-        public static /* synthetic */ RemotePlayback copy$default(RemotePlayback remotePlayback, Emotion emotion, long l, float f, boolean bl, int n, Object object) {
+        public static /* synthetic */ RemotePlayback copy$default(RemotePlayback remotePlayback, EmotionAnim emotion, long l, float f, boolean bl, int n, Object object) {
             if ((n & 1) != 0) {
                 emotion = remotePlayback.emotion;
             }
