@@ -35,7 +35,7 @@ import org.joml.Matrix3x2f;
 import org.joml.Matrix3x2fc;
 import rtx.kimiko.api.drags.Position;
 import rtx.kimiko.api.lang.I18n;
-import rtx.kimiko.api.modules.impl.Visuals.emotions.Emotion;
+import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionAnim;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionPlayback;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionPreviewState;
 import rtx.kimiko.api.ui.settings.RenderHelper;
@@ -53,7 +53,8 @@ public final class EmotionWheel {
     @NotNull
     public static final Companion Companion = new Companion(null);
     @NotNull
-    private final List<Emotion> emotionsList;
+    private final List<EmotionAnim> emotionsList;
+    private final boolean createEnabled;
     @NotNull
     private final float[] hoverAnim;
     @NotNull
@@ -75,10 +76,11 @@ public final class EmotionWheel {
     private static final float DEAD_ZONE = 48.0f;
     private static final float CENTER_DIAMETER = 92.0f;
 
-    public EmotionWheel(@NotNull List<Emotion> emotionsList) {
+    public EmotionWheel(@NotNull List<EmotionAnim> emotionsList, boolean createEnabled) {
         Intrinsics.checkNotNullParameter(emotionsList, (String)"emotionsList");
         this.emotionsList = emotionsList;
-        this.hoverAnim = new float[this.emotionsList.size()];
+        this.createEnabled = createEnabled;
+        this.hoverAnim = new float[this.sectorCount()];
         this.anim = new PanelAnimation(true, true);
         this.startNanos = System.nanoTime();
         this.lastNanos = System.nanoTime();
@@ -114,8 +116,18 @@ public final class EmotionWheel {
         this.anim.setPanelRect(Position.Companion.screenWidth() * 0.5f - radius, Position.Companion.screenHeight() * 0.5f - radius, radius * 2.0f, radius * 2.0f);
     }
 
+    /** Количество секторов с учётом сектора создания новой эмоции. */
+    public final int sectorCount() {
+        return this.emotionsList.size() + (this.createEnabled ? 1 : 0);
+    }
+
+    /** Наведён ли курсор на сектор создания новой эмоции. */
+    public final boolean isCreateHovered() {
+        return this.createEnabled && this.hoveredIndex == this.emotionsList.size();
+    }
+
     @NotNull
-    public final List<Emotion> emotions() {
+    public final List<EmotionAnim> emotions() {
         return this.emotionsList;
     }
 
@@ -124,7 +136,7 @@ public final class EmotionWheel {
     }
 
     @Nullable
-    public final Emotion hoveredEmotion() {
+    public final EmotionAnim hoveredEmotion() {
         int n = ((Collection)this.emotionsList).size();
         int n2 = this.hoveredIndex;
         return (0 <= n2 ? n2 < n : false) ? this.emotionsList.get(this.hoveredIndex) : null;
@@ -133,7 +145,7 @@ public final class EmotionWheel {
     public final void updateHover() {
         float dead;
         float dy;
-        if (this.anim.isClosing() || this.emotionsList.isEmpty()) {
+        if (this.anim.isClosing() || this.sectorCount() == 0) {
             return;
         }
         float cx = Position.Companion.screenWidth() * 0.5f;
@@ -143,12 +155,12 @@ public final class EmotionWheel {
             this.hoveredIndex = -1;
             return;
         }
-        float sweep = 360.0f / (float)this.emotionsList.size();
+        float sweep = 360.0f / (float)this.sectorCount();
         float angle = (float)Math.toDegrees(Math.atan2(dx, -dy));
         if (angle < 0.0f) {
             angle += 360.0f;
         }
-        this.hoveredIndex = Math.round(angle / sweep) % this.emotionsList.size();
+        this.hoveredIndex = Math.round(angle / sweep) % this.sectorCount();
     }
 
     public final void render(@NotNull DrawContext graphics, boolean holdHint) {
@@ -170,7 +182,7 @@ public final class EmotionWheel {
         float scale = motionScale * (0.86f + 0.14f * alpha) * this.fitScale();
         float cx = Position.Companion.screenWidth() * 0.5f;
         float cy = Position.Companion.screenHeight() * 0.5f;
-        float sweep = 360.0f / (float)this.emotionsList.size();
+        float sweep = 360.0f / (float)this.sectorCount();
         float time = (float)(now - this.startNanos) / 1.0E9f;
         MinecraftClient minecraftClient2 = MinecraftClient.getInstance();
         Intrinsics.checkNotNullExpressionValue((Object)minecraftClient2, (String)"getInstance(...)");
@@ -181,20 +193,23 @@ public final class EmotionWheel {
         Render2D.rect(-5.0f, -5.0f, window.getFramebufferWidth(), window.getFramebufferHeight(), 0.0f, EmotionWheel.Companion.color(0, 0, 0, 110, this.anim.dimAlpha()));
         this.anim.beginCaptureStratum(graphics);
         this.renderHeader(cx, cy, 132.0f * scale, alpha, holdHint);
-        int n = ((Collection)this.emotionsList).size();
+        int n = this.sectorCount();
         for (i = 0; i < n; ++i) {
             float target = !this.anim.isClosing() && i == this.hoveredIndex ? 1.0f : 0.0f;
             float[] fArray = this.hoverAnim;
             int n2 = i;
             fArray[n2] = fArray[n2] + (target - this.hoverAnim[i]) * (1.0f - (float)Math.exp(-dt * 15.0f));
         }
-        n = ((Collection)this.emotionsList).size();
+        n = this.sectorCount();
         for (i = 0; i < n; ++i) {
             float hover = this.hoverAnim[i];
             float mid = sweep * (float)i;
             float inner = (54.0f - hover) * scale;
             float outer = (132.0f + hover * 3.5f) * scale;
             RectUtil.drawClientSector(cx, cy, inner, outer, mid, sweep - 2.6f, 9.0f * scale, alpha);
+        }
+        if (this.createEnabled && alpha > 0.35f) {
+            this.renderCreateGlyph(cx, cy, sweep, scale, alpha);
         }
         if (alpha > 0.35f) {
             this.submitPreviews(graphics, cx, cy, scale, alpha, time);
@@ -211,7 +226,7 @@ public final class EmotionWheel {
 
     private final void renderHeader(float cx, float cy, float ring, float alpha, boolean holdHint) {
         String title = I18n.tr("Выбери нужную эмоцию");
-        String hint = holdHint ? I18n.tr("Выберите эмоцию и отпустите клавишу") : I18n.tr("Кликните по эмоции \u00b7 ПКМ чтобы закрыть");
+        String hint = holdHint ? I18n.tr("Выберите эмоцию и отпустите клавишу") : I18n.tr("Клик — играть \u00b7 ПКМ по своей эмоции — редактировать");
         float titleSize = 10.5f;
         float hintSize = 6.0f;
         float titleW = Fonts.SEMIBOLD.width(title, titleSize);
@@ -221,10 +236,28 @@ public final class EmotionWheel {
         Fonts.MEDIUM.draw(hint, cx - hintW * 0.5f, top + titleSize + 4.0f, hintSize, EmotionWheel.Companion.color(255, 255, 255, 130, alpha));
     }
 
+    private final void renderCreateGlyph(float cx, float cy, float sweep, float scale, float alpha) {
+        int index = this.emotionsList.size();
+        float midRad = (float)Math.toRadians(sweep * (float)index);
+        float r = 93.0f * scale;
+        float gx = cx + (float)Math.sin(midRad) * r;
+        float gy = cy - (float)Math.cos(midRad) * r;
+        boolean hovered = this.isCreateHovered() && !this.anim.isClosing();
+        float size = (hovered ? 20.0f : 16.0f) * scale;
+        String glyph = "+";
+        float w = Fonts.SEMIBOLD.width(glyph, size);
+        int color = hovered ? ClientAccent.accentSoftAt(230.0f * alpha, gx, gy)
+                : EmotionWheel.Companion.color(255, 255, 255, 200, alpha);
+        Fonts.SEMIBOLD.draw(glyph, gx - w * 0.5f, gy - size * 0.5f, size, color);
+    }
+
     private final void renderCenter(float cx, float cy, float scale, float alpha) {
-        Emotion selected = this.anim.isClosing() ? null : this.hoveredEmotion();
+        EmotionAnim selected = this.anim.isClosing() ? null : this.hoveredEmotion();
+        boolean createHovered = !this.anim.isClosing() && this.isCreateHovered();
         String label;
-        if (selected != null && selected.displayName() != null) {
+        if (createHovered) {
+            label = I18n.tr("Создать");
+        } else if (selected != null && selected.displayName() != null) {
             label = I18n.tr(selected.displayName());
         } else {
             label = EmotionPlayback.isPlaying() ? I18n.tr("Остановить") : I18n.tr("Отмена");
@@ -241,9 +274,10 @@ public final class EmotionWheel {
             labelSize *= maxLabelWidth / labelW;
             labelW = maxLabelWidth;
         }
-        int labelColor = selected != null ? EmotionWheel.Companion.color(255, 255, 255, 240, alpha) : ClientAccent.accentSoftAt(210.0f * alpha, cx, cy);
+        int labelColor = createHovered ? ClientAccent.accentSoftAt(230.0f * alpha, cx, cy)
+                : selected != null ? EmotionWheel.Companion.color(255, 255, 255, 240, alpha) : ClientAccent.accentSoftAt(210.0f * alpha, cx, cy);
         Fonts.SEMIBOLD.draw(label, cx - labelW * 0.5f, cy - labelSize * 0.5f - 3.0f * scale, labelSize, labelColor);
-        String sub = selected != null ? I18n.tr("Выбрано") : I18n.tr("Отпустите");
+        String sub = createHovered ? I18n.tr("Новая эмоция") : selected != null ? I18n.tr("Выбрано") : I18n.tr("Отпустите");
         float subSize = 5.2f * scale;
         float subW = Fonts.MEDIUM.width(sub, subSize);
         Fonts.MEDIUM.draw(sub, cx - subW * 0.5f, cy + 7.0f * scale, subSize, EmotionWheel.Companion.color(255, 255, 255, 115, alpha));
@@ -292,7 +326,7 @@ public final class EmotionWheel {
 
     private final float wheelScale() {
         float ringMid = 93.0f;
-        float arc = this.sectorArc(ringMid, 360.0f / (float)this.emotionsList.size());
+        float arc = this.sectorArc(ringMid, 360.0f / (float)this.sectorCount());
         return arc >= 52.0f ? 1.0f : 52.0f / arc;
     }
 

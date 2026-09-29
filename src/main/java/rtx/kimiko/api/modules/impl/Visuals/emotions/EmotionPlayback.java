@@ -26,7 +26,7 @@ import net.minecraft.client.render.entity.model.BipedEntityModel;
 import net.minecraft.client.network.ClientPlayerEntity;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import rtx.kimiko.api.modules.impl.Visuals.emotions.Emotion;
+import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionAnim;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionPose;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionStateHolder;
 
@@ -39,13 +39,13 @@ public final class EmotionPlayback {
     @NotNull
     private static final EmotionPose POSE = new EmotionPose();
     @Nullable
-    private static Emotion active;
+    private static EmotionAnim active;
     private static long startNanos;
     private static long stopNanos;
     private static float speed;
     private static boolean looping;
     @Nullable
-    private static Emotion preview;
+    private static EmotionAnim preview;
     private static float previewTime;
     @NotNull
     private static final Map<UUID, RemotePlayback> REMOTE;
@@ -54,7 +54,7 @@ public final class EmotionPlayback {
     }
 
     @JvmStatic
-    public static final void play(@Nullable Emotion emotion) {
+    public static final void play(Nullable EmotionAnim emotion) {
         if (emotion == null) {
             EmotionPlayback.stop();
             return;
@@ -80,7 +80,7 @@ public final class EmotionPlayback {
     }
 
     @JvmStatic
-    public static final void setRemote(@Nullable UUID playerId, @Nullable Emotion emotion, long startedAt, float speed, boolean looping) {
+    public static final void setRemote(@Nullable UUID playerId, Nullable EmotionAnim emotion, long startedAt, float speed, boolean looping) {
         if (playerId != null && emotion != null && startedAt > 0L) {
             REMOTE.put(playerId, new RemotePlayback(emotion, startedAt, Math.max(0.05f, speed), looping));
         }
@@ -103,11 +103,11 @@ public final class EmotionPlayback {
 
     @JvmStatic
     public static final void update() {
-        Emotion emotion = active;
+        EmotionAnim emotion = active;
         if (emotion == null) {
             return;
         }
-        Emotion current = emotion;
+        EmotionAnim current = emotion;
         if (!looping && stopNanos == 0L && EmotionPlayback.time() >= current.duration()) {
             EmotionPlayback.stop();
         }
@@ -116,7 +116,7 @@ public final class EmotionPlayback {
 
     @JvmStatic
     @Nullable
-    public static final Emotion active() {
+    public static final EmotionAnim active() {
         return active;
     }
 
@@ -127,21 +127,21 @@ public final class EmotionPlayback {
 
     @JvmStatic
     public static final float time() {
-        Emotion emotion = active;
+        EmotionAnim emotion = active;
         if (emotion == null) {
             return 0.0f;
         }
-        Emotion current = emotion;
+        EmotionAnim current = emotion;
         return INSTANCE.elapsed(startNanos) * speed;
     }
 
     @JvmStatic
     public static final float weight() {
-        Emotion emotion = active;
+        EmotionAnim emotion = active;
         if (emotion == null) {
             return 0.0f;
         }
-        Emotion current = emotion;
+        EmotionAnim current = emotion;
         if (stopNanos != 0L && INSTANCE.elapsed(stopNanos) >= 0.25f) {
             EmotionPlayback.cancel();
             return 0.0f;
@@ -157,7 +157,7 @@ public final class EmotionPlayback {
     }
 
     @JvmStatic
-    public static final void beginPreview(@Nullable Emotion emotion, float time) {
+    public static final void beginPreview(Nullable EmotionAnim emotion, float time) {
         preview = emotion;
         previewTime = time;
     }
@@ -169,12 +169,12 @@ public final class EmotionPlayback {
 
     @JvmStatic
     public static final void fill(@Nullable EmotionStateHolder holder, @Nullable Entity entity) {
-        Emotion act;
+        EmotionAnim act;
         RemotePlayback remote;
         if (holder == null) {
             return;
         }
-        Emotion prev = preview;
+        EmotionAnim prev = preview;
         if (prev != null) {
             holder.kimiko$setEmotion(prev, previewTime, 1.0f);
             return;
@@ -210,11 +210,11 @@ public final class EmotionPlayback {
         if (model == null || holder == null) {
             return;
         }
-        Emotion emotion = holder.kimiko$getEmotion();
+        EmotionAnim emotion = holder.kimiko$getEmotion();
         if (emotion == null) {
             return;
         }
-        Emotion emotion2 = emotion;
+        EmotionAnim emotion2 = emotion;
         float weight = holder.kimiko$getEmotionWeight();
         if (weight <= 0.001f) {
             return;
@@ -237,12 +237,12 @@ public final class EmotionPlayback {
     @Metadata(mv={2, 4, 0}, k=1, xi=48, d1={"\u00002\n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0010\t\n\u0000\n\u0002\u0010\u0007\n\u0000\n\u0002\u0010\u000b\n\u0002\b\u0010\n\u0002\u0010\b\n\u0002\b\u0002\n\u0002\u0010\u000e\n\u0002\b\u000b\b\u0082\b\u0018\u00002\u00020\u0001B'\u0012\u0006\u0010\u0003\u001a\u00020\u0002\u0012\u0006\u0010\u0005\u001a\u00020\u0004\u0012\u0006\u0010\u0007\u001a\u00020\u0006\u0012\u0006\u0010\t\u001a\u00020\b\u00a2\u0006\u0004\b\n\u0010\u000bJ\u0010\u0010\f\u001a\u00020\u0002H\u00c6\u0003\u00a2\u0006\u0004\b\f\u0010\rJ\u0010\u0010\u000e\u001a\u00020\u0004H\u00c6\u0003\u00a2\u0006\u0004\b\u000e\u0010\u000fJ\u0010\u0010\u0010\u001a\u00020\u0006H\u00c6\u0003\u00a2\u0006\u0004\b\u0010\u0010\u0011J\u0010\u0010\u0012\u001a\u00020\bH\u00c6\u0003\u00a2\u0006\u0004\b\u0012\u0010\u0013J8\u0010\u0014\u001a\u00020\u00002\b\b\u0002\u0010\u0003\u001a\u00020\u00022\b\b\u0002\u0010\u0005\u001a\u00020\u00042\b\b\u0002\u0010\u0007\u001a\u00020\u00062\b\b\u0002\u0010\t\u001a\u00020\bH\u00c6\u0001\u00a2\u0006\u0004\b\u0014\u0010\u0015J\u001b\u0010\u0017\u001a\u00020\b2\b\u0010\u0016\u001a\u0004\u0018\u00010\u0001H\u00d6\u0083\u0004\u00a2\u0006\u0004\b\u0017\u0010\u0018J\u0011\u0010\u001a\u001a\u00020\u0019H\u00d6\u0081\u0004\u00a2\u0006\u0004\b\u001a\u0010\u001bJ\u0011\u0010\u001d\u001a\u00020\u001cH\u00d6\u0081\u0004\u00a2\u0006\u0004\b\u001d\u0010\u001eR\u0017\u0010\u0003\u001a\u00020\u00028\u0006\u00a2\u0006\f\n\u0004\b\u0003\u0010\u001f\u001a\u0004\b \u0010\rR\u0017\u0010\u0005\u001a\u00020\u00048\u0006\u00a2\u0006\f\n\u0004\b\u0005\u0010!\u001a\u0004\b\"\u0010\u000fR\u0017\u0010\u0007\u001a\u00020\u00068\u0006\u00a2\u0006\f\n\u0004\b\u0007\u0010#\u001a\u0004\b$\u0010\u0011R\u0017\u0010\t\u001a\u00020\b8\u0006\u00a2\u0006\f\n\u0004\b\t\u0010%\u001a\u0004\b&\u0010\u0013\u00a8\u0006'"}, d2={"Lrtx/kimiko/api/modules/impl/Visuals/emotions/EmotionPlayback$RemotePlayback;", "", "Lrtx/kimiko/api/modules/impl/Visuals/emotions/Emotion;", "emotion", "", "startedAt", "", "speed", "", "looping", "<init>", "(Lrtx/kimiko/api/modules/impl/Visuals/emotions/Emotion;JFZ)V", "component1", "()Lrtx/kimiko/api/modules/impl/Visuals/emotions/Emotion;", "component2", "()J", "component3", "()F", "component4", "()Z", "copy", "(Lrtx/kimiko/api/modules/impl/Visuals/emotions/Emotion;JFZ)Lrtx/kimiko/api/modules/impl/Visuals/emotions/EmotionPlayback$RemotePlayback;", "other", "equals", "(Ljava/lang/Object;)Z", "", "hashCode", "()I", "", "toString", "()Ljava/lang/String;", "Lrtx/kimiko/api/modules/impl/Visuals/emotions/Emotion;", "getEmotion", "J", "getStartedAt", "F", "getSpeed", "Z", "getLooping", "rtx.kimiko:kimiko"})
     private static final class RemotePlayback {
         @NotNull
-        private final Emotion emotion;
+        private final EmotionAnim emotion;
         private final long startedAt;
         private final float speed;
         private final boolean looping;
 
-        public RemotePlayback(@NotNull Emotion emotion, long startedAt, float speed, boolean looping) {
+        public RemotePlayback(NotNull EmotionAnim emotion, long startedAt, float speed, boolean looping) {
             Intrinsics.checkNotNullParameter((Object)((Object)emotion), (String)"emotion");
             this.emotion = emotion;
             this.startedAt = startedAt;
@@ -251,7 +251,7 @@ public final class EmotionPlayback {
         }
 
         @NotNull
-        public final Emotion getEmotion() {
+        public final EmotionAnim getEmotion() {
             return this.emotion;
         }
 
@@ -268,7 +268,7 @@ public final class EmotionPlayback {
         }
 
         @NotNull
-        public final Emotion component1() {
+        public final EmotionAnim component1() {
             return this.emotion;
         }
 
@@ -285,7 +285,7 @@ public final class EmotionPlayback {
         }
 
         @NotNull
-        public final RemotePlayback copy(@NotNull Emotion emotion, long startedAt, float speed, boolean looping) {
+        public final RemotePlayback copy(NotNull EmotionAnim emotion, long startedAt, float speed, boolean looping) {
             Intrinsics.checkNotNullParameter((Object)((Object)emotion), (String)"emotion");
             return new RemotePlayback(emotion, startedAt, speed, looping);
         }

@@ -16,7 +16,7 @@ import org.jetbrains.annotations.Nullable;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionPose;
 
 @Metadata(mv={2, 4, 0}, k=1, xi=48)
-public enum Emotion {
+public enum Emotion implements EmotionAnim {
     WAVE("WAVE", 3.6f),
     JERK("JERK", 3.0f),
     SHY("SHY", 3.4f),
