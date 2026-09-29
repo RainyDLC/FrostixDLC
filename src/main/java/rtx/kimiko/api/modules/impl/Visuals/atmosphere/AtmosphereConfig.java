@@ -7,6 +7,8 @@ package rtx.kimiko.api.modules.impl.Visuals.atmosphere;
 public record AtmosphereConfig(
         boolean lensFlare, float flareIntensity, float flareScale, int flareTint,
         boolean anamorphicStreak, boolean starburst,
+        boolean sunFlare, boolean moonFlare, boolean lightningFlare,
+        boolean beaconFlare, boolean portalFlare, boolean endCrystalFlare, boolean explosionFlare,
         boolean dirtMask, float dirtIntensity, float dirtBaseVisibility,
         boolean chromaticAberration, ChromaticStrength chromaticStrength,
         boolean vignette, float vignetteIntensity, float vignetteRadius, float vignetteSoftness,
@@ -14,6 +16,10 @@ public record AtmosphereConfig(
         float masterAlpha) {
 
     public boolean needsSun() {
+        return lensFlare || dirtMask;
+    }
+
+    public boolean needsFlares() {
         return lensFlare || dirtMask;
     }
 }

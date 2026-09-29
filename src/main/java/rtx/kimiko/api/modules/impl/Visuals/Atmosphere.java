@@ -2,7 +2,10 @@ package rtx.kimiko.api.modules.impl.Visuals;
 
 import java.awt.Color;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.network.packet.s2c.play.ExplosionS2CPacket;
 import org.jetbrains.annotations.Nullable;
+import rtx.kimiko.api.events.EventHandler;
+import rtx.kimiko.api.events.impl.network.PacketReceiveEvent;
 import rtx.kimiko.api.modules.Category;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.ModuleManager;
@@ -13,6 +16,7 @@ import rtx.kimiko.api.modules.settings.impl.BooleanSetting;
 import rtx.kimiko.api.modules.settings.impl.ColorSetting;
 import rtx.kimiko.api.modules.settings.impl.ModeSetting;
 import rtx.kimiko.api.modules.settings.impl.NumberSetting;
+import rtx.kimiko.api.modules.settings.impl.SeparatorSetting;
 
 /**
  * Atmosphere: cinematic "camera lens" simulation (lens flare, lens dirt, chromatic aberration, vignette).
@@ -29,7 +33,7 @@ public final class Atmosphere extends Module {
 
     // Lens flare
     private final BooleanSetting lensFlare = (BooleanSetting) register(
-            new BooleanSetting("Блики линзы", "Блики и кольца при взгляде на солнце", true));
+            new BooleanSetting("Блики линзы", "Блики и кольца при взгляде на яркие источники света", true));
     private final NumberSetting flareIntensity = (NumberSetting) register(
             new NumberSetting("Сила бликов", "Яркость бликов", 1.0, 0.0, 2.0, 0.05).visibleWhen(lensFlare::getValue));
     private final NumberSetting flareScale = (NumberSetting) register(
@@ -37,17 +41,35 @@ public final class Atmosphere extends Module {
     private final BooleanSetting anamorphic = (BooleanSetting) register(
             new BooleanSetting("Анаморфная полоса", "Горизонтальная полоса света", true).visibleWhen(lensFlare::getValue));
     private final BooleanSetting starburst = (BooleanSetting) register(
-            new BooleanSetting("Лучи", "Лучи-звезда вокруг солнца", true).visibleWhen(lensFlare::getValue));
+            new BooleanSetting("Лучи", "Лучи-звезда вокруг источников света", true).visibleWhen(lensFlare::getValue));
     private final ColorSetting tint = (ColorSetting) register(
             new ColorSetting("Оттенок", "Оттенок бликов и грязи", new Color(255, 255, 255)));
 
+    // Sources
+    private final SeparatorSetting sourcesSep = (SeparatorSetting) register(
+            new SeparatorSetting("Источники света").visibleWhen(lensFlare::getValue));
+    private final BooleanSetting sunFlare = (BooleanSetting) register(
+            new BooleanSetting("Солнце", "Кинематографичные блики от солнца", true).visibleWhen(lensFlare::getValue));
+    private final BooleanSetting moonFlare = (BooleanSetting) register(
+            new BooleanSetting("Луна", "Холодные блики от луны ночью с учетом ее фаз", true).visibleWhen(lensFlare::getValue));
+    private final BooleanSetting lightningFlare = (BooleanSetting) register(
+            new BooleanSetting("Молнии", "Ослепляющая вспышка объектива при ударе молнии", true).visibleWhen(lensFlare::getValue));
+    private final BooleanSetting beaconFlare = (BooleanSetting) register(
+            new BooleanSetting("Маяки", "Световой столб и ореол активных маяков", true).visibleWhen(lensFlare::getValue));
+    private final BooleanSetting portalFlare = (BooleanSetting) register(
+            new BooleanSetting("Порталы", "Свечение порталов Незера и Края", true).visibleWhen(lensFlare::getValue));
+    private final BooleanSetting endCrystalFlare = (BooleanSetting) register(
+            new BooleanSetting("Кристаллы Энда", "Неоновые блики кристаллов в Краю", true).visibleWhen(lensFlare::getValue));
+    private final BooleanSetting explosionFlare = (BooleanSetting) register(
+            new BooleanSetting("Взрывы", "Вспышка линзы при взрывах TNT, криперов и кристаллов", true).visibleWhen(lensFlare::getValue));
+
     // Lens dirt
     private final BooleanSetting dirtMask = (BooleanSetting) register(
-            new BooleanSetting("Грязь на линзе", "Пыль и царапины, видны против солнца", true));
+            new BooleanSetting("Грязь на линзе", "Пыль и царапины, видны против яркого света", true));
     private final NumberSetting dirtIntensity = (NumberSetting) register(
             new NumberSetting("Сила грязи", "Насколько заметна грязь на свету", 0.8, 0.0, 1.5, 0.05).visibleWhen(dirtMask::getValue));
     private final NumberSetting dirtBase = (NumberSetting) register(
-            new NumberSetting("Грязь без солнца", "Видимость грязи всегда", 0.0, 0.0, 0.3, 0.01).visibleWhen(dirtMask::getValue));
+            new NumberSetting("Грязь без света", "Видимость грязи всегда", 0.0, 0.0, 0.3, 0.01).visibleWhen(dirtMask::getValue));
 
     // Chromatic aberration
     private final BooleanSetting chromatic = (BooleanSetting) register(
@@ -68,7 +90,7 @@ public final class Atmosphere extends Module {
 
     // Behaviour
     private final BooleanSetting occlusion = (BooleanSetting) register(
-            new BooleanSetting("Перекрытие блоками", "Блики гаснут, если солнце закрыто", true));
+            new BooleanSetting("Перекрытие блоками", "Блики гаснут, если источник закрыт", true));
     private final NumberSetting fadeSpeed = (NumberSetting) register(
             new NumberSetting("Скорость затухания", "Как быстро появляются и гаснут блики", 8.0, 1.0, 20.0, 0.5));
 
@@ -90,6 +112,15 @@ public final class Atmosphere extends Module {
         return 0.5f;
     }
 
+    @EventHandler
+    private void onPacketReceive(PacketReceiveEvent event) {
+        if (!isVisuallyActive() || !explosionFlare.getValue()) return;
+        ExplosionS2CPacket explosion = event.getPacketAs(ExplosionS2CPacket.class);
+        if (explosion != null) {
+            renderer.onExplosion(explosion.center());
+        }
+    }
+
     /** Right after the world is rendered, before the HUD. See {@code mixin.AtmosphereGameRendererMixin}. */
     public void onWorldRendered() {
         if (isVisuallyActive()) renderer.renderPostWorld(config());
@@ -104,6 +135,8 @@ public final class Atmosphere extends Module {
         return new AtmosphereConfig(
                 lensFlare.getValue(), flareIntensity.getFloat(), flareScale.getFloat(), tint.getColor() & 0xFFFFFF,
                 anamorphic.getValue(), starburst.getValue(),
+                sunFlare.getValue(), moonFlare.getValue(), lightningFlare.getValue(),
+                beaconFlare.getValue(), portalFlare.getValue(), endCrystalFlare.getValue(), explosionFlare.getValue(),
                 dirtMask.getValue(), dirtIntensity.getFloat(), dirtBase.getFloat(),
                 chromatic.getValue(), chromaticStrength(),
                 vignette.getValue(), vigIntensity.getFloat(), vigRadius.getFloat(), vigSoftness.getFloat(),
