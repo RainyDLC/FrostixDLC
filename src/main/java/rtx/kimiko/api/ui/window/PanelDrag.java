@@ -20,7 +20,6 @@ public final class PanelDrag {
     @NotNull
     public static final PanelDrag INSTANCE = new PanelDrag();
     private static final float EDGE_MARGIN = 6.0f;
-    private static final float FOLLOW_RATE = 32.0f;
     private static final float RETURN_RATE = 12.0f;
     private static float xPos;
     private static float yPos;
@@ -82,7 +81,14 @@ public final class PanelDrag {
         float limitY = Math.max(0.0f, (Position.Companion.screenHeight() - panelHeight) * 0.5f - 6.0f);
         targetX = RangesKt.coerceIn((float)targetX, (float)(-limitX), (float)limitX);
         targetY = RangesKt.coerceIn((float)targetY, (float)(-limitY), (float)limitY);
-        float k = 1.0f - (float)Math.exp(-dt * (dragging ? 32.0f : 12.0f));
+        if (dragging) {
+            // Move the panel immediately with the cursor: no smoothing lag while dragging,
+            // so nothing keeps sliding after the mouse is released.
+            xPos = targetX;
+            yPos = targetY;
+            return;
+        }
+        float k = 1.0f - (float)Math.exp(-dt * 12.0f);
         xPos += (targetX - xPos) * k;
         yPos += (targetY - yPos) * k;
         if (Math.abs(targetX - xPos) < 0.02f) {
