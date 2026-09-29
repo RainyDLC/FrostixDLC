@@ -43,7 +43,6 @@ import net.minecraft.client.session.Session;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.client.gui.screen.DeathScreen;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.network.ClientPlayerEntity;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -52,10 +51,8 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import rtx.kimiko.api.ui.mainmenu.MainMenuScreen;
 import rtx.kimiko.api.events.EventBus;
 import rtx.kimiko.api.events.impl.game.TickEvent;
 import rtx.kimiko.api.events.impl.player.AttackEntityEvent;
@@ -181,14 +178,6 @@ public abstract class MinecraftMixin {
         catch (Throwable throwable) {
             // empty catch block
         }
-    }
-
-    @ModifyVariable(method = "setScreen", at = @At("HEAD"), argsOnly = true)
-    private Screen kimiko$customMainMenu(Screen screen) {
-        if (screen instanceof TitleScreen) {
-            return MainMenuScreen.instance();
-        }
-        return screen;
     }
 
     @Inject(method={"setScreen"}, at={@At(value="HEAD")}, cancellable=true)

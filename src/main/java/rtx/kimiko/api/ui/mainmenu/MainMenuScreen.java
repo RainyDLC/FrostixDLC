@@ -84,13 +84,13 @@ public final class MainMenuScreen extends BaseScreen {
             0xD90A111C, 0xB309101A, 0x1509101A, 0xB90A111C);
         Render2D.rect(0, 0, width, 1, 0, 0x494E98FA);
         Fonts.SMALL_PIXEL.msdf("RAINYDLC", 24, 25, 13, 0xFFF3F7FF);
-        Fonts.MEDIUM.draw("ТВОЯ ИГРА. ТВОИ ПРАВИЛА.", 25, 43, 5.1f, 0xFF9FB4D5);
+        Fonts.MEDIUM.draw("РўР’РћРЇ РР“Р Рђ. РўР’РћР РџР РђР’РР›Рђ.", 25, 43, 5.1f, 0xFF9FB4D5);
         float titleSize = Math.min(30, Math.max(14, width * .037f));
         Fonts.SMALL_PIXEL.msdf("RAINYDLC", Math.max(24, width * .37f), height * .145f,
             titleSize, MenuTheme.white(240, appear));
         Render2D.rect(25, height * .355f, 31, 2, 1, 0xFF5C9EFF);
-        Fonts.BOLD.draw("Твой мир начинается здесь", 25, height * .375f, 10, 0xFFF6F8FF);
-        Fonts.MEDIUM.draw("Выбери путь и отправляйся в приключение.", 25,
+        Fonts.BOLD.draw("РўРІРѕР№ РјРёСЂ РЅР°С‡РёРЅР°РµС‚СЃСЏ Р·РґРµСЃСЊ", 25, height * .375f, 10, 0xFFF6F8FF);
+        Fonts.MEDIUM.draw("Р’С‹Р±РµСЂРё РїСѓС‚СЊ Рё РѕС‚РїСЂР°РІР»СЏР№СЃСЏ РІ РїСЂРёРєР»СЋС‡РµРЅРёРµ.", 25,
             height * .375f + 17, 5.4f, 0xFFC7D4E9);
         for (int i = 0; i < ACTIONS.length; i++) drawAction(i, mx, my);
         Render2D.rect(gearX, gearY, 30, 30, 8,
@@ -120,18 +120,18 @@ public final class MainMenuScreen extends BaseScreen {
         float ph = 191;
         Render2D.rect(px, py, pw, ph, 10, 0xE9121D2C);
         Render2D.outline(px, py, pw, ph, 10, .8f, 0x665F88BF);
-        Fonts.BOLD.draw("Настроить главное меню", px + 13, py + 15, 8, 0xFFF7FAFF);
-        Fonts.MEDIUM.draw("Перетаскивай кнопки мышью", px + 13, py + 35, 5.4f, 0xFFADC0DB);
+        Fonts.BOLD.draw("РќР°СЃС‚СЂРѕРёС‚СЊ РіР»Р°РІРЅРѕРµ РјРµРЅСЋ", px + 13, py + 15, 8, 0xFFF7FAFF);
+        Fonts.MEDIUM.draw("РџРµСЂРµС‚Р°СЃРєРёРІР°Р№ РєРЅРѕРїРєРё РјС‹С€СЊСЋ", px + 13, py + 35, 5.4f, 0xFFADC0DB);
         MenuBackground selected = MenuBackgrounds.selected();
-        String name = selected == null ? "Нет фона" : selected.name();
-        editorRow(px, py + 55, pw, "Фон: " + truncate(name, 25), mx, my);
-        editorRow(px, py + 88, pw, "Папка фото / GIF-видео", mx, my);
-        editorRow(px, py + 121, pw, "Обновить фоны", mx, my);
-        editorRow(px, py + 154, pw, "Сбросить кнопки", mx, my);
+        String name = selected == null ? "РќРµС‚ С„РѕРЅР°" : selected.name();
+        editorRow(px, py + 55, pw, "Р¤РѕРЅ: " + truncate(name, 25), mx, my);
+        editorRow(px, py + 88, pw, "РџР°РїРєР° С„РѕС‚Рѕ / GIF-РІРёРґРµРѕ", mx, my);
+        editorRow(px, py + 121, pw, "РћР±РЅРѕРІРёС‚СЊ С„РѕРЅС‹", mx, my);
+        editorRow(px, py + 154, pw, "РЎР±СЂРѕСЃРёС‚СЊ РєРЅРѕРїРєРё", mx, my);
     }
 
     private static String truncate(String text, int limit) {
-        return text.length() <= limit ? text : text.substring(0, limit - 1) + "…";
+        return text.length() <= limit ? text : text.substring(0, limit - 1) + "вЂ¦";
     }
     private void editorRow(float x, float y, float w, String label, float mx, float my) {
         Render2D.rect(x + 10, y, w - 20, 25, 6,
