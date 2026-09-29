@@ -15,21 +15,28 @@ import rtx.kimiko.api.lang.I18n;
 import rtx.kimiko.api.modules.impl.Visuals.Emotions;
 import rtx.kimiko.api.ui.BaseScreen;
 import rtx.kimiko.api.ui.module.SearchField;
+import rtx.kimiko.api.ui.settings.RenderHelper;
 import rtx.kimiko.api.ui.theme.ClientAccent;
+import rtx.kimiko.utils.color.ColorEngine;
 import rtx.kimiko.utils.render.fonts.Fonts;
+import rtx.kimiko.utils.render.others.RectUtil;
 import rtx.kimiko.utils.render.render2d.Render2D;
+import rtx.kimiko.utils.render.util.scissor.ScissorUtil;
+import rtx.kimiko.utils.sounds.Sounds;
 
 /**
  * Редактор пользовательских эмоций.
- * Живое превью персонажа, выбор части тела, слайдеры вращения/сдвига
- * по осям X/Y/Z и таймлайн с ромбиками ключевых кадров.
+ * Выполнен в фирменном полупрозрачном glassmorphism-дизайне Kimiko (как и колесо эмоций):
+ * матовые стеклянные карточки, динамические акценты темы, плавные переходы при наведении,
+ * живое превью персонажа с защитным scissor-клиппингом и голографическим пьедесталом,
+ * интерактивные слайдеры с индикацией осей X/Y/Z и таймлайн ключевых кадров.
  */
 public final class EmotionEditorScreen extends BaseScreen {
     private static final float ROT_MIN = -180.0f;
     private static final float ROT_MAX = 180.0f;
     private static final float OFF_MIN = -3.0f;
     private static final float OFF_MAX = 3.0f;
-    private static final float SNAP_PX = 5.0f;
+    private static final float SNAP_PX = 6.0f;
 
     private final Emotions module;
     private final CustomEmotion editing;
@@ -46,14 +53,28 @@ public final class EmotionEditorScreen extends BaseScreen {
     private CustomEmotion.Keyframe selectedKey;
 
     private long lastNanos = System.nanoTime();
+    private float animTime = 0.0f;
+    private float openAnim = 0.0f;
 
     // drag-состояние
     private int dragSlider = -1; // индекс слайдера 0..5 внутри части
     private boolean dragKey;
     private boolean dragScrub;
 
+    // Анимации наведения (smooth approach)
+    private float hoverClose;
+    private float hoverSave;
+    private float hoverDelete;
+    private float hoverDurMinus;
+    private float hoverDurPlus;
+    private float hoverPlay;
+    private float hoverAddKey;
+    private float hoverDelKey;
+    private final float[] tabHovers = new float[CustomEmotion.PART_COUNT];
+    private final float[] sliderHovers = new float[6];
+
     // layout (пересчитывается каждый кадр)
-    private float hdrY, hdrH;
+    private float hdrX, hdrY, hdrW, hdrH;
     private float prevX0, prevY0, prevX1, prevY1;
     private float panelX0, panelY0, panelX1, panelY1;
     private float tlX0, tlY0, tlX1, tlY1;
@@ -64,6 +85,7 @@ public final class EmotionEditorScreen extends BaseScreen {
     private float saveX, saveY, saveW, saveH;
     private float closeX, closeY, closeW, closeH;
     private float nameX, nameY, nameW, nameH;
+    private float durPillX, durPillY, durPillW, durPillH;
     private float durMinusX, durMinusY, durPlusX, durPlusY, durBox;
     private float deleteX, deleteY, deleteW, deleteH;
     private float sliderX0, sliderX1, sliderY0, sliderRowH;
@@ -88,53 +110,71 @@ public final class EmotionEditorScreen extends BaseScreen {
         this.selectedKey = this.editing.keyframeNear(0.0f, 0.03f);
     }
 
+    @Override
+    protected void init() {
+        super.init();
+        Sounds.play("gui_open");
+    }
+
     // ---------- layout ----------
 
     private void computeLayout() {
         float w = Position.screenWidth();
         float h = Position.screenHeight();
-        float pad = 14.0f;
+        float pad = 12.0f;
 
-        this.hdrY = 10.0f;
-        this.hdrH = 32.0f;
+        this.hdrX = pad;
+        this.hdrY = 8.0f;
+        this.hdrW = w - pad * 2.0f;
+        this.hdrH = 34.0f;
 
-        this.closeW = 30.0f;
-        this.closeH = 30.0f;
-        this.closeX = w - pad - this.closeW;
-        this.closeY = this.hdrY + 1.0f;
+        this.closeW = 26.0f;
+        this.closeH = 26.0f;
+        this.closeX = this.hdrX + this.hdrW - 6.0f - this.closeW;
+        this.closeY = this.hdrY + (this.hdrH - this.closeH) * 0.5f;
 
-        this.saveW = 118.0f;
-        this.saveH = 30.0f;
+        this.saveW = 104.0f;
+        this.saveH = 24.0f;
         this.saveX = this.closeX - 8.0f - this.saveW;
-        this.saveY = this.hdrY + 1.0f;
-
-        this.nameX = pad + 196.0f;
-        this.nameY = this.hdrY + 2.0f;
-        this.nameW = 230.0f;
-        this.nameH = 28.0f;
-
-        this.durBox = 26.0f;
-        this.durPlusX = this.saveX - 10.0f - this.durBox;
-        this.durMinusX = this.durPlusX - 4.0f - this.durBox;
-        this.durMinusY = this.durPlusY = this.hdrY + 3.0f;
+        this.saveY = this.hdrY + (this.hdrH - this.saveH) * 0.5f;
 
         if (this.originalName != null) {
-            this.deleteW = 118.0f;
-            this.deleteH = 30.0f;
-            this.deleteX = this.durMinusX - 10.0f - this.deleteW;
-            this.deleteY = this.hdrY + 1.0f;
+            this.deleteW = 88.0f;
+            this.deleteH = 24.0f;
+            this.deleteX = this.saveX - 6.0f - this.deleteW;
+            this.deleteY = this.hdrY + (this.hdrH - this.deleteH) * 0.5f;
         }
 
+        // Duration widget [ − | 3.0с | + ]
+        this.durBox = 20.0f;
+        float durRight = (this.originalName != null ? this.deleteX : this.saveX) - 10.0f;
+        this.durPillW = 96.0f;
+        this.durPillH = 24.0f;
+        this.durPillX = durRight - this.durPillW;
+        this.durPillY = this.hdrY + (this.hdrH - this.durPillH) * 0.5f;
+
+        this.durMinusX = this.durPillX + 2.0f;
+        this.durMinusY = this.durPillY + (this.durPillH - this.durBox) * 0.5f;
+        this.durPlusX = this.durPillX + this.durPillW - 2.0f - this.durBox;
+        this.durPlusY = this.durMinusY;
+
+        // Search / Name field
+        float titleSectionW = 175.0f;
+        this.nameX = this.hdrX + titleSectionW;
+        this.nameY = this.hdrY + (this.hdrH - 24.0f) * 0.5f;
+        this.nameW = Math.max(120.0f, Math.min(230.0f, this.durPillX - this.nameX - 12.0f));
+        this.nameH = 24.0f;
+
         float top = this.hdrY + this.hdrH + 8.0f;
-        float tlH = 108.0f;
+        float tlH = 112.0f;
         float bottom = h - tlH - pad;
 
         this.prevX0 = pad;
-        this.prevX1 = w * 0.42f;
+        this.prevX1 = Math.round(w * 0.40f);
         this.prevY0 = top;
         this.prevY1 = bottom;
 
-        this.panelX0 = this.prevX1 + 12.0f;
+        this.panelX0 = this.prevX1 + 10.0f;
         this.panelX1 = w - pad;
         this.panelY0 = top;
         this.panelY1 = bottom;
@@ -144,33 +184,41 @@ public final class EmotionEditorScreen extends BaseScreen {
         this.tlY0 = h - pad - tlH;
         this.tlY1 = h - pad;
 
-        // таймлайн: строка кнопок + трек
+        // Timeline inside
         this.playCX = this.tlX0 + 26.0f;
-        this.playCY = this.tlY0 + 24.0f;
-        this.addKeyW = 86.0f;
-        this.addKeyH = 26.0f;
-        this.addKeyX = this.tlX0 + 52.0f;
-        this.addKeyY = this.tlY0 + 11.0f;
-        this.delKeyW = 86.0f;
-        this.delKeyH = 26.0f;
-        this.delKeyX = this.addKeyX + this.addKeyW + 8.0f;
-        this.delKeyY = this.tlY0 + 11.0f;
-        this.trackX0 = this.tlX0 + 52.0f;
-        this.trackX1 = this.tlX1 - 10.0f;
+        this.playCY = this.tlY0 + 21.0f;
+
+        this.addKeyW = 78.0f;
+        this.addKeyH = 22.0f;
+        this.addKeyX = this.tlX0 + 48.0f;
+        this.addKeyY = this.tlY0 + 10.0f;
+
+        this.delKeyW = 78.0f;
+        this.delKeyH = 22.0f;
+        this.delKeyX = this.addKeyX + this.addKeyW + 6.0f;
+        this.delKeyY = this.tlY0 + 10.0f;
+
+        this.trackX0 = this.tlX0 + 48.0f;
+        this.trackX1 = this.tlX1 - 14.0f;
         this.trackY = this.tlY0 + 72.0f;
 
-        // правая панель: табы частей + слайдеры
+        // Tabs inside right panel
         this.tabX0 = this.panelX0 + 12.0f;
         this.tabY0 = this.panelY0 + 34.0f;
         this.tabGap = 6.0f;
         int perRow = 4;
         this.tabW = (this.panelX1 - this.panelX0 - 24.0f - this.tabGap * (perRow - 1)) / perRow;
-        this.tabH = 26.0f;
+        this.tabH = 24.0f;
 
-        this.sliderX0 = this.panelX0 + 12.0f;
-        this.sliderX1 = this.panelX1 - 12.0f;
-        this.sliderY0 = this.tabY0 + this.tabH * 2.0f + this.tabGap + 30.0f;
-        this.sliderRowH = 40.0f;
+        this.sliderX0 = this.panelX0 + 14.0f;
+        this.sliderX1 = this.panelX1 - 14.0f;
+        this.sliderY0 = this.tabY0 + this.tabH * 2.0f + this.tabGap + 16.0f;
+        this.sliderRowH = Math.min(38.0f, (this.panelY1 - 24.0f - this.sliderY0) / 6.0f);
+    }
+
+    private static int color(int r, int g, int b, int a, float mult) {
+        int alpha = Math.max(0, Math.min(255, Math.round((float) a * mult)));
+        return (alpha << 24) | (r << 16) | (g << 8) | b;
     }
 
     private static int col(int r, int g, int b, int a) {
@@ -181,6 +229,10 @@ public final class EmotionEditorScreen extends BaseScreen {
         return Math.max(min, Math.min(max, v));
     }
 
+    private static float approach(float current, float target, float dt, float speed) {
+        return current + (target - current) * (1.0f - (float) Math.exp(-dt * speed));
+    }
+
     private float timeToX(float t) {
         float d = Math.max(0.001f, this.editing.duration());
         return this.trackX0 + clamp(t / d, 0.0f, 1.0f) * (this.trackX1 - this.trackX0);
@@ -189,6 +241,17 @@ public final class EmotionEditorScreen extends BaseScreen {
     private float xToTime(float x) {
         float d = this.editing.duration();
         return clamp((x - this.trackX0) / Math.max(1.0f, this.trackX1 - this.trackX0), 0.0f, 1.0f) * d;
+    }
+
+    private static boolean hasNonZeroValues(int part, EmotionPose pose) {
+        int[] fields = CustomEmotion.PART_FIELD_INDICES[part];
+        for (int f : fields) {
+            float val = CustomEmotion.getValue(pose, f);
+            if (Math.abs(val) > 0.001f) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---------- render ----------
@@ -202,6 +265,7 @@ public final class EmotionEditorScreen extends BaseScreen {
         long now = System.nanoTime();
         float dt = Math.min(0.1f, (float) (now - this.lastNanos) / 1.0E9f);
         this.lastNanos = now;
+        this.animTime += dt;
 
         if (this.playing) {
             this.scrubTime += dt;
@@ -214,195 +278,511 @@ public final class EmotionEditorScreen extends BaseScreen {
             this.lastSampleTime = this.scrubTime;
         }
 
+        // Плавная анимация входа (как у колеса эмоций)
+        this.openAnim = approach(this.openAnim, 1.0f, dt, 12.0f);
+        float alpha = Math.min(1.0f, this.openAnim);
+
+        this.updateHovers(mx, my, dt);
+
         float w = Position.screenWidth();
         float h = Position.screenHeight();
-        Render2D.rect(0.0f, 0.0f, w, h, 0.0f, col(7, 9, 14, 236));
 
-        this.renderHeader(graphics, mx, my, dt);
-        this.renderPreview(graphics, mx, my);
-        this.renderPanel(graphics, mx, my);
-        this.renderTimeline(graphics, mx, my);
+        // Затемнение фона
+        Render2D.rect(-10.0f, -10.0f, w + 20.0f, h + 20.0f, 0.0f, color(0, 0, 0, 115, alpha));
+
+        // Лёгкое масштабирование при открытии
+        float scale = 0.98f + 0.02f * alpha;
+        float cx = w * 0.5f;
+        float cy = h * 0.5f;
+
+        graphics.getMatrices().pushMatrix();
+        graphics.getMatrices().translate(cx, cy);
+        graphics.getMatrices().scale(scale, scale);
+        graphics.getMatrices().translate(-cx, -cy);
+
+        this.renderHeader(graphics, mx, my, dt, alpha);
+        this.renderPreview(graphics, mx, my, alpha);
+        this.renderPanel(graphics, mx, my, alpha);
+        this.renderTimeline(graphics, mx, my, alpha);
+
+        graphics.getMatrices().popMatrix();
     }
 
-    private void renderHeader(DrawContext g, float mx, float my, float dt) {
-        float titleSize = 13.0f;
-        Fonts.SEMIBOLD.draw(I18n.tr("Редактор эмоций"), 14.0f, this.hdrY + 8.0f, titleSize, col(255, 255, 255, 240));
-        Fonts.MEDIUM.draw(I18n.tr("Название:"), 14.0f + 178.0f, this.hdrY + 13.0f, 7.0f, col(255, 255, 255, 130));
-        this.nameField.render(g, this.nameX, this.nameY, this.nameW, this.nameH, 1.0f, mx, my, dt);
-
-        // длительность: − 3.0с +
-        String durLabel = I18n.tr("Длит.:");
-        Fonts.MEDIUM.draw(durLabel, this.durMinusX - 8.0f - Fonts.MEDIUM.width(durLabel, 7.0f), this.hdrY + 13.0f, 7.0f, col(255, 255, 255, 130));
-        this.smallButton(g, this.durMinusX, this.durMinusY, this.durBox, this.durBox, "−", hit(mx, my, this.durMinusX, this.durMinusY, this.durBox, this.durBox), false);
-        this.smallButton(g, this.durPlusX, this.durPlusY, this.durBox, this.durBox, "+", hit(mx, my, this.durPlusX, this.durPlusY, this.durBox, this.durBox), false);
-        String durVal = String.format("%.1fс", this.editing.duration());
-        float dvw = Fonts.SEMIBOLD.width(durVal, 8.0f);
-        Fonts.SEMIBOLD.draw(durVal, this.durMinusX + this.durBox + (this.durPlusX - this.durMinusX - this.durBox - dvw) * 0.5f - 2.0f, this.hdrY + 11.0f, 8.0f, col(255, 255, 255, 220));
-
+    private void updateHovers(float mx, float my, float dt) {
+        this.hoverClose = approach(this.hoverClose, hit(mx, my, this.closeX, this.closeY, this.closeW, this.closeH) ? 1.0f : 0.0f, dt, 15.0f);
+        this.hoverSave = approach(this.hoverSave, hit(mx, my, this.saveX, this.saveY, this.saveW, this.saveH) ? 1.0f : 0.0f, dt, 15.0f);
         if (this.originalName != null) {
-            this.smallButton(g, this.deleteX, this.deleteY, this.deleteW, this.deleteH, I18n.tr("Удалить"), hit(mx, my, this.deleteX, this.deleteY, this.deleteW, this.deleteH), false);
+            this.hoverDelete = approach(this.hoverDelete, hit(mx, my, this.deleteX, this.deleteY, this.deleteW, this.deleteH) ? 1.0f : 0.0f, dt, 15.0f);
         }
-        this.smallButton(g, this.saveX, this.saveY, this.saveW, this.saveH, I18n.tr("Сохранить"), hit(mx, my, this.saveX, this.saveY, this.saveW, this.saveH), true);
-        this.smallButton(g, this.closeX, this.closeY, this.closeW, this.closeH, "✕", hit(mx, my, this.closeX, this.closeY, this.closeW, this.closeH), false);
+        this.hoverDurMinus = approach(this.hoverDurMinus, hit(mx, my, this.durMinusX, this.durMinusY, this.durBox, this.durBox) ? 1.0f : 0.0f, dt, 15.0f);
+        this.hoverDurPlus = approach(this.hoverDurPlus, hit(mx, my, this.durPlusX, this.durPlusY, this.durBox, this.durBox) ? 1.0f : 0.0f, dt, 15.0f);
+
+        this.hoverPlay = approach(this.hoverPlay, hit(mx, my, this.playCX - 15.0f, this.playCY - 15.0f, 30.0f, 30.0f) ? 1.0f : 0.0f, dt, 15.0f);
+        this.hoverAddKey = approach(this.hoverAddKey, hit(mx, my, this.addKeyX, this.addKeyY, this.addKeyW, this.addKeyH) ? 1.0f : 0.0f, dt, 15.0f);
+        this.hoverDelKey = approach(this.hoverDelKey, hit(mx, my, this.delKeyX, this.delKeyY, this.delKeyW, this.delKeyH) ? 1.0f : 0.0f, dt, 15.0f);
+
+        for (int part = 0; part < CustomEmotion.PART_COUNT; part++) {
+            int row = part / 4;
+            int colIdx = part % 4;
+            float x = this.tabX0 + colIdx * (this.tabW + this.tabGap);
+            float y = this.tabY0 + row * (this.tabH + this.tabGap);
+            boolean target = part == this.selectedPart || hit(mx, my, x, y, this.tabW, this.tabH);
+            this.tabHovers[part] = approach(this.tabHovers[part], target ? 1.0f : 0.0f, dt, 15.0f);
+        }
+
+        int[] fields = CustomEmotion.PART_FIELD_INDICES[this.selectedPart];
+        for (int i = 0; i < fields.length; i++) {
+            float y = this.sliderY0 + i * this.sliderRowH;
+            boolean target = this.dragSlider == i || hit(mx, my, this.sliderX0 - 4.0f, y, (this.sliderX1 - this.sliderX0) + 8.0f, this.sliderRowH);
+            this.sliderHovers[i] = approach(this.sliderHovers[i], target ? 1.0f : 0.0f, dt, 15.0f);
+        }
     }
 
-    private void renderPreview(DrawContext g, float mx, float my) {
-        Render2D.rect(this.prevX0, this.prevY0, this.prevX1 - this.prevX0, this.prevY1 - this.prevY0, 10.0f, col(13, 16, 23, 255));
-        Render2D.outline(this.prevX0, this.prevY0, this.prevX1 - this.prevX0, this.prevY1 - this.prevY0, 10.0f, 1.0f, col(255, 255, 255, 18));
+    private void renderHeader(DrawContext g, float mx, float my, float dt, float alpha) {
+        // Шапка в виде стеклянного контейнера
+        RectUtil.drawClientRectFixedRadius(this.hdrX, this.hdrY, this.hdrW, this.hdrH, 10.0f, alpha, 0.0f);
+        RenderHelper.drawPanelBg(this.hdrX + 2.0f, this.hdrY + 2.0f, this.hdrW - 4.0f, this.hdrH - 4.0f, 8.0f, alpha);
+
+        // Иконка-искра слева
+        float iconCX = this.hdrX + 16.0f;
+        float iconCY = this.hdrY + this.hdrH * 0.5f;
+        float pulse = 0.8f + 0.2f * (float) Math.sin(this.animTime * 3.0f);
+        Render2D.circle(iconCX, iconCY, 3.8f * pulse, ClientAccent.accentSoftAt(255.0f * alpha, iconCX, iconCY));
+        Render2D.circleOutline(iconCX, iconCY, 6.0f, 0.8f, ClientAccent.accentBrightAt(180.0f * alpha, iconCX, iconCY));
+
+        Fonts.SEMIBOLD.draw(I18n.tr("Редактор эмоций"), this.hdrX + 26.0f, this.hdrY + 12.0f, 8.5f, color(255, 255, 255, 245, alpha));
+
+        // Поле ввода названия
+        this.nameField.render(g, this.nameX, this.nameY, this.nameW, this.nameH, alpha, mx, my, dt);
+
+        // Длительность: [ − | 3.0с | + ]
+        RenderHelper.drawPanelBg(this.durPillX, this.durPillY, this.durPillW, this.durPillH, 5.0f, alpha);
+        Render2D.outline(this.durPillX, this.durPillY, this.durPillW, this.durPillH, 5.0f, 0.6f, color(255, 255, 255, 18, alpha));
+
+        if (this.hoverDurMinus > 0.01f) {
+            Render2D.rect(this.durMinusX, this.durMinusY, this.durBox, this.durBox, 4.0f, ClientAccent.accentFillAt(65.0f * this.hoverDurMinus * alpha, this.durMinusX, this.durMinusY));
+        }
+        float mw = Fonts.SEMIBOLD.width("−", 7.5f);
+        int mCol = ColorEngine.lerpColor(color(255, 255, 255, 180, alpha), ClientAccent.accentBrightAt(255.0f * alpha, this.durMinusX, this.durMinusY), this.hoverDurMinus);
+        Fonts.SEMIBOLD.draw("−", this.durMinusX + (this.durBox - mw) * 0.5f, this.durMinusY + 5.0f, 7.5f, mCol);
+
+        if (this.hoverDurPlus > 0.01f) {
+            Render2D.rect(this.durPlusX, this.durPlusY, this.durBox, this.durBox, 4.0f, ClientAccent.accentFillAt(65.0f * this.hoverDurPlus * alpha, this.durPlusX, this.durPlusY));
+        }
+        float pw = Fonts.SEMIBOLD.width("+", 7.5f);
+        int pCol = ColorEngine.lerpColor(color(255, 255, 255, 180, alpha), ClientAccent.accentBrightAt(255.0f * alpha, this.durPlusX, this.durPlusY), this.hoverDurPlus);
+        Fonts.SEMIBOLD.draw("+", this.durPlusX + (this.durBox - pw) * 0.5f, this.durPlusY + 5.0f, 7.5f, pCol);
+
+        String durVal = String.format("%.1fс", this.editing.duration());
+        float dvw = Fonts.SEMIBOLD.width(durVal, 7.5f);
+        float centerAreaX = this.durMinusX + this.durBox;
+        float centerAreaW = this.durPlusX - centerAreaX;
+        Fonts.SEMIBOLD.draw(durVal, centerAreaX + (centerAreaW - dvw) * 0.5f, this.durPillY + 7.5f, 7.5f, color(255, 255, 255, 235, alpha));
+
+        // Кнопка удаления (если редактируется существующая)
+        if (this.originalName != null) {
+            int delBg = ColorEngine.lerpColor(color(24, 28, 38, 220, alpha), color(175, 45, 60, 220, alpha), this.hoverDelete);
+            int delBorder = ColorEngine.lerpColor(color(255, 255, 255, 20, alpha), color(255, 95, 115, 210, alpha), this.hoverDelete);
+            Render2D.rect(this.deleteX, this.deleteY, this.deleteW, this.deleteH, 5.0f, delBg);
+            Render2D.outline(this.deleteX, this.deleteY, this.deleteW, this.deleteH, 5.0f, 0.7f, delBorder);
+            String delText = I18n.tr("Удалить");
+            float dtw = Fonts.SEMIBOLD.width(delText, 7.0f);
+            Fonts.SEMIBOLD.draw(delText, this.deleteX + (this.deleteW - dtw) * 0.5f, this.deleteY + 7.5f, 7.0f, color(255, 255, 255, 235, alpha));
+        }
+
+        // Кнопка Сохранить
+        int saveBg = ClientAccent.accentSoftAt((200.0f + 55.0f * this.hoverSave) * alpha, this.saveX, this.saveY);
+        int saveBorder = ClientAccent.accentBrightAt((160.0f + 95.0f * this.hoverSave) * alpha, this.saveX, this.saveY);
+        Render2D.rect(this.saveX, this.saveY, this.saveW, this.saveH, 5.0f, saveBg);
+        Render2D.outline(this.saveX, this.saveY, this.saveW, this.saveH, 5.0f, 0.8f, saveBorder);
+        if (this.hoverSave > 0.01f) {
+            Render2D.outline(this.saveX - 1.0f, this.saveY - 1.0f, this.saveW + 2.0f, this.saveH + 2.0f, 6.0f, 0.8f, ClientAccent.accentBrightAt(70.0f * this.hoverSave * alpha, this.saveX, this.saveY));
+        }
+        String saveText = I18n.tr("Сохранить");
+        float stw = Fonts.SEMIBOLD.width(saveText, 7.5f);
+        Fonts.SEMIBOLD.draw(saveText, this.saveX + (this.saveW - stw) * 0.5f, this.saveY + 7.0f, 7.5f, color(10, 12, 18, 255, alpha));
+
+        // Кнопка Закрыть (✕)
+        float closeR = this.closeW * 0.5f;
+        float ccx = this.closeX + closeR;
+        float ccy = this.closeY + closeR;
+        int closeBg = ColorEngine.lerpColor(color(22, 26, 36, 210, alpha), color(42, 50, 68, 240, alpha), this.hoverClose);
+        int closeBorder = ColorEngine.lerpColor(color(255, 255, 255, 18, alpha), ClientAccent.accentSoftAt(180.0f * alpha, ccx, ccy), this.hoverClose);
+        Render2D.circle(ccx, ccy, closeR, closeBg);
+        Render2D.circleOutline(ccx, ccy, closeR, 0.7f, closeBorder);
+        float cw = Fonts.SEMIBOLD.width("✕", 7.5f);
+        int cCol = ColorEngine.lerpColor(color(255, 255, 255, 190, alpha), color(255, 255, 255, 255, alpha), this.hoverClose);
+        Fonts.SEMIBOLD.draw("✕", ccx - cw * 0.5f, ccy - 4.5f, 7.5f, cCol);
+    }
+
+    private void renderPreview(DrawContext g, float mx, float my, float alpha) {
+        float pw = this.prevX1 - this.prevX0;
+        float ph = this.prevY1 - this.prevY0;
+        RectUtil.drawClientRectFixedRadius(this.prevX0, this.prevY0, pw, ph, 12.0f, alpha, 0.0f);
+        RenderHelper.drawPanelBg(this.prevX0 + 2.5f, this.prevY0 + 2.5f, pw - 5.0f, ph - 5.0f, 9.5f, alpha);
+
+        // Индикатор "Живое превью" с пульсирующей точкой
+        float dotX = this.prevX0 + 16.0f;
+        float dotY = this.prevY0 + 15.0f;
+        float pulse = 0.5f + 0.5f * (float) Math.sin(this.animTime * 4.0f);
+        Render2D.circle(dotX, dotY, 3.0f, ClientAccent.accentSoftAt(255.0f * (0.7f + 0.3f * pulse) * alpha, dotX, dotY));
+        Render2D.circleOutline(dotX, dotY, 4.5f + pulse * 1.5f, 1.0f, ClientAccent.accentSoftAt(120.0f * (1.0f - pulse) * alpha, dotX, dotY));
+
+        Fonts.SEMIBOLD.draw(I18n.tr("Живое превью"), dotX + 8.0f, this.prevY0 + 11.5f, 7.5f, color(255, 255, 255, 230, alpha));
+
+        // Бейдж текущего времени
+        String t = String.format("%.2f / %.1f с", this.scrubTime, this.editing.duration());
+        float tw = Fonts.MEDIUM.width(t, 6.5f);
+        float tpillW = tw + 12.0f;
+        float tpillX = this.prevX1 - 12.0f - tpillW;
+        RenderHelper.drawPanelBg(tpillX, this.prevY0 + 8.0f, tpillW, 14.0f, 4.0f, alpha);
+        Render2D.outline(tpillX, this.prevY0 + 8.0f, tpillW, 14.0f, 4.0f, 0.6f, color(255, 255, 255, 20, alpha));
+        Fonts.MEDIUM.draw(t, tpillX + 6.0f, this.prevY0 + 11.5f, 6.5f, color(255, 255, 255, 180, alpha));
+
+        float pad = 12.0f;
+        int x0 = (int) (this.prevX0 + pad);
+        int y0 = (int) (this.prevY0 + 26.0f);
+        int x1 = (int) (this.prevX1 - pad);
+        int y1 = (int) (this.prevY1 - 22.0f);
+
+        // Голографический пьедестал под персонажем
+        float pedCX = (x0 + x1) * 0.5f;
+        float pedCY = y1 - 12.0f;
+        float pedW = (x1 - x0) * 0.52f;
+        Render2D.circle(pedCX, pedCY, pedW * 0.5f, ClientAccent.accentFillAt(35.0f * alpha, pedCX, pedCY));
+        Render2D.circleOutline(pedCX, pedCY, pedW * 0.5f, 1.0f, ClientAccent.accentBrightAt(60.0f * alpha, pedCX, pedCY));
+        Render2D.circleOutline(pedCX, pedCY, pedW * 0.28f, 0.7f, ClientAccent.accentSoftAt(40.0f * alpha, pedCX, pedCY));
 
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc.player != null) {
-            float pad = 10.0f;
-            int x0 = (int) (this.prevX0 + pad);
-            int y0 = (int) (this.prevY0 + pad);
-            int x1 = (int) (this.prevX1 - pad);
-            int y1 = (int) (this.prevY1 - pad);
-            int size = Math.max(20, (int) ((y1 - y0) * 0.34f));
+            int size = Math.max(20, (int) ((y1 - y0) * 0.36f));
             float cx = (x0 + x1) * 0.5f;
             float cy = (y0 + y1) * 0.5f;
-            EmotionPlayback.beginPreview(this.editing, this.scrubTime);
+            ScissorUtil.push(this.prevX0 + 3.0f, this.prevY0 + 24.0f, pw - 6.0f, ph - 27.0f);
             try {
-                InventoryScreen.drawEntity(g, x0, y0, x1, y1, size, 1.0f, cx, cy, (LivingEntity) mc.player);
+                EmotionPlayback.beginPreview(this.editing, this.scrubTime);
+                try {
+                    InventoryScreen.drawEntity(g, x0, y0, x1, y1, size, 1.0f, cx, cy, (LivingEntity) mc.player);
+                } finally {
+                    EmotionPlayback.endPreview();
+                }
             } finally {
-                EmotionPlayback.endPreview();
+                ScissorUtil.pop();
             }
         }
-        String hint = I18n.tr("Живое превью");
-        Fonts.MEDIUM.draw(hint, this.prevX0 + 12.0f, this.prevY0 + 10.0f, 7.0f, col(255, 255, 255, 110));
-        if (this.playing) {
-            String t = String.format("%.2f / %.1f с", this.scrubTime, this.editing.duration());
-            float tw = Fonts.MEDIUM.width(t, 7.0f);
-            Fonts.MEDIUM.draw(t, this.prevX1 - 12.0f - tw, this.prevY0 + 10.0f, 7.0f, col(255, 255, 255, 140));
-        }
+
+        String hint = I18n.tr("● Превью в реальном времени");
+        float hw = Fonts.MEDIUM.width(hint, 6.0f);
+        Fonts.MEDIUM.draw(hint, this.prevX0 + (pw - hw) * 0.5f, this.prevY1 - 15.0f, 6.0f, color(255, 255, 255, 80, alpha));
     }
 
-    private void renderPanel(DrawContext g, float mx, float my) {
-        Render2D.rect(this.panelX0, this.panelY0, this.panelX1 - this.panelX0, this.panelY1 - this.panelY0, 10.0f, col(13, 16, 23, 255));
-        Render2D.outline(this.panelX0, this.panelY0, this.panelX1 - this.panelX0, this.panelY1 - this.panelY0, 10.0f, 1.0f, col(255, 255, 255, 18));
+    private void renderPanel(DrawContext g, float mx, float my, float alpha) {
+        float pw = this.panelX1 - this.panelX0;
+        float ph = this.panelY1 - this.panelY0;
+        RectUtil.drawClientRectFixedRadius(this.panelX0, this.panelY0, pw, ph, 12.0f, alpha, 0.0f);
+        RenderHelper.drawPanelBg(this.panelX0 + 2.5f, this.panelY0 + 2.5f, pw - 5.0f, ph - 5.0f, 9.5f, alpha);
 
-        String title = I18n.tr("Часть тела");
-        Fonts.SEMIBOLD.draw(title, this.panelX0 + 12.0f, this.panelY0 + 12.0f, 9.0f, col(255, 255, 255, 235));
+        // Заголовок панели
+        String title = I18n.tr("Части тела");
+        Fonts.SEMIBOLD.draw(title, this.panelX0 + 14.0f, this.panelY0 + 12.0f, 8.5f, color(255, 255, 255, 240, alpha));
+        String sub = I18n.tr("Настройка углов вращения и сдвига");
+        Fonts.MEDIUM.draw(sub, this.panelX0 + 14.0f + Fonts.SEMIBOLD.width(title, 8.5f) + 8.0f, this.panelY0 + 13.5f, 6.0f, color(255, 255, 255, 100, alpha));
 
-        // табы частей: 2 ряда по 4
+        // Табы частей тела (2 ряда по 4)
         for (int part = 0; part < CustomEmotion.PART_COUNT; part++) {
             int row = part / 4;
             int colIdx = part % 4;
             float x = this.tabX0 + colIdx * (this.tabW + this.tabGap);
             float y = this.tabY0 + row * (this.tabH + this.tabGap);
             boolean sel = part == this.selectedPart;
-            boolean hov = hit(mx, my, x, y, this.tabW, this.tabH);
-            int bg = sel ? ClientAccent.accentSoftAt(235.0f, x, y) : hov ? col(30, 36, 48, 255) : col(20, 24, 34, 255);
-            Render2D.rect(x, y, this.tabW, this.tabH, 7.0f, bg);
+            float hov = this.tabHovers[part];
+
+            int bg = sel ? ClientAccent.accentSoftAt(230.0f * alpha, x, y)
+                    : ColorEngine.lerpColor(color(20, 24, 34, 210, alpha), color(34, 42, 58, 230, alpha), hov);
+            Render2D.rect(x, y, this.tabW, this.tabH, 6.0f, bg);
+            int border = sel ? ClientAccent.accentBrightAt(255.0f * alpha, x, y)
+                    : color(255, 255, 255, (int)(15.0f + 25.0f * hov), alpha);
+            Render2D.outline(x, y, this.tabW, this.tabH, 6.0f, 0.7f, border);
+
             String name = I18n.tr(CustomEmotion.PART_NAMES[part]);
-            float ns = 7.5f;
+            float ns = 7.0f;
             float nw = Fonts.SEMIBOLD.width(name, ns);
-            int tc = sel ? col(10, 12, 18, 255) : col(255, 255, 255, 200);
+            int tc = sel ? color(10, 12, 18, 255, alpha) : ColorEngine.lerpColor(color(180, 195, 215, 200, alpha), color(255, 255, 255, 255, alpha), hov);
             Fonts.SEMIBOLD.draw(name, x + (this.tabW - nw) * 0.5f, y + (this.tabH - ns) * 0.5f - 1.0f, ns, tc);
+
+            // Точка-индикатор модифицированной части
+            if (hasNonZeroValues(part, this.workPose)) {
+                float dotX = x + this.tabW - 6.0f;
+                float dotY = y + 6.0f;
+                int dotColor = sel ? color(10, 12, 18, 255, alpha) : ClientAccent.accentSoftAt(255.0f * alpha, dotX, dotY);
+                Render2D.circle(dotX, dotY, 2.0f, dotColor);
+            }
         }
 
-        // слайдеры выбранной части
+        // Разделитель
+        float sepY = this.tabY0 + this.tabH * 2.0f + this.tabGap + 6.0f;
+        Render2D.rect(this.panelX0 + 14.0f, sepY, pw - 28.0f, 0.6f, 0.0f, color(255, 255, 255, 12, alpha));
+
+        // Слайдеры выбранной части
         int[] fields = CustomEmotion.PART_FIELD_INDICES[this.selectedPart];
-        String[] labels = sliderLabels(this.selectedPart);
         for (int i = 0; i < fields.length; i++) {
             boolean isRot = this.selectedPart != CustomEmotion.PART_UPPER && i < 3;
-            this.renderSlider(g, i, fields[i], labels[i], isRot, mx, my);
+            this.renderSlider(g, i, fields[i], isRot, mx, my, alpha);
         }
 
-        String hint = I18n.tr("Двигайте слайдеры — ключ создастся сам. Ромбики на таймлайне можно таскать.");
-        Fonts.MEDIUM.draw(hint, this.panelX0 + 12.0f, this.panelY1 - 20.0f, 6.5f, col(255, 255, 255, 100));
+        String hint = I18n.tr("Двигайте слайдеры — поза сохраняется автоматически в ключ. Ромбики можно таскать.");
+        Fonts.MEDIUM.draw(hint, this.panelX0 + 14.0f, this.panelY1 - 15.0f, 6.0f, color(255, 255, 255, 90, alpha));
     }
 
-    private static String[] sliderLabels(int part) {
+    private static class AxisInfo {
+        final String letter;
+        final String label;
+        final int badgeColor;
+
+        AxisInfo(String letter, String label, int badgeColor) {
+            this.letter = letter;
+            this.label = label;
+            this.badgeColor = badgeColor;
+        }
+    }
+
+    private static AxisInfo getAxisInfo(int part, int sliderIdx, boolean isRot) {
+        String letter;
         if (part == CustomEmotion.PART_UPPER) {
-            return new String[]{"Сдвиг Y", "Сдвиг Z"};
+            letter = sliderIdx == 0 ? "Y" : "Z";
+        } else {
+            letter = sliderIdx % 3 == 0 ? "X" : sliderIdx % 3 == 1 ? "Y" : "Z";
         }
-        return new String[]{"Поворот X", "Поворот Y", "Поворот Z", "Сдвиг X", "Сдвиг Y", "Сдвиг Z"};
+        String label = isRot ? I18n.tr("Поворот") : I18n.tr("Сдвиг");
+        int badgeColor;
+        if ("X".equals(letter)) {
+            badgeColor = col(245, 95, 110, 255); // coral red
+        } else if ("Y".equals(letter)) {
+            badgeColor = col(80, 215, 135, 255); // emerald green
+        } else {
+            badgeColor = col(85, 185, 255, 255); // azure blue
+        }
+        return new AxisInfo(letter, label, badgeColor);
     }
 
-    private void renderSlider(DrawContext g, int sliderIdx, int fieldIdx, String label, boolean isRot, float mx, float my) {
+    private void renderSlider(DrawContext g, int sliderIdx, int fieldIdx, boolean isRot, float mx, float my, float alpha) {
         float y = this.sliderY0 + sliderIdx * this.sliderRowH;
-        float labelW = 92.0f;
+        float labelW = 104.0f;
         float valueW = 56.0f;
         float tx0 = this.sliderX0 + labelW;
-        float tx1 = this.sliderX1 - valueW;
-        float cy = y + 20.0f;
+        float tx1 = this.sliderX1 - valueW - 6.0f;
+        float cy = y + this.sliderRowH * 0.5f;
 
         float min = isRot ? ROT_MIN : OFF_MIN;
         float max = isRot ? ROT_MAX : OFF_MAX;
         float value = CustomEmotion.getValue(this.workPose, fieldIdx);
+        float hov = this.sliderHovers[sliderIdx];
 
-        Fonts.MEDIUM.draw(I18n.tr(label), this.sliderX0, cy - 4.5f, 7.0f, col(255, 255, 255, 190));
-        // трек
-        Render2D.rect(tx0, cy - 2.0f, tx1 - tx0, 4.0f, 2.0f, col(28, 33, 45, 255));
+        // Подсветка строки при наведении
+        if (hov > 0.01f) {
+            Render2D.rect(this.sliderX0 - 4.0f, y + 1.0f, (this.sliderX1 - this.sliderX0) + 8.0f, this.sliderRowH - 2.0f, 6.0f, color(255, 255, 255, (int)(6.0f * hov), alpha));
+        }
+
+        // Бейдж оси [X] / [Y] / [Z]
+        AxisInfo info = getAxisInfo(this.selectedPart, sliderIdx, isRot);
+        float bw = 15.0f;
+        float bh = 14.0f;
+        float bx = this.sliderX0;
+        float by = cy - bh * 0.5f;
+        Render2D.rect(bx, by, bw, bh, 3.5f, ColorEngine.multAlpha(info.badgeColor, 0.22f * alpha));
+        Render2D.outline(bx, by, bw, bh, 3.5f, 0.6f, ColorEngine.multAlpha(info.badgeColor, 0.70f * alpha));
+        float lw = Fonts.SEMIBOLD.width(info.letter, 6.5f);
+        Fonts.SEMIBOLD.draw(info.letter, bx + (bw - lw) * 0.5f, cy - 4.2f, 6.5f, ColorEngine.multAlpha(info.badgeColor, alpha));
+        Fonts.MEDIUM.draw(info.label, bx + bw + 6.0f, cy - 4.5f, 6.8f, color(230, 235, 245, 215, alpha));
+
+        // Желоб трека
+        float trackH = 4.0f;
+        Render2D.rect(tx0, cy - trackH * 0.5f, tx1 - tx0, trackH, 2.0f, color(20, 24, 34, 230, alpha));
+        Render2D.outline(tx0, cy - trackH * 0.5f, tx1 - tx0, trackH, 2.0f, 0.6f, color(255, 255, 255, 12, alpha));
+
+        // Отметка нейтрального нуля
+        float zeroF = (0.0f - min) / (max - min);
+        float zx = tx0 + zeroF * (tx1 - tx0);
+        Render2D.rect(zx - 0.5f, cy - 3.5f, 1.0f, 7.0f, 0.5f, color(255, 255, 255, 60, alpha));
+
+        // Направленная закраска трека от центра к ползунку
         float f = clamp((value - min) / (max - min), 0.0f, 1.0f);
         float kx = tx0 + f * (tx1 - tx0);
-        boolean hov = this.dragSlider == sliderIdx || hit(mx, my, tx0 - 6.0f, cy - 10.0f, (tx1 - tx0) + 12.0f, 20.0f);
-        Render2D.rect(tx0, cy - 2.0f, kx - tx0, 4.0f, 2.0f, ClientAccent.accentSoftAt(220.0f, tx0, cy));
-        Render2D.circle(kx, cy, hov ? 7.0f : 5.5f, hov ? ClientAccent.accentSoftAt(255.0f, kx, cy) : col(225, 230, 240, 255));
-        // значение
-        String vs = isRot ? String.format("%.0f°", value) : String.format("%.2f", value);
-        float vw = Fonts.SEMIBOLD.width(vs, 7.5f);
-        Fonts.SEMIBOLD.draw(vs, tx1 + valueW - vw, cy - 5.0f, 7.5f, col(255, 255, 255, 220));
+        float barStart = Math.min(zx, kx);
+        float barEnd = Math.max(zx, kx);
+        if (barEnd - barStart > 0.5f) {
+            Render2D.rect(barStart, cy - trackH * 0.5f, barEnd - barStart, trackH, 2.0f, ClientAccent.accentSoftAt(220.0f * alpha, barStart, cy));
+        }
+
+        // Ползунок с анимацией масштаба и ореолом
+        float knobR = 4.8f + 1.8f * hov;
+        if (hov > 0.01f) {
+            Render2D.circleOutline(kx, cy, knobR + 2.5f, 1.2f, ClientAccent.accentBrightAt(170.0f * hov * alpha, kx, cy));
+        }
+        Render2D.circle(kx, cy, knobR, ClientAccent.accentSoftAt(255.0f * alpha, kx, cy));
+        Render2D.circle(kx, cy, knobR * 0.45f, color(255, 255, 255, 245, alpha));
+
+        // Цифровое значение в стеклянном бейдже
+        String vs = isRot ? String.format("%+.0f°", value) : String.format("%+.2f", value);
+        if (isRot && Math.abs(value) < 0.01f) vs = "0°";
+        else if (!isRot && Math.abs(value) < 0.001f) vs = "0.00";
+        float vPillX = tx1 + 6.0f;
+        float vPillY = cy - 8.0f;
+        float vPillW = valueW;
+        float vPillH = 16.0f;
+        RenderHelper.drawPanelBg(vPillX, vPillY, vPillW, vPillH, 4.0f, alpha);
+        Render2D.outline(vPillX, vPillY, vPillW, vPillH, 4.0f, 0.6f, color(255, 255, 255, (int)(14.0f + 18.0f * hov), alpha));
+        float vw = Fonts.SEMIBOLD.width(vs, 6.8f);
+        Fonts.SEMIBOLD.draw(vs, vPillX + (vPillW - vw) * 0.5f, cy - 4.5f, 6.8f, color(255, 255, 255, 230, alpha));
     }
 
-    private void renderTimeline(DrawContext g, float mx, float my) {
-        Render2D.rect(this.tlX0, this.tlY0, this.tlX1 - this.tlX0, this.tlY1 - this.tlY0, 10.0f, col(13, 16, 23, 255));
-        Render2D.outline(this.tlX0, this.tlY0, this.tlX1 - this.tlX0, this.tlY1 - this.tlY0, 10.0f, 1.0f, col(255, 255, 255, 18));
+    private void renderTimeline(DrawContext g, float mx, float my, float alpha) {
+        float tw = this.tlX1 - this.tlX0;
+        float th = this.tlY1 - this.tlY0;
+        RectUtil.drawClientRectFixedRadius(this.tlX0, this.tlY0, tw, th, 12.0f, alpha, 0.0f);
+        RenderHelper.drawPanelBg(this.tlX0 + 2.5f, this.tlY0 + 2.5f, tw - 5.0f, th - 5.0f, 9.5f, alpha);
 
-        // play / pause
-        boolean playHov = hit(mx, my, this.playCX - 14.0f, this.playCY - 14.0f, 28.0f, 28.0f);
-        Render2D.circle(this.playCX, this.playCY, 13.0f, playHov ? col(34, 40, 55, 255) : col(22, 27, 38, 255));
+        // Круглая кнопка Play/Pause в стиле хаба колеса эмоций
+        float r = 13.0f;
+        if (this.hoverPlay > 0.01f) {
+            Render2D.circleOutline(this.playCX, this.playCY, r + 2.5f, 1.2f, ClientAccent.accentBrightAt(180.0f * this.hoverPlay * alpha, this.playCX, this.playCY));
+        }
+        RectUtil.drawClientRectFixedRadius(this.playCX - r, this.playCY - r, r * 2.0f, r * 2.0f, r, alpha, 0.0f);
+        RenderHelper.drawPanelBg(this.playCX - r + 2.0f, this.playCY - r + 2.0f, (r - 2.0f) * 2.0f, (r - 2.0f) * 2.0f, r - 2.0f, alpha);
+        int iconColor = ColorEngine.lerpColor(color(255, 255, 255, 210, alpha), ClientAccent.accentSoftAt(255.0f * alpha, this.playCX, this.playCY), this.hoverPlay);
         if (this.playing) {
-            Render2D.rect(this.playCX - 5.0f, this.playCY - 6.0f, 4.0f, 12.0f, 1.0f, col(255, 255, 255, 230));
-            Render2D.rect(this.playCX + 1.0f, this.playCY - 6.0f, 4.0f, 12.0f, 1.0f, col(255, 255, 255, 230));
+            Render2D.rect(this.playCX - 4.5f, this.playCY - 5.0f, 3.0f, 10.0f, 1.0f, iconColor);
+            Render2D.rect(this.playCX + 1.5f, this.playCY - 5.0f, 3.0f, 10.0f, 1.0f, iconColor);
         } else {
-            this.triangle(this.playCX - 4.0f, this.playCY - 7.0f, this.playCX - 4.0f, this.playCY + 7.0f, this.playCX + 8.0f, this.playCY, col(255, 255, 255, 230));
+            this.triangle(this.playCX - 3.5f, this.playCY - 6.0f, this.playCX - 3.5f, this.playCY + 6.0f, this.playCX + 6.0f, this.playCY, iconColor);
         }
 
-        this.smallButton(g, this.addKeyX, this.addKeyY, this.addKeyW, this.addKeyH, "+ " + I18n.tr("Ключ"), hit(mx, my, this.addKeyX, this.addKeyY, this.addKeyW, this.addKeyH), false);
-        this.smallButton(g, this.delKeyX, this.delKeyY, this.delKeyW, this.delKeyH, "− " + I18n.tr("Ключ"), hit(mx, my, this.delKeyX, this.delKeyY, this.delKeyW, this.delKeyH), false);
+        // Кнопки управления ключами
+        this.drawTimelineButton(this.addKeyX, this.addKeyY, this.addKeyW, this.addKeyH, "+ " + I18n.tr("Ключ"), this.hoverAddKey, false, true, alpha);
+        boolean canDeleteKey = this.selectedKey != null;
+        this.drawTimelineButton(this.delKeyX, this.delKeyY, this.delKeyW, this.delKeyH, "− " + I18n.tr("Ключ"), this.hoverDelKey, canDeleteKey, canDeleteKey, alpha);
 
+        // Информационные бейджи в правом верхнем углу таймлайна
         String timeLabel = String.format("%.2f / %.1f с", this.scrubTime, this.editing.duration());
-        float tlw = Fonts.MEDIUM.width(timeLabel, 7.5f);
-        Fonts.MEDIUM.draw(timeLabel, this.tlX1 - 12.0f - tlw, this.tlY0 + 16.0f, 7.5f, col(255, 255, 255, 170));
-        String keyLabel = I18n.tr("Ключей:") + " " + this.editing.keyframes().size();
-        Fonts.MEDIUM.draw(keyLabel, this.delKeyX + this.delKeyW + 12.0f, this.tlY0 + 18.0f, 7.0f, col(255, 255, 255, 120));
+        float tlw = Fonts.MEDIUM.width(timeLabel, 6.8f);
+        float tPillW = tlw + 14.0f;
+        float tPillX = this.tlX1 - 14.0f - tPillW;
+        float pillY = this.tlY0 + 11.0f;
+        RenderHelper.drawPanelBg(tPillX, pillY, tPillW, 20.0f, 4.0f, alpha);
+        Render2D.outline(tPillX, pillY, tPillW, 20.0f, 4.0f, 0.6f, color(255, 255, 255, 18, alpha));
+        Fonts.MEDIUM.draw(timeLabel, tPillX + 7.0f, pillY + 6.0f, 6.8f, color(255, 255, 255, 190, alpha));
+
+        String keyLabel = String.format("%d %s", this.editing.keyframes().size(), I18n.tr("кадр."));
+        float klw = Fonts.MEDIUM.width(keyLabel, 6.8f);
+        float kPillW = klw + 14.0f;
+        float kPillX = tPillX - 6.0f - kPillW;
+        RenderHelper.drawPanelBg(kPillX, pillY, kPillW, 20.0f, 4.0f, alpha);
+        Render2D.outline(kPillX, pillY, kPillW, 20.0f, 4.0f, 0.6f, color(255, 255, 255, 18, alpha));
+        Fonts.MEDIUM.draw(keyLabel, kPillX + 7.0f, pillY + 6.0f, 6.8f, color(255, 255, 255, 160, alpha));
+
         if (this.selectedKey != null) {
-            String sel = String.format(I18n.tr("Ключ @ %.2fс"), this.selectedKey.time);
-            Fonts.MEDIUM.draw(sel, this.delKeyX + this.delKeyW + 12.0f + Fonts.MEDIUM.width(keyLabel, 7.0f) + 14.0f, this.tlY0 + 18.0f, 7.0f, ClientAccent.accentSoftAt(200.0f, 0.0f, 0.0f));
+            String sel = String.format(I18n.tr("Ключ: %.2fс"), this.selectedKey.time);
+            float slw = Fonts.SEMIBOLD.width(sel, 6.8f);
+            float sPillW = slw + 14.0f;
+            float sPillX = kPillX - 6.0f - sPillW;
+            RenderHelper.drawPanelBg(sPillX, pillY, sPillW, 20.0f, 4.0f, alpha);
+            Render2D.outline(sPillX, pillY, sPillW, 20.0f, 4.0f, 0.7f, ClientAccent.accentSoftAt(180.0f * alpha, sPillX, pillY));
+            Fonts.SEMIBOLD.draw(sel, sPillX + 7.0f, pillY + 6.0f, 6.8f, ClientAccent.accentSoftAt(255.0f * alpha, sPillX, pillY));
         }
 
-        // трек
+        // Трек таймлайна
         float ty = this.trackY;
-        Render2D.rect(this.trackX0, ty - 14.0f, this.trackX1 - this.trackX0, 28.0f, 6.0f, col(18, 22, 32, 255));
-        Render2D.line(this.trackX0, ty, this.trackX1, ty, 1.5f, col(255, 255, 255, 40));
-        // риски шкалы
+        float trackH = 26.0f;
+        float trackW = this.trackX1 - this.trackX0;
+        Render2D.rect(this.trackX0, ty - trackH * 0.5f, trackW, trackH, 6.0f, color(16, 20, 28, 230, alpha));
+        Render2D.outline(this.trackX0, ty - trackH * 0.5f, trackW, trackH, 6.0f, 0.7f, color(255, 255, 255, 14, alpha));
+
+        // Подсветка прогресса воспроизведения
+        float ccx = this.timeToX(this.scrubTime);
+        if (ccx > this.trackX0) {
+            Render2D.rect(this.trackX0, ty - trackH * 0.5f + 1.0f, ccx - this.trackX0, trackH - 2.0f, 5.0f, ClientAccent.accentFillAt(35.0f * alpha, this.trackX0, ty));
+        }
+
+        // Осевая линия шкалы
+        Render2D.line(this.trackX0 + 4.0f, ty, this.trackX1 - 4.0f, ty, 1.0f, color(255, 255, 255, 30, alpha));
+
+        // Риски шкалы времени
         float dur = this.editing.duration();
         float step = dur > 6.0f ? 1.0f : 0.5f;
         for (float t = 0.0f; t <= dur + 0.001f; t += step) {
             float x = this.timeToX(t);
-            Render2D.line(x, ty - 8.0f, x, ty - 3.0f, 1.0f, col(255, 255, 255, 70));
-            if (Math.abs(t - Math.round(t)) < 0.001f) {
-                String s = String.format("%.0f", t);
-                Fonts.MEDIUM.draw(s, x - Fonts.MEDIUM.width(s, 6.0f) * 0.5f, ty + 6.0f, 6.0f, col(255, 255, 255, 90));
+            boolean isMajor = Math.abs(t - Math.round(t)) < 0.001f;
+            float tickH = isMajor ? 5.5f : 3.0f;
+            int tickCol = isMajor ? color(255, 255, 255, 80, alpha) : color(255, 255, 255, 35, alpha);
+            Render2D.line(x, ty - tickH, x, ty - 1.0f, 1.0f, tickCol);
+            if (isMajor) {
+                String s = String.format("%.0fс", t);
+                float sw = Fonts.MEDIUM.width(s, 5.8f);
+                Fonts.MEDIUM.draw(s, x - sw * 0.5f, ty + 6.0f, 5.8f, color(255, 255, 255, 110, alpha));
             }
         }
-        // ромбики ключей
+
+        // Ромбики ключевых кадров
+        CustomEmotion.Keyframe hoveredKf = null;
+        float hoveredKfX = 0.0f;
         for (CustomEmotion.Keyframe key : this.editing.keyframes()) {
             float x = this.timeToX(key.time);
             boolean sel = key == this.selectedKey;
-            boolean hov = Math.abs(mx - x) <= 9.0f && Math.abs(my - ty) <= 11.0f;
-            float r = sel ? 6.5f : hov ? 6.0f : 5.0f;
-            int c = sel ? ClientAccent.accentSoftAt(255.0f, x, ty) : hov ? col(255, 255, 255, 255) : col(160, 170, 190, 255);
-            this.diamond(x, ty, r, c);
-            if (sel) {
-                Render2D.circleOutline(x, ty, r + 3.5f, 1.2f, ClientAccent.accentSoftAt(160.0f, x, ty));
+            boolean hov = Math.abs(mx - x) <= 8.0f && Math.abs(my - ty) <= 12.0f;
+            if (hov) {
+                hoveredKf = key;
+                hoveredKfX = x;
             }
+            float rDiamond = sel ? 6.5f : hov ? 6.0f : 4.8f;
+            int fill = sel ? ClientAccent.accentSoftAt(255.0f * alpha, x, ty)
+                    : hov ? color(255, 255, 255, 255, alpha)
+                    : color(175, 190, 215, 230, alpha);
+            int outline = sel ? ClientAccent.accentBrightAt(255.0f * alpha, x, ty)
+                    : hov ? color(255, 255, 255, 255, alpha)
+                    : color(220, 230, 250, 180, alpha);
+
+            if (sel || hov) {
+                Render2D.line(x, ty - 12.0f, x, ty + 12.0f, 1.0f, ClientAccent.accentSoftAt((sel ? 180.0f : 100.0f) * alpha, x, ty));
+            }
+            this.drawKeyframeDiamond(x, ty, rDiamond, fill, outline, sel, alpha);
         }
-        // курсор
-        float ccx = this.timeToX(this.scrubTime);
-        Render2D.line(ccx, ty - 13.0f, ccx, ty + 13.0f, 2.0f, ClientAccent.accentSoftAt(255.0f, ccx, ty));
-        Render2D.circle(ccx, ty - 13.0f, 3.0f, ClientAccent.accentSoftAt(255.0f, ccx, ty));
+
+        // Всплывающая подсказка над наведённым ключом
+        if (hoveredKf != null) {
+            String tip = String.format("%.2fс", hoveredKf.time);
+            float twKf = Fonts.MEDIUM.width(tip, 6.0f);
+            float tpx = hoveredKfX - twKf * 0.5f - 4.0f;
+            float tpy = ty - 26.0f;
+            Render2D.rect(tpx, tpy, twKf + 8.0f, 12.0f, 3.5f, color(12, 15, 22, 230, alpha));
+            Render2D.outline(tpx, tpy, twKf + 8.0f, 12.0f, 3.5f, 0.6f, ClientAccent.accentSoftAt(180.0f * alpha, hoveredKfX, tpy));
+            Fonts.MEDIUM.draw(tip, hoveredKfX - twKf * 0.5f, tpy + 2.5f, 6.0f, color(255, 255, 255, 255, alpha));
+        }
+
+        // Скруббер (курсор таймлайна)
+        Render2D.line(ccx, ty - 13.0f, ccx, ty + 13.0f, 2.0f, ClientAccent.accentSoftAt(255.0f * alpha, ccx, ty));
+        float headW = 9.0f;
+        float headH = 7.0f;
+        float headX = ccx - headW * 0.5f;
+        float headY = ty - 16.0f;
+        Render2D.rect(headX, headY, headW, headH, 3.0f, ClientAccent.accentSoftAt(255.0f * alpha, ccx, headY));
+        Render2D.circle(ccx, headY + headH * 0.5f, 1.8f, color(255, 255, 255, 255, alpha));
+        Render2D.circleOutline(ccx, ty, 3.0f, 0.9f, ClientAccent.accentBrightAt(220.0f * alpha, ccx, ty));
+    }
+
+    private void drawTimelineButton(float x, float y, float w, float h, String text, float hover, boolean active, boolean enabled, float alpha) {
+        float r = 5.0f;
+        int bg = !enabled ? color(18, 22, 30, 140, alpha)
+                : active ? ColorEngine.lerpColor(color(24, 28, 38, 220, alpha), color(175, 45, 60, 220, alpha), hover)
+                : ColorEngine.lerpColor(color(24, 28, 38, 220, alpha), color(36, 44, 60, 240, alpha), hover);
+        int border = !enabled ? color(255, 255, 255, 10, alpha)
+                : active ? ColorEngine.lerpColor(color(255, 255, 255, 18, alpha), color(255, 90, 110, 200, alpha), hover)
+                : ColorEngine.lerpColor(color(255, 255, 255, 18, alpha), ClientAccent.accentSoftAt(180.0f * alpha, x, y), hover);
+        Render2D.rect(x, y, w, h, r, bg);
+        Render2D.outline(x, y, w, h, r, 0.7f, border);
+        float tw = Fonts.SEMIBOLD.width(text, 6.8f);
+        int tc = !enabled ? color(255, 255, 255, 70, alpha)
+                : ColorEngine.lerpColor(color(210, 220, 235, 220, alpha), color(255, 255, 255, 255, alpha), hover);
+        Fonts.SEMIBOLD.draw(text, x + (w - tw) * 0.5f, y + 6.0f, 6.8f, tc);
     }
 
     // ---------- примитивы ----------
@@ -411,14 +791,19 @@ public final class EmotionEditorScreen extends BaseScreen {
         return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
 
-    private void smallButton(DrawContext g, float x, float y, float w, float h, String label, boolean hovered, boolean accent) {
-        int bg = accent ? ClientAccent.accentSoftAt(hovered ? 255.0f : 215.0f, x, y)
-                : hovered ? col(34, 40, 55, 255) : col(22, 27, 38, 255);
-        Render2D.rect(x, y, w, h, 7.0f, bg);
-        float s = 7.5f;
-        float lw = Fonts.SEMIBOLD.width(label, s);
-        int tc = accent ? col(10, 12, 18, 255) : col(255, 255, 255, 210);
-        Fonts.SEMIBOLD.draw(label, x + (w - lw) * 0.5f, y + (h - s) * 0.5f - 1.0f, s, tc);
+    private void drawKeyframeDiamond(float cx, float cy, float r, int fillColor, int outlineColor, boolean glow, float alpha) {
+        if (glow) {
+            Render2D.circleOutline(cx, cy, r + 3.5f, 1.2f, ClientAccent.accentBrightAt(200.0f * alpha, cx, cy));
+        }
+        this.diamond(cx, cy, r, fillColor);
+        int ri = (int) Math.ceil(r);
+        for (int i = -ri; i <= ri; i++) {
+            float hw = r - Math.abs(i);
+            if (hw > 0.4f) {
+                Render2D.rect(cx - hw, cy + i, 1.0f, 1.0f, 0.0f, outlineColor);
+                Render2D.rect(cx + hw - 1.0f, cy + i, 1.0f, 1.0f, 0.0f, outlineColor);
+            }
+        }
     }
 
     /** Залитый ромбик (ключевой кадр). */
@@ -432,7 +817,7 @@ public final class EmotionEditorScreen extends BaseScreen {
         }
     }
 
-    /** Залитый треугольник. */
+    /** Залитый треугольник (Play). */
     private void triangle(float x1, float y1, float x2, float y2, float x3, float y3, int color) {
         float minY = Math.min(y1, Math.min(y2, y3));
         float maxY = Math.max(y1, Math.max(y2, y3));
@@ -527,10 +912,12 @@ public final class EmotionEditorScreen extends BaseScreen {
         int[] fields = CustomEmotion.PART_FIELD_INDICES[this.selectedPart];
         for (int i = 0; i < fields.length; i++) {
             float y = this.sliderY0 + i * this.sliderRowH;
-            float tx0 = this.sliderX0 + 92.0f;
-            float tx1 = this.sliderX1 - 56.0f;
-            float cy = y + 20.0f;
-            if (hit(mx, my, tx0 - 8.0f, cy - 11.0f, (tx1 - tx0) + 16.0f, 22.0f)) {
+            float labelW = 104.0f;
+            float valueW = 56.0f;
+            float tx0 = this.sliderX0 + labelW;
+            float tx1 = this.sliderX1 - valueW - 6.0f;
+            float cy = y + this.sliderRowH * 0.5f;
+            if (hit(mx, my, tx0 - 8.0f, cy - 12.0f, (tx1 - tx0) + 16.0f, 24.0f)) {
                 this.dragSlider = i;
                 this.applySlider(i, mx);
                 return true;
@@ -538,7 +925,7 @@ public final class EmotionEditorScreen extends BaseScreen {
         }
 
         // таймлайн: play
-        if (hit(mx, my, this.playCX - 14.0f, this.playCY - 14.0f, 28.0f, 28.0f)) {
+        if (hit(mx, my, this.playCX - 15.0f, this.playCY - 15.0f, 30.0f, 30.0f)) {
             this.playing = !this.playing;
             if (this.playing && this.scrubTime >= this.editing.duration() - 0.001f) {
                 this.scrubTime = 0.0f;
@@ -643,9 +1030,18 @@ public final class EmotionEditorScreen extends BaseScreen {
             }
         } else {
             int key = event.key();
+            // Delete (261) или Backspace (259) — удалить выбранный ключ
             if ((key == 261 || key == 259) && this.selectedKey != null) {
                 this.editing.removeKeyframe(this.selectedKey);
                 this.selectedKey = null;
+                return true;
+            }
+            // Пробел (32) — переключить воспроизведение/паузу
+            if (key == 32) {
+                this.playing = !this.playing;
+                if (this.playing && this.scrubTime >= this.editing.duration() - 0.001f) {
+                    this.scrubTime = 0.0f;
+                }
                 return true;
             }
         }
@@ -675,8 +1071,10 @@ public final class EmotionEditorScreen extends BaseScreen {
         boolean isRot = this.selectedPart != CustomEmotion.PART_UPPER && sliderIdx < 3;
         float min = isRot ? ROT_MIN : OFF_MIN;
         float max = isRot ? ROT_MAX : OFF_MAX;
-        float tx0 = this.sliderX0 + 92.0f;
-        float tx1 = this.sliderX1 - 56.0f;
+        float labelW = 104.0f;
+        float valueW = 56.0f;
+        float tx0 = this.sliderX0 + labelW;
+        float tx1 = this.sliderX1 - valueW - 6.0f;
         float f = clamp((mx - tx0) / Math.max(1.0f, tx1 - tx0), 0.0f, 1.0f);
         float value = min + f * (max - min);
         if (isRot) {
@@ -691,7 +1089,7 @@ public final class EmotionEditorScreen extends BaseScreen {
     }
 
     private CustomEmotion.Keyframe keyAt(float mx, float my) {
-        if (Math.abs(my - this.trackY) > 11.0f) {
+        if (Math.abs(my - this.trackY) > 13.0f) {
             return null;
         }
         CustomEmotion.Keyframe best = null;
@@ -727,6 +1125,7 @@ public final class EmotionEditorScreen extends BaseScreen {
     }
 
     private void backToWheel() {
+        Sounds.play("gui_close");
         MinecraftClient mc = MinecraftClient.getInstance();
         mc.setScreen(new EmotionWheelScreen(this.module, this.module.wheel()));
     }
