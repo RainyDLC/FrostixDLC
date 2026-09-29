@@ -192,9 +192,13 @@ public class MainMenuScreen extends BaseScreen {
         int gearOutline = settingsOpen || gearHover ? 0xCC68B1FF : 0x2AFFFFFF;
         Render2D.outline(gearX, gearY, gearSize, gearSize, 8.0f, 0.85f, gearOutline);
 
-        // Gear Icon (Vector MSDF glyph 'd' with rotation)
+        // Gear Icon (Vector MSDF glyph 'd')
         float rotDeg = gearHoverAnim * 50.0f;
-        Fonts.MAINMENU.draw("d", gearX + 11.5f, gearY + 11.5f, 9.0f, 0xFFFFFFFF, rotDeg, gearX + 16.0f, gearY + 16.0f);
+        if (gearHoverAnim > 0.01f) {
+            Fonts.MAINMENU.msdf("d", gearX + 11.5f, gearY + 11.5f, 9.0f, 0xFFFFFFFF, rotDeg, gearX + 16.0f, gearY + 16.0f);
+        } else {
+            Fonts.MAINMENU.draw("d", gearX + 11.5f, gearY + 11.5f, 9.0f, 0xFFFFFFFF);
+        }
 
         // Time Widget
         if (cfg.showClock) {
