@@ -47,6 +47,7 @@ import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.ModuleManager;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.Emotion;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionAnim;
+import rtx.kimiko.api.modules.impl.Visuals.emotions.CustomEmotionStore;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionPlayback;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionRemoteState;
 import rtx.kimiko.api.modules.impl.Visuals.emotions.EmotionSyncClient;
