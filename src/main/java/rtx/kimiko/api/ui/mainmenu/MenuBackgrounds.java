@@ -142,8 +142,6 @@ public final class MenuBackgrounds {
     }
 
     private final void registerBuiltIn() {
-        this.add(new MenuBackground("rainydlc_castle", "Замок RainyDLC", MenuBackground.Kind.IMAGE, "kimiko:images/mainmenu/rainydlc_castle.jpg", true));
-        this.add(new MenuBackground("winter_motion", "Зимняя долина · видео", MenuBackground.Kind.IMAGE, "kimiko:images/mainmenu/winter_cover.jpg", true));
         this.add(new MenuBackground("castle_night", "Ночной замок", MenuBackground.Kind.IMAGE, "kimiko:images/mainmenu/background.png", true));
         this.add(new MenuBackground("castle_storm", "Гроза над замком", MenuBackground.Kind.IMAGE, "kimiko:images/mainmenu/singleplayer.png", true));
         this.add(new MenuBackground("castle_gates", "Врата", MenuBackground.Kind.IMAGE, "kimiko:images/mainmenu/multiplayer.png", true));
@@ -210,7 +208,7 @@ public final class MenuBackgrounds {
     }
 
     static {
-        String[] stringArray = new String[]{".png", ".jpg", ".jpeg", ".gif"};
+        String[] stringArray = new String[]{".png", ".jpg", ".jpeg"};
         EXTENSIONS = stringArray;
         REGISTRY = new LinkedHashMap();
         BUILT_IN = new ArrayList();

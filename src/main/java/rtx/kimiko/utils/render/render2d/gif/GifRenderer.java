@@ -273,9 +273,7 @@ public final class GifRenderer {
                 string = "/assets/kimiko/" + path;
             }
             String resourcePath = string;
-            InputStream is = path.startsWith("file:")
-                ? java.nio.file.Files.newInputStream(java.nio.file.Path.of(path.substring(5)))
-                : GifRenderer.class.getResourceAsStream(resourcePath);
+            InputStream is = GifRenderer.class.getResourceAsStream(resourcePath);
             if (is == null) {
                 this.state = State.IDLE;
                 return;

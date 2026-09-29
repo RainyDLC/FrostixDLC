@@ -18,7 +18,6 @@ import rtx.kimiko.api.ui.mainmenu.MenuBackground;
 import rtx.kimiko.api.ui.mainmenu.MenuBackgrounds;
 import rtx.kimiko.api.ui.mainmenu.MenuSettings;
 import rtx.kimiko.api.ui.mainmenu.MenuTextures;
-import rtx.kimiko.utils.render.render2d.gif.GifRenderer;
 import rtx.kimiko.api.ui.mainmenu.MenuTheme;
 import rtx.kimiko.api.ui.theme.ClientAccent;
 import rtx.kimiko.utils.color.ColorEngine;
@@ -170,14 +169,6 @@ public final class MenuBackdrop {
         float y = (h - drawH) * 0.5f + driftY + parallaxY;
         int tint = MenuTheme.white(255.0f, alpha);
         Render2D.image(sharp, x, y, drawW, drawH, 0.0f, tint);
-        if ("winter_motion".equals(background.id())) {
-            GifRenderer.draw(null, x, y, drawW, drawH, 0.0f,
-                "kimiko:gif/winter_landscape.gif", alpha);
-        } else if (background.id().startsWith("user:") &&
-                   background.id().toLowerCase(java.util.Locale.ROOT).endsWith(".gif")) {
-            GifRenderer.draw(null, x, y, drawW, drawH, 0.0f,
-                "file:" + MenuBackgrounds.folder().resolve(background.id().substring(5)), alpha);
-        }
         float blur = MenuSettings.blur();
         if (blur > 0.004f && (soft = background.blurred()) != null) {
             Render2D.image(soft, x, y, drawW, drawH, 0.0f, MenuTheme.white(255.0f, alpha * blur));
