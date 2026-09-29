@@ -651,7 +651,7 @@ implements GuiCapture.Source {
         if (!(this.parallaxX == 0.0f) || !(this.parallaxY == 0.0f)) {
             graphics.getMatrices().translate(this.parallaxX, this.parallaxY);
         }
-        RectUtil.drawClientRect(x, y, w, h, 12.0f, screenAlpha, 6.0f);
+        RectUtil.drawMatteWindow(x, y, w, h, 12.0f, screenAlpha, 6.0f);
         float panelR = 12.0f;
         RenderHelper.drawPanelBg(x + 5.0f, y + 5.0f, 110.0f, h - 10.0f, panelR, 0.0f, 0.0f, panelR, screenAlpha);
         InterfaceModule ifaceModule = InterfaceModule.Companion.getInstance();
@@ -901,10 +901,10 @@ implements GuiCapture.Source {
         RenderHelper.drawPanelBg(panelX, brandCardTop, panelW, brandCardH, 12.0f, 0.0f, 0.0f, 0.0f, alpha);
         float brandCY = brandCardTop + brandCardH * 0.5f;
         String bIcon = "x";
-        float bIconSize = 11.7f;
+        float bIconSize = 14.0f;
         float brandSize = 14.299999f;
         float brandGap = 7.7999997f;
-        float bIconW = Fonts.KIMIKO.msdfWidth(bIcon, bIconSize);
+        float bIconW = bIconSize;
         float brandTextW = Fonts.SMALL_PIXEL.msdfWidth(MainWindow.CLIENT_NAME_UPPER, brandSize);
         float brandStartX = panelX + (panelW - (bIconW + brandGap + brandTextW)) * 0.5f;
         LogoToy.renderSocket(graphics, brandStartX, brandCY - bIconSize * 0.5f + 0.5f, bIconSize, alpha);
@@ -925,7 +925,6 @@ implements GuiCapture.Source {
         float subIconX = lineX + 9.0f;
         float firstC = subStartY + 9.0f;
         float lastC = subStartY + (float)(MAIN_CATEGORIES.length - 1) * 18.0f + 9.0f;
-        Render2D.rect(lineX, firstC, 1.0f, lastC - firstC, 0.0f, UI.Companion.color(255, 255, 255, 36, alpha));
         float rowLift = 2.0f;
         int n = MAIN_CATEGORIES.length;
         for (int i = 0; i < n; ++i) {
@@ -940,7 +939,8 @@ implements GuiCapture.Source {
             float iconW = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
             if (p > 0.01f) {
                 float underW = (iconW + 5.0f + Fonts.MEDIUM.width(cat.getDisplayName(), 7.0f)) * p;
-                AccentGradient.fillHorizontal(subIconX, cy + 8.5f - rowLift, underW, 0.75f, 0.625f, 88.0f * p * alpha);
+                AccentGradient.fillHorizontal(panelX + 4.0f, cy - 8.5f, panelW - 8.0f, 14.0f, 5.0f, 30.0f * p * alpha);
+                AccentGradient.fillVertical(panelX + 5.5f, cy - 5.5f, 1.6f, 8.0f, 0.8f, 235.0f * p * alpha);
             }
             float indexT = catCount > 1 ? (float)i / (float)(catCount - 1) : 0.5f;
             AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, indexT);
@@ -963,7 +963,6 @@ implements GuiCapture.Source {
         float eSubStartY = eventsHeaderTop + 20.0f + 4.0f;
         float eFirstC = eSubStartY + 9.0f;
         float eLastC = eSubStartY + (float)(EVENT_SUBS.length - 1) * 18.0f + 9.0f;
-        Render2D.rect(lineX, eFirstC, 1.0f, eLastC - eFirstC, 0.0f, UI.Companion.color(255, 255, 255, 36, alpha));
         int iconW = EVENT_SUBS.length;
         for (int i = 0; i < iconW; ++i) {
             float rowTop = eSubStartY + (float)i * 18.0f;
@@ -975,7 +974,8 @@ implements GuiCapture.Source {
             float iconW2 = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
             if (p > 0.01f) {
                 float underW = (iconW2 + 5.0f + Fonts.MEDIUM.width(EVENT_SUBS[i], 7.0f)) * p;
-                AccentGradient.fillHorizontal(subIconX, cy + 8.5f - rowLift, underW, 0.75f, 0.625f, 88.0f * p * alpha);
+                AccentGradient.fillHorizontal(panelX + 4.0f, cy - 8.5f, panelW - 8.0f, 14.0f, 5.0f, 30.0f * p * alpha);
+                AccentGradient.fillVertical(panelX + 5.5f, cy - 5.5f, 1.6f, 8.0f, 0.8f, 235.0f * p * alpha);
             }
             AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.6f);
             Fonts.MEDIUM.draw(EVENT_SUBS[i], subIconX + iconW2 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
@@ -1006,7 +1006,6 @@ implements GuiCapture.Source {
         if (firstVisible >= 0 && lastVisible > firstVisible) {
             float cFirstC = cSubStartY + (float)firstVisible * 18.0f + 9.0f;
             float cLastC = cSubStartY + (float)lastVisible * 18.0f + 9.0f;
-            Render2D.rect(lineX, cFirstC, 1.0f, cLastC - cFirstC, 0.0f, UI.Companion.color(255, 255, 255, 36, alpha));
         }
         n2 = OTHER_CATEGORIES.length;
         for (int i = 0; i < n2; ++i) {
@@ -1024,7 +1023,8 @@ implements GuiCapture.Source {
             float iconW3 = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
             if (p > 0.01f) {
                 float underW = (iconW3 + 5.0f + Fonts.MEDIUM.width(cat.getDisplayName(), 7.0f)) * p;
-                AccentGradient.fillHorizontal(subIconX, cy + 8.5f - rowLift, underW, 0.75f, 0.625f, 88.0f * p * rowT * alpha);
+                AccentGradient.fillHorizontal(panelX + 4.0f, cy - 8.5f, panelW - 8.0f, 14.0f, 5.0f, 30.0f * p * rowT * alpha);
+                AccentGradient.fillVertical(panelX + 5.5f, cy - 5.5f, 1.6f, 8.0f, 0.8f, 235.0f * p * rowT * alpha);
             }
             AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.85f);
             Fonts.MEDIUM.draw(cat.getDisplayName(), subIconX + iconW3 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);

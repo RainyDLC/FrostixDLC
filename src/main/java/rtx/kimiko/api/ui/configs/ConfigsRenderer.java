@@ -567,7 +567,7 @@ public final class ConfigsRenderer {
         this.hoverAnims.put(key + ":active", Float.valueOf(activeT += ((active ? 1.0f : 0.0f) - activeT) * (hoverFactor > 0.0f ? hoverFactor : 1.0f)));
         float tint = Math.max(activeT, premium ? 0.5f : 0.0f);
         float lift = Math.max(hoverT, activeT * 0.65f);
-        RectUtil.drawGlassCard(cx, renderCy, cw, 34.0f, radius, radius, rbr, radius, ma, lift);
+        RectUtil.drawMatteCard(cx, renderCy, cw, 34.0f, radius, radius, rbr, radius, ma, lift);
         Render2D.rect(cx, renderCy, cw, 34.0f, overlayRadius, overlayRadius, overlayRbr, overlayRadius, ThemeManager.rgba(0xFFFFFF, (7.0f + 5.0f * hoverT) * ma), ThemeManager.rgba(0xFFFFFF, (7.0f + 5.0f * hoverT) * ma), ThemeManager.rgba(0xFFFFFF, 1.5f * ma), ThemeManager.rgba(0xFFFFFF, 1.5f * ma));
         float sampleX = cx + cw * 0.5f;
         float sampleY = renderCy + 17.0f;

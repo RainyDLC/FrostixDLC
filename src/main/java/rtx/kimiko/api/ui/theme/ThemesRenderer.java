@@ -319,7 +319,7 @@ Map $this$getOrPut$iv = this.selectAnims;
                 }
                 switch (pass) {
                     case 0: {
-                        RectUtil.drawGlassCard(cx, cy, colW, 35.0f, 6.0f, 6.0f, rbr, 6.0f, ma, this.cardParams[base + 6]);
+                        RectUtil.drawMatteCard(cx, cy, colW, 35.0f, 6.0f, 6.0f, rbr, 6.0f, ma, this.cardParams[base + 6]);
                         Render2D.rect(cx, cy, colW, 35.0f, 6.0f, 6.0f, rbr, 6.0f, ThemeManager.rgba(0xFFFFFF, (7.0f + 5.0f * hoverT) * ma), ThemeManager.rgba(0xFFFFFF, (7.0f + 5.0f * hoverT) * ma), ThemeManager.rgba(0xFFFFFF, 1.5f * ma), ThemeManager.rgba(0xFFFFFF, 1.5f * ma));
                         if (st > 0.01f) {
                             int gA = theme.gradientA();

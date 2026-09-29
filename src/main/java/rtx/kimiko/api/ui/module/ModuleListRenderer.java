@@ -57,6 +57,7 @@ import rtx.kimiko.api.ui.ClientLanguage;
 import rtx.kimiko.api.ui.ScrollBar;
 import rtx.kimiko.api.ui.UI;
 import rtx.kimiko.api.ui.settings.RenderHelper;
+import rtx.kimiko.api.ui.theme.AccentGradient;
 import rtx.kimiko.api.ui.theme.ClientAccent;
 import rtx.kimiko.utils.animations.Animation;
 import rtx.kimiko.utils.animations.Decelerate;
@@ -546,17 +547,17 @@ public final class ModuleListRenderer {
             text.setRadiusBottomRight(rbr);
             text.setCardAlpha(cardAlpha);
             text.setCardLift(cardLift);
-            text.setFillTop(ModuleListRenderer.Companion.rgba(255, 255, 255, (7.0f + 5.0f * hoverT) * cardAlpha));
-            text.setFillBottom(ModuleListRenderer.Companion.rgba(255, 255, 255, 1.5f * cardAlpha));
+            text.setFillTop(ModuleListRenderer.Companion.rgba(255, 255, 255, (2.0f + 4.0f * hoverT) * cardAlpha));
+            text.setFillBottom(ModuleListRenderer.Companion.rgba(255, 255, 255, 0.0f));
             text.setHasAccent(enableT > 0.01f);
             if (text.getHasAccent()) {
-                text.setAccentA(ClientAccent.gradientAAt(22.0f * enableT * cardAlpha, cardSampleX, cardSampleY));
-                text.setAccentB(ClientAccent.gradientBAt(22.0f * enableT * cardAlpha, cardSampleX, cardSampleY));
+                text.setAccentA(ClientAccent.gradientAAt(44.0f * enableT * cardAlpha, cardSampleX, cardSampleY));
+                text.setAccentB(ClientAccent.gradientBAt(14.0f * enableT * cardAlpha, cardSampleX, cardSampleY));
             }
             float topAlpha = (30.0f + 22.0f * hoverT) * cardAlpha + (78.0f * cardAlpha - (30.0f + 22.0f * hoverT) * cardAlpha) * enableT;
             float bottomAlpha = (10.0f + 8.0f * hoverT) * cardAlpha + (52.0f * cardAlpha - (10.0f + 8.0f * hoverT) * cardAlpha) * enableT;
-            text.setOutlineTop(ModuleListRenderer.Companion.rgba(255, 255, 255, topAlpha));
-            text.setOutlineBottom(ModuleListRenderer.Companion.rgba(255, 255, 255, bottomAlpha));
+            text.setOutlineTop(ClientAccent.accentAt(120.0f * enableT * cardAlpha, cardSampleX, cardSampleY));
+            text.setOutlineBottom(ClientAccent.accentAt(60.0f * enableT * cardAlpha, cardSampleX, cardSampleY));
             text.setOutlineStrength(enableT);
             KeyBind bind = mod.getBind();
             boolean voiceBind = mod.getBindType() == Module.BindType.VOICE;
@@ -577,7 +578,7 @@ public final class ModuleListRenderer {
                 text.setBadgeX(badgeX);
                 text.setBadgeY(badgeY);
                 text.setBadgeWidth(badgeW);
-                text.setBadgeFill(ModuleListRenderer.Companion.rgba(255, 255, 255, 16.0f * ma));
+                text.setBadgeFill(ModuleListRenderer.Companion.rgba(255, 255, 255, 12.0f * ma));
                 text.setBadgeOutline(ModuleListRenderer.Companion.rgba(255, 255, 255, 30.0f * ma));
                 float tw = Fonts.MEDIUM.width(badgeText, 5.5f);
                 text.setBadgeText(badgeText);
@@ -600,7 +601,7 @@ public final class ModuleListRenderer {
             if (!pinned) {
                 float toggleX = cx + colW - 8.5f - 8.0f;
                 float toggleY = renderCy + 10.75f - 4.25f;
-                boolean checkHover = hovered && mx >= toggleX - 2.0f && mx <= toggleX + 8.5f + 2.0f && my >= toggleY - 2.0f && my <= toggleY + 8.5f + 2.0f;
+                boolean checkHover = hovered && mx >= toggleX - 9.0f && mx <= toggleX + 8.5f + 2.0f && my >= toggleY - 2.0f && my <= toggleY + 8.5f + 2.0f;
                 text.setHasCheck(true);
                 text.setCheckX(toggleX);
                 text.setCheckY(toggleY);
@@ -685,7 +686,7 @@ public final class ModuleListRenderer {
             entry = this.cardTexts.get(index);
             if (entry.getModule() == null) continue;
             ModuleListRenderer.Companion.pushCardPose(g, entry);
-            RectUtil.drawGlassCard(entry.getCardX(), entry.getCardY(), entry.getCardWidth(), entry.getCardHeight(), 6.0f, entry.getRadiusTopRight(), entry.getRadiusBottomRight(), 6.0f, entry.getCardAlpha(), entry.getCardLift());
+            RectUtil.drawMatteCard(entry.getCardX(), entry.getCardY(), entry.getCardWidth(), entry.getCardHeight(), 6.0f, entry.getRadiusTopRight(), entry.getRadiusBottomRight(), 6.0f, entry.getCardAlpha(), entry.getCardLift());
             ModuleListRenderer.Companion.popCardPose(g, entry);
         }
         n = this.cardTextCount;
@@ -696,13 +697,14 @@ public final class ModuleListRenderer {
             Render2D.rect(entry.getCardX(), entry.getCardY(), entry.getCardWidth(), entry.getCardHeight(), 6.0f, entry.getRadiusTopRight(), entry.getRadiusBottomRight(), 6.0f, entry.getFillTop(), entry.getFillTop(), entry.getFillBottom(), entry.getFillBottom());
             if (entry.getHasAccent()) {
                 Render2D.rect(entry.getCardX(), entry.getCardY(), entry.getCardWidth(), entry.getCardHeight(), 6.0f, entry.getRadiusTopRight(), entry.getRadiusBottomRight(), 6.0f, entry.getAccentA(), entry.getAccentB(), entry.getAccentB(), entry.getAccentA());
+                AccentGradient.fillVertical(entry.getCardX() + 2.5f, entry.getCardY() + entry.getCardHeight() * 0.22f, 1.8f, entry.getCardHeight() * 0.56f, 0.9f, 235.0f * entry.getEnableT() * entry.getCardAlpha());
             }
             ModuleListRenderer.Companion.popCardPose(g, entry);
         }
         n = this.cardTextCount;
         for (index = 0; index < n; ++index) {
             entry = this.cardTexts.get(index);
-            if (entry.getModule() == null) continue;
+            if (entry.getModule() == null || entry.getEnableT() <= 0.01f) continue;
             ModuleListRenderer.Companion.pushCardPose(g, entry);
             Render2D.outlineClient(entry.getCardX(), entry.getCardY(), entry.getCardWidth(), entry.getCardHeight(), 6.0f, entry.getRadiusTopRight(), entry.getRadiusBottomRight(), 6.0f, 0.6f, entry.getOutlineTop(), entry.getOutlineTop(), entry.getOutlineBottom(), entry.getOutlineBottom(), entry.getOutlineStrength());
             ModuleListRenderer.Companion.popCardPose(g, entry);
@@ -1325,7 +1327,7 @@ public final class ModuleListRenderer {
             if (this.isPinned(mod)) {
                 return cx + colW - 8.0f - 4.25f - gw * 0.5f;
             }
-            return cx + colW - 8.5f - 8.0f - 7.0f - gw;
+            return cx + colW - 8.5f - 8.0f - 7.0f - gw - 7.0f;
         }
 
         @JvmStatic
@@ -1398,30 +1400,20 @@ public final class ModuleListRenderer {
         }
 
         private final void drawModuleCheck(float px, float py, float t, float alpha, boolean hover) {
-            float cx = px + 4.25f;
-            float cy = py + 4.25f;
-            float off = 1.0f - t;
+            float pw = 15.5f;
+            float ph = 8.5f;
+            float x0 = px + 8.5f - pw;
+            float rad = ph * 0.5f;
             float hoverT = hover ? 1.0f : 0.0f;
-            float chipTop = (13.0f + 7.0f * hoverT) * off * alpha;
-            float chipBottom = 3.0f * off * alpha;
-            Render2D.rect(px, py, 8.5f, 8.5f, 2.9750001f, this.rgba(255, 255, 255, chipTop), this.rgba(255, 255, 255, chipTop), this.rgba(255, 255, 255, chipBottom), this.rgba(255, 255, 255, chipBottom));
-            if (t < 0.996f) {
-                float ringAlpha = alpha * off;
-                float i1 = 1.2750001f;
-                Render2D.outlineClient$default(px + i1, py + i1, 8.5f - i1 * 2.0f, 8.5f - i1 * 2.0f, 2.5500002f, CHECK_RING_THICKNESS, ClientAccent.accentAt((hover ? 70.0f : 28.0f) * ringAlpha, cx, cy), 0.0f, 128, null);
-                float i2 = 2.5500002f;
-                Render2D.outlineClient$default(px + i2, py + i2, 8.5f - i2 * 2.0f, 8.5f - i2 * 2.0f, 2.125f, CHECK_RING_THICKNESS, ClientAccent.accentAt((hover ? 40.0f : 16.0f) * ringAlpha, cx, cy), 0.0f, 128, null);
-            }
+            Render2D.rect(x0, py, pw, ph, rad, this.rgba(255, 255, 255, (15.0f + 9.0f * hoverT) * alpha));
             if (t > 0.004f) {
-                float fillAlpha = 255.0f * t * alpha;
-                Render2D.rect(new BuiltRectangle(px - 0.25f, py - 0.25f, 9.0f, 9.0f, 2.9750001f, 2.9750001f, 2.9750001f, 2.9750001f, this.checkGradient(0, fillAlpha), this.checkGradient(90, fillAlpha), this.checkGradient(180, fillAlpha), this.checkGradient(270, fillAlpha), 0.35f));
-                float d = 2.125f;
-                float dot = 8.5f - d * 2.0f;
-                Render2D.rect(px + d, py + d, dot, dot, dot * 0.5f, this.rgba(255, 255, 255, 255.0f * t * alpha));
+                AccentGradient.fillHorizontal(x0, py, pw, ph, rad, 255.0f * t * alpha);
             }
-            int rimTop = ColorEngine.lerpColor(this.rgba(255, 255, 255, (34.0f + 22.0f * hoverT) * alpha), this.checkGradient(0, 120.0f * alpha), t);
-            int rimBottom = ColorEngine.lerpColor(this.rgba(255, 255, 255, (12.0f + 8.0f * hoverT) * alpha), this.checkGradient(180, 70.0f * alpha), t);
-            Render2D.outline(px, py, 8.5f, 8.5f, 2.9750001f, 0.6f, rimTop, rimTop, rimBottom, rimBottom);
+            float kd = ph - 2.4f;
+            float kx = x0 + 1.2f + t * (pw - kd - 2.4f);
+            Render2D.rect(kx, py + 1.2f, kd, kd, kd * 0.5f, this.rgba(255, 255, 255, (200.0f + 55.0f * t) * alpha));
+            int rim = ColorEngine.lerpColor(this.rgba(255, 255, 255, (28.0f + 16.0f * hoverT) * alpha), this.checkGradient(0, 110.0f * alpha), t);
+            Render2D.outline(x0, py, pw, ph, rad, 0.6f, rim);
         }
 
         private final int checkGradient(int index, float alpha255) {

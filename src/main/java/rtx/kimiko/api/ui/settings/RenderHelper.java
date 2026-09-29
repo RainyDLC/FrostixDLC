@@ -113,7 +113,7 @@ public final class RenderHelper {
 
     @JvmStatic
     public static final void drawPanelBg(float x, float y, float w, float h, float radiusTopLeft, float radiusTopRight, float radiusBottomRight, float radiusBottomLeft, float alpha) {
-        int a = Math.max(0, Math.min(255, Math.round((float)40 * alpha)));
+        int a = Math.max(0, Math.min(255, Math.round((float)62 * alpha)));
         if (a <= 0) {
             return;
         }
@@ -124,11 +124,12 @@ public final class RenderHelper {
         float rbr = Math.min(maxR, radiusBottomRight * scale);
         float rbl = Math.min(maxR, radiusBottomLeft * scale);
         Render2D.rect(x, y, w, h, rtl, rtr, rbr, rbl, new Color(0, 0, 0, a).getRGB());
+        Render2D.outline(x, y, w, h, rtl, rtr, rbr, rbl, 0.6f, new Color(255, 255, 255, Math.max(0, Math.min(255, Math.round(11.0f * alpha)))).getRGB());
     }
 
     @JvmStatic
     public static final void drawDropBackground(float dx, float dy, float dw, float dh, float alpha) {
-        RectUtil.drawClientWindow(dx, dy, dw, dh, 2.0f, alpha);
+        RectUtil.drawMatteWindow(dx, dy, dw, dh, 2.0f, alpha);
     }
 
     @JvmStatic

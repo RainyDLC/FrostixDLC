@@ -38,6 +38,8 @@ public final class LogoToy {
     public static final LogoToy INSTANCE;
     @NotNull
     private static final String GLYPH = "x";
+    @NotNull
+    private static final String LOGO_TEXTURE = "rain_logo.png";
     private static final int STATE_DOCKED = 0;
     private static final int STATE_HELD = 1;
     private static final int STATE_FREE = 2;
@@ -279,14 +281,14 @@ public final class LogoToy {
         socketY = drawY;
         if (Math.abs(size - boundsSize) > 0.001f) {
             boundsSize = size;
-            float[] bounds = Fonts.KIMIKO.msdfBounds(GLYPH, size);
+            float[] bounds = LogoToy.logoBounds(size);
             if (bounds.length >= 4 && bounds[2] - bounds[0] > 0.0f && bounds[3] - bounds[1] > 0.0f) {
                 boundsLeft = bounds[0];
                 boundsTop = bounds[1];
                 boundsRight = bounds[2];
                 boundsBottom = bounds[3];
             } else {
-                float width = Fonts.KIMIKO.msdfWidth(GLYPH, size);
+                float width = size;
                 boundsLeft = 0.0f;
                 boundsTop = 0.0f;
                 boundsRight = width > 0.0f ? width : size;
@@ -637,6 +639,17 @@ public final class LogoToy {
         squashAxisY = 1.0f;
     }
 
+    private static void drawLogoImage(float x, float y, float size, int color) {
+        if (((color >>> 24) & 0xFF) <= 0) {
+            return;
+        }
+        Render2D.image(LOGO_TEXTURE, x, y, size, size, 0.0f, color);
+    }
+
+    private static float[] logoBounds(float size) {
+        return new float[]{0.0f, 0.0f, size, size};
+    }
+
     @JvmStatic
     public static final void renderSocket(@NotNull DrawContext graphics, float drawX, float drawY, float size, float alpha) {
         Intrinsics.checkNotNullParameter((Object)graphics, (String)"graphics");
@@ -646,21 +659,21 @@ public final class LogoToy {
         }
         float hole = detachT;
         if (hole > 0.004f) {
-            Fonts.KIMIKO.msdf(GLYPH, drawX + 0.5f, drawY + 0.5f, size, INSTANCE.rgba(255, 255, 255, 30.0f * alpha * hole));
-            Fonts.KIMIKO.msdf(GLYPH, drawX, drawY, size, INSTANCE.rgba(104, 108, 122, 145.0f * alpha * hole));
+            LogoToy.drawLogoImage(drawX + 0.5f, drawY + 0.5f, size, INSTANCE.rgba(255, 255, 255, 30.0f * alpha * hole));
+            LogoToy.drawLogoImage(drawX, drawY, size, INSTANCE.rgba(104, 108, 122, 145.0f * alpha * hole));
         }
         if (hole < 0.996f) {
             float docked = 1.0f - hole;
             float lift = 1.0f + 0.09f * hoverT;
             INSTANCE.pushToyTransform(graphics, socketCenterX, socketCenterY, scale * lift, spin * docked);
-            AccentGradient.msdfIcon(Fonts.KIMIKO, GLYPH, drawX, drawY, size, (225.0f + 30.0f * hoverT) * alpha * docked, 0.1f);
+            LogoToy.drawLogoImage(drawX, drawY, size, INSTANCE.rgba(255, 255, 255, (225.0f + 30.0f * hoverT) * alpha * docked));
             graphics.getMatrices().popMatrix();
         }
         if (insertT > 0.004f) {
             float t = insertT;
             float ring = size * (0.42f + (1.0f - t) * 1.35f);
             Render2D.circleOutline(socketCenterX, socketCenterY, ring, 0.85f, ClientAccent.accentBrightAt(200.0f * alpha * t * t, socketCenterX, socketCenterY));
-            Fonts.KIMIKO.msdf(GLYPH, drawX, drawY, size, INSTANCE.rgba(255, 255, 255, 190.0f * alpha * t * t));
+            LogoToy.drawLogoImage(drawX, drawY, size, INSTANCE.rgba(255, 255, 255, 190.0f * alpha * t * t));
         }
     }
 
@@ -679,7 +692,7 @@ public final class LogoToy {
         }
         float shrink = 0.21739131f;
         float size = socketSize * 4.6f * (shrink + (1.0f - shrink) * visible);
-        float[] bounds = Fonts.KIMIKO.msdfBounds(GLYPH, size);
+        float[] bounds = LogoToy.logoBounds(size);
         float cx = 0.0f;
         float cy = 0.0f;
         float boxW = 0.0f;
@@ -703,7 +716,7 @@ public final class LogoToy {
         float heat = 1.0f + 0.55f * Math.min(1.0f, (float)Math.sqrt(vx * vx + vy * vy) / 700.0f);
         INSTANCE.drawGlow(graphics, Math.max(boxW, boxH), 200.0f * a * heat);
         INSTANCE.pushToyTransform(graphics, x, y, scale, spin);
-        AccentGradient.msdfIcon(Fonts.KIMIKO, GLYPH, cx, cy, size, 255.0f * a, 0.1f);
+        LogoToy.drawLogoImage(cx, cy, size, INSTANCE.rgba(255, 255, 255, 255.0f * a));
         graphics.getMatrices().popMatrix();
     }
 
@@ -729,7 +742,7 @@ public final class LogoToy {
             graphics.getMatrices().pushMatrix();
             graphics.getMatrices().translate(dx, dy);
             this.pushToyTransform(graphics, x, y, scale, spin);
-            AccentGradient.msdfIcon(Fonts.KIMIKO, GLYPH, drawX, drawY, size, 255.0f * shardAlpha, 0.1f);
+            LogoToy.drawLogoImage(drawX, drawY, size, INSTANCE.rgba(255, 255, 255, 255.0f * shardAlpha));
             graphics.getMatrices().popMatrix();
             graphics.getMatrices().popMatrix();
             Render2D.popScissor(graphics);

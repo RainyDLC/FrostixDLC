@@ -413,7 +413,7 @@ public final class MessengerPanel {
         float drawX = this.px;
         float drawY = this.py + (1.0f - t) * 4.0f;
         float panelRadius = RenderHelper.effectiveCornerRadius(12.0f, this.pw, this.ph);
-        RectUtil.drawClientRectFixedRadius(drawX, drawY, this.pw, this.ph, panelRadius, a, 0.0f);
+        RectUtil.drawMatteWindow(drawX, drawY, this.pw, this.ph, panelRadius, a);
         Render2D.outline(drawX, drawY, this.pw, this.ph, panelRadius, 0.6f, ColorEngine.multAlpha(0x18FFFFFF, a));
         float rate = 1.0f - (float)Math.exp(-dt * 14.0f);
         this.editBarT += ((this.editingId != -1L ? 1.0f : 0.0f) - this.editBarT) * rate;

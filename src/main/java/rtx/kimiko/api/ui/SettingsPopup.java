@@ -306,7 +306,7 @@ public final class SettingsPopup {
             graphics.getMatrices().rotate((float)Math.toRadians(tilt));
             graphics.getMatrices().translate(-centerX, -centerY);
         }
-        RectUtil.drawClientWindow(this.px, drawY, this.width, this.height, 8.0f, a);
+        RectUtil.drawMatteWindow(this.px, drawY, this.width, this.height, 8.0f, a);
         float windowRadius = RectUtil.clientWindowRadius(8.0f, this.width, this.height);
         Render2D.outline(this.px, drawY, this.width, this.height, windowRadius, 0.6f, SettingsPopup.Companion.rgba(255, 255, 255, (float)24 * a));
         float bodyY = drawY + this.topPad();

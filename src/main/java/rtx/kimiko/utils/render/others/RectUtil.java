@@ -190,6 +190,67 @@ public final class RectUtil {
         return Math.max(0.0f, Math.min(configuredRadius, Math.min(width, height) * 0.5f));
     }
 
+    // ================= Matte Frost GUI style (used only by the ClickGUI) =================
+    private static int matteArgb(int r, int g, int b, float a255) {
+        int a = Math.max(0, Math.min(255, Math.round(a255)));
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    /** Frosted matte surface: backdrop blur + flat tint + faint satin sheen + hairline border. */
+    public static void drawMatte(float x, float y, float w, float h, float rtl, float rtr, float rbr, float rbl, float alpha, float blurRadius, int tintR, int tintG, int tintB, float tintA, float borderA) {
+        if (w <= 0.0f || h <= 0.0f || alpha <= 0.0f) {
+            return;
+        }
+        float a = Math.max(0.0f, Math.min(1.0f, alpha));
+        float maxR = Math.min(w, h) * 0.5f;
+        rtl = Math.min(maxR, rtl);
+        rtr = Math.min(maxR, rtr);
+        rbr = Math.min(maxR, rbr);
+        rbl = Math.min(maxR, rbl);
+        Render2D.blur(Render2D.blurBuilder().rectangle(x, y, w, h).radius(rtl, rtr, rbr, rbl).blurRadius(blurRadius).smoothness(1.0f).color(RectUtil.matteArgb(255, 255, 255, 255.0f * a)).build());
+        Render2D.rect(x, y, w, h, rtl, rtr, rbr, rbl, RectUtil.matteArgb(tintR, tintG, tintB, tintA * a));
+        int sheenTop = RectUtil.matteArgb(255, 255, 255, 8.0f * a);
+        int sheenBottom = RectUtil.matteArgb(255, 255, 255, 0.0f);
+        Render2D.rect(x, y, w, h, rtl, rtr, rbr, rbl, sheenTop, sheenTop, sheenBottom, sheenBottom);
+        Render2D.outline(x, y, w, h, rtl, rtr, rbr, rbl, 0.7f, RectUtil.matteArgb(255, 255, 255, borderA * a));
+    }
+
+    /** Main ClickGUI window. */
+    public static void drawMatteWindow(float x, float y, float width, float height, float radius, float alpha, float radiusBonus) {
+        InterfaceModule module = InterfaceModule.Companion.getInstance();
+        float r = (module == null ? radius : module.rectCornerRadius.getFloat()) + radiusBonus;
+        r = Math.max(0.0f, Math.min(r, Math.min(width, height) * 0.5f));
+        float blur = module == null ? 18.0f : module.rectBackdropBlur.getFloat();
+        RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.85f, 13, 14, 18, 176.0f, 26.0f);
+    }
+
+    /** Popups / dropdowns / messenger inside the ClickGUI. */
+    public static void drawMatteWindow(float x, float y, float width, float height, float radius, float alpha) {
+        float r = RectUtil.clientWindowRadius(radius, width, height);
+        InterfaceModule module = InterfaceModule.Companion.getInstance();
+        float blur = module == null ? 18.0f : module.rectBackdropBlur.getFloat();
+        RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.7f, 11, 12, 16, 208.0f, 30.0f);
+    }
+
+    /** Module / config / theme card: flat matte tile, no per-card blur. */
+    public static void drawMatteCard(float x, float y, float width, float height, float rtl, float rtr, float rbr, float rbl, float alpha, float lift) {
+        if (width <= 0.0f || height <= 0.0f || alpha <= 0.0f) {
+            return;
+        }
+        float a = Math.max(0.0f, Math.min(1.0f, alpha));
+        float l = Math.max(0.0f, Math.min(1.0f, lift));
+        float maxR = Math.min(width, height) * 0.5f;
+        rtl = Math.min(maxR, rtl);
+        rtr = Math.min(maxR, rtr);
+        rbr = Math.min(maxR, rbr);
+        rbl = Math.min(maxR, rbl);
+        Render2D.rect(x, y, width, height, rtl, rtr, rbr, rbl, RectUtil.matteArgb(8, 9, 12, (84.0f + 22.0f * l) * a));
+        int top = RectUtil.matteArgb(255, 255, 255, (9.0f + 9.0f * l) * a);
+        int bottom = RectUtil.matteArgb(255, 255, 255, (2.0f + 3.0f * l) * a);
+        Render2D.rect(x, y, width, height, rtl, rtr, rbr, rbl, top, top, bottom, bottom);
+        Render2D.outline(x, y, width, height, rtl, rtr, rbr, rbl, 0.6f, RectUtil.matteArgb(255, 255, 255, (14.0f + 16.0f * l) * a));
+    }
+
     @JvmStatic
     public static final void drawGlassCard(float x, float y, float width, float height, float radiusTopLeft, float radiusTopRight, float radiusBottomRight, float radiusBottomLeft, float alpha, float lift) {
         int n;

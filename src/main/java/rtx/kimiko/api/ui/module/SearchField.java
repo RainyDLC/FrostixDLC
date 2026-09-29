@@ -156,12 +156,12 @@ public final class SearchField {
         this.focusT += ((this.typing ? 1.0f : 0.0f) - this.focusT) * focusRate;
         float glow = Math.max(this.hoverT, this.focusT);
         int accentRgb = ClientAccent.accentAt(255.0f, x + width * 0.5f, y + height * 0.5f) & 0xFFFFFF;
-        Render2D.rect(x, y, width, height, 4.0f, SearchField.Companion.col(0, 0, 0, ((float)40 + (float)12 * glow) * alpha));
-        Color outlineLeft = new Color(9, 9, 9, 0);
-        Color outlineRight = new Color(9, 12, 14, 0);
-        int outL = SearchField.Companion.withAlpha(outlineLeft, alpha);
-        int outR = SearchField.Companion.withAlpha(outlineRight, alpha);
-        Render2D.outline(x, y, width, height, 4.0f, 0.8f, outL, outR, outR, outL);
+        float pillR = height * 0.5f;
+        Render2D.rect(x, y, width, height, pillR, SearchField.Companion.col(0, 0, 0, ((float)66 + (float)16 * glow) * alpha));
+        Render2D.outline(x, y, width, height, pillR, 0.7f, SearchField.Companion.col(255, 255, 255, ((float)16 + (float)10 * glow) * alpha));
+        if (this.focusT > 0.02f) {
+            Render2D.outline(x, y, width, height, pillR, 0.8f, ClientAccent.accentAt(150.0f * this.focusT * alpha, x + width * 0.5f, y + height * 0.5f));
+        }
         float iconSize = 7.5f;
         float iconX = x + 5.0f;
         if (((CharSequence)this.iconGlyph).length() == 0) {

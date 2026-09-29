@@ -365,7 +365,7 @@ public final class EventsRenderer {
 
     private final void drawCardBase(float x, float y, float w, float alpha, float hoverT) {
         float rbr = this.cardBottomRadius(y);
-        RectUtil.drawGlassCard(x, y, w, 31.0f, 6.0f, 6.0f, rbr, 6.0f, alpha, hoverT);
+        RectUtil.drawMatteCard(x, y, w, 31.0f, 6.0f, 6.0f, rbr, 6.0f, alpha, hoverT);
         int fillTop = EventsRenderer.Companion.rgba(255, 255, 255, (7.0f + 5.0f * hoverT) * alpha);
         int fillBottom = EventsRenderer.Companion.rgba(255, 255, 255, 1.5f * alpha);
         Render2D.rect(x, y, w, 31.0f, 6.0f, 6.0f, rbr, 6.0f, fillTop, fillTop, fillBottom, fillBottom);
