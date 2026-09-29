@@ -640,6 +640,9 @@ implements GuiCapture.Source {
             float fullX = dimCenterX - dimHalfW;
             float fullY = dimCenterY - dimHalfH;
 
+            // Make sure the blur backdrop is fresh so the fullscreen blur never samples a stale/empty target
+            BlurFramebuffer.getInstance().recaptureBackdrop();
+
             // Fullscreen backdrop blur
             Render2D.blur(Render2D.blurBuilder().rectangle(fullX, fullY, fullW, fullH).radius(0.0f).blurRadius(18.0f * dimDrawAlpha).smoothness(1.0f).color(UI.Companion.color(255, 255, 255, 255, dimDrawAlpha)).build());
 
@@ -661,6 +664,16 @@ implements GuiCapture.Source {
         graphics.getMatrices().pushMatrix();
         if (!(this.parallaxX == 0.0f) || !(this.parallaxY == 0.0f)) {
             graphics.getMatrices().translate(this.parallaxX, this.parallaxY);
+        }
+        // Soft accent glow around the main panel (reference screenshot style)
+        InterfaceModule glowModule = InterfaceModule.Companion.getInstance();
+        if (glowModule != null) {
+            int accent = glowModule.clientPrimaryColorAt(x + w * 0.5f, y + h * 0.5f);
+            int glowR = (accent >> 16) & 0xFF;
+            int glowG = (accent >> 8) & 0xFF;
+            int glowB = accent & 0xFF;
+            Render2D.rect(x - 18.0f, y - 14.0f, w + 36.0f, h + 28.0f, 24.0f, UI.Companion.color(glowR, glowG, glowB, 14, screenAlpha));
+            Render2D.rect(x - 9.0f, y - 7.0f, w + 18.0f, h + 14.0f, 19.0f, UI.Companion.color(glowR, glowG, glowB, 26, screenAlpha));
         }
         RectUtil.drawMatteWindow(x, y, w, h, 14.0f, screenAlpha, 0.0f);
         Render2D.rect(x + 110.0f, y + 8.0f, 0.7f, h - 16.0f, 0.0f, UI.Companion.color(255, 255, 255, 13, screenAlpha));
@@ -763,7 +776,7 @@ implements GuiCapture.Source {
                 GuiRenderState rs = ((GuiGraphicsExtractorAccessor)graphics).kimiko$getGuiRenderState();
                 rs.createNewRootLayer();
                 rs.applyBlur();
-                Companion.markPopupStratum(anyBlur && !splitAtBind, anyBlur);
+                Companion.markPopupStratum(false, anyBlur);
             }
             if (settingsVisible) {
                 this.settingsPopup.render(graphics, screenAlpha);
@@ -968,8 +981,10 @@ implements GuiCapture.Source {
             float iconW = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
             if (p > 0.01f) {
                 float underW = (iconW + 5.0f + Fonts.MEDIUM.width(cat.getDisplayName(), 7.0f)) * p;
-                AccentGradient.fillHorizontal(panelX + 4.0f, cy - 8.5f, panelW - 8.0f, 14.0f, 5.0f, 30.0f * p * alpha);
-                AccentGradient.fillVertical(panelX + 5.5f, cy - 5.5f, 1.6f, 8.0f, 0.8f, 235.0f * p * alpha);
+                float pillX = subIconX - 6.0f;
+                float pillW = underW + 12.0f;
+                Render2D.rect(pillX, cy - 8.5f, pillW, 17.0f, 8.5f, UI.Companion.color(255, 255, 255, MathKt.roundToInt(26.0f * p), alpha));
+                AccentGradient.fillVertical(pillX + 4.5f, cy - 4.5f * p, 1.6f, 9.0f * p, 0.8f, 235.0f * p * alpha);
             }
             float indexT = catCount > 1 ? (float)i / (float)(catCount - 1) : 0.5f;
             AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, indexT);
@@ -1003,8 +1018,10 @@ implements GuiCapture.Source {
             float iconW2 = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
             if (p > 0.01f) {
                 float underW = (iconW2 + 5.0f + Fonts.MEDIUM.width(EVENT_SUBS[i], 7.0f)) * p;
-                AccentGradient.fillHorizontal(panelX + 4.0f, cy - 8.5f, panelW - 8.0f, 14.0f, 5.0f, 30.0f * p * alpha);
-                AccentGradient.fillVertical(panelX + 5.5f, cy - 5.5f, 1.6f, 8.0f, 0.8f, 235.0f * p * alpha);
+                float pillX = subIconX - 6.0f;
+                float pillW = underW + 12.0f;
+                Render2D.rect(pillX, cy - 8.5f, pillW, 17.0f, 8.5f, UI.Companion.color(255, 255, 255, MathKt.roundToInt(26.0f * p), alpha));
+                AccentGradient.fillVertical(pillX + 4.5f, cy - 4.5f * p, 1.6f, 9.0f * p, 0.8f, 235.0f * p * alpha);
             }
             AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.6f);
             Fonts.MEDIUM.draw(EVENT_SUBS[i], subIconX + iconW2 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
@@ -1052,8 +1069,10 @@ implements GuiCapture.Source {
             float iconW3 = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
             if (p > 0.01f) {
                 float underW = (iconW3 + 5.0f + Fonts.MEDIUM.width(cat.getDisplayName(), 7.0f)) * p;
-                AccentGradient.fillHorizontal(panelX + 4.0f, cy - 8.5f, panelW - 8.0f, 14.0f, 5.0f, 30.0f * p * rowT * alpha);
-                AccentGradient.fillVertical(panelX + 5.5f, cy - 5.5f, 1.6f, 8.0f, 0.8f, 235.0f * p * rowT * alpha);
+                float pillX = subIconX - 6.0f;
+                float pillW = underW + 12.0f;
+                Render2D.rect(pillX, cy - 8.5f, pillW, 17.0f, 8.5f, UI.Companion.color(255, 255, 255, MathKt.roundToInt(26.0f * p * rowT), alpha));
+                AccentGradient.fillVertical(pillX + 4.5f, cy - 4.5f * p, 1.6f, 9.0f * p, 0.8f, 235.0f * p * rowT * alpha);
             }
             AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.85f);
             Fonts.MEDIUM.draw(cat.getDisplayName(), subIconX + iconW3 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
@@ -1090,10 +1109,10 @@ implements GuiCapture.Source {
                     Render2D.imageUvNearest(skinTex, avX, avY, avSize, avRadius, avRadius, avRadius, avRadius, 0.5f, 0.125f, 0.125f, 0.25f, 0.25f, UI.Companion.color(255, 255, 255, 255, alpha));
                     Render2D.imageUvNearest(skinTex, avX, avY, avSize, avRadius, avRadius, avRadius, avRadius, 0.5f, 0.625f, 0.125f, 0.75f, 0.25f, UI.Companion.color(255, 255, 255, 255, alpha));
                 } else {
-                    Render2D.rect(avX, avY, avSize, avSize, avRadius, UI.Companion.color(30, 42, 58, 200, alpha));
+                    Render2D.rect(avX, avY, avSize, avSize, avRadius, UI.Companion.color(0, 0, 0, 90, alpha));
                 }
             } catch (Throwable ignored) {
-                Render2D.rect(avX, avY, avSize, avSize, avRadius, UI.Companion.color(30, 42, 58, 200, alpha));
+                Render2D.rect(avX, avY, avSize, avSize, avRadius, UI.Companion.color(0, 0, 0, 90, alpha));
             }
         }
         Render2D.outline(avX, avY, avSize, avSize, avRadius, 0.6f, UI.Companion.color(255, 255, 255, 25, alpha));
