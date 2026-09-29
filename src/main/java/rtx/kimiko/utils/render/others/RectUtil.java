@@ -238,7 +238,7 @@ public final class RectUtil {
             Render2D.glow(halo);
         }
         // Deep obsidian matte glass surface
-        RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.95f, 10, 12, 17, 226.0f, 26.0f);
+        RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.95f, 10, 12, 17, 204.0f, 26.0f);
     }
 
     /** Popups / dropdowns / messenger inside the ClickGUI. */
@@ -252,7 +252,7 @@ public final class RectUtil {
             BuiltGlow shadow = new BuiltGlow(x, y, width, height, radii, 0xFF010205, 1.15f, 22.0f, 0.82f * a);
             Render2D.glow(shadow);
         }
-        RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.75f, 11, 13, 18, 222.0f, 28.0f);
+        RectUtil.drawMatte(x, y, width, height, r, r, r, r, alpha, blur * 0.75f, 11, 13, 18, 200.0f, 28.0f);
     }
 
     /** Module / config / theme card: flat matte tile, no per-card blur. */
