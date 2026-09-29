@@ -54,7 +54,7 @@ public final class EmotionPlayback {
     }
 
     @JvmStatic
-    public static final void play(Nullable EmotionAnim emotion) {
+    public static final void play(@Nullable EmotionAnim emotion) {
         if (emotion == null) {
             EmotionPlayback.stop();
             return;
@@ -80,7 +80,7 @@ public final class EmotionPlayback {
     }
 
     @JvmStatic
-    public static final void setRemote(@Nullable UUID playerId, Nullable EmotionAnim emotion, long startedAt, float speed, boolean looping) {
+    public static final void setRemote(@Nullable UUID playerId, @Nullable EmotionAnim emotion, long startedAt, float speed, boolean looping) {
         if (playerId != null && emotion != null && startedAt > 0L) {
             REMOTE.put(playerId, new RemotePlayback(emotion, startedAt, Math.max(0.05f, speed), looping));
         }
@@ -157,7 +157,7 @@ public final class EmotionPlayback {
     }
 
     @JvmStatic
-    public static final void beginPreview(Nullable EmotionAnim emotion, float time) {
+    public static final void beginPreview(@Nullable EmotionAnim emotion, float time) {
         preview = emotion;
         previewTime = time;
     }
@@ -242,7 +242,7 @@ public final class EmotionPlayback {
         private final float speed;
         private final boolean looping;
 
-        public RemotePlayback(NotNull EmotionAnim emotion, long startedAt, float speed, boolean looping) {
+        public RemotePlayback(@NotNull EmotionAnim emotion, long startedAt, float speed, boolean looping) {
             Intrinsics.checkNotNullParameter((Object)((Object)emotion), (String)"emotion");
             this.emotion = emotion;
             this.startedAt = startedAt;
@@ -285,7 +285,7 @@ public final class EmotionPlayback {
         }
 
         @NotNull
-        public final RemotePlayback copy(NotNull EmotionAnim emotion, long startedAt, float speed, boolean looping) {
+        public final RemotePlayback copy(@NotNull EmotionAnim emotion, long startedAt, float speed, boolean looping) {
             Intrinsics.checkNotNullParameter((Object)((Object)emotion), (String)"emotion");
             return new RemotePlayback(emotion, startedAt, speed, looping);
         }
