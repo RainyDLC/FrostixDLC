@@ -175,7 +175,8 @@ extends SpecialGuiElementRenderer<EmotionPreviewState> {
         }
     }
 
-    protected void blitTexture(@NotNull EmotionPreviewState state, @NotNull GuiRenderState guiRenderState) {
+    @Override
+    protected void renderElement(@NotNull EmotionPreviewState state, @NotNull GuiRenderState guiRenderState) {
         Intrinsics.checkNotNullParameter((Object)state, (String)"state");
         Intrinsics.checkNotNullParameter((Object)guiRenderState, (String)"guiRenderState");
         Intrinsics.checkNotNull((Object)((Object)this), (String)"null cannot be cast to non-null type kotlin.Any");
