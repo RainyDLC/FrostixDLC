@@ -979,13 +979,6 @@ implements GuiCapture.Source {
             int col = UI.Companion.color(255, 255, 255, a, alpha);
             String icon = String.valueOf(UI.Companion.iconChar(cat));
             float iconW = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
-            if (p > 0.01f) {
-                float underW = (iconW + 5.0f + Fonts.MEDIUM.width(cat.getDisplayName(), 7.0f)) * p;
-                float pillX = subIconX - 6.0f;
-                float pillW = underW + 12.0f;
-                Render2D.rect(pillX, cy - 8.5f, pillW, 17.0f, 8.5f, UI.Companion.color(255, 255, 255, MathKt.roundToInt(26.0f * p), alpha));
-                AccentGradient.fillVertical(pillX + 4.5f, cy - 4.5f * p, 1.6f, 9.0f * p, 0.8f, 235.0f * p * alpha);
-            }
             float indexT = catCount > 1 ? (float)i / (float)(catCount - 1) : 0.5f;
             AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, indexT);
             Fonts.MEDIUM.draw(cat.getDisplayName(), subIconX + iconW + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
@@ -1016,13 +1009,6 @@ implements GuiCapture.Source {
             int col = UI.Companion.color(255, 255, 255, a, alpha);
             String icon = EVENT_SUB_ICONS[i];
             float iconW2 = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
-            if (p > 0.01f) {
-                float underW = (iconW2 + 5.0f + Fonts.MEDIUM.width(EVENT_SUBS[i], 7.0f)) * p;
-                float pillX = subIconX - 6.0f;
-                float pillW = underW + 12.0f;
-                Render2D.rect(pillX, cy - 8.5f, pillW, 17.0f, 8.5f, UI.Companion.color(255, 255, 255, MathKt.roundToInt(26.0f * p), alpha));
-                AccentGradient.fillVertical(pillX + 4.5f, cy - 4.5f * p, 1.6f, 9.0f * p, 0.8f, 235.0f * p * alpha);
-            }
             AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.6f);
             Fonts.MEDIUM.draw(EVENT_SUBS[i], subIconX + iconW2 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
         }
@@ -1067,13 +1053,6 @@ implements GuiCapture.Source {
             int col = UI.Companion.color(255, 255, 255, a, alpha);
             String icon = String.valueOf(UI.Companion.iconChar(cat));
             float iconW3 = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
-            if (p > 0.01f) {
-                float underW = (iconW3 + 5.0f + Fonts.MEDIUM.width(cat.getDisplayName(), 7.0f)) * p;
-                float pillX = subIconX - 6.0f;
-                float pillW = underW + 12.0f;
-                Render2D.rect(pillX, cy - 8.5f, pillW, 17.0f, 8.5f, UI.Companion.color(255, 255, 255, MathKt.roundToInt(26.0f * p * rowT), alpha));
-                AccentGradient.fillVertical(pillX + 4.5f, cy - 4.5f * p, 1.6f, 9.0f * p, 0.8f, 235.0f * p * rowT * alpha);
-            }
             AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.85f);
             Fonts.MEDIUM.draw(cat.getDisplayName(), subIconX + iconW3 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
         }
