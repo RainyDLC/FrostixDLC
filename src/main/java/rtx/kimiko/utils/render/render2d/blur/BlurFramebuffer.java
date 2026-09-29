@@ -638,12 +638,11 @@ implements AutoCloseable {
             return;
         }
         SimpleFramebuffer snapshot = this.worldSnapshot;
-        if (snapshot == null || snapshot.textureWidth != w || snapshot.textureHeight != h) {
-            if (snapshot != null) {
-                snapshot.close();
-            }
+        if (snapshot == null) {
             snapshot = new SimpleFramebuffer("kimiko_blur_world_snapshot", w, h, false);
             this.worldSnapshot = snapshot;
+        } else if (snapshot.textureWidth != w || snapshot.textureHeight != h) {
+            snapshot.resize(w, h);
         }
         if (snapshot.getColorAttachment() == null || snapshot.getColorAttachmentView() == null) {
             return;
