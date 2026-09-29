@@ -1,329 +1,230 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  kotlin.Metadata
- *  kotlin.jvm.JvmStatic
- *  kotlin.jvm.internal.DefaultConstructorMarker
- *  kotlin.jvm.internal.Intrinsics
- *  kotlin.jvm.internal.SourceDebugExtension
- *  net.minecraft.client.input.CharInput
- *  net.minecraft.client.input.KeyInput
- *  net.minecraft.client.gui.Click
- *  net.minecraft.text.Text
- *  net.minecraft.client.MinecraftClient
- *  net.minecraft.client.gui.DrawContext
- *  net.minecraft.text.MutableText
- *  org.jetbrains.annotations.NotNull
- *  org.jetbrains.annotations.Nullable
- *  rtx.kimiko.api.ui.mainmenu.pages.NewsPage
- *  rtx.kimiko.api.ui.mainmenu.pages.SettingsPage
- */
 package rtx.kimiko.api.ui.mainmenu;
 
-import java.util.Collection;
-import java.util.EnumMap;
-import java.util.Map;
-import kotlin.Metadata;
-import kotlin.jvm.JvmStatic;
-import kotlin.jvm.internal.DefaultConstructorMarker;
-import kotlin.jvm.internal.Intrinsics;
-import kotlin.jvm.internal.SourceDebugExtension;
-import net.minecraft.client.input.CharInput;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.client.gui.Click;
-import net.minecraft.text.Text;
+import mods.acountswiher.ru.vidtu.ias.screen.AccountScreen;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.text.MutableText;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
+import net.minecraft.client.input.KeyInput;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
+import net.minecraft.client.gui.screen.option.OptionsScreen;
+import net.minecraft.client.gui.screen.world.SelectWorldScreen;
+import net.minecraft.text.Text;
 import rtx.kimiko.api.drags.Position;
 import rtx.kimiko.api.ui.BaseScreen;
-import rtx.kimiko.api.ui.mainmenu.MainMenuTab;
-import rtx.kimiko.api.ui.mainmenu.MenuBackdrop;
-import rtx.kimiko.api.ui.mainmenu.MenuDock;
-import rtx.kimiko.api.ui.mainmenu.MenuFooter;
-import rtx.kimiko.api.ui.mainmenu.MenuHeader;
-import rtx.kimiko.api.ui.mainmenu.MenuPage;
-import rtx.kimiko.api.ui.mainmenu.MenuRipples;
-import rtx.kimiko.api.ui.mainmenu.MenuSettings;
-import rtx.kimiko.api.ui.mainmenu.MenuStats;
-import rtx.kimiko.api.ui.mainmenu.MenuTheme;
-import rtx.kimiko.api.ui.mainmenu.pages.AccountsPage;
-import rtx.kimiko.api.ui.mainmenu.pages.BackgroundsPage;
-import rtx.kimiko.api.ui.mainmenu.pages.CosmeticsPage;
-import rtx.kimiko.api.ui.mainmenu.pages.NewsPage;
-import rtx.kimiko.api.ui.mainmenu.pages.PlayPage;
-import rtx.kimiko.api.ui.mainmenu.pages.ProfilePage;
-import rtx.kimiko.api.ui.mainmenu.pages.SettingsPage;
-import rtx.kimiko.utils.sounds.Sounds;
+import rtx.kimiko.utils.render.fonts.Fonts;
+import rtx.kimiko.utils.render.render2d.Render2D;
 
-@Metadata(mv={2, 4, 0}, k=1, xi=48, d1={"\u0000\u0086\u0001\n\u0002\u0018\u0002\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0010\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0000\n\u0002\u0010\b\n\u0002\b\u0002\n\u0002\u0010\u0007\n\u0002\b\t\n\u0002\u0010\u000b\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\b\u0006\n\u0002\u0010\u0006\n\u0002\b\u0004\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\b\u0003\n\u0002\u0010%\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\b\b\n\u0002\u0010\t\n\u0002\b\u0004\u0018\u0000 E2\u00020\u0001:\u0001EB\t\b\u0002\u00a2\u0006\u0004\b\u0002\u0010\u0003J\r\u0010\u0005\u001a\u00020\u0004\u00a2\u0006\u0004\b\u0005\u0010\u0006J\u000f\u0010\b\u001a\u00020\u0007H\u0014\u00a2\u0006\u0004\b\b\u0010\u0003J\u000f\u0010\t\u001a\u00020\u0007H\u0016\u00a2\u0006\u0004\b\t\u0010\u0003J/\u0010\u0011\u001a\u00020\u00072\u0006\u0010\u000b\u001a\u00020\n2\u0006\u0010\r\u001a\u00020\f2\u0006\u0010\u000e\u001a\u00020\f2\u0006\u0010\u0010\u001a\u00020\u000fH\u0014\u00a2\u0006\u0004\b\u0011\u0010\u0012J\u0017\u0010\u0014\u001a\u00020\u00072\u0006\u0010\u0013\u001a\u00020\u000fH\u0002\u00a2\u0006\u0004\b\u0014\u0010\u0015J\u0017\u0010\u0017\u001a\u00020\u00072\b\u0010\u0016\u001a\u0004\u0018\u00010\u0004\u00a2\u0006\u0004\b\u0017\u0010\u0018J\u000f\u0010\u001a\u001a\u00020\u0019H\u0002\u00a2\u0006\u0004\b\u001a\u0010\u001bJ\u001f\u0010\u001f\u001a\u00020\u00192\u0006\u0010\u001d\u001a\u00020\u001c2\u0006\u0010\u001e\u001a\u00020\u0019H\u0016\u00a2\u0006\u0004\b\u001f\u0010 J\u0017\u0010!\u001a\u00020\u00192\u0006\u0010\u001d\u001a\u00020\u001cH\u0016\u00a2\u0006\u0004\b!\u0010\"J/\u0010&\u001a\u00020\u00192\u0006\u0010\r\u001a\u00020#2\u0006\u0010\u000e\u001a\u00020#2\u0006\u0010$\u001a\u00020#2\u0006\u0010%\u001a\u00020#H\u0016\u00a2\u0006\u0004\b&\u0010'J\u0017\u0010)\u001a\u00020\u00192\u0006\u0010\u001d\u001a\u00020(H\u0016\u00a2\u0006\u0004\b)\u0010*J\u0017\u0010,\u001a\u00020\u00192\u0006\u0010\u001d\u001a\u00020+H\u0016\u00a2\u0006\u0004\b,\u0010-J\u000f\u0010.\u001a\u00020\u0019H\u0016\u00a2\u0006\u0004\b.\u0010\u001bR \u00101\u001a\u000e\u0012\u0004\u0012\u00020\u0004\u0012\u0004\u0012\u0002000/8\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b1\u00102R\u0014\u00104\u001a\u0002038\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b4\u00105R\u0014\u00107\u001a\u0002068\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b7\u00108R\u0014\u0010:\u001a\u0002098\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b:\u0010;R\u0016\u0010\u0005\u001a\u00020\u00048\u0002@\u0002X\u0082\u000e\u00a2\u0006\u0006\n\u0004\b\u0005\u0010<R\u0018\u0010=\u001a\u0004\u0018\u00010\u00048\u0002@\u0002X\u0082\u000e\u00a2\u0006\u0006\n\u0004\b=\u0010<R\u0016\u0010>\u001a\u00020\u000f8\u0002@\u0002X\u0082\u000e\u00a2\u0006\u0006\n\u0004\b>\u0010?R\u0016\u0010@\u001a\u00020\u000f8\u0002@\u0002X\u0082\u000e\u00a2\u0006\u0006\n\u0004\b@\u0010?R\u0016\u0010A\u001a\u00020\u000f8\u0002@\u0002X\u0082\u000e\u00a2\u0006\u0006\n\u0004\bA\u0010?R\u0016\u0010C\u001a\u00020B8\u0002@\u0002X\u0082\u000e\u00a2\u0006\u0006\n\u0004\bC\u0010D\u00a8\u0006F"}, d2={"Lrtx/kimiko/api/ui/mainmenu/MainMenuScreen;", "Lrtx/kimiko/api/ui/BaseScreen;", "<init>", "()V", "Lrtx/kimiko/api/ui/mainmenu/MainMenuTab;", "tab", "()Lrtx/kimiko/api/ui/mainmenu/MainMenuTab;", "", "init", "onClose", "Lnet/minecraft/DrawContext;", "graphics", "", "mouseX", "mouseY", "", "partialTick", "renderScreen", "(Lnet/minecraft/DrawContext;IIF)V", "dt", "updatePageTransition", "(F)V", "next", "select", "(Lrtx/kimiko/api/ui/mainmenu/MainMenuTab;)V", "", "interactive", "()Z", "Lnet/minecraft/Click;", "event", "doubleClick", "mouseClicked", "(Lnet/minecraft/Click;Z)Z", "mouseReleased", "(Lnet/minecraft/Click;)Z", "", "horizontal", "vertical", "mouseScrolled", "(DDDD)Z", "Lnet/minecraft/KeyInput;", "keyPressed", "(Lnet/minecraft/KeyInput;)Z", "Lnet/minecraft/CharInput;", "charTyped", "(Lnet/minecraft/CharInput;)Z", "isPauseScreen", "", "Lrtx/kimiko/api/ui/mainmenu/MenuPage;", "pages", "Ljava/util/Map;", "Lrtx/kimiko/api/ui/mainmenu/MenuDock;", "dock", "Lrtx/kimiko/api/ui/mainmenu/MenuDock;", "Lrtx/kimiko/api/ui/mainmenu/MenuHeader;", "header", "Lrtx/kimiko/api/ui/mainmenu/MenuHeader;", "Lrtx/kimiko/api/ui/mainmenu/MenuFooter;", "footer", "Lrtx/kimiko/api/ui/mainmenu/MenuFooter;", "Lrtx/kimiko/api/ui/mainmenu/MainMenuTab;", "pendingTab", "appear", "F", "pageAlpha", "pageAppear", "", "lastNanos", "J", "Companion", "rtx.kimiko:kimiko"})
-@SourceDebugExtension(value={"SMAP\nMainMenuScreen.kt\nKotlin\n*S Kotlin\n*F\n+ 1 MainMenuScreen.kt\nrtx/kimiko/api/ui/mainmenu/MainMenuScreen\n+ 2 ArraysJVM.kt\nkotlin/collections/ArraysKt__ArraysJVMKt\n*L\n1#1,233:1\n37#2,2:234\n37#2,2:236\n*S KotlinDebug\n*F\n+ 1 MainMenuScreen.kt\nrtx/kimiko/api/ui/mainmenu/MainMenuScreen\n*L\n181#1:234,2\n189#1:236,2\n*E\n"})
-public final class MainMenuScreen
-extends BaseScreen {
-    @NotNull
-    public static final Companion Companion = new Companion(null);
-    @NotNull
-    private final Map<MainMenuTab, MenuPage> pages;
-    @NotNull
-    private final MenuDock dock;
-    @NotNull
-    private final MenuHeader header;
-    @NotNull
-    private final MenuFooter footer;
-    @NotNull
-    private MainMenuTab tab;
-    @Nullable
-    private MainMenuTab pendingTab;
-    private float appear;
-    private float pageAlpha;
-    private float pageAppear;
-    private long lastNanos;
-    private static final float INTRO_SECONDS = 0.72f;
-    private static final float PAGE_FADE_SECONDS = 0.13f;
-    @Nullable
+import java.util.List;
+
+/** Reference-inspired, directly customizable main menu. */
+public final class MainMenuScreen extends BaseScreen {
+    /** Kept for callers compiled against the former Kotlin companion API. */
+    public static final Companion Companion = new Companion();
+    public static final class Companion {
+        public MainMenuScreen instance() { return MainMenuScreen.instance(); }
+        public boolean isOpen() { return MainMenuScreen.isOpen(); }
+    }
     private static MainMenuScreen instance;
+    private static final String[] ACTIONS = {
+        "РћРґРёРЅРѕС‡РЅР°СЏ РёРіСЂР°", "РЎРµС‚РµРІР°СЏ РёРіСЂР°", "РЎРјРµРЅРёС‚СЊ Р°РєРєР°СѓРЅС‚", "РќР°СЃС‚СЂРѕР№РєРё", "Р’С‹Р№С‚Рё РёР· РёРіСЂС‹"
+    };
+    private MainMenuTab tab = MainMenuTab.PLAY;
+    private boolean editing;
+    private int dragging = -1;
+    private float offsetX, offsetY;
+    private float width, height, buttonW, buttonH, gearX, gearY;
+    private long lastFrame;
+    private float appear;
 
-    private MainMenuScreen() {
-        super((Text)Text.literal("RainyDLC"));
-        this.pages = new EnumMap(MainMenuTab.class);
-        this.dock = new MenuDock();
-        this.header = new MenuHeader();
-        this.footer = new MenuFooter();
-        this.tab = MainMenuTab.PLAY;
-        this.pageAlpha = 1.0f;
-        this.pages.put(MainMenuTab.PLAY, new PlayPage());
-        this.pages.put(MainMenuTab.BACKGROUNDS, new BackgroundsPage());
-        this.pages.put(MainMenuTab.COSMETICS, new CosmeticsPage());
-        this.pages.put(MainMenuTab.PROFILE, new ProfilePage());
-        this.pages.put(MainMenuTab.ACCOUNTS, new AccountsPage());
-        this.pages.put(MainMenuTab.NEWS, (MenuPage)new NewsPage());
-        this.pages.put(MainMenuTab.SETTINGS, (MenuPage)new SettingsPage());
-        this.tab = MainMenuTab.Companion.of(MenuSettings.lastTab());
+    private MainMenuScreen() { super(Text.literal("RainyDLC")); }
+    public static MainMenuScreen instance() {
+        if (instance == null) instance = new MainMenuScreen();
+        return instance;
+    }
+    public static boolean isOpen() { return MinecraftClient.getInstance().currentScreen instanceof MainMenuScreen; }
+    public MainMenuTab tab() { return tab; }
+    public void select(MainMenuTab next) { if (next != null) tab = next; }
+
+    @Override protected void init() {
+        MenuLayout.load();
+        lastFrame = System.nanoTime();
+        appear = 0;
+        editing = false;
+        dragging = -1;
     }
 
-    @NotNull
-    public final MainMenuTab tab() {
-        return this.tab;
+    private void metrics() {
+        width = Position.Companion.screenWidth();
+        height = Position.Companion.screenHeight();
+        MenuTheme.updateMetrics(height);
+        buttonW = Math.min(170, Math.max(108, width * 0.22f));
+        buttonH = Math.max(23, Math.min(32, height * 0.065f));
+        gearX = width - 47;
+        gearY = 17;
     }
 
-    protected void init() {
-        block1: {
-            this.lastNanos = System.nanoTime();
-            if (!MenuSettings.intro()) {
-                this.appear = 1.0f;
-            }
-            this.pageAlpha = 1.0f;
-            this.pageAppear = this.appear;
-            MenuStats.touch();
-            MenuPage menuPage = this.pages.get((Object)this.tab);
-            if (menuPage == null) break block1;
-            menuPage.onShow();
-        }
+    private float bx(int i) { return 15 + MenuLayout.x(i) * Math.max(0, width - buttonW - 30); }
+    private float by(int i) { return 58 + MenuLayout.y(i) * Math.max(0, height - buttonH - 88); }
+    private static boolean hit(float mx, float my, float x, float y, float w, float h) {
+        return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
 
-    public void close() {
-        MenuSettings.setLastTab(this.tab.name());
-        MenuSettings.save();
-        super.close();
-    }
-
-    @Override
-    protected void renderScreen(@NotNull DrawContext graphics, int mouseX, int mouseY, float partialTick) {
-        boolean scaled;
-        Intrinsics.checkNotNullParameter((Object)graphics, (String)"graphics");
+    @Override protected void renderScreen(DrawContext graphics, int mouseX, int mouseY, float partialTick) {
+        metrics();
         long now = System.nanoTime();
-        float dt = Math.min(0.1f, (float)(now - this.lastNanos) / 1.0E9f);
-        this.lastNanos = now;
-        float w = Position.Companion.screenWidth();
-        float h = Position.Companion.screenHeight();
+        float dt = Math.min(0.1f, (now - lastFrame) / 1_000_000_000f);
+        lastFrame = now;
+        appear = Math.min(1, appear + dt * 2.8f);
         float mx = Position.Companion.mouseX();
         float my = Position.Companion.mouseY();
-        MenuTheme.updateMetrics(h);
-        this.appear = Math.min(1.0f, this.appear + dt / 0.72f);
-        float intro = MenuTheme.ease(this.appear);
-        MenuBackdrop.render(w, h, mx, my, dt, 1.0f, intro);
-        float zoom = 1.0f + (1.0f - intro) * 0.035f;
-        boolean bl = scaled = zoom > 1.0005f;
-        if (scaled) {
-            graphics.getMatrices().pushMatrix();
-            graphics.getMatrices().translate(w * 0.5f, h * 0.5f);
-            graphics.getMatrices().scale(zoom, zoom);
-            graphics.getMatrices().translate(-w * 0.5f, -h * 0.5f);
-        }
-        float pad = MenuTheme.PAD;
-        float railX = pad * 0.35f;
-        float headerX = railX + MenuTheme.RAIL_W + pad * 0.5f;
-        float headerW = w - headerX - pad;
-        this.header.renderBrand(headerX, pad * 0.35f, MenuTheme.TOP_H, 1.0f, this.appear);
-        this.dock.layout(railX, MenuTheme.TOP_H + pad * 0.5f, h - MenuTheme.TOP_H - pad * 1.5f);
-        this.dock.render(this.tab, mx, my, dt, 1.0f, this.appear);
-        this.updatePageTransition(dt);
-        MenuRipples.render(dt, intro);
-        if (scaled) {
-            graphics.getMatrices().popMatrix();
+        MenuBackdrop.render(width, height, mx, my, dt, 1, appear);
+        // Keep the scene visible; a restrained dark rail gives the actions consistent contrast.
+        Render2D.rect(0, 0, Math.min(width * .39f, 280), height, 0,
+            0xD90A111C, 0xB309101A, 0x1509101A, 0xB90A111C);
+        Render2D.rect(0, 0, width, 1, 0, 0x494E98FA);
+        Fonts.SMALL_PIXEL.msdf("RAINYDLC", 24, 25, 13, 0xFFF3F7FF);
+        Fonts.MEDIUM.draw("РўР’РћРЇ РР“Р Рђ. РўР’РћР РџР РђР’РР›Рђ.", 25, 43, 5.1f, 0xFF9FB4D5);
+        float titleSize = Math.min(30, Math.max(14, width * .037f));
+        Fonts.SMALL_PIXEL.msdf("RAINYDLC", Math.max(24, width * .37f), height * .145f,
+            titleSize, MenuTheme.white(240, appear));
+        Render2D.rect(25, height * .355f, 31, 2, 1, 0xFF5C9EFF);
+        Fonts.BOLD.draw("РўРІРѕР№ РјРёСЂ РЅР°С‡РёРЅР°РµС‚СЃСЏ Р·РґРµСЃСЊ", 25, height * .375f, 10, 0xFFF6F8FF);
+        Fonts.MEDIUM.draw("Р’С‹Р±РµСЂРё РїСѓС‚СЊ Рё РѕС‚РїСЂР°РІР»СЏР№СЃСЏ РІ РїСЂРёРєР»СЋС‡РµРЅРёРµ.", 25,
+            height * .375f + 17, 5.4f, 0xFFC7D4E9);
+        for (int i = 0; i < ACTIONS.length; i++) drawAction(i, mx, my);
+        Render2D.rect(gearX, gearY, 30, 30, 8,
+            editing ? 0xE03364B0 : (hit(mx,my,gearX,gearY,30,30) ? 0xD13C536F : 0xB319273A));
+        Fonts.I2.msdf(MainMenuTab.SETTINGS.glyph(), gearX + 8, gearY + 7, 16, 0xFFFFFFFF);
+        Fonts.MEDIUM.draw("RAINYDLC  /  1.21.11", 24, height - 18, 4.8f, 0xFFAAB9CB);
+        if (editing) drawEditor(mx, my);
+    }
+
+    private void drawAction(int i, float mx, float my) {
+        float x = bx(i), y = by(i);
+        boolean hover = hit(mx, my, x, y, buttonW, buttonH);
+        Render2D.rect(x, y, buttonW, buttonH, 7,
+            i == 0 ? (hover ? 0xF75F9BFA : 0xE83C77E3) : (hover ? 0xDE304666 : 0xBA182333));
+        Render2D.outline(x, y, buttonW, buttonH, 7, .7f,
+            editing && dragging == i ? 0xFFD9EDFF : 0x637D9BC5);
+        Fonts.SEMIBOLD.draw(ACTIONS[i], x + 12, y + buttonH * .5f - 3.5f, 6,
+            0xFFFFFFFF);
+        if (editing) {
+            Render2D.rect(x + buttonW - 14, y + buttonH * .5f - 4, 2, 8, 1, 0xFFC2D6F3);
+            Render2D.rect(x + buttonW - 10, y + buttonH * .5f - 4, 2, 8, 1, 0xFFC2D6F3);
         }
     }
 
-    private final void updatePageTransition(float dt) {
-        MainMenuTab pending = this.pendingTab;
-        if (pending != null) {
-            this.pageAlpha -= dt / 0.13f;
-            if (this.pageAlpha <= 0.0f) {
-                this.pageAlpha = 0.0f;
-                MenuPage menuPage = this.pages.get((Object)this.tab);
-                if (menuPage != null) {
-                    menuPage.onHide();
-                }
-                this.tab = pending;
-                this.pendingTab = null;
-                this.pageAppear = 0.0f;
-                MenuPage menuPage2 = this.pages.get((Object)this.tab);
-                if (menuPage2 != null) {
-                    menuPage2.onShow();
-                }
-                MenuSettings.setLastTab(this.tab.name());
-                MenuSettings.save();
-            }
-            return;
-        }
-        this.pageAlpha = Math.min(1.0f, this.pageAlpha + dt / 0.13f);
-        this.pageAppear = Math.min(1.0f, this.pageAppear + dt / 0.46f);
+    private void drawEditor(float mx, float my) {
+        float pw = Math.min(235, width * .48f), px = width - pw - 16, py = 58;
+        float ph = 191;
+        Render2D.rect(px, py, pw, ph, 10, 0xE9121D2C);
+        Render2D.outline(px, py, pw, ph, 10, .8f, 0x665F88BF);
+        Fonts.BOLD.draw("РќР°СЃС‚СЂРѕРёС‚СЊ РіР»Р°РІРЅРѕРµ РјРµРЅСЋ", px + 13, py + 15, 8, 0xFFF7FAFF);
+        Fonts.MEDIUM.draw("РџРµСЂРµС‚Р°СЃРєРёРІР°Р№ РєРЅРѕРїРєРё РјС‹С€СЊСЋ", px + 13, py + 35, 5.4f, 0xFFADC0DB);
+        MenuBackground selected = MenuBackgrounds.selected();
+        String name = selected == null ? "РќРµС‚ С„РѕРЅР°" : selected.name();
+        editorRow(px, py + 55, pw, "Р¤РѕРЅ: " + truncate(name, 25), mx, my);
+        editorRow(px, py + 88, pw, "РџР°РїРєР° С„РѕС‚Рѕ / GIF-РІРёРґРµРѕ", mx, my);
+        editorRow(px, py + 121, pw, "РћР±РЅРѕРІРёС‚СЊ С„РѕРЅС‹", mx, my);
+        editorRow(px, py + 154, pw, "РЎР±СЂРѕСЃРёС‚СЊ РєРЅРѕРїРєРё", mx, my);
     }
 
-    public final void select(@Nullable MainMenuTab next) {
-        if (next == null || next == this.tab || next == this.pendingTab) {
-            return;
-        }
-        this.pendingTab = next;
-        Sounds.play("select_category");
+    private static String truncate(String text, int limit) {
+        return text.length() <= limit ? text : text.substring(0, limit - 1) + "вЂ¦";
+    }
+    private void editorRow(float x, float y, float w, String label, float mx, float my) {
+        Render2D.rect(x + 10, y, w - 20, 25, 6,
+            hit(mx,my,x+10,y,w-20,25) ? 0xD5364D6D : 0xA925344A);
+        Fonts.MEDIUM.draw(label, x + 19, y + 8, 5.5f, 0xFFE8F2FF);
     }
 
-    private final boolean interactive() {
-        return this.appear > 0.92f;
-    }
-
-    public boolean mouseClicked(@NotNull Click event, boolean doubleClick) {
-        Intrinsics.checkNotNullParameter((Object)event, (String)"event");
-        if (!this.interactive()) {
+    @Override public boolean mouseClicked(Click event, boolean doubleClick) {
+        if (event.button() != 0) return super.mouseClicked(event, doubleClick);
+        metrics();
+        float mx = Position.Companion.mouseX(), my = Position.Companion.mouseY();
+        if (hit(mx, my, gearX, gearY, 30, 30)) {
+            editing = !editing;
+            dragging = -1;
             return true;
         }
-        float mx = Position.Companion.mouseX();
-        float my = Position.Companion.mouseY();
-        if (event.button() == 0) {
-            MainMenuTab hit = this.dock.hit(mx, my);
-            MenuRipples.spawn(mx, my, hit != null);
-            if (hit != null) {
-                this.select(hit);
-                return true;
+        if (editing) {
+            float pw = Math.min(235, width * .48f), px = width - pw - 16, py = 58;
+            for (int row = 0; row < 4; row++) {
+                if (hit(mx, my, px + 10, py + 55 + row * 33, pw - 20, 25)) {
+                    switch (row) {
+                        case 0 -> cycleBackground();
+                        case 1 -> MenuBackgrounds.openFolder();
+                        case 2 -> MenuBackgrounds.rescan();
+                        case 3 -> MenuLayout.reset();
+                    }
+                    return true;
+                }
             }
-            if (this.dock.inExit(mx, my)) {
-                Sounds.play("gui_close");
-                MinecraftClient.getInstance().scheduleStop();
+            // Last painted button receives the drag on overlapping layouts.
+            for (int i = ACTIONS.length - 1; i >= 0; i--) {
+                if (hit(mx, my, bx(i), by(i), buttonW, buttonH)) {
+                    dragging = i;
+                    offsetX = mx - bx(i);
+                    offsetY = my - by(i);
+                    return true;
+                }
+            }
+            return true;
+        }
+        for (int i = 0; i < ACTIONS.length; i++) {
+            if (hit(mx, my, bx(i), by(i), buttonW, buttonH)) {
+                activate(i);
                 return true;
             }
         }
         return super.mouseClicked(event, doubleClick);
     }
 
-    public boolean mouseReleased(@NotNull Click event) {
-        Intrinsics.checkNotNullParameter((Object)event, (String)"event");
+    private void cycleBackground() {
+        List<MenuBackground> all = MenuBackgrounds.all();
+        if (all.isEmpty()) return;
+        MenuBackground selected = MenuBackgrounds.selected();
+        int index = all.indexOf(selected);
+        MenuBackgrounds.select(all.get((index + 1) % all.size()));
+    }
+
+    private void activate(int i) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        switch (i) {
+            case 0 -> mc.setScreen(new SelectWorldScreen(this));
+            case 1 -> mc.setScreen(new MultiplayerScreen(this));
+            case 2 -> mc.setScreen(new AccountScreen(this));
+            case 3 -> mc.setScreen(new OptionsScreen(this, mc.options));
+            case 4 -> mc.scheduleStop();
+        }
+    }
+
+    @Override public boolean mouseDragged(Click event, double dragX, double dragY) {
+        if (editing && dragging >= 0) {
+            metrics();
+            float mx = Position.Companion.mouseX(), my = Position.Companion.mouseY();
+            MenuLayout.move(dragging,
+                (mx - offsetX - 15) / Math.max(1, width - buttonW - 30),
+                (my - offsetY - 58) / Math.max(1, height - buttonH - 88));
+            return true;
+        }
+        return super.mouseDragged(event, dragX, dragY);
+    }
+    @Override public boolean mouseReleased(Click event) {
+        if (dragging >= 0) {
+            dragging = -1;
+            MenuLayout.save();
+            return true;
+        }
         return super.mouseReleased(event);
     }
-
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
-        if (!this.interactive()) {
-            return true;
-        }
-        return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
-    }
-
-    public boolean keyPressed(@NotNull KeyInput event) {
-        Intrinsics.checkNotNullParameter((Object)event, (String)"event");
-        if (!this.interactive()) {
-            return true;
-        }
-        int key = event.key();
-        if (key >= 49 && key <= 55) {
-            MainMenuTab[] tabs = MainMenuTab.values();
-            int index = key - 49;
-            if (index < tabs.length) {
-                this.select(tabs[index]);
-                return true;
-            }
-        }
-        if (key == 258) {
-            MainMenuTab[] tabs = MainMenuTab.values();
-            int index = 0;
-            int n = tabs.length;
-            for (int i = 0; i < n; ++i) {
-                if (tabs[i] != this.tab) continue;
-                index = i;
-                break;
-            }
-            this.select(tabs[(index + 1) % tabs.length]);
-            return true;
-        }
-        if (key == 256) {
+    @Override public boolean keyPressed(KeyInput event) {
+        if (event.key() == 256) {
+            if (editing) editing = false;
             return true;
         }
         return super.keyPressed(event);
     }
-
-    public boolean charTyped(@NotNull CharInput event) {
-        Intrinsics.checkNotNullParameter((Object)event, (String)"event");
-        return super.charTyped(event);
-    }
-
-    @Override
-    public boolean shouldPause() {
-        return false;
-    }
-
-    @JvmStatic
-    @NotNull
-    public static final MainMenuScreen instance() {
-        return Companion.instance();
-    }
-
-    @JvmStatic
-    public static final boolean isOpen() {
-        return Companion.isOpen();
-    }
-
-    public /* synthetic */ MainMenuScreen(DefaultConstructorMarker $constructor_marker) {
-        this();
-    }
-
-    @Metadata(mv={2, 4, 0}, k=1, xi=48, d1={"\u0000(\n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0010\u000b\n\u0002\b\u0002\n\u0002\u0010\u0007\n\u0002\b\u0005\b\u0086\u0003\u0018\u00002\u00020\u0001B\t\b\u0002\u00a2\u0006\u0004\b\u0002\u0010\u0003J\u0013\u0010\u0006\u001a\u00020\u0004H\u0007b\u0002\b\u0005\u00a2\u0006\u0004\b\u0006\u0010\u0007J\u0013\u0010\t\u001a\u00020\bH\u0007b\u0002\b\u0005\u00a2\u0006\u0004\b\t\u0010\nR\u0014\u0010\f\u001a\u00020\u000b8\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\f\u0010\rR\u0014\u0010\u000e\u001a\u00020\u000b8\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u000e\u0010\rR\u0018\u0010\u0006\u001a\u0004\u0018\u00010\u00048\u0002@\u0002X\u0082\u000e\u00a2\u0006\u0006\n\u0004\b\u0006\u0010\u000f\u00a8\u0006\u0010"}, d2={"Lrtx/kimiko/api/ui/mainmenu/MainMenuScreen.Companion;", "", "<init>", "()V", "Lrtx/kimiko/api/ui/mainmenu/MainMenuScreen;", "Lkotlin/jvm/JvmStatic;", "instance", "()Lrtx/kimiko/api/ui/mainmenu/MainMenuScreen;", "", "isOpen", "()Z", "", "INTRO_SECONDS", "F", "PAGE_FADE_SECONDS", "Lrtx/kimiko/api/ui/mainmenu/MainMenuScreen;", "rtx.kimiko:kimiko"})
-    public static final class Companion {
-        private Companion() {
-        }
-
-        @JvmStatic
-        @NotNull
-        public final MainMenuScreen instance() {
-            if (instance == null) {
-                instance = new MainMenuScreen(null);
-            }
-            MainMenuScreen mainMenuScreen = instance;
-            Intrinsics.checkNotNull((Object)((Object)mainMenuScreen));
-            return mainMenuScreen;
-        }
-
-        @JvmStatic
-        public final boolean isOpen() {
-            MinecraftClient minecraftClient2 = MinecraftClient.getInstance();
-            Intrinsics.checkNotNullExpressionValue((Object)minecraftClient2, (String)"getInstance(...)");
-            MinecraftClient minecraft = minecraftClient2;
-            return minecraft.currentScreen instanceof MainMenuScreen;
-        }
-
-        public /* synthetic */ Companion(DefaultConstructorMarker $constructor_marker) {
-            this();
-        }
-    }
+    @Override public boolean shouldPause() { return false; }
 }
-

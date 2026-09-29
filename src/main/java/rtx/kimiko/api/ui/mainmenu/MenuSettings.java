@@ -311,7 +311,7 @@ public final class MenuSettings {
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         Intrinsics.checkNotNullExpressionValue((Object)gson, (String)"create(...)");
         GSON = gson;
-        backgroundIdValue = "castle_night";
+        backgroundIdValue = "winter_motion";
         blurValue = 0.58f;
         dimValue = 0.5f;
         vignetteValue = 0.55f;
