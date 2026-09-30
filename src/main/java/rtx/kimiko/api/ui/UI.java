@@ -627,9 +627,6 @@ implements GuiCapture.Source {
         float h = 290.0f;
         float x = Companion.panelX();
         float y = Companion.panelY();
-        if (this.screenAnim.isClosing()) {
-            y -= this.screenAnim.closeProgress() * 25.0f;
-        }
         float shatterFade = Companion.guiCaptureActive() && GuiShatterAnimation.isActive() ? 1.0f - Math.min(1.0f, Math.max(0.0f, Companion.guiShatterProgress())) : 1.0f;
         float dimDrawAlpha = dimAlpha * shatterFade;
         if (dimDrawAlpha > 0.002f) {

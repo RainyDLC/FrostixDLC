@@ -19,7 +19,6 @@ public final class GuiMotionAnimation {
     @NotNull
     public static final Companion Companion = new Companion(null);
     private long startNs = System.nanoTime() - 500000000L;
-    private long durationNs = DURATION_NS;
     private double alphaFrom;
     private double alphaTo;
     @NotNull
@@ -34,7 +33,6 @@ public final class GuiMotionAnimation {
     private float frameBlurRadius;
     private double frameProgress = 1.0;
     private static final long DURATION_NS = 500000000L;
-    private static final long CLOSE_DURATION_NS = 180000000L;
     private static final double OPEN_START_SCALE = 1.25;
     private static final double REST_SCALE = 1.0;
     private static final double CLOSE_END_SCALE = 0.75;
@@ -49,12 +47,9 @@ public final class GuiMotionAnimation {
     private static final Ease QUINT_OUT = GuiMotionAnimation::QUINT_OUT$lambda$0;
     @NotNull
     private static final Ease BACK_IN = GuiMotionAnimation::BACK_IN$lambda$0;
-    @NotNull
-    private static final Ease SINE_IN = GuiMotionAnimation::SINE_IN$lambda$0;
 
     public final void startOpening() {
         this.closing = false;
-        this.durationNs = DURATION_NS;
         this.startNs = System.nanoTime();
         this.alphaFrom = 0.0;
         this.alphaTo = 1.0;
@@ -69,7 +64,6 @@ public final class GuiMotionAnimation {
         double curAlpha = this.currentAlpha();
         double curScale = this.currentScaleRaw();
         this.closing = false;
-        this.durationNs = DURATION_NS;
         this.startNs = System.nanoTime();
         this.alphaFrom = curAlpha;
         this.alphaTo = 1.0;
@@ -87,36 +81,33 @@ public final class GuiMotionAnimation {
         double curAlpha = this.currentAlpha();
         double curScale = this.currentScaleRaw();
         this.closing = true;
-        this.durationNs = CLOSE_DURATION_NS;
         this.startNs = System.nanoTime();
         this.alphaFrom = curAlpha;
         this.alphaTo = 0.0;
-        this.alphaEase = SINE_IN;
+        this.alphaEase = CUBIC_IN;
         this.scaleFrom = curScale;
-        this.scaleTo = curScale;
-        this.scaleEase = SINE_IN;
+        this.scaleTo = 0.75;
+        this.scaleEase = BACK_IN;
         this.updateFrame();
     }
 
     public final void snapClosed() {
         this.closing = false;
-        this.durationNs = CLOSE_DURATION_NS;
         this.alphaFrom = 0.0;
         this.alphaTo = 0.0;
-        this.scaleFrom = 1.0;
-        this.scaleTo = 1.0;
-        this.startNs = System.nanoTime() - this.durationNs;
+        this.scaleFrom = 0.75;
+        this.scaleTo = 0.75;
+        this.startNs = System.nanoTime() - 500000000L;
         this.updateFrame();
     }
 
     public final void snapOpen() {
         this.closing = false;
-        this.durationNs = DURATION_NS;
         this.alphaFrom = 1.0;
         this.alphaTo = 1.0;
         this.scaleFrom = 1.0;
         this.scaleTo = 1.0;
-        this.startNs = System.nanoTime() - this.durationNs;
+        this.startNs = System.nanoTime() - 500000000L;
         this.updateFrame();
     }
 
@@ -164,14 +155,13 @@ public final class GuiMotionAnimation {
 
     private final double progress() {
         long elapsed = System.nanoTime() - this.startNs;
-        long duration = this.durationNs;
-        if (elapsed >= duration) {
+        if (elapsed >= 500000000L) {
             return 1.0;
         }
         if (elapsed <= 0L) {
             return 0.0;
         }
-        return (double)elapsed / (double)duration;
+        return (double)elapsed / 5.0E8;
     }
 
     private final double currentAlpha() {
@@ -198,10 +188,6 @@ public final class GuiMotionAnimation {
 
     private static final double BACK_IN$lambda$0(double x) {
         return 2.70158 * Math.pow(x, 3.0) - 1.70158 * Math.pow(x, 2.0);
-    }
-
-    private static final double SINE_IN$lambda$0(double x) {
-        return 1.0 - Math.cos(x * Math.PI / 2.0);
     }
 
     @Metadata(mv={2, 4, 0}, k=1, xi=48, d1={"\u0000,\n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0002\b\u0002\n\u0002\u0010\u0007\n\u0002\b\u0003\n\u0002\u0010\t\n\u0002\b\u0002\n\u0002\u0010\u0006\n\u0002\b\b\n\u0002\u0018\u0002\n\u0002\b\u0006\b\u0086\u0003\u0018\u00002\u00020\u0001B\t\b\u0002\u00a2\u0006\u0004\b\u0002\u0010\u0003J\u0017\u0010\u0006\u001a\u00020\u00042\u0006\u0010\u0005\u001a\u00020\u0004H\u0002\u00a2\u0006\u0004\b\u0006\u0010\u0007R\u0014\u0010\t\u001a\u00020\b8\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\t\u0010\nR\u0014\u0010\f\u001a\u00020\u000b8\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\f\u0010\rR\u0014\u0010\u000e\u001a\u00020\u000b8\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u000e\u0010\rR\u0014\u0010\u000f\u001a\u00020\u000b8\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u000f\u0010\rR\u0014\u0010\u0010\u001a\u00020\u00048\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u0010\u0010\u0011R\u0014\u0010\u0012\u001a\u00020\u00048\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u0012\u0010\u0011R\u0014\u0010\u0013\u001a\u00020\u00048\u0002X\u0082T\u00a2\u0006\u0006\n\u0004\b\u0013\u0010\u0011R\u0014\u0010\u0015\u001a\u00020\u00148\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b\u0015\u0010\u0016R\u0014\u0010\u0017\u001a\u00020\u00148\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b\u0017\u0010\u0016R\u0014\u0010\u0018\u001a\u00020\u00148\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b\u0018\u0010\u0016R\u0014\u0010\u0019\u001a\u00020\u00148\u0002X\u0082\u0004\u00a2\u0006\u0006\n\u0004\b\u0019\u0010\u0016\u00a8\u0006\u001a"}, d2={"Lrtx/kimiko/utils/animations/GuiMotionAnimation.Companion;", "", "<init>", "()V", "", "value", "clamp01", "(F)F", "", "DURATION_NS", "J", "", "OPEN_START_SCALE", "D", "REST_SCALE", "CLOSE_END_SCALE", "SCALE_MIN", "F", "SCALE_RANGE", "MAX_BLUR_RADIUS", "Lrtx/kimiko/utils/animations/GuiMotionAnimation$Ease;", "CUBIC_OUT", "Lrtx/kimiko/utils/animations/GuiMotionAnimation$Ease;", "CUBIC_IN", "QUINT_OUT", "BACK_IN", "rtx.kimiko:kimiko"})
