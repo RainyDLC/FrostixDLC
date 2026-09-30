@@ -94,6 +94,8 @@ import org.joml.Matrix3x2f;
 import org.joml.Matrix3x2fc;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import rtx.kimiko.Kimiko;
 import rtx.kimiko.api.modules.impl.Utils.guishare.RemoteGuiWorld;
 import rtx.kimiko.api.ui.window.GuiShatterAnimation;
@@ -107,6 +109,7 @@ import rtx.kimiko.utils.render.others.profiler.RenderProfiler;
 public final class GuiLayerBlurRenderer {
     @NotNull
     public static final GuiLayerBlurRenderer INSTANCE = new GuiLayerBlurRenderer();
+    private static final Logger LOGGER = LoggerFactory.getLogger((String)"Kimiko/GuiLayerBlur");
     private static final int BLUR_UNIFORM_BYTES = 16;
     private static final int COMPOSITE_UNIFORM_BYTES = 16;
     private static final int SLOT_BLIT_UNIFORM_BYTES = 64;
@@ -1659,6 +1662,9 @@ public final class GuiLayerBlurRenderer {
     }
 
     private final void disableAfterError(Throwable throwable) {
+        if (!disabledAfterError) {
+            LOGGER.error("[Kimiko] GuiLayerBlurRenderer disabled after render error; shatter/world-close effects stay off until restart", throwable);
+        }
         disabledAfterError = true;
         captureActive = false;
         this.closeTargets();
