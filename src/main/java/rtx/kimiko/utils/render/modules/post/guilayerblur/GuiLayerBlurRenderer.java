@@ -224,6 +224,14 @@ public final class GuiLayerBlurRenderer {
     private static SimpleFramebuffer tempH;
     @Nullable
     private static SimpleFramebuffer tempV;
+    @Nullable
+    private static SimpleFramebuffer frostH;
+    @Nullable
+    private static SimpleFramebuffer frostV;
+    private static int frostWidth;
+    private static int frostHeight;
+    private static final float FROST_DOWNSAMPLE = 0.5f;
+    private static boolean shatterGateLogged;
     private static int texWidth;
     private static int texHeight;
     @Nullable
@@ -643,7 +651,7 @@ public final class GuiLayerBlurRenderer {
                     live = quad.matrix;
                 }
                 if (quad.shatter != null && INSTANCE.drawRemoteShards(encoder, main, quad, live)) continue;
-                INSTANCE.writeCompositeUniform(encoder, 1.0f, INSTANCE.clamp01(quad.opacity));
+                INSTANCE.writeCompositeUniform(encoder, 1.0f, INSTANCE.clamp01(quad.opacity), 0.0f);
                 INSTANCE.writeWorldQuadUniform(encoder, live, quad.quadW, quad.quadH, 1.0f, quad.fbX / (float)texWidth, 1.0f - quad.fbY / (float)texHeight, (quad.fbX + quad.fbW) / (float)texWidth, 1.0f - (quad.fbY + quad.fbH) / (float)texHeight);
                 INSTANCE.drawRemoteQuad(encoder, main, occlude);
             }
@@ -860,7 +868,7 @@ public final class GuiLayerBlurRenderer {
                 CommandEncoder commandEncoder = RenderSystem.getDevice().createCommandEncoder();
                 Intrinsics.checkNotNullExpressionValue((Object)commandEncoder, (String)"createCommandEncoder(...)");
                 CommandEncoder encoder = commandEncoder;
-                INSTANCE.writeCompositeUniform(encoder, 1.0f, 1.0f);
+                INSTANCE.writeCompositeUniform(encoder, 1.0f, 1.0f, 0.0f);
                 Supplier<String> supplier = GuiLayerBlurRenderer::worldSnapshotWithPanels$lambda$0;
                 GpuTextureView gpuTextureView = snapshot.getColorAttachmentView();
                 Intrinsics.checkNotNull((Object)gpuTextureView);
@@ -1179,7 +1187,13 @@ public final class GuiLayerBlurRenderer {
             Intrinsics.checkNotNullExpressionValue((Object)commandEncoder, (String)"createCommandEncoder(...)");
             CommandEncoder encoder = commandEncoder;
             float shatterProgress = GuiCapture.shatterProgress();
-            boolean shatter = GuiShatterAnimation.isActive() && shatterProgress > 0.0f && tempH != null && tempV != null;
+            boolean shatterAnims = GuiShatterAnimation.isActive();
+            boolean shatterHasProgress = shatterProgress > 0.0f;
+            boolean shatterTargetsOk = tempH != null && tempV != null && frostH != null && frostV != null;
+            boolean shatter = shatterAnims && shatterHasProgress && shatterTargetsOk;
+            if (shatterAnims && !shatter) {
+                logShatterGateOnce(shatterProgress, shatterTargetsOk);
+            }
             boolean worldActive = WorldGuiCloseAnimation.isActive();
             Matrix4f shatterMatrix = IDENTITY_MATRIX;
             if (worldActive && (shatterMatrix = WorldGuiCloseAnimation.compositeMatrix(width, height)) == null) {
@@ -1194,22 +1208,10 @@ public final class GuiLayerBlurRenderer {
                 if (!INSTANCE.drawShards(encoder, simpleFramebuffer2.getColorAttachmentView(), shatterProgress, shardAlpha, shardScale, worldActive)) {
                     return;
                 }
-                if (blurRadius >= 0.5f) {
-                    float step = blurRadius / 16.0f;
-                    SimpleFramebuffer simpleFramebuffer3 = tempH;
-                    Intrinsics.checkNotNull((Object)simpleFramebuffer3);
-                    GpuTextureView gpuTextureView = simpleFramebuffer3.getColorAttachmentView();
-                    SimpleFramebuffer simpleFramebuffer4 = tempV;
-                    Intrinsics.checkNotNull((Object)simpleFramebuffer4);
-                    INSTANCE.gaussianPass(encoder, gpuTextureView, simpleFramebuffer4, step / (float)width, 0.0f);
-                    SimpleFramebuffer simpleFramebuffer5 = tempV;
-                    Intrinsics.checkNotNull((Object)simpleFramebuffer5);
-                    GpuTextureView gpuTextureView2 = simpleFramebuffer5.getColorAttachmentView();
-                    SimpleFramebuffer simpleFramebuffer6 = tempH;
-                    Intrinsics.checkNotNull((Object)simpleFramebuffer6);
-                    INSTANCE.gaussianPass(encoder, gpuTextureView2, simpleFramebuffer6, 0.0f, step / (float)height);
-                }
-                INSTANCE.writeCompositeUniform(encoder, 1.0f, 1.0f);
+                SimpleFramebuffer tempHForShatter = tempH;
+                Intrinsics.checkNotNull((Object)tempHForShatter);
+                INSTANCE.frostedBlur(encoder, tempHForShatter.getColorAttachmentView(), blurRadius);
+                INSTANCE.writeCompositeUniform(encoder, 1.0f, 1.0f, 1.0f);
                 Supplier<String> supplier = GuiLayerBlurRenderer::composite$lambda$0;
                 GpuTextureView gpuTextureView = main.getColorAttachmentView();
                 Intrinsics.checkNotNull((Object)gpuTextureView);
@@ -1221,7 +1223,7 @@ public final class GuiLayerBlurRenderer {
                     RenderPipeline renderPipeline = compositePipeline;
                     Intrinsics.checkNotNull((Object)renderPipeline);
                     pass.setPipeline(renderPipeline);
-                    SimpleFramebuffer simpleFramebuffer7 = tempH;
+                    SimpleFramebuffer simpleFramebuffer7 = frostH;
                     Intrinsics.checkNotNull((Object)simpleFramebuffer7);
                     pass.bindTexture("uGui", simpleFramebuffer7.getColorAttachmentView(), RenderSampler.linear());
                     GpuBuffer gpuBuffer = compositeUniform;
@@ -1243,29 +1245,19 @@ public final class GuiLayerBlurRenderer {
             SimpleFramebuffer simpleFramebuffer8 = guiFbo;
             Intrinsics.checkNotNull((Object)simpleFramebuffer8);
             source = simpleFramebuffer8.getColorAttachmentView();
-            if (blurRadius >= 0.5f && tempH != null && tempV != null) {
-                float step = blurRadius / 16.0f;
-                SimpleFramebuffer simpleFramebuffer9 = guiFbo;
-                Intrinsics.checkNotNull((Object)simpleFramebuffer9);
-                GpuTextureView gpuTextureView = simpleFramebuffer9.getColorAttachmentView();
-                SimpleFramebuffer simpleFramebuffer10 = tempH;
-                Intrinsics.checkNotNull((Object)simpleFramebuffer10);
-                INSTANCE.gaussianPass(encoder, gpuTextureView, simpleFramebuffer10, step / (float)width, 0.0f);
-                SimpleFramebuffer simpleFramebuffer11 = tempH;
-                Intrinsics.checkNotNull((Object)simpleFramebuffer11);
-                GpuTextureView gpuTextureView3 = simpleFramebuffer11.getColorAttachmentView();
-                SimpleFramebuffer simpleFramebuffer12 = tempV;
-                Intrinsics.checkNotNull((Object)simpleFramebuffer12);
-                INSTANCE.gaussianPass(encoder, gpuTextureView3, simpleFramebuffer12, 0.0f, step / (float)height);
-                SimpleFramebuffer simpleFramebuffer13 = tempV;
-                Intrinsics.checkNotNull((Object)simpleFramebuffer13);
-                source = simpleFramebuffer13.getColorAttachmentView();
+            if (blurRadius >= 0.5f && frostH != null && frostV != null) {
+                SimpleFramebuffer guiFboLocal = guiFbo;
+                Intrinsics.checkNotNull((Object)guiFboLocal);
+                INSTANCE.frostedBlur(encoder, guiFboLocal.getColorAttachmentView(), blurRadius);
+                SimpleFramebuffer frostHLocal = frostH;
+                Intrinsics.checkNotNull((Object)frostHLocal);
+                source = frostHLocal.getColorAttachmentView();
             }
             if (worldActive) {
                 Matrix4f worldMatrix = shatterMatrix;
                 float worldScale = WorldGuiCloseAnimation.screenScale();
                 float worldInvScale = worldScale > 1.0E-4f ? 1.0f / worldScale : 1.0f;
-                INSTANCE.writeCompositeUniform(encoder, worldInvScale, WorldGuiCloseAnimation.alpha());
+                INSTANCE.writeCompositeUniform(encoder, worldInvScale, WorldGuiCloseAnimation.alpha(), 1.0f);
                 INSTANCE.writeWorldQuadUniform(encoder, worldMatrix, width, height, 1.0f);
                 Supplier<String> supplier = GuiLayerBlurRenderer::composite$lambda$2;
                 GpuTextureView gpuTextureView = main.getColorAttachmentView();
@@ -1298,7 +1290,7 @@ public final class GuiLayerBlurRenderer {
                 return;
             }
             float invScale = scale > 1.0E-4f ? 1.0f / scale : 1.0f;
-            INSTANCE.writeCompositeUniform(encoder, invScale, 1.0f);
+            INSTANCE.writeCompositeUniform(encoder, invScale, 1.0f, 1.0f);
             Supplier<String> supplier = GuiLayerBlurRenderer::composite$lambda$4;
             GpuTextureView gpuTextureView = main.getColorAttachmentView();
             Intrinsics.checkNotNull((Object)gpuTextureView);
@@ -1488,7 +1480,7 @@ public final class GuiLayerBlurRenderer {
     /*
      * WARNING - Removed try catching itself - possible behaviour change.
      */
-    private final void writeCompositeUniform(CommandEncoder encoder, float invScale, float alpha) {
+    private final void writeCompositeUniform(CommandEncoder encoder, float invScale, float alpha, float frost) {
         AutoCloseable autoCloseable = (AutoCloseable)MemoryStack.stackPush();
         Throwable throwable = null;
         try {
@@ -1497,6 +1489,7 @@ public final class GuiLayerBlurRenderer {
             ByteBuffer data = stack.calloc(16);
             data.putFloat(0, invScale);
             data.putFloat(4, alpha);
+            data.putFloat(8, frost);
             data.position(0);
             GpuBuffer gpuBuffer = compositeUniform;
             Intrinsics.checkNotNull((Object)gpuBuffer);
@@ -1509,6 +1502,85 @@ public final class GuiLayerBlurRenderer {
         }
         finally {
             AutoCloseableKt.closeFinally((AutoCloseable)autoCloseable, (Throwable)throwable);
+        }
+    }
+
+    /**
+     * Custom frosted-glass blur: downsample the source into the half-resolution
+     * frost chain, run separable gaussian passes at reduced resolution, and leave
+     * the result in frostH. The frosted look itself (desaturation, cool tint,
+     * slight lift) is applied by the composite shader via the frost amount in
+     * the composite uniform.
+     */
+    private final void frostedBlur(CommandEncoder encoder, GpuTextureView source, float blurRadius) {
+        SimpleFramebuffer frostHTarget = frostH;
+        Intrinsics.checkNotNull((Object)frostHTarget);
+        this.blitToTarget(encoder, source, frostHTarget, 1.0f, 1.0f, 0.0f);
+        if (blurRadius < 0.5f || frostWidth <= 0 || frostHeight <= 0) {
+            return;
+        }
+        float step = blurRadius / 16.0f;
+        float stepX = step / (float)frostWidth;
+        float stepY = step / (float)frostHeight;
+        for (int round = 0; round < 2; ++round) {
+            SimpleFramebuffer h = frostH;
+            Intrinsics.checkNotNull((Object)h);
+            SimpleFramebuffer v = frostV;
+            Intrinsics.checkNotNull((Object)v);
+            this.gaussianPass(encoder, h.getColorAttachmentView(), v, stepX, 0.0f);
+            SimpleFramebuffer v2 = frostV;
+            Intrinsics.checkNotNull((Object)v2);
+            SimpleFramebuffer h2 = frostH;
+            Intrinsics.checkNotNull((Object)h2);
+            this.gaussianPass(encoder, v2.getColorAttachmentView(), h2, 0.0f, stepY);
+        }
+    }
+
+    /**
+     * Draws a fullscreen quad from {@code source} into {@code target} using the
+     * composite pipeline (target cleared to transparent black first). Used to
+     * downsample into the frost chain; pass {@code frost = 0} for a plain copy.
+     */
+    private final void blitToTarget(CommandEncoder encoder, GpuTextureView source, SimpleFramebuffer target, float invScale, float alpha, float frost) {
+        this.writeCompositeUniform(encoder, invScale, alpha, frost);
+        GpuTextureView targetView = target.getColorAttachmentView();
+        Intrinsics.checkNotNull((Object)targetView);
+        RenderPipeline pipeline = compositePipeline;
+        Intrinsics.checkNotNull((Object)pipeline);
+        GpuBuffer uniform = compositeUniform;
+        Intrinsics.checkNotNull((Object)uniform);
+        Supplier<String> nameSupplier = () -> "Kimiko/GuiLayerBlur frost blit";
+        AutoCloseable passHandle = (AutoCloseable)encoder.createRenderPass(nameSupplier, targetView, OptionalInt.of(0));
+        Throwable thrown = null;
+        try {
+            RenderPass pass = (RenderPass)passHandle;
+            pass.setPipeline(pipeline);
+            pass.bindTexture("uGui", source, RenderSampler.linear());
+            pass.setUniform("CompositeData", uniform);
+            pass.draw(0, 6);
+        }
+        catch (Throwable t) {
+            thrown = t;
+            throw t;
+        }
+        finally {
+            AutoCloseableKt.closeFinally(passHandle, thrown);
+        }
+    }
+
+    /**
+     * One-time-per-session diagnostic: the shatter animation was requested
+     * (GuiShatterAnimation active) but the composite gate still rejected it.
+     */
+    private static void logShatterGateOnce(float progress, boolean targetsOk) {
+        if (shatterGateLogged) {
+            return;
+        }
+        shatterGateLogged = true;
+        if (progress <= 0.0f) {
+            LOGGER.warn("[GuiLayerBlurRenderer] shatter skipped: GuiShatterAnimation is active but shatterProgress={} (close animation is not driving the shatter)", Float.valueOf(progress));
+        } else if (!targetsOk) {
+            LOGGER.warn("[GuiLayerBlurRenderer] shatter skipped: blur targets not ready (tempH/tempV/frostH/frostV)");
         }
     }
 
@@ -1611,13 +1683,17 @@ public final class GuiLayerBlurRenderer {
         if (device == null || width <= 0 || height <= 0) {
             return false;
         }
-        if (guiFbo != null && tempH != null && tempV != null && width == texWidth && height == texHeight) {
+        if (guiFbo != null && tempH != null && tempV != null && frostH != null && frostV != null && width == texWidth && height == texHeight) {
             return true;
         }
         this.closeTargets();
         guiFbo = new SimpleFramebuffer("kimiko_gui_capture", width, height, true);
         tempH = new SimpleFramebuffer("kimiko_gui_capture_h", width, height, false);
         tempV = new SimpleFramebuffer("kimiko_gui_capture_v", width, height, false);
+        frostWidth = Math.max(1, (int)((float)width * FROST_DOWNSAMPLE));
+        frostHeight = Math.max(1, (int)((float)height * FROST_DOWNSAMPLE));
+        frostH = new SimpleFramebuffer("kimiko_gui_capture_frost_h", frostWidth, frostHeight, false);
+        frostV = new SimpleFramebuffer("kimiko_gui_capture_frost_v", frostWidth, frostHeight, false);
         texWidth = width;
         texHeight = height;
         return true;
@@ -1643,6 +1719,8 @@ public final class GuiLayerBlurRenderer {
         guiFbo = this.destroy(guiFbo);
         tempH = this.destroy(tempH);
         tempV = this.destroy(tempV);
+        frostH = this.destroy(frostH);
+        frostV = this.destroy(frostV);
         sceneSnapshot = this.destroy(sceneSnapshot);
         remoteFbo = this.destroy(remoteFbo);
         this.closeWorldDepthCopy();
