@@ -1,0 +1,4 @@
+#pragma once
+static constexpr const char* jvmtiTableSource = R"JVMTI_TABLE(
+@JVMTI_TABLE_SOURCE@
+)JVMTI_TABLE";

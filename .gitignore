@@ -1,0 +1,13 @@
+/build/
+/logs/
+/LegitBuilder.jar
+/.vs/
+*.user
+*.suo
+*.obj
+*.pdb
+*.exp
+*.lib
+*.class
+*.log
+__pycache__/

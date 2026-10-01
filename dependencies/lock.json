@@ -1,0 +1,11 @@
+{
+  "dependencies/compile/asm-9.9.jar": "03d99a74ad1ee5c71334ef67437f4ef4fe3488caa7c96d8645abc73c8e2017d4",
+  "dependencies/compile/asm-analysis-9.9.jar": "6a15d28e8bd29ba4fd5bca4baf9b50e8fba2d7b51fbf78cfa0c875a7214c678b",
+  "dependencies/compile/asm-commons-9.9.jar": "db2f6f26150bbe7c126606b4a1151836bcc22a1e05a423b3585698bece995ff8",
+  "dependencies/compile/asm-tree-9.9.jar": "42178f3775c9c63f9e5e1446747d29b4eca4d91bd6e75e5c43cfa372a47d38c6",
+  "dependencies/compile/asm-util-9.9.jar": "3842e13cfe324ee9ab7cdc4914be9943541ead397c17e26daf0b8a755bede717",
+  "dependencies/compile/fabric-loader-0.19.5.jar": "93044e4dd46de5d8136701292f05e868da096d2c9fddb4793e4fdbcc63efc695",
+  "dependencies/compile/sponge-mixin-0.17.4+mixin.0.8.7.jar": "1f0ae44db7295f8626f33b1dc0ad7f043d8954a8d6847247875fcc5dfcecc934",
+  "injector/lib/jna-5.14.0.jar": "34ed1e1f27fa896bca50dbc4e99cf3732967cec387a7a0d5e3486c09673fe8c6",
+  "injector/lib/jna-platform-5.14.0.jar": "ae4caceb3840730c2537f9b7fb55a01baba580286b4122951488bcee558c2449"
+}
