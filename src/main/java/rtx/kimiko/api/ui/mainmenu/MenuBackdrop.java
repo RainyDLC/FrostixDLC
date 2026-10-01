@@ -27,7 +27,7 @@ public class MenuBackdrop {
         "День (Пшеничные поля)",
         "Закат (Пшеничные поля)",
         "Ночь (Пшеничные поля)",
-        "Frostix 4K Classic",
+        "RainyDLC 4K Classic",
         "Свой фон (папка)"
     };
 
