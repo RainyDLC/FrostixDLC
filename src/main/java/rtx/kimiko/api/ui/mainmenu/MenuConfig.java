@@ -15,7 +15,7 @@ public class MenuConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static MenuConfig INSTANCE;
 
-    public int backgroundPreset = 0; // 0 = Auto (Real-world day/night cycle), 1 = Morning, 2 = Day, 3 = Sunset, 4 = Night, 5 = Frostix 4K, 6 = Custom File
+    public int backgroundPreset = 0; // 0 = Auto (Real-world day/night cycle), 1 = Morning, 2 = Day, 3 = Sunset, 4 = Night, 5 = RainyDLC 4K, 6 = Custom File
     public String customBackgroundName = "";
     public float backgroundBlur = 0.0f;
     public float backgroundDarkness = 0.22f;
@@ -32,7 +32,7 @@ public class MenuConfig {
     public boolean hasCustomPositions = false;
 
     public String greetingText = "РАД ВИДЕТЬ";
-    public String titleText = "Сборка собрана и прогрета —\nэто Frostix Client.";
+    public String titleText = "Сборка собрана и прогрета —\nэто RainyDLC.";
     public String subtitleText = "Куда сегодня — на сервер или в свой мир?";
 
     public static MenuConfig get() {

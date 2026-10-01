@@ -17,6 +17,7 @@ import org.lwjgl.glfw.GLFW;
 import rtx.kimiko.api.drags.Position;
 import rtx.kimiko.api.ui.BaseScreen;
 import rtx.kimiko.utils.render.fonts.Fonts;
+import rtx.kimiko.utils.render.render2d.image.ImageRenderer;
 import rtx.kimiko.utils.render.render2d.Render2D;
 import rtx.kimiko.utils.sounds.SoundManager;
 
@@ -59,13 +60,16 @@ public class MainMenuScreen extends BaseScreen {
     private float dragOffsetX = 0.0f;
     private float dragOffsetY = 0.0f;
 
+    // Tracks window focus to detect Alt-Tab/minimize -> restore transitions
+    private boolean windowWasFocused = true;
+
     // Layout Metrics
     private float buttonW = 168.0f;
     private float buttonH = 29.0f;
     private float splitW = 81.0f; // for button 3 & 4
 
     public MainMenuScreen() {
-        super(Text.literal("Frostix Main Menu"));
+        super(Text.literal("RainyDLC Main Menu"));
     }
 
     public static MainMenuScreen instance() {
@@ -98,10 +102,22 @@ public class MainMenuScreen extends BaseScreen {
 
         MenuConfig cfg = MenuConfig.get();
 
+        // If the window lost and then regained focus (Alt-Tab to desktop and back),
+        // GPU texture bindings may have gone stale while the context was inactive.
+        // Drop the cached texture setups so the backdrop image is re-resolved instead
+        // of sampling a dead texture (black background bug).
+        long windowHandle = this.client.getWindow().getHandle();
+        boolean focused = GLFW.glfwGetWindowAttrib(windowHandle, GLFW.GLFW_FOCUSED) == GLFW.GLFW_TRUE;
+        if (!windowWasFocused && focused) {
+            ImageRenderer.getInstance().invalidate();
+            MenuBackdrop.invalidate();
+        }
+        windowWasFocused = focused;
+
         // 1. Render Cinematic Backdrop
         MenuBackdrop.render(graphics, width, height, mx, my, dt);
 
-        // 2. Top-Left Player Profile Card
+        // 2. Bottom-Left Player Profile Card
         renderPlayerCard(mx, my, dt);
 
         // 3. Top-Center Minimalist Time Widget (Time only, centered at top)
@@ -121,7 +137,7 @@ public class MainMenuScreen extends BaseScreen {
             renderFreeMoveOverlay(mx, my);
         }
 
-        // 7. Bottom-Left Footer
+        // 7. Bottom-Right Footer
         renderFooter();
 
         // 8. Settings Modal Dialog (If open)
@@ -132,12 +148,12 @@ public class MainMenuScreen extends BaseScreen {
     }
 
     /* =========================================================================
-     * TOP-LEFT: Player Profile Card
+     * BOTTOM-LEFT: Player Profile Card
      * ========================================================================= */
     private void renderPlayerCard(float mx, float my, float dt) {
         MinecraftClient mc = MinecraftClient.getInstance();
         float cardX = 24.0f;
-        float cardY = 18.0f;
+        float cardY = height - 50.0f;
         float cardW = 120.0f;
         float cardH = 32.0f;
         boolean hover = hit(mx, my, cardX, cardY, cardW, cardH);
@@ -246,7 +262,7 @@ public class MainMenuScreen extends BaseScreen {
 
         // Big Headline
         Fonts.BOLD.draw("Сборка собрана и прогрета —", startX, startY + 14.0f, 12.0f, 0xFFFFFFFF);
-        Fonts.BOLD.draw("это Frostix Client.", startX, startY + 28.0f, 12.0f, 0xFFFFFFFF);
+        Fonts.BOLD.draw("это RainyDLC.", startX, startY + 28.0f, 12.0f, 0xFFFFFFFF);
 
         // Subtitle
         Fonts.REGULAR.draw("Куда сегодня — на сервер или в свой мир?", startX, startY + 44.0f, 5.5f, 0xBBA7C4E0);
@@ -323,12 +339,16 @@ public class MainMenuScreen extends BaseScreen {
     }
 
     /* =========================================================================
-     * BOTTOM-LEFT: Footer
+     * BOTTOM-RIGHT: Footer
      * ========================================================================= */
     private void renderFooter() {
         float fy = height - 22.0f;
-        Fonts.MEDIUM.draw("Frostix Client • Minecraft 1.21.4", 24.0f, fy, 4.9f, 0x88AABFD4);
-        Fonts.REGULAR.draw("Не является официальным продуктом Mojang", 24.0f, fy + 9.0f, 4.0f, 0x5588A0B8);
+        String line1 = "RainyDLC • Minecraft 1.21.4";
+        String line2 = "Не является официальным продуктом Mojang";
+        float x1 = width - Fonts.MEDIUM.width(line1, 4.9f) - 24.0f;
+        float x2 = width - Fonts.REGULAR.width(line2, 4.0f) - 24.0f;
+        Fonts.MEDIUM.draw(line1, x1, fy, 4.9f, 0x88AABFD4);
+        Fonts.REGULAR.draw(line2, x2, fy + 9.0f, 4.0f, 0x5588A0B8);
     }
 
     /* =========================================================================
@@ -677,7 +697,7 @@ public class MainMenuScreen extends BaseScreen {
         }
 
         // 3. Player Card Click -> Account screen
-        if (hit(mx, my, 24.0f, 18.0f, 120.0f, 32.0f)) {
+        if (hit(mx, my, 24.0f, height - 50.0f, 120.0f, 32.0f)) {
             SoundManager.playSound(SoundManager.BUTTON_CLICK, 1.0f, 1.0f);
             MinecraftClient.getInstance().setScreen(new AccountScreen(this));
             return true;
