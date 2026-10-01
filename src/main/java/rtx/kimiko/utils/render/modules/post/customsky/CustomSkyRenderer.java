@@ -28,6 +28,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.lwjgl.system.MemoryStack;
 import rtx.kimiko.Kimiko;
 import rtx.kimiko.api.modules.impl.Visuals.Ambience;
@@ -55,6 +57,21 @@ import rtx.kimiko.utils.render.render2d.ThemeWaveUniform;
  *    через историю с точной репроекцией (небо на бесконечности). Через 4 кадра каждый пиксель экрана
  *    посчитан честно, а не растянут;
  *  - bloom строится с той же базы 1/2, поэтому свечение выглядит как раньше и не дорожает.
+ *
+ * v9, PERF: пропуск марша, когда дыра вне кадра (картинка бит-в-бит та же):
+ *  - шейдер марша выдаёт ровно vec4(0,0) для всех лучей с прицельным параметром >= 7.25
+ *    (ветка impact >= IMPACT_CULL || along >= 0 пропускает цикл, все дальнейшие вклады — нули);
+ *    impact = 14 * sin(угол(луч, BH_DIR)), т.е. ненулевой результат возможен только в конусе
+ *    asin(7.25/14) ~= 31.1° вокруг BH_DIR;
+ *  - на CPU раз в кадр считаем направление взгляда и макс. угол до углов экрана (через INV_VIEW_PROJ,
+ *    без аллокаций — статические темпы); если угол(взгляд, BH_DIR) > угол_до_угла + 31.1° + eps,
+ *    ни один луч экрана не достаёт до дыры -> пропускаем марш (самый дорогой проход: до 200 итераций
+ *    реймарша), resolve и все 6 уровней bloom, а в composite подсовываем статичную чёрную 1x1 текстуру
+ *    вместо Sky и Bloom0..5 (resolve/bloom нулей дали бы те же нули);
+ *  - джеты, анаморфный блик, звёзды и туманность считаются в composite аналитически и от марша
+ *    не зависят (кроме множителя тени, который при скипе и так равен 0, как у марша), поэтому
+ *    их работа при скипе не меняется; история TAA инвалидируется, при возврате дыры в кадр
+ *    resolve стартует заново без гостинга.
  *
  * Uniform SkyParams (std140):
  *  0 invViewProj | 64 misc | 80 skyColor | 96 skyColor2 | 112 taa | 128 prevViewProj
@@ -94,6 +111,17 @@ public final class CustomSkyRenderer {
     @NotNull private static final String[] MARCH_PASS_NAMES = new String[]{
             "kimiko:customsky_march_aurora", "kimiko:customsky_march_blackhole", "kimiko:customsky_march_starfall"};
 
+    /** Направление на дыру в world space — та же константа, что в шейдере blackhole. */
+    @NotNull private static final Vector3f BH_DIR = new Vector3f(0.34f, 0.62f, 0.71f).normalize();
+    /** Угловой радиус области, где марш может дать ненулевой результат (asin(IMPACT_CULL / CAM_DIST)). */
+    private static final float HOLE_ANGULAR_RADIUS = (float) Math.asin(7.25 / 14.0);
+    /** Запас точности для скипа марша, радианы. */
+    private static final float HOLE_SKIP_EPS = 0.01f;
+    @NotNull private static final Vector4f TMP_CLIP_A = new Vector4f();
+    @NotNull private static final Vector4f TMP_CLIP_B = new Vector4f();
+    @NotNull private static final Vector3f TMP_VIEW_DIR = new Vector3f();
+    @NotNull private static final Vector3f TMP_RAY_DIR = new Vector3f();
+
     @NotNull private static final Matrix4f INV_VIEW_PROJ = new Matrix4f();
     @NotNull private static final Matrix4f PREV_VIEW_PROJ = new Matrix4f();
     @NotNull private static final Matrix4f PENDING_VIEW_PROJ = new Matrix4f();
@@ -112,6 +140,9 @@ public final class CustomSkyRenderer {
     @Nullable private static GpuTextureView marchHalfTextureView;
     @Nullable private static GpuTexture noiseTexture;
     @Nullable private static GpuTextureView noiseTextureView;
+    /** Статичная чёрная текстура 1x1 — подмена неба/bloom, когда дыра вне кадра (марш дал бы ровно 0). */
+    @Nullable private static GpuTexture blackTexture;
+    @Nullable private static GpuTextureView blackTextureView;
     @NotNull private static final GpuTexture[] bloomTextures = new GpuTexture[BLOOM_LEVELS];
     @NotNull private static final GpuTextureView[] bloomTextureViews = new GpuTextureView[BLOOM_LEVELS];
     @NotNull private static final int[] bloomWidths = new int[BLOOM_LEVELS];
@@ -218,7 +249,6 @@ public final class CustomSkyRenderer {
         }
         int write = frameIndex & 1;
         int read = 1 - write;
-        boolean useHistory = hdr && historyValid;
 
         // настройки чёрной дыры (дефолты = то, что стоит в модуле по умолчанию)
         float bhPalette = 2.0f;
@@ -240,6 +270,15 @@ public final class CustomSkyRenderer {
         try {
             CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
             INV_VIEW_PROJ.set((Matrix4fc) viewProj).invert();
+            // PERF: если дыра вне кадра, марш выдал бы ровно vec4(0,0) на каждом пикселе
+            // (см. isHoleOnScreen) — пропускаем марш, resolve и bloom, подменяем чёрной 1x1 текстурой.
+            // Джеты/блик/звёзды/туманность живут в composite и от марша не зависят.
+            boolean holeOnScreen = !hdr || blackTextureView == null
+                    || isHoleOnScreen(renderTarget.textureWidth, renderTarget.textureHeight);
+            if (hdr && !holeOnScreen) {
+                historyValid = false;
+            }
+            boolean useHistory = hdr && historyValid;
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 ByteBuffer data = stack.calloc(UNIFORM_SIZE);
                 INV_VIEW_PROJ.get(0, data);
@@ -273,33 +312,41 @@ public final class CustomSkyRenderer {
                 encoder.writeToBuffer(uniformBuffer.slice(0L, (long) UNIFORM_SIZE), data);
             }
 
-            String marchName = type == TYPE_USER ? "kimiko:customsky_march_user" : MARCH_PASS_NAMES[type];
-            GpuTextureView marchTarget = hdr ? marchHalfTextureView : skyTextureViews[write];
-            try (RenderPass pass = encoder.createRenderPass(() -> marchName, marchTarget, OptionalInt.empty())) {
-                pass.setPipeline(marchPipeline);
-                pass.setUniform("SkyParams", uniformBuffer);
-                if (type != TYPE_USER) {
-                    ThemeWaveUniform.bind(pass);
-                }
-                if (hdr) {
-                    pass.bindTexture("NoiseTex", noiseTextureView, RenderSampler.linearRepeat());
-                }
-                pass.draw(0, 6);
-            }
-
-            if (hdr) {
-                // resolve: собираем 1/4-сэмплы этого кадра + репроецированную историю в полное разрешение
-                try (RenderPass pass = encoder.createRenderPass(() -> "kimiko:customsky_resolve_blackhole",
-                        skyTextureViews[write], OptionalInt.empty())) {
-                    pass.setPipeline(resolvePipeline);
+            GpuTextureView skyView;
+            if (holeOnScreen) {
+                String marchName = type == TYPE_USER ? "kimiko:customsky_march_user" : MARCH_PASS_NAMES[type];
+                GpuTextureView marchTarget = hdr ? marchHalfTextureView : skyTextureViews[write];
+                try (RenderPass pass = encoder.createRenderPass(() -> marchName, marchTarget, OptionalInt.empty())) {
+                    pass.setPipeline(marchPipeline);
                     pass.setUniform("SkyParams", uniformBuffer);
-                    pass.bindTexture("Current", marchHalfTextureView, RenderSampler.linear());
-                    pass.bindTexture("History", skyTextureViews[read], RenderSampler.linear());
+                    if (type != TYPE_USER) {
+                        ThemeWaveUniform.bind(pass);
+                    }
+                    if (hdr) {
+                        pass.bindTexture("NoiseTex", noiseTextureView, RenderSampler.linearRepeat());
+                    }
                     pass.draw(0, 6);
                 }
-            }
 
-            INSTANCE.buildBloom(encoder, skyTextureViews[write], hdr);
+                if (hdr) {
+                    // resolve: собираем 1/4-сэмплы этого кадра + репроецированную историю в полное разрешение
+                    try (RenderPass pass = encoder.createRenderPass(() -> "kimiko:customsky_resolve_blackhole",
+                            skyTextureViews[write], OptionalInt.empty())) {
+                        pass.setPipeline(resolvePipeline);
+                        pass.setUniform("SkyParams", uniformBuffer);
+                        pass.bindTexture("Current", marchHalfTextureView, RenderSampler.linear());
+                        pass.bindTexture("History", skyTextureViews[read], RenderSampler.linear());
+                        pass.draw(0, 6);
+                    }
+                }
+
+                INSTANCE.buildBloom(encoder, skyTextureViews[write], hdr);
+                skyView = skyTextureViews[write];
+            } else {
+                // дыра вне кадра: resolve чёрного Current и bloom чёрного неба дали бы нули,
+                // поэтому сразу подменяем статичной чёрной текстурой — composite бит-в-бит тот же.
+                skyView = blackTextureView;
+            }
 
             // Без копии сцены: composite делает discard там, где есть геометрия.
             try (RenderPass pass = encoder.createRenderPass(() -> "kimiko:customsky_composite",
@@ -307,16 +354,20 @@ public final class CustomSkyRenderer {
                 pass.setPipeline(compositePipeline);
                 pass.setUniform("SkyParams", uniformBuffer);
                 pass.bindTexture("DepthTex", renderTarget.getDepthAttachmentView(), RenderSampler.nearest());
-                pass.bindTexture("Sky", skyTextureViews[write], RenderSampler.linear());
+                pass.bindTexture("Sky", skyView, RenderSampler.linear());
                 for (int level = 0; level < BLOOM_LEVELS; ++level) {
-                    pass.bindTexture("Bloom" + level, bloomTextureViews[level], RenderSampler.linear());
+                    pass.bindTexture("Bloom" + level, holeOnScreen ? bloomTextureViews[level] : blackTextureView,
+                            RenderSampler.linear());
                 }
                 pass.bindTexture("NoiseTex", noiseTextureView, RenderSampler.linearRepeat());
                 pass.draw(0, 6);
             }
 
             PREV_VIEW_PROJ.set((Matrix4fc) viewProj);
-            historyValid = true;
+            // историю валидируем только если реально посчитали небо; при скипе дыры она уже инвалидирована выше
+            if (holeOnScreen) {
+                historyValid = true;
+            }
             frameIndex = frameIndex + 1 & 0x3FFFFFFF;
             taaSequence = (taaSequence + 0.618034f) % 1.0f;
         } catch (Throwable throwable) {
@@ -437,6 +488,8 @@ public final class CustomSkyRenderer {
             }
             // composite общий для всех типов и читает NoiseTex -> текстура нужна всегда (256x256, создаётся один раз)
             this.ensureNoiseTexture();
+            // чёрная 1x1 для скипа марша/bloom, когда дыра вне кадра
+            this.ensureBlackTexture();
         } catch (Throwable throwable) {
             disabledAfterError = true;
             for (int i = 0; i < TYPE_COUNT; ++i) {
@@ -448,7 +501,74 @@ public final class CustomSkyRenderer {
             this.closeUniform();
             this.closeBloomUniform();
             this.closeNoise();
+            this.closeBlack();
         }
+    }
+
+    /**
+     * PERF: марш чёрной дыры — самый дорогой проход (до 200 итераций реймарша на half-res пиксель).
+     * Шейдер выдаёт ровно vec4(0,0) для всех лучей с прицельным параметром >= 7.25
+     * (ветка impact >= IMPACT_CULL || along >= 0 пропускает цикл, а дальше все вклады — нули:
+     * color=0, captured=0 -> кольцо 0, bend=0 -> фотонное кольцо 0, fell=0 -> shadow 0).
+     * Такие лучи — это угловое расстояние от направления взгляда до BH_DIR больше, чем
+     * (макс. угол до угла экрана + asin(7.25/14)). Тогда марш, resolve и bloom можно не запускать
+     * вообще, а в composite подсунуть статичную чёрную 1x1 текстуру — результат бит-в-бит тот же.
+     * Джеты/блик/звёзды/туманность считаются в composite аналитически и от марша не зависят.
+     */
+    private static boolean isHoleOnScreen(int width, int height) {
+        rayDirNdc(0.0f, 0.0f, TMP_VIEW_DIR);
+        // расширяем NDC-рамку на 2 пикселя: сэмпл марша может брать луч со сдвигом до ~1.5px от центра пикселя
+        float ex = 1.0f + 2.0f / (float) Math.max(1, width);
+        float ey = 1.0f + 2.0f / (float) Math.max(1, height);
+        float minCos = 1.0f;
+        rayDirNdc(ex, ey, TMP_RAY_DIR);
+        minCos = Math.min(minCos, TMP_VIEW_DIR.dot(TMP_RAY_DIR));
+        rayDirNdc(-ex, ey, TMP_RAY_DIR);
+        minCos = Math.min(minCos, TMP_VIEW_DIR.dot(TMP_RAY_DIR));
+        rayDirNdc(ex, -ey, TMP_RAY_DIR);
+        minCos = Math.min(minCos, TMP_VIEW_DIR.dot(TMP_RAY_DIR));
+        rayDirNdc(-ex, -ey, TMP_RAY_DIR);
+        minCos = Math.min(minCos, TMP_VIEW_DIR.dot(TMP_RAY_DIR));
+        float cornerAngle = (float) Math.acos(Math.clamp(minCos, -1.0f, 1.0f));
+        float toHole = (float) Math.acos(Math.clamp(TMP_VIEW_DIR.dot(BH_DIR), -1.0f, 1.0f));
+        return toHole <= cornerAngle + HOLE_ANGULAR_RADIUS + HOLE_SKIP_EPS;
+    }
+
+    /** Направление луча в world space для NDC-координат (тот же rayDir, что в шейдерах). */
+    private static void rayDirNdc(float ndcX, float ndcY, Vector3f dest) {
+        TMP_CLIP_A.set(ndcX, ndcY, 1.0f, 1.0f);
+        INV_VIEW_PROJ.transform(TMP_CLIP_A);
+        TMP_CLIP_A.div(TMP_CLIP_A.w);
+        TMP_CLIP_B.set(ndcX, ndcY, -1.0f, 1.0f);
+        INV_VIEW_PROJ.transform(TMP_CLIP_B);
+        TMP_CLIP_B.div(TMP_CLIP_B.w);
+        dest.set(TMP_CLIP_A.x - TMP_CLIP_B.x, TMP_CLIP_A.y - TMP_CLIP_B.y, TMP_CLIP_A.z - TMP_CLIP_B.z).normalize();
+    }
+
+    private void ensureBlackTexture() {
+        GpuTexture current = blackTexture;
+        if (current != null && !current.isClosed() && blackTextureView != null) {
+            return;
+        }
+        this.closeBlack();
+        GpuDevice device = RenderSystem.getDevice();
+        NativeImage image = new NativeImage(1, 1, false);
+        image.setColor(0, 0, 0xFF000000);
+        blackTexture = device.createTexture(() -> "kimiko:customsky_black", 5, TextureFormat.RGBA8, 1, 1, 1, 1);
+        device.createCommandEncoder().writeToTexture(blackTexture, image);
+        blackTextureView = device.createTextureView(blackTexture);
+        image.close();
+    }
+
+    private void closeBlack() {
+        if (blackTextureView != null) {
+            blackTextureView.close();
+        }
+        blackTextureView = null;
+        if (blackTexture != null) {
+            blackTexture.close();
+        }
+        blackTexture = null;
     }
 
     private void ensureNoiseTexture() {
