@@ -83,18 +83,15 @@ public final class DragController {
 
     private final float computeRenderX() {
         this.ensureAnims();
+        if (this.dragging) {
+            // While the element is being dragged it follows the cursor 1:1: no lerp lag.
+            float pc = DragController.Companion.jitterStrength();
+            return this.xPos + MathUtils.getRandom(-2.0f * pc, 2.0f * pc);
+        }
         DragLerpAnim dragLerpAnim = this.animX;
         Intrinsics.checkNotNull((Object)dragLerpAnim);
-        float x = dragLerpAnim.getAnim();
-        if (this.dragging) {
-            float pc = DragController.Companion.jitterStrength();
-            x += MathUtils.getRandom(-2.0f * pc, 2.0f * pc);
-        } else {
-            DragLerpAnim dragLerpAnim2 = this.animX;
-            Intrinsics.checkNotNull((Object)dragLerpAnim2);
-            dragLerpAnim2.setTo(this.xPos);
-        }
-        return x;
+        dragLerpAnim.setTo(this.xPos);
+        return dragLerpAnim.getAnim();
     }
 
     public final float getRenderY() {
@@ -106,18 +103,15 @@ public final class DragController {
 
     private final float computeRenderY() {
         this.ensureAnims();
+        if (this.dragging) {
+            // While the element is being dragged it follows the cursor 1:1: no lerp lag.
+            float pc = DragController.Companion.jitterStrength();
+            return this.yPos + MathUtils.getRandom(-2.0f * pc, 2.0f * pc);
+        }
         DragLerpAnim dragLerpAnim = this.animY;
         Intrinsics.checkNotNull((Object)dragLerpAnim);
-        float y = dragLerpAnim.getAnim();
-        if (this.dragging) {
-            float pc = DragController.Companion.jitterStrength();
-            y += MathUtils.getRandom(-2.0f * pc, 2.0f * pc);
-        } else {
-            DragLerpAnim dragLerpAnim2 = this.animY;
-            Intrinsics.checkNotNull((Object)dragLerpAnim2);
-            dragLerpAnim2.setTo(this.yPos);
-        }
-        return y;
+        dragLerpAnim.setTo(this.yPos);
+        return dragLerpAnim.getAnim();
     }
 
     public final float getTargetX() {
@@ -349,9 +343,12 @@ public final class DragController {
             DragLerpAnim dragLerpAnim = this.animX2;
             Intrinsics.checkNotNull((Object)dragLerpAnim);
             dragLerpAnim.setTo(this.xPos);
+            // Keep the live drag overlay box exactly on the cursor, not lerping behind it.
+            dragLerpAnim.setAnim(this.xPos);
             DragLerpAnim dragLerpAnim2 = this.animY2;
             Intrinsics.checkNotNull((Object)dragLerpAnim2);
             dragLerpAnim2.setTo(this.yPos);
+            dragLerpAnim2.setAnim(this.yPos);
             if (directDrag) {
                 DragLerpAnim dragLerpAnim3 = this.animX;
                 Intrinsics.checkNotNull((Object)dragLerpAnim3);
@@ -399,20 +396,14 @@ public final class DragController {
     }
 
     public final void release() {
-        block2: {
-            if (!this.dragging) {
-                return;
-            }
-            this.cancelled = false;
-            this.dragging = false;
-            DragLerpAnim dragLerpAnim = this.animX;
-            if (dragLerpAnim != null) {
-                dragLerpAnim.setTo(this.xPos);
-            }
-            DragLerpAnim dragLerpAnim2 = this.animY;
-            if (dragLerpAnim2 == null) break block2;
-            dragLerpAnim2.setTo(this.yPos);
+        if (!this.dragging) {
+            return;
         }
+        this.cancelled = false;
+        this.dragging = false;
+        // The render position was already 1:1 with the target while dragging:
+        // snap the smoothed state as well so nothing slides or jumps after release.
+        this.syncToTarget();
     }
 
     public final void cancel() {
