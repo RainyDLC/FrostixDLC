@@ -8,6 +8,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerInteractionManager;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.decoration.EndCrystalEntity;
@@ -18,6 +19,7 @@ import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
+import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -31,6 +33,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import rtx.kimiko.api.events.EventHandler;
 import rtx.kimiko.api.events.impl.game.TickEvent;
+import rtx.kimiko.api.events.impl.network.PacketReceiveEvent;
 import rtx.kimiko.api.liteapi.Feature;
 import rtx.kimiko.api.modules.Category;
 import rtx.kimiko.api.modules.Module;
@@ -43,9 +46,9 @@ import rtx.kimiko.utils.storage.friend.FriendUtils;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 @Feature(value={"crystalaura"})
 public final class CrystalAura extends Module {
@@ -81,8 +84,11 @@ public final class CrystalAura extends Module {
     private final BooleanSetting autoBreak = (BooleanSetting) register(
             new BooleanSetting("Авто-взрыв", "Автоматически взрывать кристаллы", true)
     );
+    private final BooleanSetting instantBreak = (BooleanSetting) register(
+            new BooleanSetting("Быстрый взрыв", "Мгновенно взрывать кристалл при получении пакета спавна от сервера", true)
+    );
     private final BooleanSetting autoObsidian = (BooleanSetting) register(
-            new BooleanSetting("Авто-обсидиан", "Ставить обсидиан возле цели, если его нет", true)
+            new BooleanSetting("Авто-обсидиан", "Ставить платформу из обсидиана под кристалл, если её нет", true)
     );
     private final ModeSetting switchMode = (ModeSetting) register(
             new ModeSetting("Смена слота", "Режим переключения на кристаллы", "Обычный", "Обычный", "Возврат", "Без смены")
@@ -100,7 +106,7 @@ public final class CrystalAura extends Module {
             new SliderSetting("Задержка (тики)", "Задержка между действиями в тиках").range(0, 10).increment(1).setValue(0.0f)
     );
     private final SliderSetting maxPerTick = (SliderSetting) register(
-            new SliderSetting("Действий за тик", "Максимальное количество действий за один тик").range(1, 5).increment(1).setValue(2.0f)
+            new SliderSetting("Действий за тик", "Максимальное количество действий за один тик").range(1, 5).increment(1).setValue(3.0f)
     );
     private final BooleanSetting rotate = (BooleanSetting) register(
             new BooleanSetting("Поворот", "Наводить камеру на кристалл/блок", false)
@@ -128,7 +134,7 @@ public final class CrystalAura extends Module {
             new BooleanSetting("Сейф-режим", "Запрещает взрывать кристаллы, наносящие слишком много урона игроку", true)
     );
     private final SliderSetting maxSelfDamage = (SliderSetting) register(
-            new SliderSetting("Макс. урон себе", "Максимально допустимый урон по себе от взрыва (в HP)").range(1.0f, 36.0f).increment(0.5f).setValue(14.0f)
+            new SliderSetting("Макс. урон себе", "Максимально допустимый урон по себе от взрыва (в HP)").range(1.0f, 36.0f).increment(0.5f).setValue(18.0f)
     );
     private final BooleanSetting safeCover = (BooleanSetting) register(
             new BooleanSetting("Сейф укрытием", "Отдавать приоритет позициям, где ноги закрыты блоком (снижает урон в 2-4 раза)", true)
@@ -149,7 +155,9 @@ public final class CrystalAura extends Module {
     private int shieldResetTicks = 0;
     private int previousSlot = -1;
     private int restoreSlotTicks = 0;
-    private final Set<Integer> attackedCrystals = new HashSet<>();
+    private final Map<Integer, Long> attackedCrystals = new HashMap<>();
+    private final Map<BlockPos, Long> recentlyPlacedObsidian = new HashMap<>();
+    private final Map<BlockPos, Long> attackedAnchors = new HashMap<>();
 
     public CrystalAura() {
         super("Crystal Aura", "Автоматически ставит и взрывает кристаллы/маяки возле цели с защитой от самоубийства и минимизацией урона себе.", Category.UTILS);
@@ -160,6 +168,8 @@ public final class CrystalAura extends Module {
         super.onDisable();
         this.delayTimer = 0;
         this.attackedCrystals.clear();
+        this.recentlyPlacedObsidian.clear();
+        this.attackedAnchors.clear();
         resetSneakAndShield();
         if (this.previousSlot != -1) {
             selectHotbarSlot(this.previousSlot);
@@ -191,18 +201,22 @@ public final class CrystalAura extends Module {
             return;
         }
 
-        // Очищаем старые атакованные кристаллы, которых уже нет в мире
-        if (!this.attackedCrystals.isEmpty() && world.getTime() % 10 == 0) {
-            this.attackedCrystals.removeIf(id -> world.getEntityById(id) == null);
+        // Очищаем старые атакованные кристаллы, якоря и недавно установленный обсидиан
+        long currentWorldTime = world.getTime();
+        if (!this.attackedCrystals.isEmpty()) {
+            this.attackedCrystals.entrySet().removeIf(entry ->
+                    currentWorldTime - entry.getValue() > 3 || world.getEntityById(entry.getKey()) == null
+            );
         }
-
-        // Возврат слота хотбара
-        if (this.restoreSlotTicks > 0) {
-            this.restoreSlotTicks--;
-            if (this.restoreSlotTicks == 0 && this.previousSlot != -1) {
-                selectHotbarSlot(this.previousSlot);
-                this.previousSlot = -1;
-            }
+        if (!this.recentlyPlacedObsidian.isEmpty()) {
+            this.recentlyPlacedObsidian.entrySet().removeIf(entry ->
+                    currentWorldTime - entry.getValue() > 10 || world.getBlockState(entry.getKey()).isOf(Blocks.OBSIDIAN)
+            );
+        }
+        if (!this.attackedAnchors.isEmpty()) {
+            this.attackedAnchors.entrySet().removeIf(entry ->
+                    currentWorldTime - entry.getValue() > 4
+            );
         }
 
         // Сброс приседа и щита
@@ -231,6 +245,14 @@ public final class CrystalAura extends Module {
         // 1. Поиск вражеской цели
         LivingEntity target = findTarget(player, world);
         if (target == null && this.requireTarget.getValue()) {
+            // Возврат слота хотбара если нет цели
+            if (this.restoreSlotTicks > 0) {
+                this.restoreSlotTicks--;
+                if (this.restoreSlotTicks == 0 && this.previousSlot != -1) {
+                    selectHotbarSlot(this.previousSlot);
+                    this.previousSlot = -1;
+                }
+            }
             return;
         }
 
@@ -246,7 +268,89 @@ public final class CrystalAura extends Module {
 
         if (actionsDone > 0) {
             this.delayTimer = (int) this.delayTicks.getValue();
+            this.restoreSlotTicks = 2; // Продлеваем активный слот кристаллов во время боя
+        } else if (this.restoreSlotTicks > 0) {
+            this.restoreSlotTicks--;
+            if (this.restoreSlotTicks == 0 && this.previousSlot != -1) {
+                selectHotbarSlot(this.previousSlot);
+                this.previousSlot = -1;
+            }
         }
+    }
+
+    /**
+     * Мгновенный взрыв кристалла по пакету спавна сущности от сервера
+     */
+    @EventHandler
+    public final void onPacketReceive(@NotNull PacketReceiveEvent event) {
+        if (!this.isEnabled()) return;
+        if (!this.autoBreak.getValue() || !this.instantBreak.getValue()) return;
+
+        EntitySpawnS2CPacket spawn = event.getPacketAs(EntitySpawnS2CPacket.class);
+        if (spawn == null) return;
+        if (spawn.getEntityType() != EntityType.END_CRYSTAL) return;
+
+        int entityId = spawn.getEntityId();
+        Vec3d crystalPos = new Vec3d(spawn.getX(), spawn.getY(), spawn.getZ());
+
+        this.mc.execute(() -> {
+            ClientPlayerEntity player = this.mc.player;
+            ClientWorld world = this.mc.world;
+            ClientPlayerInteractionManager interactionManager = this.mc.interactionManager;
+            if (player == null || world == null || interactionManager == null || this.mc.currentScreen != null) return;
+
+            Entity entity = world.getEntityById(entityId);
+            if (!(entity instanceof EndCrystalEntity crystal)) return;
+            if (crystal.isRemoved() || !crystal.isAlive() || this.attackedCrystals.containsKey(crystal.getId())) return;
+
+            double distSq = player.squaredDistanceTo(crystalPos);
+            float maxBreakDist = this.breakRange.getValue();
+            if (distSq > maxBreakDist * maxBreakDist) return;
+
+            boolean canSee = player.canSee(crystal);
+            if (!canSee && distSq > this.wallRange.getValue() * this.wallRange.getValue()) return;
+
+            LivingEntity target = findTarget(player, world);
+            float enemyDamage = 0.0f;
+            if (target != null) {
+                enemyDamage = calculateExplosionDamage(crystalPos, 6.0f, target, world);
+                if (!player.isCreative() && this.requireTarget.getValue() && enemyDamage < this.minEnemyDamage.getValue()) {
+                    return;
+                }
+            } else if (this.requireTarget.getValue()) {
+                return;
+            }
+
+            float selfDamage = calculateExplosionDamage(crystalPos, 6.0f, player, world);
+            if (!isSafeExplosion(player, target, selfDamage, enemyDamage)) {
+                return;
+            }
+
+            if (this.rotate.getValue()) {
+                lookAt(crystalPos);
+            }
+            if (this.autoSneak.getValue()) {
+                this.mc.options.sneakKey.setPressed(true);
+                this.sneakResetTicks = 2;
+            }
+            if (this.autoShield.getValue() && hasShield(player)) {
+                this.mc.options.useKey.setPressed(true);
+                this.shieldResetTicks = 2;
+            }
+
+            player.resetTicksSince();
+            this.attackedCrystals.put(crystal.getId(), world.getTime());
+            interactionManager.attackEntity(player, crystal);
+            crystal.discard();
+            if (this.swing.getValue()) {
+                player.swingHand(Hand.MAIN_HAND);
+            }
+
+            // Сразу после мгновенного взрыва ставим следующий кристалл!
+            if (this.autoPlace.getValue()) {
+                tryPlaceCrystal(player, world, interactionManager, target, 1);
+            }
+        });
     }
 
     /**
@@ -266,7 +370,7 @@ public final class CrystalAura extends Module {
         if (allowCrystals) {
             for (Entity entity : world.getEntities()) {
                 if (!(entity instanceof EndCrystalEntity crystal)) continue;
-                if (crystal.isRemoved() || !crystal.isAlive() || this.attackedCrystals.contains(crystal.getId())) continue;
+                if (crystal.isRemoved() || !crystal.isAlive() || this.attackedCrystals.containsKey(crystal.getId())) continue;
 
                 Vec3d crystalPos = crystal.getEntityPos();
                 double distSq = player.squaredDistanceTo(crystalPos);
@@ -279,7 +383,7 @@ public final class CrystalAura extends Module {
                 float enemyDamage = 0.0f;
                 if (target != null) {
                     double distToTargetSq = target.squaredDistanceTo(crystalPos);
-                    if (distToTargetSq > 36.0 && this.requireTarget.getValue()) continue;
+                    if (distToTargetSq > 144.0 && this.requireTarget.getValue()) continue;
                     enemyDamage = calculateExplosionDamage(crystalPos, 6.0f, target, world);
                     if (!player.isCreative() && this.requireTarget.getValue() && enemyDamage < this.minEnemyDamage.getValue()) {
                         continue;
@@ -288,19 +392,8 @@ public final class CrystalAura extends Module {
 
                 // Расчёт урона себе
                 float selfDamage = calculateExplosionDamage(crystalPos, 6.0f, player, world);
-
-                // Анти-суицид (если есть тотем — игрок защищен)
-                if (this.antiSuicide.getValue() && !player.isCreative() && !hasTotem(player)) {
-                    if (playerHp - selfDamage < this.minHealth.getValue()) {
-                        continue;
-                    }
-                }
-
-                // Сейф-режим
-                if (this.safeMode.getValue() && !player.isCreative()) {
-                    if (selfDamage > this.maxSelfDamage.getValue()) {
-                        continue;
-                    }
+                if (!isSafeExplosion(player, target, selfDamage, enemyDamage)) {
+                    continue;
                 }
 
                 boolean feetCovered = isFeetCovered(player, crystalPos, world);
@@ -309,13 +402,15 @@ public final class CrystalAura extends Module {
         }
 
         // 2. Поиск заряженных якорей возрождения / маяков
-        if (allowAnchors) {
+        if (allowAnchors && !isNether(world)) {
             BlockPos playerPos = player.getBlockPos();
             int r = (int) Math.ceil(maxBreakDist);
             for (int x = -r; x <= r; x++) {
                 for (int y = -r; y <= r; y++) {
                     for (int z = -r; z <= r; z++) {
                         BlockPos pos = playerPos.add(x, y, z);
+                        if (this.attackedAnchors.containsKey(pos)) continue;
+
                         BlockState state = world.getBlockState(pos);
                         if (!state.isOf(Blocks.RESPAWN_ANCHOR)) continue;
 
@@ -332,7 +427,7 @@ public final class CrystalAura extends Module {
                         float enemyDamage = 0.0f;
                         if (target != null) {
                             double distToTargetSq = target.squaredDistanceTo(anchorPos);
-                            if (distToTargetSq > 36.0 && this.requireTarget.getValue()) continue;
+                            if (distToTargetSq > 144.0 && this.requireTarget.getValue()) continue;
                             enemyDamage = calculateExplosionDamage(anchorPos, 5.0f, target, world);
                             if (!player.isCreative() && this.requireTarget.getValue() && enemyDamage < this.minEnemyDamage.getValue()) {
                                 continue;
@@ -340,12 +435,8 @@ public final class CrystalAura extends Module {
                         }
 
                         float selfDamage = calculateExplosionDamage(anchorPos, 5.0f, player, world);
-
-                        if (this.antiSuicide.getValue() && !player.isCreative() && !hasTotem(player)) {
-                            if (playerHp - selfDamage < this.minHealth.getValue()) continue;
-                        }
-                        if (this.safeMode.getValue() && !player.isCreative()) {
-                            if (selfDamage > this.maxSelfDamage.getValue()) continue;
+                        if (!isSafeExplosion(player, target, selfDamage, enemyDamage)) {
+                            continue;
                         }
 
                         boolean feetCovered = isFeetCovered(player, anchorPos, world);
@@ -384,7 +475,7 @@ public final class CrystalAura extends Module {
             if (candidate.crystal() != null) {
                 // Взрыв энд-кристалла
                 player.resetTicksSince();
-                this.attackedCrystals.add(candidate.crystal().getId());
+                this.attackedCrystals.put(candidate.crystal().getId(), world.getTime());
                 interactionManager.attackEntity(player, candidate.crystal());
                 candidate.crystal().discard(); // Убираем клиентскую сущность сразу, чтобы не блокировать установку нового кристалла!
                 if (this.swing.getValue()) {
@@ -398,8 +489,12 @@ public final class CrystalAura extends Module {
                         selectHotbarSlot(nonGlow);
                     }
                 }
-                BlockHitResult hit = new BlockHitResult(candidate.pos(), Direction.UP, candidate.anchorPos(), false);
+                Direction hitSide = getInteractableSide(candidate.anchorPos(), world);
+                Vec3d hitPos = candidate.pos().add(hitSide.getOffsetX() * 0.5, hitSide.getOffsetY() * 0.5, hitSide.getOffsetZ() * 0.5);
+                BlockHitResult hit = new BlockHitResult(hitPos, hitSide, candidate.anchorPos(), false);
                 interactionManager.interactBlock(player, Hand.MAIN_HAND, hit);
+                world.setBlockState(candidate.anchorPos(), Blocks.AIR.getDefaultState());
+                this.attackedAnchors.put(candidate.anchorPos(), world.getTime());
                 if (this.swing.getValue()) {
                     player.swingHand(Hand.MAIN_HAND);
                 }
@@ -420,32 +515,48 @@ public final class CrystalAura extends Module {
         boolean allowCrystals = !"Якоря".equals(this.targetType.getSelected());
         boolean allowAnchors = !"Кристаллы".equals(this.targetType.getSelected());
 
-        // 1. Установка энд-кристаллов
-        if (allowCrystals) {
-            int placed = tryPlaceCrystal(player, world, interactionManager, target);
-            if (placed > 0) return placed;
-        }
+        boolean hasExistingAnchor = allowAnchors && hasNearbyAnchor(player, world, this.placeRange.getValue());
 
-        // 2. Установка / зарядка якорей возрождения
-        if (allowAnchors) {
-            int placedAnchor = tryPlaceOrChargeAnchor(player, world, interactionManager, target);
+        boolean holdingAnchorOrGlow = player.getMainHandStack().isOf(Items.RESPAWN_ANCHOR)
+                || player.getOffHandStack().isOf(Items.RESPAWN_ANCHOR)
+                || player.getMainHandStack().isOf(Items.GLOWSTONE)
+                || player.getOffHandStack().isOf(Items.GLOWSTONE);
+
+        boolean preferAnchors = "Якоря".equals(this.targetType.getSelected()) || hasExistingAnchor || (allowAnchors && holdingAnchorOrGlow);
+
+        if (preferAnchors && allowAnchors) {
+            int placedAnchor = tryPlaceOrChargeAnchor(player, world, interactionManager, target, maxAllowed);
             if (placedAnchor > 0) return placedAnchor;
+            if (allowCrystals) {
+                int placedCrystal = tryPlaceCrystal(player, world, interactionManager, target, maxAllowed);
+                if (placedCrystal > 0) return placedCrystal;
+            }
+        } else {
+            // Если рядом УЖЕ есть якорь (например, поставлен вручную) — заряжаем и взрываем его в первую очередь!
+            if (hasExistingAnchor) {
+                int charged = tryPlaceOrChargeAnchor(player, world, interactionManager, target, maxAllowed);
+                if (charged > 0) return charged;
+            }
+            if (allowCrystals) {
+                int placed = tryPlaceCrystal(player, world, interactionManager, target, maxAllowed);
+                if (placed > 0) return placed;
+            }
+            if (allowAnchors) {
+                int placedAnchor = tryPlaceOrChargeAnchor(player, world, interactionManager, target, maxAllowed);
+                if (placedAnchor > 0) return placedAnchor;
+            }
         }
 
         return 0;
     }
 
-    private int tryPlaceCrystal(ClientPlayerEntity player, ClientWorld world, ClientPlayerInteractionManager interactionManager, @Nullable LivingEntity target) {
+    private int tryPlaceCrystal(ClientPlayerEntity player, ClientWorld world, ClientPlayerInteractionManager interactionManager, @Nullable LivingEntity target, int maxAllowed) {
         // Проверяем наличие кристаллов
-        Hand hand = getHandWithItem(player, Items.END_CRYSTAL);
+        Hand crystalHand = getHandWithItem(player, Items.END_CRYSTAL);
         int crystalSlot = -1;
-        if (hand == null) {
-            if ("Без смены".equals(this.switchMode.getSelected())) {
-                return 0;
-            }
-            crystalSlot = findItemInHotbar(Items.END_CRYSTAL);
-            if (crystalSlot == -1) {
-                return 0;
+        if (crystalHand == null) {
+            if (!"Без смены".equals(this.switchMode.getSelected())) {
+                crystalSlot = findItemInHotbar(Items.END_CRYSTAL);
             }
         }
 
@@ -469,7 +580,7 @@ public final class CrystalAura extends Module {
                     float enemyDamage = 0.0f;
                     if (target != null) {
                         double distToTargetSq = target.squaredDistanceTo(crystalPos);
-                        if (distToTargetSq > 36.0 && this.requireTarget.getValue()) continue;
+                        if (distToTargetSq > 144.0 && this.requireTarget.getValue()) continue;
                         enemyDamage = calculateExplosionDamage(crystalPos, 6.0f, target, world);
                         if (!player.isCreative() && this.requireTarget.getValue() && enemyDamage < this.minEnemyDamage.getValue()) {
                             continue;
@@ -477,12 +588,8 @@ public final class CrystalAura extends Module {
                     }
 
                     float selfDamage = calculateExplosionDamage(crystalPos, 6.0f, player, world);
-
-                    if (this.antiSuicide.getValue() && !player.isCreative() && !hasTotem(player)) {
-                        if (playerHp - selfDamage < this.minHealth.getValue()) continue;
-                    }
-                    if (this.safeMode.getValue() && !player.isCreative()) {
-                        if (selfDamage > this.maxSelfDamage.getValue()) continue;
+                    if (!isSafeExplosion(player, target, selfDamage, enemyDamage)) {
+                        continue;
                     }
 
                     boolean feetCovered = isFeetCovered(player, crystalPos, world);
@@ -491,163 +598,510 @@ public final class CrystalAura extends Module {
             }
         }
 
-        // Если обсидиана нет рядом с целью, но включен авто-обсидиан — ставим обсидиан
-        if (candidates.isEmpty() && target != null && this.autoObsidian.getValue()) {
-            if (tryPlaceObsidianNear(player, world, interactionManager, target)) {
-                return 1;
+        // Если есть готовая позиция на существующем/недавно установленном обсидиане — ставим кристалл!
+        if (!candidates.isEmpty()) {
+            if (crystalHand == null && crystalSlot == -1) {
+                return 0; // Нет кристаллов
             }
-            return 0;
+
+            sortPlaceCandidates(candidates, player);
+            PlaceCandidate best = candidates.get(0);
+
+            if (crystalHand == null) {
+                selectHotbarSlot(crystalSlot);
+                crystalHand = Hand.MAIN_HAND;
+            }
+
+            Vec3d hitVec = new Vec3d(best.blockPos().getX() + 0.5, best.blockPos().getY() + 1.0, best.blockPos().getZ() + 0.5);
+            if (this.rotate.getValue()) {
+                lookAt(hitVec);
+            }
+
+            BlockHitResult hitResult = new BlockHitResult(hitVec, Direction.UP, best.blockPos(), false);
+            interactionManager.interactBlock(player, crystalHand, hitResult);
+            if (this.swing.getValue()) {
+                player.swingHand(crystalHand);
+            }
+            return 1;
+        }
+
+        // Если готового обсидиана нет рядом, но включен авто-обсидиан — ставим платформу под кристалл и сразу кристалл!
+        if (target != null && this.autoObsidian.getValue()) {
+            return tryPlaceObsidianAndCrystal(player, world, interactionManager, target, crystalHand, crystalSlot, maxAllowed);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Находит лучшую позицию для платформы из обсидиана (НЕ трапит, а создает базу под кристалл у ног цели)
+     */
+    @Nullable
+    private ObsidianCandidate findBestObsidianPlacement(ClientPlayerEntity player, ClientWorld world, LivingEntity target) {
+        float maxPlaceDist = this.placeRange.getValue();
+        float playerHp = player.getHealth() + player.getAbsorptionAmount();
+        BlockPos targetPos = target.getBlockPos();
+        Vec3d playerEye = player.getEyePos();
+
+        List<ObsidianCandidate> candidates = new ArrayList<>();
+
+        // Сканируем позиции платформы вокруг цели (горизонтальный радиус 2 блока)
+        // dy: -1 (на уровне пола/под ногами цели) или 0 (если цель на уступе/неровной поверхности)
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                if (dx == 0 && dz == 0) continue; // Не ставим в блок, где стоит сама цель
+
+                for (int dy = -1; dy <= 0; dy++) {
+                    BlockPos obsPos = targetPos.add(dx, dy, dz);
+
+                    Vec3d obsCenter = Vec3d.ofCenter(obsPos);
+                    if (player.squaredDistanceTo(obsCenter) > maxPlaceDist * maxPlaceDist) continue;
+
+                    BlockState obsState = world.getBlockState(obsPos);
+                    if (!obsState.isAir() && !obsState.isReplaceable()) continue;
+
+                    // Не ставим блок в хитбокс цели или игрока (с запасом для ближнего боя)
+                    Box obsBox = new Box(obsPos).contract(0.12);
+                    if (target.getBoundingBox().intersects(obsBox) || player.getBoundingBox().intersects(obsBox)) {
+                        continue;
+                    }
+
+                    // Проверяем возможность установки кристалла НА этот обсидиан (obsPos.up())
+                    BlockPos crystalBlockPos = obsPos.up();
+                    BlockState upState = world.getBlockState(crystalBlockPos);
+                    if (!upState.isAir() && !upState.isReplaceable()) continue;
+
+                    Box crystalBox = new Box(crystalBlockPos).contract(0.08);
+
+                    // Проверяем коллизии кристалла с сущностями
+                    boolean entityBlocked = false;
+                    for (Entity e : world.getEntities()) {
+                        if (e.isRemoved() || !e.isAlive() || e.isSpectator()) continue;
+                        if (e instanceof EndCrystalEntity && this.attackedCrystals.containsKey(e.getId())) continue;
+                        if (e.getBoundingBox().intersects(crystalBox)) {
+                            entityBlocked = true;
+                            break;
+                        }
+                    }
+                    if (entityBlocked) continue;
+
+                    // Ищем соседний твёрдый блок для клика установки
+                    BlockPos validNeighbor = null;
+                    Direction validSide = null;
+                    Vec3d validHitVec = null;
+
+                    for (Direction dir : Direction.values()) {
+                        BlockPos neighbor = obsPos.offset(dir);
+                        BlockState neighborState = world.getBlockState(neighbor);
+                        if (neighborState.isAir() || neighborState.isReplaceable()) continue;
+
+                        Direction side = dir.getOpposite();
+                        Vec3d hit = Vec3d.ofCenter(neighbor).add(
+                                side.getOffsetX() * 0.5,
+                                side.getOffsetY() * 0.5,
+                                side.getOffsetZ() * 0.5
+                        );
+                        if (playerEye.squaredDistanceTo(hit) <= maxPlaceDist * maxPlaceDist) {
+                            validNeighbor = neighbor;
+                            validSide = side;
+                            validHitVec = hit;
+                            break;
+                        }
+                    }
+
+                    if (validNeighbor == null) continue;
+
+                    // Расчёт урона от кристалла на этой позиции
+                    Vec3d crystalPos = new Vec3d(obsPos.getX() + 0.5, obsPos.getY() + 1.0, obsPos.getZ() + 0.5);
+                    float enemyDamage = calculateExplosionDamage(crystalPos, 6.0f, target, world);
+                    if (!player.isCreative() && enemyDamage < this.minEnemyDamage.getValue()) {
+                        continue;
+                    }
+
+                    float selfDamage = calculateExplosionDamage(crystalPos, 6.0f, player, world);
+                    if (!isSafeExplosion(player, target, selfDamage, enemyDamage)) {
+                        continue;
+                    }
+
+                    boolean feetCovered = isFeetCovered(player, crystalPos, world);
+                    candidates.add(new ObsidianCandidate(obsPos, validNeighbor, validSide, validHitVec, crystalPos, selfDamage, enemyDamage, feetCovered));
+                }
+            }
         }
 
         if (candidates.isEmpty()) {
+            return null;
+        }
+
+        // Сортировка кандидатов по приоритету
+        String mode = this.priority.getSelected();
+        if ("Ближайший".equals(mode)) {
+            candidates.sort(Comparator.comparingDouble(c -> target.squaredDistanceTo(c.crystalPos())));
+        } else if ("Больше урона цели".equals(mode)) {
+            candidates.sort((a, b) -> {
+                int cmp = Float.compare(b.enemyDamage(), a.enemyDamage());
+                if (cmp != 0) return cmp;
+                return Float.compare(a.selfDamage(), b.selfDamage());
+            });
+        } else {
+            // "Меньше урона себе"
+            candidates.sort((a, b) -> {
+                if (this.safeCover.getValue() && a.feetCovered() != b.feetCovered()) {
+                    return a.feetCovered() ? -1 : 1;
+                }
+                float diffA = a.enemyDamage() - a.selfDamage();
+                float diffB = b.enemyDamage() - b.selfDamage();
+                int cmp = Float.compare(diffB, diffA);
+                if (cmp != 0) return cmp;
+                return Float.compare(a.selfDamage(), b.selfDamage());
+            });
+        }
+
+        return candidates.get(0);
+    }
+
+    /**
+     * Ставит обсидиан как платформу под кристалл и (если позволяет лимит) сразу ставит кристалл сверху
+     */
+    private int tryPlaceObsidianAndCrystal(ClientPlayerEntity player, ClientWorld world, ClientPlayerInteractionManager interactionManager, LivingEntity target, @Nullable Hand crystalHand, int crystalSlot, int maxAllowed) {
+        int obsSlot = findItemInHotbar(Items.OBSIDIAN);
+        Hand obsHand = getHandWithItem(player, Items.OBSIDIAN);
+        if (obsHand == null && (obsSlot == -1 || "Без смены".equals(this.switchMode.getSelected()))) {
+            return 0; // Нет обсидиана
+        }
+
+        // Если кристаллов вообще нет, не ставим обсидиан впустую
+        if (crystalHand == null && (crystalSlot == -1 || "Без смены".equals(this.switchMode.getSelected()))) {
             return 0;
         }
 
-        // Сортируем кандидатов
-        sortPlaceCandidates(candidates, player);
-
-        PlaceCandidate best = candidates.get(0);
-
-        // Переключаемся на кристалл если не в руке
-        if (hand == null) {
-            selectHotbarSlot(crystalSlot);
-            hand = Hand.MAIN_HAND;
+        ObsidianCandidate bestObs = findBestObsidianPlacement(player, world, target);
+        if (bestObs == null) {
+            return 0;
         }
 
-        Vec3d hitVec = new Vec3d(best.blockPos().getX() + 0.5, best.blockPos().getY() + 1.0, best.blockPos().getZ() + 0.5);
+        // 1. Ставим обсидиановую платформу
+        if (obsHand == null) {
+            selectHotbarSlot(obsSlot);
+            obsHand = Hand.MAIN_HAND;
+        }
+
         if (this.rotate.getValue()) {
-            lookAt(hitVec);
+            lookAt(bestObs.hitVec());
         }
 
-        BlockHitResult hitResult = new BlockHitResult(hitVec, Direction.UP, best.blockPos(), false);
-        interactionManager.interactBlock(player, hand, hitResult);
+        BlockHitResult obsHit = new BlockHitResult(bestObs.hitVec(), bestObs.side(), bestObs.neighbor(), false);
+        interactionManager.interactBlock(player, obsHand, obsHit);
         if (this.swing.getValue()) {
-            player.swingHand(hand);
+            player.swingHand(obsHand);
+        }
+
+        this.recentlyPlacedObsidian.put(bestObs.obsPos(), world.getTime());
+
+        // 2. Сразу же ставим кристалл на этот новый обсидиан!
+        if (maxAllowed > 1) {
+            Hand cHand = crystalHand;
+            if (cHand == null) {
+                int cSlot = findItemInHotbar(Items.END_CRYSTAL);
+                if (cSlot != -1) {
+                    selectHotbarSlot(cSlot);
+                    cHand = Hand.MAIN_HAND;
+                }
+            }
+
+            if (cHand != null) {
+                Vec3d crystalHitVec = new Vec3d(bestObs.obsPos().getX() + 0.5, bestObs.obsPos().getY() + 1.0, bestObs.obsPos().getZ() + 0.5);
+                if (this.rotate.getValue()) {
+                    lookAt(crystalHitVec);
+                }
+
+                BlockHitResult crystalHit = new BlockHitResult(crystalHitVec, Direction.UP, bestObs.obsPos(), false);
+                interactionManager.interactBlock(player, cHand, crystalHit);
+                if (this.swing.getValue()) {
+                    player.swingHand(cHand);
+                }
+                return 2; // Установлен обсидиан + кристалл!
+            }
         }
 
         return 1;
     }
 
-    private boolean tryPlaceObsidianNear(ClientPlayerEntity player, ClientWorld world, ClientPlayerInteractionManager interactionManager, LivingEntity target) {
-        int obsSlot = findItemInHotbar(Items.OBSIDIAN);
-        if (obsSlot == -1 && !player.getOffHandStack().isOf(Items.OBSIDIAN) && !player.getMainHandStack().isOf(Items.OBSIDIAN)) {
-            return false;
-        }
-
-        BlockPos targetPos = target.getBlockPos();
-        BlockPos[] offsets = new BlockPos[]{
-                targetPos.down(),
-                targetPos.north(),
-                targetPos.south(),
-                targetPos.east(),
-                targetPos.west(),
-                targetPos.north().down(),
-                targetPos.south().down(),
-                targetPos.east().down(),
-                targetPos.west().down()
-        };
-
-        for (BlockPos candidate : offsets) {
-            double distSq = player.squaredDistanceTo(Vec3d.ofCenter(candidate));
-            if (distSq > this.placeRange.getValue() * this.placeRange.getValue()) continue;
-
-            BlockState state = world.getBlockState(candidate);
-            if (!state.isAir() && !state.isReplaceable()) continue;
-
-            // Ищем твёрдый соседний блок для клика
-            for (Direction dir : Direction.values()) {
-                BlockPos neighbor = candidate.offset(dir);
-                BlockState neighborState = world.getBlockState(neighbor);
-                if (neighborState.isAir() || neighborState.isReplaceable()) continue;
-
-                Hand hand = getHandWithItem(player, Items.OBSIDIAN);
-                if (hand == null) {
-                    selectHotbarSlot(obsSlot);
-                    hand = Hand.MAIN_HAND;
-                }
-
-                Direction side = dir.getOpposite();
-                Vec3d hitVec = Vec3d.ofCenter(neighbor).add(side.getOffsetX() * 0.5, side.getOffsetY() * 0.5, side.getOffsetZ() * 0.5);
-                if (this.rotate.getValue()) {
-                    lookAt(hitVec);
-                }
-
-                BlockHitResult hit = new BlockHitResult(hitVec, side, neighbor, false);
-                interactionManager.interactBlock(player, hand, hit);
-                if (this.swing.getValue()) {
-                    player.swingHand(hand);
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private int tryPlaceOrChargeAnchor(ClientPlayerEntity player, ClientWorld world, ClientPlayerInteractionManager interactionManager, @Nullable LivingEntity target) {
+    /**
+     * Быстрая установка, зарядка и детонация якорей возрождения возле цели
+     */
+    private int tryPlaceOrChargeAnchor(ClientPlayerEntity player, ClientWorld world, ClientPlayerInteractionManager interactionManager, @Nullable LivingEntity target, int maxAllowed) {
         if (target == null) return 0;
-        BlockPos targetPos = target.getBlockPos();
-        float maxR = this.placeRange.getValue();
+        if (isNether(world)) return 0; // Якоря не взрываются в Незере
 
-        // 1. Проверяем незаряженные якоря поблизости для зарядки светокамнем
+        float maxR = this.placeRange.getValue();
+        float playerHp = player.getHealth() + player.getAbsorptionAmount();
+
         int glowSlot = findItemInHotbar(Items.GLOWSTONE);
         Hand glowHand = getHandWithItem(player, Items.GLOWSTONE);
-        if (glowHand != null || glowSlot != -1) {
+        boolean canGlow = glowHand != null || (glowSlot != -1 && !"Без смены".equals(this.switchMode.getSelected()));
+
+        // 1. Быстрая зарядка и детонация уже установленного якоря поблизости
+        if (canGlow) {
             int r = (int) Math.ceil(maxR);
             BlockPos pPos = player.getBlockPos();
             for (int x = -r; x <= r; x++) {
                 for (int y = -r; y <= r; y++) {
                     for (int z = -r; z <= r; z++) {
                         BlockPos pos = pPos.add(x, y, z);
+                        if (this.attackedAnchors.containsKey(pos)) continue;
+
                         BlockState state = world.getBlockState(pos);
                         if (!state.isOf(Blocks.RESPAWN_ANCHOR)) continue;
-                        if (state.get(RespawnAnchorBlock.CHARGES) == 0) {
-                            if (glowHand == null) {
+
+                        int currentCharges = state.get(RespawnAnchorBlock.CHARGES);
+                        Vec3d center = Vec3d.ofCenter(pos);
+                        if (player.squaredDistanceTo(center) > maxR * maxR) continue;
+
+                        float enemyDamage = calculateExplosionDamage(center, 5.0f, target, world);
+                        if (!player.isCreative() && enemyDamage < this.minEnemyDamage.getValue()) continue;
+
+                        float selfDamage = calculateExplosionDamage(center, 5.0f, player, world);
+                        if (!isSafeExplosion(player, target, selfDamage, enemyDamage)) continue;
+
+                        // Если не заряжен — заряжаем светокамнем
+                        if (currentCharges == 0) {
+                            Hand gHand = glowHand;
+                            if (gHand == null) {
                                 selectHotbarSlot(glowSlot);
-                                glowHand = Hand.MAIN_HAND;
+                                gHand = Hand.MAIN_HAND;
                             }
-                            Vec3d center = Vec3d.ofCenter(pos);
+
                             if (this.rotate.getValue()) lookAt(center);
-                            BlockHitResult hit = new BlockHitResult(center, Direction.UP, pos, false);
-                            interactionManager.interactBlock(player, glowHand, hit);
-                            if (this.swing.getValue()) player.swingHand(glowHand);
-                            return 1;
+                            Direction hitSide = getInteractableSide(pos, world);
+                            Vec3d hitPos = center.add(hitSide.getOffsetX() * 0.5, hitSide.getOffsetY() * 0.5, hitSide.getOffsetZ() * 0.5);
+                            BlockHitResult hit = new BlockHitResult(hitPos, hitSide, pos, false);
+                            interactionManager.interactBlock(player, gHand, hit);
+                            if (this.swing.getValue()) player.swingHand(gHand);
+
+                            // Моментально обновляем состояние блока на клиенте, чтобы следующий клик не возвращал PASS
+                            world.setBlockState(pos, state.with(RespawnAnchorBlock.CHARGES, 1));
                         }
+
+                        // Сразу подрываем тем же тиком!
+                        int nonGlow = findNonItemSlot(Items.GLOWSTONE);
+                        if (nonGlow != -1) {
+                            selectHotbarSlot(nonGlow);
+                        }
+                        if (this.rotate.getValue()) lookAt(center);
+                        Direction hitSide = getInteractableSide(pos, world);
+                        Vec3d hitPos = center.add(hitSide.getOffsetX() * 0.5, hitSide.getOffsetY() * 0.5, hitSide.getOffsetZ() * 0.5);
+                        BlockHitResult hit = new BlockHitResult(hitPos, hitSide, pos, false);
+                        interactionManager.interactBlock(player, Hand.MAIN_HAND, hit);
+                        if (this.swing.getValue()) player.swingHand(Hand.MAIN_HAND);
+
+                        // Помечаем взорванным локально
+                        world.setBlockState(pos, Blocks.AIR.getDefaultState());
+                        this.attackedAnchors.put(pos, world.getTime());
+                        return 2;
                     }
                 }
             }
         }
 
-        // 2. Установка нового якоря возрождения
+        // 2. Установка НОВОГО якоря возрождения
         int anchorSlot = findItemInHotbar(Items.RESPAWN_ANCHOR);
         Hand anchorHand = getHandWithItem(player, Items.RESPAWN_ANCHOR);
-        if (anchorHand != null || anchorSlot != -1) {
-            BlockPos underTarget = targetPos.down();
-            if (world.getBlockState(underTarget).isAir() || world.getBlockState(underTarget).isReplaceable()) {
-                for (Direction dir : Direction.values()) {
-                    BlockPos neighbor = underTarget.offset(dir);
-                    if (!world.getBlockState(neighbor).isAir()) {
-                        if (anchorHand == null) {
-                            selectHotbarSlot(anchorSlot);
-                            anchorHand = Hand.MAIN_HAND;
-                        }
-                        Direction side = dir.getOpposite();
-                        Vec3d hitVec = Vec3d.ofCenter(neighbor).add(side.getOffsetX() * 0.5, side.getOffsetY() * 0.5, side.getOffsetZ() * 0.5);
-                        if (this.rotate.getValue()) lookAt(hitVec);
-                        BlockHitResult hit = new BlockHitResult(hitVec, side, neighbor, false);
-                        interactionManager.interactBlock(player, anchorHand, hit);
-                        if (this.swing.getValue()) player.swingHand(anchorHand);
-                        return 1;
+        if (anchorHand == null && (anchorSlot == -1 || "Без смены".equals(this.switchMode.getSelected()))) {
+            return 0;
+        }
+
+        // Без светокамня ставить якорь нет смысла
+        if (!canGlow) {
+            return 0;
+        }
+
+        AnchorCandidate bestAnchor = findBestAnchorPlacement(player, world, target);
+        if (bestAnchor == null) {
+            return 0;
+        }
+
+        // 2.1 Ставим якорь
+        Hand aHand = anchorHand;
+        if (aHand == null) {
+            selectHotbarSlot(anchorSlot);
+            aHand = Hand.MAIN_HAND;
+        }
+
+        if (this.rotate.getValue()) lookAt(bestAnchor.hitVec());
+        BlockHitResult placeHit = new BlockHitResult(bestAnchor.hitVec(), bestAnchor.side(), bestAnchor.neighbor(), false);
+        interactionManager.interactBlock(player, aHand, placeHit);
+        if (this.swing.getValue()) player.swingHand(aHand);
+
+        // 2.2 Сразу заряжаем светокамнем в том же тике!
+        Hand gHand = glowHand;
+        if (gHand == null) {
+            int gSlot = findItemInHotbar(Items.GLOWSTONE);
+            if (gSlot != -1) {
+                selectHotbarSlot(gSlot);
+                gHand = Hand.MAIN_HAND;
+            }
+        }
+
+        if (gHand != null) {
+            if (this.rotate.getValue()) lookAt(bestAnchor.center());
+            Direction chargeSide = getInteractableSide(bestAnchor.pos(), world);
+            Vec3d chargeHitPos = bestAnchor.center().add(chargeSide.getOffsetX() * 0.5, chargeSide.getOffsetY() * 0.5, chargeSide.getOffsetZ() * 0.5);
+            BlockHitResult chargeHit = new BlockHitResult(chargeHitPos, chargeSide, bestAnchor.pos(), false);
+            interactionManager.interactBlock(player, gHand, chargeHit);
+            if (this.swing.getValue()) player.swingHand(gHand);
+
+            // Мгновенно ставим CHARGES = 1 в клиентском мире
+            world.setBlockState(bestAnchor.pos(), Blocks.RESPAWN_ANCHOR.getDefaultState().with(RespawnAnchorBlock.CHARGES, 1));
+
+            // 2.3 Сразу взрываем в том же тике!
+            int nonGlow = findNonItemSlot(Items.GLOWSTONE);
+            if (nonGlow != -1) {
+                selectHotbarSlot(nonGlow);
+            }
+            interactionManager.interactBlock(player, Hand.MAIN_HAND, chargeHit);
+            if (this.swing.getValue()) player.swingHand(Hand.MAIN_HAND);
+
+            // Локально очищаем и помечаем как взорванный
+            world.setBlockState(bestAnchor.pos(), Blocks.AIR.getDefaultState());
+            this.attackedAnchors.put(bestAnchor.pos(), world.getTime());
+            return 3;
+        }
+
+        return 1;
+    }
+
+    /**
+     * Находит лучшую позицию для установки якоря возрождения рядом с целью (маневренно, высокий урон, без суицида)
+     */
+    @Nullable
+    private AnchorCandidate findBestAnchorPlacement(ClientPlayerEntity player, ClientWorld world, LivingEntity target) {
+        float maxPlaceDist = this.placeRange.getValue();
+        float maxWallDist = this.wallRange.getValue();
+        float playerHp = player.getHealth() + player.getAbsorptionAmount();
+        BlockPos targetPos = target.getBlockPos();
+        Vec3d playerEye = player.getEyePos();
+
+        List<AnchorCandidate> candidates = new ArrayList<>();
+
+        // Динамический радиус вокруг цели для маневренности:
+        // dx, dz: [-2, 2], dy: [-2, 1]
+        // Учитываем прыжки цели, бег, ступеньки и уступы
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                for (int dy = -2; dy <= 1; dy++) {
+                    // Не ставим прямо в тело цели на уровне туловища (dy == 0)
+                    if (dx == 0 && dz == 0 && dy == 0) continue;
+
+                    BlockPos pos = targetPos.add(dx, dy, dz);
+                    Vec3d center = Vec3d.ofCenter(pos);
+
+                    double distSq = player.squaredDistanceTo(center);
+                    if (distSq > maxPlaceDist * maxPlaceDist) continue;
+
+                    boolean canSee = canSeePos(player, center, world);
+                    if (!canSee && distSq > maxWallDist * maxWallDist) continue;
+
+                    BlockState state = world.getBlockState(pos);
+                    if (!state.isAir() && !state.isReplaceable()) continue;
+
+                    // Не ставим внутрь хитбоксов игрока или цели (с отступом для ближнего боя)
+                    Box box = new Box(pos).contract(0.12);
+                    if (target.getBoundingBox().intersects(box) || player.getBoundingBox().intersects(box)) {
+                        continue;
                     }
+
+                    // Проверяем коллизии с другими сущностями
+                    boolean entityBlocked = false;
+                    for (Entity e : world.getEntities()) {
+                        if (e.isRemoved() || !e.isAlive() || e.isSpectator()) continue;
+                        if (e.getBoundingBox().intersects(box)) {
+                            entityBlocked = true;
+                            break;
+                        }
+                    }
+                    if (entityBlocked) continue;
+
+                    // Ищем соседний твёрдый блок для привязки установки
+                    BlockPos validNeighbor = null;
+                    Direction validSide = null;
+                    Vec3d validHitVec = null;
+
+                    // Сначала проверяем блок снизу (DOWN), затем стороны
+                    Direction[] checkDirs = {Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST, Direction.UP};
+                    for (Direction dir : checkDirs) {
+                        BlockPos neighbor = pos.offset(dir);
+                        BlockState neighborState = world.getBlockState(neighbor);
+                        if (neighborState.isAir() || neighborState.isReplaceable()) continue;
+
+                        Direction side = dir.getOpposite();
+                        Vec3d hit = Vec3d.ofCenter(neighbor).add(
+                                side.getOffsetX() * 0.5,
+                                side.getOffsetY() * 0.5,
+                                side.getOffsetZ() * 0.5
+                        );
+                        if (playerEye.squaredDistanceTo(hit) <= maxPlaceDist * maxPlaceDist) {
+                            validNeighbor = neighbor;
+                            validSide = side;
+                            validHitVec = hit;
+                            break;
+                        }
+                    }
+
+                    if (validNeighbor == null) continue;
+
+                    // Расчёт урона от взрыва якоря (power 5.0)
+                    float enemyDamage = calculateExplosionDamage(center, 5.0f, target, world);
+                    if (!player.isCreative() && enemyDamage < this.minEnemyDamage.getValue()) {
+                        continue;
+                    }
+
+                    float selfDamage = calculateExplosionDamage(center, 5.0f, player, world);
+                    if (!isSafeExplosion(player, target, selfDamage, enemyDamage)) {
+                        continue;
+                    }
+
+                    boolean feetCovered = isFeetCovered(player, center, world);
+                    candidates.add(new AnchorCandidate(pos, validNeighbor, validSide, validHitVec, center, selfDamage, enemyDamage, feetCovered));
                 }
             }
         }
 
-        return 0;
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        // Сортировка по выбранному приоритету
+        String mode = this.priority.getSelected();
+        if ("Ближайший".equals(mode)) {
+            candidates.sort(Comparator.comparingDouble(c -> target.squaredDistanceTo(c.center())));
+        } else if ("Больше урона цели".equals(mode)) {
+            candidates.sort((a, b) -> {
+                int cmp = Float.compare(b.enemyDamage(), a.enemyDamage());
+                if (cmp != 0) return cmp;
+                return Float.compare(a.selfDamage(), b.selfDamage());
+            });
+        } else {
+            // "Меньше урона себе"
+            candidates.sort((a, b) -> {
+                if (this.safeCover.getValue() && a.feetCovered() != b.feetCovered()) {
+                    return a.feetCovered() ? -1 : 1;
+                }
+                float diffA = a.enemyDamage() - a.selfDamage();
+                float diffB = b.enemyDamage() - b.selfDamage();
+                int cmp = Float.compare(diffB, diffA);
+                if (cmp != 0) return cmp;
+                return Float.compare(a.selfDamage(), b.selfDamage());
+            });
+        }
+
+        return candidates.get(0);
     }
 
     private boolean canPlaceCrystalOn(BlockPos pos, ClientWorld world) {
         BlockState state = world.getBlockState(pos);
-        if (!state.isOf(Blocks.OBSIDIAN) && !state.isOf(Blocks.BEDROCK)) {
+        boolean isObsidian = state.isOf(Blocks.OBSIDIAN) || state.isOf(Blocks.BEDROCK) || this.recentlyPlacedObsidian.containsKey(pos);
+        if (!isObsidian) {
             return false;
         }
         BlockPos up = pos.up();
@@ -656,15 +1110,12 @@ public final class CrystalAura extends Module {
             return false;
         }
 
-        // Проверяем хитбокс кристалла (2.0 вверх, 1.0 в стороны)
-        Box box = new Box(
-                up.getX(), up.getY(), up.getZ(),
-                up.getX() + 1.0, up.getY() + 2.0, up.getZ() + 1.0
-        );
+        // Хитбокс кристалла (1 блок над платформой с запасом от краев)
+        Box box = new Box(up).contract(0.08);
 
         for (Entity e : world.getEntities()) {
             if (e.isRemoved() || !e.isAlive() || e.isSpectator()) continue;
-            if (e instanceof EndCrystalEntity && this.attackedCrystals.contains(e.getId())) continue;
+            if (e instanceof EndCrystalEntity && this.attackedCrystals.containsKey(e.getId())) continue;
             if (e.getBoundingBox().intersects(box)) {
                 return false;
             }
@@ -982,6 +1433,83 @@ public final class CrystalAura extends Module {
         return total > 0 ? (double) hits / total : 0.0;
     }
 
+    private static boolean isNether(ClientWorld world) {
+        return world.getRegistryKey().getValue().toString().contains("nether") || world.getDimension().coordinateScale() > 1.0;
+    }
+
+    private static Direction getInteractableSide(BlockPos pos, ClientWorld world) {
+        BlockState upState = world.getBlockState(pos.up());
+        if (upState.isAir() || upState.isReplaceable()) {
+            return Direction.UP;
+        }
+        for (Direction dir : Direction.values()) {
+            BlockState sideState = world.getBlockState(pos.offset(dir));
+            if (sideState.isAir() || sideState.isReplaceable()) {
+                return dir;
+            }
+        }
+        return Direction.UP;
+    }
+
+    /**
+     * Интеллектуальная проверка безопасности взрыва:
+     * - При наличии тотема в руках — никогда не блокирует (игрок защищен от смерти)
+     * - В ближнем бою не тупит, если урон цели выгоден или летален
+     * - Блокирует суицид только если урон убьет игрока без тотема
+     */
+    private boolean isSafeExplosion(ClientPlayerEntity player, @Nullable LivingEntity target, float selfDamage, float enemyDamage) {
+        if (player.isCreative()) return true;
+
+        // 1. Тотем дает бессмертие: разрешаем взрывы в упор
+        if (hasTotem(player)) {
+            return true;
+        }
+
+        float playerHp = player.getHealth() + player.getAbsorptionAmount();
+
+        // 2. Анти-суицид: предотвращаем смерть без тотема
+        if (this.antiSuicide.getValue()) {
+            float minHp = this.minHealth.getValue();
+            if (playerHp - selfDamage < minHp) {
+                // Исключение: если взрыв гарантированно убивает противника, а мы остаемся живы (> 1.0 HP) — добиваем!
+                if (target != null && (target.getHealth() + target.getAbsorptionAmount()) <= enemyDamage && (playerHp - selfDamage) > 1.0f) {
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        // 3. Сейф-режим: запрещаем невыгодный высокий урон по себе
+        if (this.safeMode.getValue()) {
+            if (selfDamage > this.maxSelfDamage.getValue()) {
+                // Если противнику наносится БОЛЬШЕ урона, чем себе, или урон летален для врага — не тупим в упор!
+                if (target != null && (enemyDamage > selfDamage || (target.getHealth() + target.getAbsorptionAmount()) <= enemyDamage)) {
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private boolean hasNearbyAnchor(ClientPlayerEntity player, ClientWorld world, float maxDist) {
+        int r = (int) Math.ceil(maxDist);
+        BlockPos pPos = player.getBlockPos();
+        for (int x = -r; x <= r; x++) {
+            for (int y = -r; y <= r; y++) {
+                for (int z = -r; z <= r; z++) {
+                    BlockPos pos = pPos.add(x, y, z);
+                    if (this.attackedAnchors.containsKey(pos)) continue;
+                    if (world.getBlockState(pos).isOf(Blocks.RESPAWN_ANCHOR)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     private record BreakCandidate(
             @Nullable EndCrystalEntity crystal,
             @Nullable BlockPos anchorPos,
@@ -994,6 +1522,28 @@ public final class CrystalAura extends Module {
     private record PlaceCandidate(
             BlockPos blockPos,
             Vec3d crystalPos,
+            float selfDamage,
+            float enemyDamage,
+            boolean feetCovered
+    ) {}
+
+    private record ObsidianCandidate(
+            BlockPos obsPos,
+            BlockPos neighbor,
+            Direction side,
+            Vec3d hitVec,
+            Vec3d crystalPos,
+            float selfDamage,
+            float enemyDamage,
+            boolean feetCovered
+    ) {}
+
+    private record AnchorCandidate(
+            BlockPos pos,
+            BlockPos neighbor,
+            Direction side,
+            Vec3d hitVec,
+            Vec3d center,
             float selfDamage,
             float enemyDamage,
             boolean feetCovered
