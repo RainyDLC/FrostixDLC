@@ -213,6 +213,14 @@ public class NeuroModel {
         return getNeuroDir().resolve(name + ".json");
     }
 
+    public static Path getDataDir() {
+        return getNeuroDir().resolve("data");
+    }
+
+    public static Path getTrainerDir() {
+        return getNeuroDir().resolve("trainer");
+    }
+
     public static String getActiveName() {
         if (activeName == null) {
             try {

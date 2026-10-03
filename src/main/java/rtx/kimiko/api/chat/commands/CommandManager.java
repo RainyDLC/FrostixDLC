@@ -53,6 +53,7 @@ import rtx.kimiko.api.chat.commands.impl.HelpCommand;
 import rtx.kimiko.api.chat.commands.impl.MacroCommand;
 import rtx.kimiko.api.chat.commands.impl.PartyChatCommand;
 import rtx.kimiko.api.chat.commands.impl.PartyCommand;
+import rtx.kimiko.api.chat.commands.impl.NeuroCommand;
 import rtx.kimiko.api.chat.commands.impl.PrefixCommand;
 import rtx.kimiko.api.chat.commands.impl.ViewModelCommand;
 import rtx.kimiko.utils.chat.ChatMessage;
@@ -101,6 +102,7 @@ public final class CommandManager {
         this.register(new PartyChatCommand());
         this.register(new CardsCommand());
         this.register(new ViewModelCommand());
+        this.register(new NeuroCommand());
     }
 
     @Protect(value=Level.CROWN)
