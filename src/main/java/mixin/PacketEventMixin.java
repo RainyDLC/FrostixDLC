@@ -39,14 +39,33 @@ import rtx.kimiko.utils.network.Network;
 
 @Mixin(value={ClientConnection.class})
 public abstract class PacketEventMixin {
+    @org.spongepowered.asm.mixin.Unique
+    private static final ThreadLocal<Boolean> kimiko$SENDING_REPLACEMENT = ThreadLocal.withInitial(() -> false);
+
     @Inject(method={"send(Lnet/minecraft/network/packet/Packet;)V"}, at={@At(value="HEAD")}, cancellable=true)
     private void kimiko$onPacketSend(Packet<?> packet, CallbackInfo ci) {
+        if (kimiko$SENDING_REPLACEMENT.get()) {
+            return;
+        }
         PacketEvent unified;
         PacketSendEvent sendEvent;
         EventBus bus = EventBus.get();
-        if (bus.hasListeners(PacketSendEvent.class) && (sendEvent = bus.post(new PacketSendEvent(packet))).isCancelled()) {
-            ci.cancel();
-            return;
+        if (bus.hasListeners(PacketSendEvent.class)) {
+            sendEvent = bus.post(new PacketSendEvent(packet));
+            if (sendEvent.isCancelled()) {
+                ci.cancel();
+                return;
+            }
+            if (sendEvent.getPacket() != packet) {
+                ci.cancel();
+                kimiko$SENDING_REPLACEMENT.set(true);
+                try {
+                    ((ClientConnection) (Object) this).send(sendEvent.getPacket());
+                } finally {
+                    kimiko$SENDING_REPLACEMENT.set(false);
+                }
+                return;
+            }
         }
         if (bus.hasListeners(PacketEvent.class) && (unified = bus.post(new PacketEvent(packet, PacketEvent.Direction.SEND))).isCancelled()) {
             ci.cancel();
