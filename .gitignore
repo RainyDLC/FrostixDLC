@@ -27,3 +27,7 @@ launcher/*.exe
 launcher/payload.zip
 /*.jar
 *.mp4
+
+.rockstar_extract/
+.rockstar_src/
+cfr.jar
