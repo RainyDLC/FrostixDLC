@@ -12,6 +12,9 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.passive.PassiveEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
@@ -33,12 +36,16 @@ import rtx.kimiko.api.modules.Category;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.settings.impl.BooleanSetting;
 import rtx.kimiko.api.modules.settings.impl.ModeSetting;
+import rtx.kimiko.api.modules.settings.impl.MultiSelectSetting;
 import rtx.kimiko.api.modules.settings.impl.SeparatorSetting;
 import rtx.kimiko.api.modules.settings.impl.SliderSetting;
+import rtx.kimiko.utils.storage.friend.FriendUtils;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Feature(value={"crystalaura"})
 public final class CrystalAura extends Module {
@@ -47,8 +54,12 @@ public final class CrystalAura extends Module {
     private final ModeSetting targetType = (ModeSetting) register(
             new ModeSetting("Режим целей", "Тип используемых взрывов", "Все", "Кристаллы", "Якоря", "Все")
     );
-    private final ModeSetting targetEntities = (ModeSetting) register(
-            new ModeSetting("Тип цели", "Кого атаковать", "Все", "Все", "Игроки", "Мобы")
+    private final MultiSelectSetting targetEntities = (MultiSelectSetting) register(
+            new MultiSelectSetting("Цели", "Кого атаковать кристаллом", "Игроки", "Мобы", "Животные", "Другие")
+                    .selected("Игроки", "Мобы")
+    );
+    private final BooleanSetting ignoreFriends = (BooleanSetting) register(
+            new BooleanSetting("Игнорировать друзей", "Не атаковать добавленных в друзья игроков", true)
     );
     private final SliderSetting targetRange = (SliderSetting) register(
             new SliderSetting("Поиск цели", "Радиус поиска цели (в блоках)").range(4.0f, 20.0f).increment(0.5f).setValue(12.0f)
@@ -129,7 +140,7 @@ public final class CrystalAura extends Module {
             new BooleanSetting("Авто-щит", "Поднимать щит в момент детонации (поглощает до 100% урона)", false)
     );
     private final SliderSetting minEnemyDamage = (SliderSetting) register(
-            new SliderSetting("Мин. урон цели", "Минимальный урон по цели").range(1.0f, 36.0f).increment(0.5f).setValue(4.0f)
+            new SliderSetting("Мин. урон цели", "Минимальный урон по цели").range(0.0f, 36.0f).increment(0.5f).setValue(2.0f)
     );
 
     // Внутреннее состояние
@@ -138,6 +149,7 @@ public final class CrystalAura extends Module {
     private int shieldResetTicks = 0;
     private int previousSlot = -1;
     private int restoreSlotTicks = 0;
+    private final Set<Integer> attackedCrystals = new HashSet<>();
 
     public CrystalAura() {
         super("Crystal Aura", "Автоматически ставит и взрывает кристаллы/маяки возле цели с защитой от самоубийства и минимизацией урона себе.", Category.UTILS);
@@ -147,6 +159,7 @@ public final class CrystalAura extends Module {
     protected void onDisable() {
         super.onDisable();
         this.delayTimer = 0;
+        this.attackedCrystals.clear();
         resetSneakAndShield();
         if (this.previousSlot != -1) {
             selectHotbarSlot(this.previousSlot);
@@ -176,6 +189,11 @@ public final class CrystalAura extends Module {
 
         if (player == null || world == null || interactionManager == null || this.mc.currentScreen != null) {
             return;
+        }
+
+        // Очищаем старые атакованные кристаллы, которых уже нет в мире
+        if (!this.attackedCrystals.isEmpty() && world.getTime() % 10 == 0) {
+            this.attackedCrystals.removeIf(id -> world.getEntityById(id) == null);
         }
 
         // Возврат слота хотбара
@@ -248,7 +266,7 @@ public final class CrystalAura extends Module {
         if (allowCrystals) {
             for (Entity entity : world.getEntities()) {
                 if (!(entity instanceof EndCrystalEntity crystal)) continue;
-                if (crystal.isRemoved() || !crystal.isAlive()) continue;
+                if (crystal.isRemoved() || !crystal.isAlive() || this.attackedCrystals.contains(crystal.getId())) continue;
 
                 Vec3d crystalPos = crystal.getEntityPos();
                 double distSq = player.squaredDistanceTo(crystalPos);
@@ -257,13 +275,13 @@ public final class CrystalAura extends Module {
                 boolean canSee = player.canSee(crystal);
                 if (!canSee && distSq > maxWallDist * maxWallDist) continue;
 
-                // Если цель есть, кристалл должен наносить ей урон (в пределах 6 блоков от цели)
+                // Если цель есть, кристалл должен наносить ей урон
                 float enemyDamage = 0.0f;
                 if (target != null) {
                     double distToTargetSq = target.squaredDistanceTo(crystalPos);
-                    if (distToTargetSq > 36.0) continue;
+                    if (distToTargetSq > 36.0 && this.requireTarget.getValue()) continue;
                     enemyDamage = calculateExplosionDamage(crystalPos, 6.0f, target, world);
-                    if (!player.isCreative() && enemyDamage < this.minEnemyDamage.getValue()) {
+                    if (!player.isCreative() && this.requireTarget.getValue() && enemyDamage < this.minEnemyDamage.getValue()) {
                         continue;
                     }
                 }
@@ -271,8 +289,8 @@ public final class CrystalAura extends Module {
                 // Расчёт урона себе
                 float selfDamage = calculateExplosionDamage(crystalPos, 6.0f, player, world);
 
-                // Анти-суицид
-                if (this.antiSuicide.getValue() && !player.isCreative()) {
+                // Анти-суицид (если есть тотем — игрок защищен)
+                if (this.antiSuicide.getValue() && !player.isCreative() && !hasTotem(player)) {
                     if (playerHp - selfDamage < this.minHealth.getValue()) {
                         continue;
                     }
@@ -314,16 +332,16 @@ public final class CrystalAura extends Module {
                         float enemyDamage = 0.0f;
                         if (target != null) {
                             double distToTargetSq = target.squaredDistanceTo(anchorPos);
-                            if (distToTargetSq > 36.0) continue;
+                            if (distToTargetSq > 36.0 && this.requireTarget.getValue()) continue;
                             enemyDamage = calculateExplosionDamage(anchorPos, 5.0f, target, world);
-                            if (!player.isCreative() && enemyDamage < this.minEnemyDamage.getValue()) {
+                            if (!player.isCreative() && this.requireTarget.getValue() && enemyDamage < this.minEnemyDamage.getValue()) {
                                 continue;
                             }
                         }
 
                         float selfDamage = calculateExplosionDamage(anchorPos, 5.0f, player, world);
 
-                        if (this.antiSuicide.getValue() && !player.isCreative()) {
+                        if (this.antiSuicide.getValue() && !player.isCreative() && !hasTotem(player)) {
                             if (playerHp - selfDamage < this.minHealth.getValue()) continue;
                         }
                         if (this.safeMode.getValue() && !player.isCreative()) {
@@ -366,7 +384,9 @@ public final class CrystalAura extends Module {
             if (candidate.crystal() != null) {
                 // Взрыв энд-кристалла
                 player.resetTicksSince();
+                this.attackedCrystals.add(candidate.crystal().getId());
                 interactionManager.attackEntity(player, candidate.crystal());
+                candidate.crystal().discard(); // Убираем клиентскую сущность сразу, чтобы не блокировать установку нового кристалла!
                 if (this.swing.getValue()) {
                     player.swingHand(Hand.MAIN_HAND);
                 }
@@ -449,16 +469,16 @@ public final class CrystalAura extends Module {
                     float enemyDamage = 0.0f;
                     if (target != null) {
                         double distToTargetSq = target.squaredDistanceTo(crystalPos);
-                        if (distToTargetSq > 36.0) continue;
+                        if (distToTargetSq > 36.0 && this.requireTarget.getValue()) continue;
                         enemyDamage = calculateExplosionDamage(crystalPos, 6.0f, target, world);
-                        if (!player.isCreative() && enemyDamage < this.minEnemyDamage.getValue()) {
+                        if (!player.isCreative() && this.requireTarget.getValue() && enemyDamage < this.minEnemyDamage.getValue()) {
                             continue;
                         }
                     }
 
                     float selfDamage = calculateExplosionDamage(crystalPos, 6.0f, player, world);
 
-                    if (this.antiSuicide.getValue() && !player.isCreative()) {
+                    if (this.antiSuicide.getValue() && !player.isCreative() && !hasTotem(player)) {
                         if (playerHp - selfDamage < this.minHealth.getValue()) continue;
                     }
                     if (this.safeMode.getValue() && !player.isCreative()) {
@@ -636,14 +656,15 @@ public final class CrystalAura extends Module {
             return false;
         }
 
-        // Проверяем, не заблокирован ли хитбокс кристалла (2.0 вверх, 1.0 в стороны)
+        // Проверяем хитбокс кристалла (2.0 вверх, 1.0 в стороны)
         Box box = new Box(
                 up.getX(), up.getY(), up.getZ(),
                 up.getX() + 1.0, up.getY() + 2.0, up.getZ() + 1.0
         );
 
         for (Entity e : world.getEntities()) {
-            if (e.isRemoved()) continue;
+            if (e.isRemoved() || !e.isAlive() || e.isSpectator()) continue;
+            if (e instanceof EndCrystalEntity && this.attackedCrystals.contains(e.getId())) continue;
             if (e.getBoundingBox().intersects(box)) {
                 return false;
             }
@@ -656,13 +677,21 @@ public final class CrystalAura extends Module {
         if ("Ближайший".equals(mode)) {
             list.sort(Comparator.comparingDouble(c -> player.squaredDistanceTo(c.pos())));
         } else if ("Больше урона цели".equals(mode)) {
-            list.sort((a, b) -> Float.compare(b.enemyDamage(), a.enemyDamage()));
+            list.sort((a, b) -> {
+                int cmp = Float.compare(b.enemyDamage(), a.enemyDamage());
+                if (cmp != 0) return cmp;
+                return Float.compare(a.selfDamage(), b.selfDamage());
+            });
         } else {
             // "Меньше урона себе"
             list.sort((a, b) -> {
                 if (this.safeCover.getValue() && a.feetCovered() != b.feetCovered()) {
                     return a.feetCovered() ? -1 : 1;
                 }
+                float diffA = a.enemyDamage() - a.selfDamage();
+                float diffB = b.enemyDamage() - b.selfDamage();
+                int cmp = Float.compare(diffB, diffA);
+                if (cmp != 0) return cmp;
                 return Float.compare(a.selfDamage(), b.selfDamage());
             });
         }
@@ -673,16 +702,47 @@ public final class CrystalAura extends Module {
         if ("Ближайший".equals(mode)) {
             list.sort(Comparator.comparingDouble(c -> player.squaredDistanceTo(c.crystalPos())));
         } else if ("Больше урона цели".equals(mode)) {
-            list.sort((a, b) -> Float.compare(b.enemyDamage(), a.enemyDamage()));
+            list.sort((a, b) -> {
+                int cmp = Float.compare(b.enemyDamage(), a.enemyDamage());
+                if (cmp != 0) return cmp;
+                return Float.compare(a.selfDamage(), b.selfDamage());
+            });
         } else {
             // "Меньше урона себе"
             list.sort((a, b) -> {
                 if (this.safeCover.getValue() && a.feetCovered() != b.feetCovered()) {
                     return a.feetCovered() ? -1 : 1;
                 }
+                float diffA = a.enemyDamage() - a.selfDamage();
+                float diffB = b.enemyDamage() - b.selfDamage();
+                int cmp = Float.compare(diffB, diffA);
+                if (cmp != 0) return cmp;
                 return Float.compare(a.selfDamage(), b.selfDamage());
             });
         }
+    }
+
+    private boolean isValidTarget(@Nullable LivingEntity entity, @NotNull ClientPlayerEntity player) {
+        if (entity == null || entity == player || !entity.isAlive() || entity.isDead() || entity.isRemoved() || entity.isSpectator()) {
+            return false;
+        }
+
+        if (entity instanceof PlayerEntity p) {
+            if (!this.targetEntities.isSelected("Игроки")) return false;
+            if (p.isCreative()) return false;
+            if (this.ignoreFriends.getValue() && FriendUtils.isFriend((Entity) p)) return false;
+            return true;
+        }
+
+        if (entity instanceof AnimalEntity || entity instanceof PassiveEntity) {
+            return this.targetEntities.isSelected("Животные");
+        }
+
+        if (entity instanceof MobEntity) {
+            return this.targetEntities.isSelected("Мобы");
+        }
+
+        return this.targetEntities.isSelected("Другие");
     }
 
     @Nullable
@@ -692,36 +752,40 @@ public final class CrystalAura extends Module {
         double maxTargetDist = this.targetRange.getValue();
         double maxTargetDistSq = maxTargetDist * maxTargetDist;
 
-        String mode = this.targetEntities.getSelected();
-        boolean allowPlayers = !"Мобы".equals(mode);
-        boolean allowMobs = !"Игроки".equals(mode);
+        boolean allowPlayers = this.targetEntities.isSelected("Игроки");
 
-        if (allowPlayers) {
-            for (PlayerEntity p : world.getPlayers()) {
-                if (p == player || !p.isAlive() || p.isSpectator()) continue;
-                double distSq = player.squaredDistanceTo(p);
-                if (distSq <= maxTargetDistSq && distSq < bestDistSq) {
+        for (Entity e : world.getEntities()) {
+            if (!(e instanceof LivingEntity living)) continue;
+            if (!isValidTarget(living, player)) continue;
+
+            double distSq = player.squaredDistanceTo(living);
+            if (distSq > maxTargetDistSq) continue;
+
+            // Если разрешены игроки, отдаем им приоритет над мобами и животными
+            if (allowPlayers && living instanceof PlayerEntity) {
+                if (best == null || !(best instanceof PlayerEntity) || distSq < bestDistSq) {
+                    best = living;
                     bestDistSq = distSq;
-                    best = p;
+                    continue;
                 }
             }
-        }
 
-        if (allowMobs && (best == null || "Мобы".equals(mode))) {
-            for (Entity e : world.getEntities()) {
-                if (e == player || !(e instanceof LivingEntity living)) continue;
-                if (e instanceof PlayerEntity) continue;
-                if (!living.isAlive() || living.isDead()) continue;
+            // Если лучший уже игрок, мобы не могут его перебить
+            if (allowPlayers && best instanceof PlayerEntity && !(living instanceof PlayerEntity)) {
+                continue;
+            }
 
-                double distSq = player.squaredDistanceTo(living);
-                if (distSq <= maxTargetDistSq && distSq < bestDistSq) {
-                    bestDistSq = distSq;
-                    best = living;
-                }
+            if (distSq < bestDistSq) {
+                bestDistSq = distSq;
+                best = living;
             }
         }
 
         return best;
+    }
+
+    private boolean hasTotem(ClientPlayerEntity player) {
+        return player.getMainHandStack().isOf(Items.TOTEM_OF_UNDYING) || player.getOffHandStack().isOf(Items.TOTEM_OF_UNDYING);
     }
 
     private void selectHotbarSlot(int slot) {
@@ -828,12 +892,29 @@ public final class CrystalAura extends Module {
         }
 
         double exposure = getExposure(blastCenter, entity, world);
+        // Запасная проверка прямой видимости, если граничные лучи зацепили геометрию
         if (exposure <= 0.0) {
-            return 0.0f;
+            double dSq = entity.squaredDistanceTo(blastCenter);
+            if (dSq <= 16.0) {
+                Vec3d eye = entity.getEyePos();
+                RaycastContext eyeCtx = new RaycastContext(eye, blastCenter, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, entity);
+                if (world.raycast(eyeCtx).getType() == HitResult.Type.MISS) {
+                    exposure = 0.5;
+                } else {
+                    Vec3d center = entity.getEntityPos().add(0, entity.getHeight() * 0.5, 0);
+                    RaycastContext centerCtx = new RaycastContext(center, blastCenter, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, entity);
+                    if (world.raycast(centerCtx).getType() == HitResult.Type.MISS) {
+                        exposure = 0.5;
+                    }
+                }
+            }
+            if (exposure <= 0.0) {
+                return 0.0f;
+            }
         }
 
         double impact = (1.0 - dist) * exposure;
-        float rawDamage = (float) ((impact * impact + impact) / 2.0 * 7.0 * maxDist + 1.0) * 1.5f;
+        float rawDamage = (float) ((impact * impact + impact) / 2.0 * 7.0 * maxDist + 1.0);
 
         float armor = (float) entity.getArmor();
         float toughness = 0.0f;
@@ -850,9 +931,9 @@ public final class CrystalAura extends Module {
             damage = damage * Math.max(0.0f, 1.0f - amp * 0.2f);
         }
 
-        // Средняя защита зачарований на сетах брони
+        // Защита зачарований (Protection / Blast Protection) на броне
         if (armor >= 12.0f) {
-            damage *= 0.5f;
+            damage *= 0.4f;
         }
 
         return Math.max(0.0f, damage);
@@ -867,16 +948,23 @@ public final class CrystalAura extends Module {
         double maxY = box.maxY;
         double maxZ = box.maxZ;
 
-        double stepX = (maxX - minX) * 0.5;
-        double stepY = (maxY - minY) * 0.5;
-        double stepZ = (maxZ - minZ) * 0.5;
-
         int hits = 0;
         int total = 0;
 
-        for (double x = minX; x <= maxX + 0.001; x += stepX) {
-            for (double y = minY; y <= maxY + 0.001; y += stepY) {
-                for (double z = minZ; z <= maxZ + 0.001; z += stepZ) {
+        // Сэмплируем точки строго ВНУТРИ хитбокса (3x3x3 grid)
+        // Смещение 0.167, 0.5, 0.833 гарантирует отсутствие клиппинга в пол и стены ямы (1x1 hole)
+        for (int ix = 0; ix < 3; ix++) {
+            double fracX = (ix + 0.5) / 3.0;
+            double x = MathHelper.lerp(fracX, minX, maxX);
+
+            for (int iy = 0; iy < 3; iy++) {
+                double fracY = (iy + 0.5) / 3.0;
+                double y = MathHelper.lerp(fracY, minY + 0.05, maxY);
+
+                for (int iz = 0; iz < 3; iz++) {
+                    double fracZ = (iz + 0.5) / 3.0;
+                    double z = MathHelper.lerp(fracZ, minZ, maxZ);
+
                     Vec3d target = new Vec3d(x, y, z);
                     RaycastContext context = new RaycastContext(
                             target, source,
