@@ -71,6 +71,7 @@ import rtx.kimiko.api.events.impl.input.MouseButtonEvent;
 import rtx.kimiko.api.events.impl.render.WorldRenderEvent;
 import rtx.kimiko.api.liteapi.Feature;
 import rtx.kimiko.api.modules.Category;
+import rtx.kimiko.api.modules.SubCategory;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.settings.Setting;
 import rtx.kimiko.api.modules.settings.impl.BooleanSetting;
@@ -126,7 +127,7 @@ extends Module {
     private static final long ACTIVATION_DEBOUNCE_MS = 90L;
 
     public HolyWorldHelper() {
-        super("HolyWorld Helper", "Показывает зоны HolyWorld-предметов после использования.", Category.UTILS);
+        super("HolyWorld Helper", "Показывает зоны HolyWorld-предметов после использования.", Category.COMBAT, SubCategory.UTILS);
     }
 
     @Override

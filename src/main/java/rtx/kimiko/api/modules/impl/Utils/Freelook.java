@@ -38,7 +38,7 @@ extends Module {
     private Perspective previousCamera;
 
     public Freelook() {
-        super("Freelook", "Свободный обзор камерой от третьего лица при зажатии клавиши", Category.UTILS);
+        super("Freelook", "Свободный обзор камерой от третьего лица при зажатии клавиши", Category.PLAYER);
         Setting[] settingArray = new Setting[]{this.separator, this.lookKey};
         this.register(settingArray);
     }

@@ -52,6 +52,8 @@ public abstract class Module {
     private final String description;
     @NotNull
     private final Category category;
+    @Nullable
+    private final SubCategory subCategory;
     @JvmField
     @NotNull
     protected final MinecraftClient mc;
@@ -72,12 +74,25 @@ public abstract class Module {
     private final Lazy cachedDisplayName$delegate;
 
     protected Module(@NotNull String name, @NotNull String description, @NotNull Category category) {
+        this(name, description, category, null);
+    }
+
+    protected Module(@NotNull String name, @NotNull String description, @NotNull Category category, @Nullable SubCategory subCategory) {
         Intrinsics.checkNotNullParameter((Object)name, (String)"name");
         Intrinsics.checkNotNullParameter((Object)description, (String)"description");
         Intrinsics.checkNotNullParameter((Object)((Object)category), (String)"category");
         this.name = name;
         this.description = description;
-        this.category = category;
+        if (category == Category.DISPLAY) {
+            this.category = Category.VISUALS;
+            this.subCategory = SubCategory.DISPLAY;
+        } else if (category == Category.VISUALS && subCategory == null) {
+            this.category = Category.VISUALS;
+            this.subCategory = SubCategory.VISUALS;
+        } else {
+            this.category = category;
+            this.subCategory = subCategory;
+        }
         MinecraftClient minecraftClient2 = MinecraftClient.getInstance();
         Intrinsics.checkNotNullExpressionValue((Object)minecraftClient2, (String)"getInstance(...)");
         this.mc = minecraftClient2;
@@ -240,6 +255,11 @@ public abstract class Module {
     @NotNull
     public final Category getCategory() {
         return this.category;
+    }
+
+    @Nullable
+    public final SubCategory getSubCategory() {
+        return this.subCategory;
     }
 
     public boolean isHiddenInList() {

@@ -41,7 +41,7 @@ extends Module {
     private boolean wasDown;
 
     public HandSwap() {
-        super("Hand Swap", "Смена ведущей руки одним нажатием клавиши, без меню.", Category.UTILS);
+        super("Hand Swap", "Смена ведущей руки одним нажатием клавиши, без меню.", Category.PLAYER);
         Setting[] settingArray = new Setting[]{this.separator, this.swapKey, this.notify};
         this.register(settingArray);
     }

@@ -52,7 +52,7 @@ extends Module {
     private volatile long suppressUntil;
 
     public AutoSprint() {
-        super("Auto Sprint", "Удерживает спринт при движении вперёд", Category.UTILS);
+        super("Auto Sprint", "Удерживает спринт при движении вперёд", Category.MOVEMENT);
     }
 
     public final void suppressFor(long ms) {

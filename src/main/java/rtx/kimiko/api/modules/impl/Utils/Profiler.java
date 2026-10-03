@@ -111,7 +111,7 @@ extends Module {
     private static final DateTimeFormatter REPORT_TIME;
 
     public Profiler() {
-        super("Profiler", "Собирает причины просадок FPS и сохраняет отчёт при выключении.", Category.UTILS);
+        super("Profiler", "Собирает причины просадок FPS и сохраняет отчёт при выключении.", Category.MISC);
         List<GarbageCollectorMXBean> list = ManagementFactory.getGarbageCollectorMXBeans();
         Intrinsics.checkNotNullExpressionValue(list, (String)"getGarbageCollectorMXBeans(...)");
         this.gcBeans = list;

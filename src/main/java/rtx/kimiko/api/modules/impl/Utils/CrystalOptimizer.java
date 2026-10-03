@@ -31,6 +31,7 @@ import rtx.kimiko.api.events.EventHandler;
 import rtx.kimiko.api.events.impl.game.TickEvent;
 import rtx.kimiko.api.liteapi.Feature;
 import rtx.kimiko.api.modules.Category;
+import rtx.kimiko.api.modules.SubCategory;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.restrict.Server;
 import rtx.kimiko.api.modules.restrict.ServerRule;
@@ -41,7 +42,7 @@ import rtx.kimiko.api.modules.restrict.ServerRule;
 public final class CrystalOptimizer
 extends Module {
     public CrystalOptimizer() {
-        super("Crystal Optimizer", "Убирает задержку разбивания энд-кристаллов при удержании атаки.", Category.UTILS);
+        super("Crystal Optimizer", "Убирает задержку разбивания энд-кристаллов при удержании атаки.", Category.COMBAT, SubCategory.PVP);
     }
 
     @EventHandler

@@ -49,7 +49,7 @@ extends Module {
     private static final String[] TELEPORT_MESSAGES;
 
     public AutoTpAccept() {
-        super("Auto Accept", "Автоматически принимает запросы на телепорт.", Category.UTILS);
+        super("Auto Accept", "Автоматически принимает запросы на телепорт.", Category.MISC);
     }
 
     @Override

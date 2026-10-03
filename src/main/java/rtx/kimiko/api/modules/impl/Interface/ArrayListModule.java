@@ -30,9 +30,14 @@ extends InterfaceComponentModule {
 
     public ArrayListModule() {
         super("Array List", "Перемещаемый список включённых модулей.");
-        String[] stringArray = new String[]{Category.VISUALS.getDisplayName(), Category.DISPLAY.getDisplayName(), Category.UTILS.getDisplayName()};
+        String[] stringArray = new String[]{
+            Category.COMBAT.getDisplayName(),
+            Category.MOVEMENT.getDisplayName(),
+            Category.VISUALS.getDisplayName(),
+            Category.PLAYER.getDisplayName(),
+            Category.MISC.getDisplayName()
+        };
         MultiSelectSetting multiSelectSetting = new MultiSelectSetting("Категории", "Модули каких категорий показывать в списке.").value(stringArray);
-        stringArray = new String[]{Category.VISUALS.getDisplayName(), Category.UTILS.getDisplayName()};
         this.categories = (MultiSelectSetting)this.register((Setting)multiSelectSetting.selected(stringArray));
         this.categoryIconsSetting = (BooleanSetting)this.register((Setting)new BooleanSetting("Иконки категорий", "Показывать иконку категории рядом с каждым модулем списка.", false));
     }

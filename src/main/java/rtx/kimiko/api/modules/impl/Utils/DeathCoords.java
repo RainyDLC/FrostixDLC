@@ -35,7 +35,7 @@ import rtx.kimiko.api.modules.Module;
 public final class DeathCoords
 extends Module {
     public DeathCoords() {
-        super("Death Coords", "Выводит координаты смерти в чат.", Category.UTILS);
+        super("Death Coords", "Выводит координаты смерти в чат.", Category.MISC);
     }
 
     @EventHandler

@@ -78,6 +78,7 @@ import rtx.kimiko.api.events.EventHandler;
 import rtx.kimiko.api.events.impl.render.WorldRenderEvent;
 import rtx.kimiko.api.liteapi.Feature;
 import rtx.kimiko.api.modules.Category;
+import rtx.kimiko.api.modules.SubCategory;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.restrict.Server;
 import rtx.kimiko.api.modules.restrict.ServerRule;
@@ -134,7 +135,7 @@ extends Module {
     private static final boolean CLOUD_MODE;
 
     public TrowPearlHelper() {
-        super("Trow Pearl Helper", "Метка, куда целиться, чтобы попасть жемчугом почти в цель.", Category.UTILS);
+        super("Trow Pearl Helper", "Метка, куда целиться, чтобы попасть жемчугом почти в цель.", Category.COMBAT, SubCategory.UTILS);
     }
 
     @Override

@@ -49,6 +49,7 @@ import rtx.kimiko.api.lang.I18n;
 import rtx.kimiko.api.modules.Category;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.ModuleManager;
+import rtx.kimiko.api.modules.SubCategory;
 import rtx.kimiko.api.modules.impl.Interface.ClickGui;
 import rtx.kimiko.api.modules.impl.Interface.InterfaceModule;
 import rtx.kimiko.api.modules.restrict.Server;
@@ -182,10 +183,15 @@ public final class ModuleListRenderer {
 
     @NotNull
     public final List<Module> getModules(@Nullable Category cat) {
+        return this.getModules(cat, null);
+    }
+
+    @NotNull
+    public final List<Module> getModules(@Nullable Category cat, @Nullable SubCategory sub) {
         if (cat == null) {
             return CollectionsKt.emptyList();
         }
-        List<Module> all = this.moduleCache.computeIfAbsent(cat, c -> ModuleManager.Companion.get().getByCategory(c));
+        List<Module> all = ModuleManager.Companion.get().getByCategoryAndSub(cat, sub);
         EnumSet<Server> here = ServerRestrictions.current();
         ArrayList<Module> visible = new ArrayList<Module>(all.size());
         for (Module m : all) {
@@ -300,10 +306,14 @@ public final class ModuleListRenderer {
     }
 
     public final void beginFadeOut(@Nullable Category from) {
+        this.beginFadeOut(from, null);
+    }
+
+    public final void beginFadeOut(@Nullable Category from, @Nullable SubCategory fromSub) {
         if (from == null) {
             return;
         }
-        this.fadingOut = this.getModules(from);
+        this.fadingOut = this.getModules(from, fromSub);
         this.fadeOutTime = 0.15f;
         this.transitioning = true;
     }
@@ -1372,14 +1382,18 @@ public final class ModuleListRenderer {
         }
 
         private final char iconChar(Category c) {
-            return switch (WhenMappings.$EnumSwitchMapping$0[c.ordinal()]) {
-                case 1 -> 'p';
-                case 2 -> 'j';
-                case 3 -> 'r';
-                case 4 -> 'i';
-                case 5 -> 'w';
-                case 6 -> 'B';
-                default -> throw new NoWhenBranchMatchedException();
+            if (c == null) return ' ';
+            return switch (c) {
+                case COMBAT -> 'a';
+                case MOVEMENT -> 'f';
+                case VISUALS -> 'p';
+                case PLAYER -> 'u';
+                case MISC -> 'r';
+                case DISPLAY -> 'j';
+                case UTILS -> 'r';
+                case EVENTS -> 'i';
+                case CONFIGS -> 'w';
+                case THEMES -> 'B';
             };
         }
 

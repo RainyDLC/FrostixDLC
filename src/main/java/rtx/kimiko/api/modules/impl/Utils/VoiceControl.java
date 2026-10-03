@@ -59,7 +59,7 @@ extends Module {
     private static VoiceControl companionInstance;
 
     public VoiceControl() {
-        super("Voice Control", "Голосовые бинды: скажи ключевое слово и название модуля.", Category.UTILS);
+        super("Voice Control", "Голосовые бинды: скажи ключевое слово и название модуля.", Category.MISC);
         companionInstance = this;
     }
 

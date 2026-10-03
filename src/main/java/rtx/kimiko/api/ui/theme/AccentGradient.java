@@ -136,17 +136,20 @@ public final class AccentGradient {
 
     @JvmStatic
     public static final float categoryListIndexT(@NotNull Category cat) {
-        Intrinsics.checkNotNullParameter((Object)((Object)cat), (String)"cat");
-        int idx = switch (WhenMappings.$EnumSwitchMapping$0[cat.ordinal()]) {
-            case 1 -> 0;
-            case 2 -> 1;
-            case 3 -> 2;
-            case 4 -> 4;
-            case 5 -> 3;
-            case 6 -> 5;
-            default -> throw new NoWhenBranchMatchedException();
+        Intrinsics.checkNotNullParameter((Object)((Object)cat), "cat");
+        int idx = switch (cat) {
+            case COMBAT -> 0;
+            case MOVEMENT -> 1;
+            case VISUALS -> 2;
+            case PLAYER -> 3;
+            case MISC -> 4;
+            case DISPLAY -> 2;
+            case UTILS -> 4;
+            case CONFIGS -> 5;
+            case THEMES -> 6;
+            case EVENTS -> 3;
         };
-        return (float)idx / 5.0f;
+        return (float)idx / 6.0f;
     }
 
     @Metadata(mv={2, 4, 0}, k=3, xi=48)

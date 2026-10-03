@@ -257,6 +257,20 @@ public final class ModuleManager {
     }
 
     @NotNull
+    public final List<Module> getByCategoryAndSub(@NotNull Category category, @Nullable SubCategory subCategory) {
+        Intrinsics.checkNotNullParameter((Object)category, "category");
+        List<Module> result = new ArrayList<>();
+        for (Module m : this.modules) {
+            if (m.getCategory() == category) {
+                if (subCategory == null || m.getSubCategory() == subCategory) {
+                    result.add(m);
+                }
+            }
+        }
+        return result;
+    }
+
+    @NotNull
     public final List<Module> getEnabled() {
         if (this.enabledDirty) {
             List<Module> result = new ArrayList<>();

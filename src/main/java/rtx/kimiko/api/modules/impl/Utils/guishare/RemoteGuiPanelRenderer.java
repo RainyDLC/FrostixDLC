@@ -2859,14 +2859,18 @@ public final class RemoteGuiPanelRenderer {
     }
 
     private final char iconChar(Category category) {
-        return switch (WhenMappings.$EnumSwitchMapping$0[category.ordinal()]) {
-            case 1 -> 'p';
-            case 2 -> 'j';
-            case 3 -> 'r';
-            case 4 -> 'i';
-            case 5 -> 'w';
-            case 6 -> 'B';
-            default -> throw new NoWhenBranchMatchedException();
+        if (category == null) return ' ';
+        return switch (category) {
+            case COMBAT -> 'a';
+            case MOVEMENT -> 'f';
+            case VISUALS -> 'p';
+            case PLAYER -> 'u';
+            case MISC -> 'r';
+            case DISPLAY -> 'j';
+            case UTILS -> 'r';
+            case EVENTS -> 'i';
+            case CONFIGS -> 'w';
+            case THEMES -> 'B';
         };
     }
 
@@ -3010,7 +3014,7 @@ public final class RemoteGuiPanelRenderer {
         CFG_ACTION_ICON_SIZE = new float[]{6.5f, 6.5f, 7.0f};
         CFG_ACTION_ICON_X = new float[]{0.0f, 0.5f, 1.0f};
         CFG_ACTION_ICON_Y = new float[]{0.5f, 0.0f, 0.0f};
-        MAIN_CATEGORIES = new Category[]{Category.VISUALS, Category.DISPLAY, Category.UTILS};
+        MAIN_CATEGORIES = new Category[]{Category.COMBAT, Category.MOVEMENT, Category.VISUALS, Category.PLAYER, Category.MISC};
         OTHER_CATEGORIES = new Category[]{Category.CONFIGS, Category.THEMES};
         EVENT_SUBS = new String[]{"Events", "Mines"};
         EVENT_SUB_ICONS = new String[]{"b", "m"};

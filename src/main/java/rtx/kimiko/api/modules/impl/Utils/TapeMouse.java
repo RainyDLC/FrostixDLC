@@ -23,6 +23,7 @@ import rtx.kimiko.api.events.EventHandler;
 import rtx.kimiko.api.events.impl.render.HudRenderEvent;
 import rtx.kimiko.api.liteapi.Feature;
 import rtx.kimiko.api.modules.Category;
+import rtx.kimiko.api.modules.SubCategory;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.settings.Setting;
 import rtx.kimiko.api.modules.settings.impl.ModeSetting;
@@ -50,7 +51,7 @@ extends Module {
     private static final String RIGHT = "ПКМ";
 
     public TapeMouse() {
-        super("Tape Mouse", "Автокликер выбранной кнопкой мыши с настраиваемой скоростью.", Category.UTILS);
+        super("Tape Mouse", "Автокликер выбранной кнопкой мыши с настраиваемой скоростью.", Category.COMBAT, SubCategory.PVP);
         String[] stringArray = new String[]{LEFT, RIGHT};
         this.button = (ModeSetting)this.register((Setting)new ModeSetting("Кнопка", "Какую кнопку мыши автоматически кликать.", LEFT, stringArray));
         this.cps = (SliderSetting)this.register((Setting)new SliderSetting("Скорость", "Кликов в секунду (CPS).").setValue(10.0f).range(1, 20).increment(1));

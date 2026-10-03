@@ -32,6 +32,7 @@ import rtx.kimiko.api.events.EventHandler;
 import rtx.kimiko.api.events.impl.player.AttackEntityEvent;
 import rtx.kimiko.api.liteapi.Feature;
 import rtx.kimiko.api.modules.Category;
+import rtx.kimiko.api.modules.SubCategory;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.settings.Setting;
 import rtx.kimiko.api.modules.settings.impl.ButtonSetting;
@@ -74,7 +75,7 @@ extends Module {
     private static final long RESCAN_INTERVAL_MS = 1200L;
 
     public HitSound() {
-        super("Hit Sound", "Проигрывает звук при попадании.", Category.UTILS);
+        super("Hit Sound", "Проигрывает звук при попадании.", Category.COMBAT, SubCategory.UTILS);
         String[] stringArray = new String[]{"Стоны", "Металл", "Криминал", "Кастомный"};
         this.soundType = (ModeSetting)this.register((Setting)new ModeSetting("Звук", "Тип звука попадания.", "Стоны", stringArray));
         this.volume = (NumberSetting)this.register((Setting)new NumberSetting("Громкость", "Громкость звука.", 1.0, 0.1, 2.0, 0.1));

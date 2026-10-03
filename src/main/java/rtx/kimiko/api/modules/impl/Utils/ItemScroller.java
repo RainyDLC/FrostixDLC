@@ -59,7 +59,7 @@ extends Module {
     private final SliderSetting scrollDelay = (SliderSetting)this.register((Setting)new SliderSetting("Задержка прокрутки", "Задержка между кликами прокрутки предметов.").range(0, 200).increment(1).setValue(50.0f));
 
     public ItemScroller() {
-        super("Item Scroller", "Прокручивает подходящие предметы в инвентаре с клавишами-модификаторами.", Category.UTILS);
+        super("Item Scroller", "Прокручивает подходящие предметы в инвентаре с клавишами-модификаторами.", Category.PLAYER);
     }
 
     @EventHandler

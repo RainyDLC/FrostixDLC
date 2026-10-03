@@ -63,7 +63,7 @@ extends Module {
     private static final int RESELL_SLOT = 52;
 
     public AutoResell() {
-        super("Auto Resell", "Перевыставляет предметы на аукционе.", Category.UTILS);
+        super("Auto Resell", "Перевыставляет предметы на аукционе.", Category.MISC);
         String[] stringArray = new String[]{"Команда", "Аукцион"};
         this.mode = (ModeSetting)this.register((Setting)new ModeSetting("Режим", "Способ перевыставления.", "Команда", stringArray));
         this.cycleTimer = new StopWatch();

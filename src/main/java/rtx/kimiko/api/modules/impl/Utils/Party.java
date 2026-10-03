@@ -215,7 +215,7 @@ extends Module {
     private static final int DEFAULT_MARKER_COLOR = -14628609;
 
     public Party() {
-        super("Party", "Метки для участников Party. Нажмите бинд, чтобы поставить ping.", Category.UTILS);
+        super("Party", "Метки для участников Party. Нажмите бинд, чтобы поставить ping.", Category.MISC);
         String[] stringArray = new String[]{COLOR_RAINBOW, COLOR_CLIENT, COLOR_CUSTOM};
         this.colorMode = (ModeSetting)this.register((Setting)new ModeSetting("Режим цвета", "Цвет метки.", COLOR_RAINBOW, stringArray));
         this.customColor = (ColorSetting)this.register((Setting)new ColorSetting("Цвет", "Свой цвет метки.", new Color(0, 200, 255, 255)).visibleWhen(() -> Party.customColor$lambda$0(this)));

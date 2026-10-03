@@ -34,6 +34,7 @@ import rtx.kimiko.api.events.impl.player.TotemPopEvent;
 import rtx.kimiko.api.lang.I18n;
 import rtx.kimiko.api.liteapi.Feature;
 import rtx.kimiko.api.modules.Category;
+import rtx.kimiko.api.modules.SubCategory;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.settings.Setting;
 import rtx.kimiko.api.modules.settings.impl.BooleanSetting;
@@ -59,7 +60,7 @@ extends Module {
     private static final HashMap<Integer, Long> LAST_POP_MESSAGES = new HashMap();
 
     public TalTracker() {
-        super("Tal Tracker", "Сообщает в чат когда у противника лопается тотем и был ли он зачарован.", Category.UTILS);
+        super("Tal Tracker", "Сообщает в чат когда у противника лопается тотем и был ли он зачарован.", Category.COMBAT, SubCategory.UTILS);
         Setting[] settingArray = new Setting[]{this.onlyTarget, this.memory, this.showSelf};
         this.register(settingArray);
     }

@@ -35,6 +35,7 @@ import rtx.kimiko.api.events.impl.game.TickEvent;
 import rtx.kimiko.api.lang.I18n;
 import rtx.kimiko.api.liteapi.Feature;
 import rtx.kimiko.api.modules.Category;
+import rtx.kimiko.api.modules.SubCategory;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.restrict.Server;
 import rtx.kimiko.api.modules.restrict.ServerRule;
@@ -63,7 +64,7 @@ extends Module {
     private static final long COOLDOWN_MS = 200L;
 
     public ClickPearl() {
-        super("Click Pearl", "Бросает эндер-жемчуг из хотбара по нажатию клавиши.", Category.UTILS);
+        super("Click Pearl", "Бросает эндер-жемчуг из хотбара по нажатию клавиши.", Category.COMBAT, SubCategory.PVP);
     }
 
     @Override

@@ -44,6 +44,7 @@ import rtx.kimiko.api.events.impl.game.TickEvent;
 import rtx.kimiko.api.lang.I18n;
 import rtx.kimiko.api.liteapi.Feature;
 import rtx.kimiko.api.modules.Category;
+import rtx.kimiko.api.modules.SubCategory;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.restrict.Server;
 import rtx.kimiko.api.modules.restrict.ServerRule;
@@ -80,7 +81,7 @@ extends Module {
     private static final long POST_SWAP_STOP_MS = 60L;
 
     public AutoSwap() {
-        super("Auto Swap", "Свапает боевой предмет в оффхенд по бинду одним кликом, без открытия инвентаря.", Category.UTILS);
+        super("Auto Swap", "Свапает боевой предмет в оффхенд по бинду одним кликом, без открытия инвентаря.", Category.COMBAT, SubCategory.PVP);
         String[] stringArray = new String[]{TOTEM, SPHERE};
         this.firstItem = (SelectSetting)this.register((Setting)new SelectSetting("Основной предмет", "Выберите первый предмет для обмена.").value(stringArray).selected(TOTEM));
         stringArray = new String[]{TOTEM, SPHERE};

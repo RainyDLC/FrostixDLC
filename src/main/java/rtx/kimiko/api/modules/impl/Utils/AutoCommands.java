@@ -59,7 +59,7 @@ extends Module {
     private static final long STAGGER_MS = 10000L;
 
     public AutoCommands() {
-        super("Auto Commands", "Автоматически отправляет выбранные команды по кулдауну, по очереди.", Category.UTILS);
+        super("Auto Commands", "Автоматически отправляет выбранные команды по кулдауну, по очереди.", Category.MISC);
         String[] stringArray = new String[]{FIX_ALL, HEAL};
         MultiSelectSetting multiSelectSetting = new MultiSelectSetting("Команды", "Какие команды отправлять автоматически.").value(stringArray);
         stringArray = new String[]{FIX_ALL, HEAL};

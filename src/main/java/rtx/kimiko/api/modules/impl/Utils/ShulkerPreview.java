@@ -62,7 +62,7 @@ extends Module {
     private static final float OVERLAY_H = 70.0f;
 
     public ShulkerPreview() {
-        super("Shulker Preview", "Показывает содержимое шалкера. SHIFT — заглянуть, CTRL — закрепить.", Category.UTILS);
+        super("Shulker Preview", "Показывает содержимое шалкера. SHIFT — заглянуть, CTRL — закрепить.", Category.PLAYER);
     }
 
     @Override

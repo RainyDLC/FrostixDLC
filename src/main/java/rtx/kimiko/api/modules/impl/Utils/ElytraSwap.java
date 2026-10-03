@@ -59,7 +59,7 @@ extends Module {
     private static final long CLOSE_DELAY_MS = 70L;
 
     public ElytraSwap() {
-        super("Elytra Swap", "Легитный свап элитры на нагрудник через открытие инвентаря.", Category.UTILS);
+        super("Elytra Swap", "Легитный свап элитры на нагрудник через открытие инвентаря.", Category.MOVEMENT);
     }
 
     @Override

@@ -107,7 +107,7 @@ extends Module {
     private static ClientSounds companionInstance;
 
     public ClientSounds() {
-        super("Client Sounds", "Звуки клиента для действий модулей и меню.", Category.UTILS);
+        super("Client Sounds", "Звуки клиента для действий модулей и меню.", Category.MISC);
         String[] stringArray = new String[]{"Основной"};
         this.soundType = (ModeSetting)this.register((Setting)new ModeSetting("Тип звука", "Тип звука клиента.", "Основной", stringArray));
         this.volume = (NumberSetting)this.register((Setting)new NumberSetting("Громкость", "Громкость звуков вкл/выкл модулей.", 1.0, 0.0, 1.0, 0.05));

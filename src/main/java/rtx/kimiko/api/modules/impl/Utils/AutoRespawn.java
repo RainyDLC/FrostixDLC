@@ -30,7 +30,7 @@ extends Module {
     public final SelectSetting mode;
 
     public AutoRespawn() {
-        super("Auto Respawn", "Автоматически возрождает после смерти.", Category.UTILS);
+        super("Auto Respawn", "Автоматически возрождает после смерти.", Category.PLAYER);
         String[] stringArray = new String[]{"Стандарт"};
         this.mode = new SelectSetting("Режим", "Режим возрождения.").value(stringArray);
         this.register((Setting)this.mode);

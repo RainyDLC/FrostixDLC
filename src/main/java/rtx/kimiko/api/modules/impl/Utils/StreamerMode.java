@@ -100,7 +100,7 @@ extends Module {
     private static StreamerMode companionInstance;
 
     public StreamerMode() {
-        super("Streamer Mode", "Скрывает ваш ник, ники друзей/пати и координаты в отображаемом тексте.", Category.UTILS);
+        super("Streamer Mode", "Скрывает ваш ник, ники друзей/пати и координаты в отображаемом тексте.", Category.MISC);
         String[] targets = new String[]{HIDE_SELF, HIDE_FRIENDS, HIDE_PARTY};
         this.hideWho = new MultiModeSetting("Кого скрывать", "Какие имена маскировать", targets, targets);
         this.replaceName = new TextSetting("Заменять имена на", "Текст для подмены скрываемых имён").setPlaceholder("Protected").lengthBounds(0, 32).visible(() -> StreamerMode.replaceName$lambda$0(this));

@@ -59,7 +59,7 @@ extends Module {
     private static Optimization companionInstance;
 
     public Optimization() {
-        super("Optimization", "Поднимает FPS: куллинг сущностей, частиц и тайлов, дистанция, облака.", Category.UTILS);
+        super("Optimization", "Поднимает FPS: куллинг сущностей, частиц и тайлов, дистанция, облака.", Category.MISC);
         String[] stringArray = new String[]{"Низкий", "Средний", "Ультра"};
         this.mode = (ModeSetting)this.register((Setting)new ModeSetting("Режим", "Агрессивность оптимизации.", "Средний", stringArray));
         this.entityCulling = (BooleanSetting)this.register((Setting)new BooleanSetting("Куллинг сущностей", "Не рендерить сущностей, полностью скрытых за блоками.", true));

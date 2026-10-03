@@ -74,7 +74,7 @@ extends Module {
     private static CameraSettings companionInstance;
 
     public CameraSettings() {
-        super("Camera Settings", "Плавный зум камеры и плавное переключение F5.", Category.UTILS);
+        super("Camera Settings", "Плавный зум камеры и плавное переключение F5.", Category.PLAYER);
         companionInstance = this;
         try {
             this.zoomAnim.setMs(180L);

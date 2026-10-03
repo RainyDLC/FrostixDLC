@@ -470,16 +470,18 @@ Map $this$getOrPut$iv = this.rowAnimations;
         }
 
         private final String iconGlyph(Category category) {
-            Category category2 = category;
-            return switch (category2 == null ? -1 : WhenMappings.$EnumSwitchMapping$0[category2.ordinal()]) {
-                case 1 -> "p";
-                case 2 -> "j";
-                case 3 -> "r";
-                case 4 -> "i";
-                case 5 -> "w";
-                case 6 -> "B";
-                case -1 -> null;
-                default -> throw new NoWhenBranchMatchedException();
+            if (category == null) return null;
+            return switch (category) {
+                case COMBAT -> "a";
+                case MOVEMENT -> "f";
+                case VISUALS -> "p";
+                case PLAYER -> "u";
+                case MISC -> "r";
+                case DISPLAY -> "j";
+                case UTILS -> "r";
+                case EVENTS -> "i";
+                case CONFIGS -> "w";
+                case THEMES -> "B";
             };
         }
 

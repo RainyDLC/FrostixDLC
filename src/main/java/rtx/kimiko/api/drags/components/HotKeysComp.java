@@ -110,14 +110,18 @@ extends ListHudComp {
         }
 
         private final char iconChar(Category category) {
-            return switch (WhenMappings.$EnumSwitchMapping$0[category.ordinal()]) {
-                case 1 -> 'p';
-                case 2 -> 'j';
-                case 3 -> 'r';
-                case 4 -> 'i';
-                case 5 -> 'w';
-                case 6 -> 'B';
-                default -> throw new NoWhenBranchMatchedException();
+            if (category == null) return ' ';
+            return switch (category) {
+                case COMBAT -> 'a';
+                case MOVEMENT -> 'f';
+                case VISUALS -> 'p';
+                case PLAYER -> 'u';
+                case MISC -> 'r';
+                case DISPLAY -> 'j';
+                case UTILS -> 'r';
+                case EVENTS -> 'i';
+                case CONFIGS -> 'w';
+                case THEMES -> 'B';
             };
         }
 

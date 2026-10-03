@@ -76,6 +76,7 @@ import rtx.kimiko.api.events.EventHandler;
 import rtx.kimiko.api.events.impl.input.MouseButtonEvent;
 import rtx.kimiko.api.lang.I18n;
 import rtx.kimiko.api.modules.Category;
+import rtx.kimiko.api.modules.SubCategory;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.ModuleManager;
 import rtx.kimiko.api.modules.impl.Interface.ClickGui;
@@ -141,12 +142,22 @@ implements GuiCapture.Source {
     private Category targetCategory;
     @Nullable
     private Category contentCategory;
+    @Nullable
+    private SubCategory targetSubCategory;
+    @Nullable
+    private SubCategory contentSubCategory;
     @NotNull
     private String oldSubText;
     @NotNull
     private String newSubText;
     @NotNull
     private final Map<Category, Decelerate> categoryAnims;
+    @NotNull
+    private final Map<Category, Decelerate> subExpandAnims;
+    @NotNull
+    private final Map<SubCategory, Decelerate> subCategoryAnims;
+    private float sidebarScroll;
+    private float sidebarScrollTarget;
     @NotNull
     private final Decelerate subTextAnim;
     @NotNull
@@ -273,6 +284,8 @@ implements GuiCapture.Source {
         this.oldSubText = "";
         this.newSubText = "";
         this.categoryAnims = new EnumMap(Category.class);
+        this.subExpandAnims = new EnumMap(Category.class);
+        this.subCategoryAnims = new EnumMap(SubCategory.class);
         this.subTextAnim = UI.Companion.createAnim(300);
         this.modulesHeaderAnim = UI.Companion.createAnim(200);
         this.eventsHeaderAnim = UI.Companion.createAnim(200);
@@ -420,8 +433,52 @@ implements GuiCapture.Source {
         }
     }
 
+    private static final class SubCategoryTarget {
+        @NotNull
+        final Category category;
+        @NotNull
+        final SubCategory subCategory;
+
+        SubCategoryTarget(@NotNull Category category, @NotNull SubCategory subCategory) {
+            this.category = category;
+            this.subCategory = subCategory;
+        }
+    }
+
     private final Decelerate getCategoryAnim(Category category) {
         return this.categoryAnims.computeIfAbsent(category, it -> UI.Companion.createAnim(200));
+    }
+
+    private final Decelerate getSubExpandAnim(Category category) {
+        return this.subExpandAnims.computeIfAbsent(category, it -> UI.Companion.createAnim(220));
+    }
+
+    private final Decelerate getSubCategoryAnim(SubCategory sub) {
+        return this.subCategoryAnims.computeIfAbsent(sub, it -> UI.Companion.createAnim(200));
+    }
+
+    private final float getSidebarContentHeight() {
+        float totalH = 24.0f;
+        for (Category cat : MAIN_CATEGORIES) {
+            totalH += 18.0f;
+            if (cat.hasSubCategories()) {
+                Double d = this.getSubExpandAnim(cat).getOutput();
+                float expandT = (float)(d != null ? d : 0.0);
+                if (expandT > 0.001f) {
+                    totalH += (float)cat.getSubCategories().length * 16.0f * expandT;
+                }
+            }
+        }
+        totalH += 3.0f + 24.0f;
+        totalH += (float)EVENT_SUBS.length * 18.0f;
+        totalH += 3.0f + 24.0f;
+        for (Category cat : OTHER_CATEGORIES) {
+            float rowT = cat == Category.THEMES ? this.themesRowT : 1.0f;
+            if (rowT > 0.01f) {
+                totalH += 18.0f * rowT;
+            }
+        }
+        return totalH;
     }
 
     public final void profileSelectCategory(@NotNull Category category) {
@@ -432,7 +489,7 @@ implements GuiCapture.Source {
     private final void selectCategory(Category category) {
         Category target;
         Category category2 = target = category == this.targetCategory ? null : category;
-        if (target == this.targetCategory) {
+        if (target == this.targetCategory && this.targetSubCategory == null) {
             return;
         }
         this.search.setText("");
@@ -440,6 +497,7 @@ implements GuiCapture.Source {
         this.headerButtons.close();
         this.settingsPopup.close();
         this.targetCategory = target;
+        this.targetSubCategory = null;
         this.oldSubText = this.newSubText;
         this.newSubText = target != null && target.getDisplayName() != null ? target.getDisplayName() : I18n.tr("Не выбрано");
         this.subTextAnim.setDirection(Direction.FORWARDS);
@@ -447,6 +505,10 @@ implements GuiCapture.Source {
         this.subTextAnimDone = false;
         for (Category cat : Category.values()) {
             this.getCategoryAnim(cat).setDirection(cat == target ? Direction.FORWARDS : Direction.BACKWARDS);
+            this.getSubExpandAnim(cat).setDirection(cat == target && cat.hasSubCategories() ? Direction.FORWARDS : Direction.BACKWARDS);
+        }
+        for (SubCategory sub : SubCategory.values()) {
+            this.getSubCategoryAnim(sub).setDirection(Direction.BACKWARDS);
         }
         this.modulesHeaderAnim.setDirection(UI.Companion.isMainCategory(target) || target == Category.CONFIGS ? Direction.FORWARDS : Direction.BACKWARDS);
         this.eventsHeaderAnim.setDirection(target == Category.EVENTS ? Direction.FORWARDS : Direction.BACKWARDS);
@@ -456,6 +518,66 @@ implements GuiCapture.Source {
             this.placeholderAnim.counter.resetCounter();
         } else {
             this.placeholderAnim.setDirection(Direction.BACKWARDS);
+        }
+    }
+
+    private final void selectSubCategory(@NotNull Category category, @Nullable SubCategory subCategory) {
+        if (subCategory == null) {
+            this.search.setText("");
+            this.search.blur();
+            this.headerButtons.close();
+            this.settingsPopup.close();
+            this.targetCategory = category;
+            this.targetSubCategory = null;
+            this.oldSubText = this.newSubText;
+            this.newSubText = category.getDisplayName();
+            this.subTextAnim.setDirection(Direction.FORWARDS);
+            this.subTextAnim.counter.resetCounter();
+            this.subTextAnimDone = false;
+            for (Category cat : Category.values()) {
+                this.getCategoryAnim(cat).setDirection(cat == category ? Direction.FORWARDS : Direction.BACKWARDS);
+                this.getSubExpandAnim(cat).setDirection(cat == category && cat.hasSubCategories() ? Direction.FORWARDS : Direction.BACKWARDS);
+            }
+            for (SubCategory sub : SubCategory.values()) {
+                this.getSubCategoryAnim(sub).setDirection(Direction.BACKWARDS);
+            }
+            this.modulesHeaderAnim.setDirection(Direction.FORWARDS);
+            this.eventsHeaderAnim.setDirection(Direction.BACKWARDS);
+            this.clientHeaderAnim.setDirection(Direction.BACKWARDS);
+            this.placeholderAnim.setDirection(Direction.BACKWARDS);
+            if (this.contentCategory == category && this.contentSubCategory != null) {
+                this.moduleList.beginFadeOut(category, this.contentSubCategory);
+                this.contentSubCategory = null;
+                this.categoryT = 0.0f;
+            }
+            return;
+        }
+        this.search.setText("");
+        this.search.blur();
+        this.headerButtons.close();
+        this.settingsPopup.close();
+        this.targetCategory = category;
+        this.targetSubCategory = subCategory;
+        this.oldSubText = this.newSubText;
+        this.newSubText = category.getDisplayName() + " / " + subCategory.getDisplayName();
+        this.subTextAnim.setDirection(Direction.FORWARDS);
+        this.subTextAnim.counter.resetCounter();
+        this.subTextAnimDone = false;
+        for (Category cat : Category.values()) {
+            this.getCategoryAnim(cat).setDirection(cat == category ? Direction.FORWARDS : Direction.BACKWARDS);
+            this.getSubExpandAnim(cat).setDirection(cat == category && cat.hasSubCategories() ? Direction.FORWARDS : Direction.BACKWARDS);
+        }
+        for (SubCategory sub : SubCategory.values()) {
+            this.getSubCategoryAnim(sub).setDirection(sub == subCategory ? Direction.FORWARDS : Direction.BACKWARDS);
+        }
+        this.modulesHeaderAnim.setDirection(Direction.FORWARDS);
+        this.eventsHeaderAnim.setDirection(Direction.BACKWARDS);
+        this.clientHeaderAnim.setDirection(Direction.BACKWARDS);
+        this.placeholderAnim.setDirection(Direction.BACKWARDS);
+        if (this.contentCategory == category && this.contentSubCategory != subCategory) {
+            this.moduleList.beginFadeOut(category, this.contentSubCategory);
+            this.contentSubCategory = subCategory;
+            this.categoryT = 0.0f;
         }
     }
 
@@ -482,13 +604,14 @@ implements GuiCapture.Source {
         }
     }
 
-    private final void swapContentCategory(Category next) {
+    private final void swapContentCategory(Category next, @Nullable SubCategory nextSub) {
         boolean nextHasHeader;
         this.moduleList.finishTransition();
         this.themesRenderer.finishTransition();
         this.eventsRenderer.finishTransition();
         Category previous = this.contentCategory;
         this.contentCategory = next;
+        this.contentSubCategory = nextSub;
         boolean headerSwap = previous == Category.CONFIGS && UI.Companion.isMainCategory(next) || UI.Companion.isMainCategory(previous) && next == Category.CONFIGS;
         boolean bl = nextHasHeader = next == Category.CONFIGS || UI.Companion.isMainCategory(next);
         if (!headerSwap && nextHasHeader) {
@@ -515,20 +638,20 @@ implements GuiCapture.Source {
     }
 
     private final void updateCategoryCrossfade(float dt) {
-        if (this.targetCategory == this.contentCategory) {
+        if (this.targetCategory == this.contentCategory && this.targetSubCategory == this.contentSubCategory) {
             if (this.contentCategory != null && this.categoryT < 1.0f) {
                 this.categoryT = Math.min(1.0f, this.categoryT + dt / 0.15f);
             }
             return;
         }
         if (this.contentCategory == null) {
-            this.swapContentCategory(this.targetCategory);
+            this.swapContentCategory(this.targetCategory, this.targetSubCategory);
             this.categoryT = 0.0f;
         } else {
             this.categoryT = Math.max(0.0f, this.categoryT - dt / 0.15f);
             if (this.categoryT <= 0.0f) {
                 this.categoryT = 0.0f;
-                this.swapContentCategory(this.targetCategory);
+                this.swapContentCategory(this.targetCategory, this.targetSubCategory);
             }
         }
     }
@@ -655,7 +778,7 @@ implements GuiCapture.Source {
         InterfaceModule ifaceModule = InterfaceModule.Companion.getInstance();
         float themesTarget = ifaceModule == null || ifaceModule.isThemeClientColor() ? 1.0f : 0.0f;
         this.themesRowT += (themesTarget - this.themesRowT) * (1.0f - (float)Math.exp(-frameDt * 10.0f));
-        this.renderCategoryPanel(graphics, x, y, h, screenAlpha);
+        this.renderCategoryPanel(graphics, x, y, h, screenAlpha, frameDt);
         this.updateCategoryCrossfade(frameDt);
         this.updateEventsSubAnim(frameDt);
         float catAlpha = screenAlpha * this.categoryT;
@@ -817,7 +940,7 @@ implements GuiCapture.Source {
         Intrinsics.checkNotNullExpressionValue((Object)string2, (String)"toLowerCase(...)");
         String q = string2;
         if (((CharSequence)q).length() == 0) {
-            return this.moduleList.getModules(cat);
+            return this.moduleList.getModules(cat, this.contentSubCategory);
         }
         String norm = UI.Companion.layoutNormalize(q);
         String qCompact = String.valueOf(q).replace(" ", "");
@@ -843,7 +966,7 @@ implements GuiCapture.Source {
         float panelH = ModuleListRenderer.HEADER_OFFSET - 4.0f;
         float fieldY = areaY + (panelH - fieldH) * 0.5f;
 
-        // Breadcrumbs on left: Client / <Icon> <Category> ★
+        // Breadcrumbs on left: Client / <Icon> <Category> / <SubIcon> <SubCategory> ★
         float breadcrumbX = areaX + 4.0f;
         float breadcrumbY = areaY + panelH * 0.5f - 3.2f;
 
@@ -870,6 +993,21 @@ implements GuiCapture.Source {
             Fonts.MEDIUM.draw(cat.getDisplayName(), breadcrumbX, breadcrumbY, 6.2f, UI.Companion.color(255, 255, 255, 245, alpha));
             float catNameW = Fonts.MEDIUM.width(cat.getDisplayName(), 6.2f);
             breadcrumbX += catNameW + 6.0f;
+
+            if (this.contentSubCategory != null) {
+                Fonts.REGULAR.draw("/", breadcrumbX, breadcrumbY, 6.2f, UI.Companion.color(255, 255, 255, 60, alpha));
+                float slashSubW = Fonts.REGULAR.width("/", 6.2f);
+                breadcrumbX += slashSubW + 5.0f;
+
+                String subIcon = String.valueOf(this.contentSubCategory.getIconChar());
+                float subIconW = Fonts.KIMIKO.msdfWidth(subIcon, 6.2f);
+                AccentGradient.msdfIcon(Fonts.KIMIKO, subIcon, breadcrumbX, breadcrumbY + 0.5f, 6.2f, 255.0f * alpha, 0.5f);
+                breadcrumbX += subIconW + 4.0f;
+
+                Fonts.MEDIUM.draw(this.contentSubCategory.getDisplayName(), breadcrumbX, breadcrumbY, 6.2f, UI.Companion.color(255, 255, 255, 245, alpha));
+                float subNameW = Fonts.MEDIUM.width(this.contentSubCategory.getDisplayName(), 6.2f);
+                breadcrumbX += subNameW + 6.0f;
+            }
 
             // Star
             Fonts.MEDIUM.draw("★", breadcrumbX, breadcrumbY - 0.5f, 5.8f, UI.Companion.color(255, 255, 255, 110, alpha));
@@ -909,7 +1047,7 @@ implements GuiCapture.Source {
         Fonts.MEDIUM.draw(msg, areaX + (areaW - mw) * 0.5f, listTop + listH * 0.5f - 3.0f, size, UI.Companion.color(255, 255, 255, 110, alpha));
     }
 
-    private final void renderCategoryPanel(DrawContext graphics, float x, float y, float h, float alpha) {
+    private final void renderCategoryPanel(DrawContext graphics, float x, float y, float h, float alpha, float frameDt) {
         float panelX = x;
         float panelW = 110.0f;
         float left = panelX + 11.0f;
@@ -926,117 +1064,150 @@ implements GuiCapture.Source {
         float brandStartX = panelX + (panelW - (bIconW + brandGap + brandTextW)) * 0.5f;
         LogoToy.renderSocket(graphics, brandStartX, brandCY - bIconSize * 0.5f + 0.5f, bIconSize, alpha);
         Fonts.MANASCO.msdf(MainWindow.CLIENT_NAME_UPPER, brandStartX + bIconW + brandGap, brandCY - brandSize * 0.5f + 0.5f, brandSize, UI.Companion.color(255, 255, 255, 255, alpha));
-        float headerTop = y + 34.0f;
-        float hcY = headerTop + 10.0f;
-        Double d = this.modulesHeaderAnim.getOutput();
-        float modulesAnim = (float)(d != null ? d : 0.0);
-        if (modulesAnim > 0.004f) {
-            Render2D.rect(panelX + 4.0f, headerTop + 4.5f, panelW - 8.0f, 13.333333f, 5.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)16 * modulesAnim)), alpha));
-        }
-        String mIcon = "h";
-        float mIconW = Fonts.KIMIKO.msdfWidth(mIcon, 8.0f);
-        AccentGradient.msdfIcon(Fonts.KIMIKO, mIcon, left, hcY - 4.0f + 1.5f, 8.0f, (200.0f + 55.0f * modulesAnim) * alpha, 0.15f);
-        Fonts.MEDIUM.draw("Modules", left + mIconW + 6.0f, hcY - 4.0f + 0.5f, 8.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)215 + (float)40 * modulesAnim)), alpha));
-        float subStartY = headerTop + 20.0f + 4.0f;
-        float lineX = left + 3.0f;
-        float subIconX = lineX + 9.0f;
-        float firstC = subStartY + 9.0f;
-        float lastC = subStartY + (float)(MAIN_CATEGORIES.length - 1) * 18.0f + 9.0f;
-        float rowLift = 2.0f;
-        int n = MAIN_CATEGORIES.length;
-        for (int i = 0; i < n; ++i) {
-            Category cat = MAIN_CATEGORIES[i];
-            float rowTop = subStartY + (float)i * 18.0f;
-            float cy = rowTop + 9.0f;
-            Double d2 = this.getCategoryAnim(cat).getOutput();
-            float p = (float)(d2 != null ? d2 : 0.0);
-            int a = Math.min(255, 140 + MathKt.roundToInt((float)(p * (float)115)));
-            int col = UI.Companion.color(255, 255, 255, a, alpha);
-            String icon = String.valueOf(UI.Companion.iconChar(cat));
-            float iconW = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
-            float indexT = catCount > 1 ? (float)i / (float)(catCount - 1) : 0.5f;
-            AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, indexT);
-            Fonts.MEDIUM.draw(cat.getDisplayName(), subIconX + iconW + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
-            String count = String.valueOf(this.moduleList.getModules(cat).size());
-            float countW = Fonts.MEDIUM.width(count, 5.5f);
-            Fonts.MEDIUM.draw(count, panelX + panelW - 10.0f - countW, cy - 2.75f + 0.5f - rowLift, 5.5f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)80 + (float)80 * p)), alpha));
-        }
-        float eventsHeaderTop = subStartY + (float)MAIN_CATEGORIES.length * 18.0f + 3.0f;
-        float ehcY = eventsHeaderTop + 10.0f;
-        Double d3 = this.eventsHeaderAnim.getOutput();
-        float eventsAnim = (float)(d3 != null ? d3 : 0.0);
-        if (eventsAnim > 0.004f) {
-            Render2D.rect(panelX + 4.0f, eventsHeaderTop + 4.5f, panelW - 8.0f, 13.333333f, 5.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)16 * eventsAnim)), alpha));
-        }
-        String eIcon = "e";
-        float eIconW = Fonts.KIMIKO.msdfWidth(eIcon, 8.0f);
-        AccentGradient.msdfIcon(Fonts.KIMIKO, eIcon, left, ehcY - 4.0f + 1.5f, 8.0f, (200.0f + 55.0f * eventsAnim) * alpha, 0.6f);
-        Fonts.MEDIUM.draw("Server", left + eIconW + 6.0f, ehcY - 4.0f + 0.5f, 8.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)215 + (float)40 * eventsAnim)), alpha));
-        float eSubStartY = eventsHeaderTop + 20.0f + 4.0f;
-        float eFirstC = eSubStartY + 9.0f;
-        float eLastC = eSubStartY + (float)(EVENT_SUBS.length - 1) * 18.0f + 9.0f;
-        int iconW = EVENT_SUBS.length;
-        for (int i = 0; i < iconW; ++i) {
-            float rowTop = eSubStartY + (float)i * 18.0f;
-            float cy = rowTop + 9.0f;
-            float p = this.eventsSubT[i];
-            int a = Math.min(255, 140 + MathKt.roundToInt((float)(p * (float)115)));
-            int col = UI.Companion.color(255, 255, 255, a, alpha);
-            String icon = EVENT_SUB_ICONS[i];
-            float iconW2 = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
-            AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.6f);
-            Fonts.MEDIUM.draw(EVENT_SUBS[i], subIconX + iconW2 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
-        }
-        float clientHeaderTop = eSubStartY + (float)EVENT_SUBS.length * 18.0f + 3.0f;
-        float chcY = clientHeaderTop + 10.0f;
-        Double d4 = this.clientHeaderAnim.getOutput();
-        float clientAnim = (float)(d4 != null ? d4 : 0.0);
-        if (clientAnim > 0.004f) {
-            Render2D.rect(panelX + 4.0f, clientHeaderTop + 4.5f, panelW - 8.0f, 13.333333f, 5.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)16 * clientAnim)), alpha));
-        }
-        String cIcon = "л";
-        float cIconSize = 8.5f;
-        float cIconW = Fonts.I2.msdfWidth(cIcon, cIconSize);
-        AccentGradient.msdfIcon(Fonts.I2, cIcon, left, chcY - cIconSize * 0.5f + 1.5f, cIconSize, (200.0f + 55.0f * clientAnim) * alpha, 0.85f);
-        Fonts.MEDIUM.draw("Client", left + cIconW + 6.0f, chcY - 4.0f + 0.5f, 8.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)215 + (float)40 * clientAnim)), alpha));
-        float cSubStartY = clientHeaderTop + 20.0f + 4.0f;
-        int firstVisible = -1;
-        int lastVisible = -1;
-        int n2 = OTHER_CATEGORIES.length;
-        for (int i = 0; i < n2; ++i) {
-            if (!UI.Companion.otherRowVisible(UI.OTHER_CATEGORIES[i])) continue;
-            if (firstVisible < 0) {
-                firstVisible = i;
+
+        // Profile Card coordinates (for clipping bottom)
+        float profCardH = 26.0f;
+        float profCardY = y + h - profCardH - 7.0f;
+        float clipTop = y + 33.0f;
+        float clipBottom = profCardY - 4.0f;
+        float clipH = clipBottom - clipTop;
+
+        // Smooth scroll
+        float maxScroll = Math.max(0.0f, this.getSidebarContentHeight() - clipH + 10.0f);
+        this.sidebarScrollTarget = MathHelper.clamp(this.sidebarScrollTarget, 0.0f, maxScroll);
+        this.sidebarScroll += (this.sidebarScrollTarget - this.sidebarScroll) * Math.min(1.0f, frameDt * 16.0f);
+
+        RoundedScissor.push(graphics, panelX, clipTop, panelW, clipH, 0.0f, 0.0f, 0.0f, 0.0f);
+        try {
+            float headerTop = clipTop + 1.0f - this.sidebarScroll;
+            float hcY = headerTop + 10.0f;
+            Double d = this.modulesHeaderAnim.getOutput();
+            float modulesAnim = (float)(d != null ? d : 0.0);
+            if (modulesAnim > 0.004f) {
+                Render2D.rect(panelX + 4.0f, headerTop + 4.5f, panelW - 8.0f, 13.333333f, 5.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)16 * modulesAnim)), alpha));
             }
-            lastVisible = i;
-        }
-        if (firstVisible >= 0 && lastVisible > firstVisible) {
-            float cFirstC = cSubStartY + (float)firstVisible * 18.0f + 9.0f;
-            float cLastC = cSubStartY + (float)lastVisible * 18.0f + 9.0f;
-        }
-        n2 = OTHER_CATEGORIES.length;
-        for (int i = 0; i < n2; ++i) {
-            float rowT;
-            Category cat = OTHER_CATEGORIES[i];
-            float f = rowT = cat == Category.THEMES ? this.themesRowT : 1.0f;
-            if (rowT <= 0.01f) continue;
-            float rowTop = cSubStartY + (float)i * 18.0f;
-            float cy = rowTop + 9.0f;
-            Double d5 = this.getCategoryAnim(cat).getOutput();
-            float p = (float)(d5 != null ? d5 : 0.0);
-            int a = MathKt.roundToInt((float)((float)Math.min(255, 140 + MathKt.roundToInt((float)(p * (float)115))) * rowT));
-            int col = UI.Companion.color(255, 255, 255, a, alpha);
-            String icon = String.valueOf(UI.Companion.iconChar(cat));
-            float iconW3 = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
-            AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.85f);
-            Fonts.MEDIUM.draw(cat.getDisplayName(), subIconX + iconW3 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
+            String mIcon = "h";
+            float mIconW = Fonts.KIMIKO.msdfWidth(mIcon, 8.0f);
+            AccentGradient.msdfIcon(Fonts.KIMIKO, mIcon, left, hcY - 4.0f + 1.5f, 8.0f, (200.0f + 55.0f * modulesAnim) * alpha, 0.15f);
+            Fonts.MEDIUM.draw("Modules", left + mIconW + 6.0f, hcY - 4.0f + 0.5f, 8.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)215 + (float)40 * modulesAnim)), alpha));
+            float subStartY = headerTop + 20.0f + 4.0f;
+            float lineX = left + 3.0f;
+            float subIconX = lineX + 9.0f;
+            float rowLift = 2.0f;
+            float currentY = subStartY;
+
+            for (int i = 0; i < MAIN_CATEGORIES.length; ++i) {
+                Category cat = MAIN_CATEGORIES[i];
+                float rowTop = currentY;
+                float cy = rowTop + 9.0f;
+                Double d2 = this.getCategoryAnim(cat).getOutput();
+                float p = (float)(d2 != null ? d2 : 0.0);
+                int a = Math.min(255, 140 + MathKt.roundToInt((float)(p * (float)115)));
+                int col = UI.Companion.color(255, 255, 255, a, alpha);
+                String icon = String.valueOf(UI.Companion.iconChar(cat));
+                float iconW = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
+                float indexT = catCount > 1 ? (float)i / (float)(catCount - 1) : 0.5f;
+                AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, indexT);
+                Fonts.MEDIUM.draw(cat.getDisplayName(), subIconX + iconW + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
+                String count = String.valueOf(this.moduleList.getModules(cat, null).size());
+                float countW = Fonts.MEDIUM.width(count, 5.5f);
+                Fonts.MEDIUM.draw(count, panelX + panelW - 10.0f - countW, cy - 2.75f + 0.5f - rowLift, 5.5f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)80 + (float)80 * p)), alpha));
+                currentY += 18.0f;
+
+                if (cat.hasSubCategories()) {
+                    Double expD = this.getSubExpandAnim(cat).getOutput();
+                    float expandT = (float)(expD != null ? expD : 0.0);
+                    if (expandT > 0.001f) {
+                        for (SubCategory sub : cat.getSubCategories()) {
+                            float subRowH = 16.0f * expandT;
+                            if (expandT > 0.05f) {
+                                float subCY = currentY + 8.0f * expandT;
+                                float subLift = 2.0f * expandT;
+                                Double subD = this.getSubCategoryAnim(sub).getOutput();
+                                float subP = (float)(subD != null ? subD : 0.0);
+                                int subA = Math.min(255, 130 + MathKt.roundToInt(subP * 125.0f));
+                                subA = MathKt.roundToInt((float)subA * expandT);
+                                int subCol = UI.Companion.color(255, 255, 255, subA, alpha);
+
+                                float subIndentX = subIconX + 7.0f;
+                                String subIcon = String.valueOf(sub.getIconChar());
+                                float subIconW = Fonts.KIMIKO.msdfWidth(subIcon, 6.0f);
+                                AccentGradient.msdfIcon(Fonts.KIMIKO, subIcon, subIndentX, subCY - 3.0f + 1.0f - subLift, 6.0f, (float)subA * alpha, indexT);
+                                Fonts.MEDIUM.draw(sub.getDisplayName(), subIndentX + subIconW + 4.5f, subCY - 3.0f + 0.5f - subLift, 6.0f, subCol);
+
+                                String subCount = String.valueOf(this.moduleList.getModules(cat, sub).size());
+                                float subCountW = Fonts.MEDIUM.width(subCount, 5.0f);
+                                Fonts.MEDIUM.draw(subCount, panelX + panelW - 10.0f - subCountW, subCY - 2.5f + 0.5f - subLift, 5.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt(((float)65 + (float)85 * subP) * expandT), alpha));
+                            }
+                            currentY += subRowH;
+                        }
+                    }
+                }
+            }
+
+            float eventsHeaderTop = currentY + 3.0f;
+            float ehcY = eventsHeaderTop + 10.0f;
+            Double d3 = this.eventsHeaderAnim.getOutput();
+            float eventsAnim = (float)(d3 != null ? d3 : 0.0);
+            if (eventsAnim > 0.004f) {
+                Render2D.rect(panelX + 4.0f, eventsHeaderTop + 4.5f, panelW - 8.0f, 13.333333f, 5.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)16 * eventsAnim)), alpha));
+            }
+            String eIcon = "e";
+            float eIconW = Fonts.KIMIKO.msdfWidth(eIcon, 8.0f);
+            AccentGradient.msdfIcon(Fonts.KIMIKO, eIcon, left, ehcY - 4.0f + 1.5f, 8.0f, (200.0f + 55.0f * eventsAnim) * alpha, 0.6f);
+            Fonts.MEDIUM.draw("Server", left + eIconW + 6.0f, ehcY - 4.0f + 0.5f, 8.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)215 + (float)40 * eventsAnim)), alpha));
+            float eSubStartY = eventsHeaderTop + 20.0f + 4.0f;
+            currentY = eSubStartY;
+            for (int i = 0; i < EVENT_SUBS.length; ++i) {
+                float rowTop = currentY;
+                float cy = rowTop + 9.0f;
+                float p = this.eventsSubT[i];
+                int a = Math.min(255, 140 + MathKt.roundToInt((float)(p * (float)115)));
+                int col = UI.Companion.color(255, 255, 255, a, alpha);
+                String icon = EVENT_SUB_ICONS[i];
+                float iconW2 = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
+                AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.6f);
+                Fonts.MEDIUM.draw(EVENT_SUBS[i], subIconX + iconW2 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
+                currentY += 18.0f;
+            }
+
+            float clientHeaderTop = currentY + 3.0f;
+            float chcY = clientHeaderTop + 10.0f;
+            Double d4 = this.clientHeaderAnim.getOutput();
+            float clientAnim = (float)(d4 != null ? d4 : 0.0);
+            if (clientAnim > 0.004f) {
+                Render2D.rect(panelX + 4.0f, clientHeaderTop + 4.5f, panelW - 8.0f, 13.333333f, 5.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)16 * clientAnim)), alpha));
+            }
+            String cIcon = "л";
+            float cIconSize = 8.5f;
+            float cIconW = Fonts.I2.msdfWidth(cIcon, cIconSize);
+            AccentGradient.msdfIcon(Fonts.I2, cIcon, left, chcY - cIconSize * 0.5f + 1.5f, cIconSize, (200.0f + 55.0f * clientAnim) * alpha, 0.85f);
+            Fonts.MEDIUM.draw("Client", left + cIconW + 6.0f, chcY - 4.0f + 0.5f, 8.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)215 + (float)40 * clientAnim)), alpha));
+            float cSubStartY = clientHeaderTop + 20.0f + 4.0f;
+            currentY = cSubStartY;
+            for (int i = 0; i < OTHER_CATEGORIES.length; ++i) {
+                Category cat = OTHER_CATEGORIES[i];
+                float rowT = cat == Category.THEMES ? this.themesRowT : 1.0f;
+                if (rowT <= 0.01f) continue;
+                float rowTop = currentY;
+                float cy = rowTop + 9.0f;
+                Double d5 = this.getCategoryAnim(cat).getOutput();
+                float p = (float)(d5 != null ? d5 : 0.0);
+                int a = MathKt.roundToInt((float)((float)Math.min(255, 140 + MathKt.roundToInt((float)(p * (float)115))) * rowT));
+                int col = UI.Companion.color(255, 255, 255, a, alpha);
+                String icon = String.valueOf(UI.Companion.iconChar(cat));
+                float iconW3 = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
+                AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.85f);
+                Fonts.MEDIUM.draw(cat.getDisplayName(), subIconX + iconW3 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
+                currentY += 18.0f;
+            }
+        } finally {
+            RoundedScissor.pop();
         }
 
         // Profile Card at bottom-left of sidebar
         float profCardX = panelX + 7.0f;
         float profCardW = panelW - 14.0f;
-        float profCardH = 26.0f;
-        float profCardY = y + h - profCardH - 7.0f;
 
         float mx = Position.Companion.mouseX();
         float my = Position.Companion.mouseY();
@@ -1241,6 +1412,12 @@ implements GuiCapture.Source {
         if (event.button() != 0) {
             return super.mouseClicked(event, doubleClick);
         }
+        SubCategoryTarget subClicked = this.subCategoryAt(x, y, mx, my);
+        if (subClicked != null) {
+            Sounds.play("select_category");
+            this.selectSubCategory(subClicked.category, subClicked.subCategory);
+            return true;
+        }
         int eventsSubClicked = this.eventsSubAt(x, y, mx, my);
         if (eventsSubClicked >= 0) {
             if (this.targetCategory != Category.EVENTS || this.eventsSub != eventsSubClicked) {
@@ -1251,13 +1428,51 @@ implements GuiCapture.Source {
         }
         Category clicked = this.categoryButtonAt(x, y, mx, my);
         if (clicked != null) {
-            if (clicked != this.targetCategory) {
-                Sounds.play("select_category");
+            if (clicked == this.targetCategory) {
+                if (clicked.hasSubCategories() && this.targetSubCategory != null) {
+                    Sounds.play("select_category");
+                    this.selectSubCategory(clicked, null);
+                    return true;
+                }
             }
+            Sounds.play("select_category");
             this.selectCategory(clicked);
             return true;
         }
         return super.mouseClicked(event, doubleClick);
+    }
+
+    private final SubCategoryTarget subCategoryAt(float x, float y, float mx, float my) {
+        float panelX = x;
+        float panelW = 110.0f;
+        float hitX0 = panelX + 4.0f;
+        float hitX1 = panelX + panelW - 4.0f;
+        float clipTop = y + 33.0f;
+        float profCardH = 26.0f;
+        float profCardY = y + 290.0f - profCardH - 7.0f;
+        float clipBottom = profCardY - 4.0f;
+        if (mx < hitX0 || mx > hitX1 || my < clipTop || my > clipBottom) {
+            return null;
+        }
+        float headerTop = clipTop + 1.0f - this.sidebarScroll;
+        float currentY = headerTop + 20.0f + 4.0f;
+        for (Category cat : MAIN_CATEGORIES) {
+            currentY += 18.0f;
+            if (cat.hasSubCategories()) {
+                Double d = this.getSubExpandAnim(cat).getOutput();
+                float expandT = (float)(d != null ? d : 0.0);
+                if (expandT > 0.05f) {
+                    for (SubCategory sub : cat.getSubCategories()) {
+                        float subH = 16.0f * expandT;
+                        if (my >= currentY && my <= currentY + subH) {
+                            return new SubCategoryTarget(cat, sub);
+                        }
+                        currentY += subH;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private final Category categoryButtonAt(float x, float y, float mx, float my) {
@@ -1265,27 +1480,41 @@ implements GuiCapture.Source {
         float panelW = 110.0f;
         float hitX0 = panelX + 4.0f;
         float hitX1 = panelX + panelW - 4.0f;
-        float colY = y;
-        float subStartY = colY + 34.0f + 20.0f + 4.0f;
-        int n = MAIN_CATEGORIES.length;
-        for (int i = 0; i < n; ++i) {
-            float top = subStartY + (float)i * 18.0f;
-            if (!(mx >= hitX0) || !(mx <= hitX1) || !(my >= top) || !(my <= top + 18.0f)) continue;
-            return MAIN_CATEGORIES[i];
+        float clipTop = y + 33.0f;
+        float profCardH = 26.0f;
+        float profCardY = y + 290.0f - profCardH - 7.0f;
+        float clipBottom = profCardY - 4.0f;
+        if (mx < hitX0 || mx > hitX1 || my < clipTop || my > clipBottom) {
+            return null;
         }
-        float eventsHeaderTop = subStartY + (float)MAIN_CATEGORIES.length * 18.0f + 3.0f;
-        float eSubStartY = eventsHeaderTop + 20.0f + 4.0f;
-        float clientHeaderTop = eSubStartY + (float)EVENT_SUBS.length * 18.0f + 3.0f;
-        float cSubStartY = clientHeaderTop + 20.0f + 4.0f;
-        int n2 = OTHER_CATEGORIES.length;
-        for (int i = 0; i < n2; ++i) {
-            float top = cSubStartY + (float)i * 18.0f;
-            if (!(mx >= hitX0) || !(mx <= hitX1) || !(my >= top) || !(my <= top + 18.0f)) continue;
-            Category cat = OTHER_CATEGORIES[i];
-            if (cat == Category.THEMES && this.themesRowT < 0.5f) {
-                return null;
+        float headerTop = clipTop + 1.0f - this.sidebarScroll;
+        float currentY = headerTop + 20.0f + 4.0f;
+        for (Category cat : MAIN_CATEGORIES) {
+            if (my >= currentY && my <= currentY + 18.0f) {
+                return cat;
             }
-            return cat;
+            currentY += 18.0f;
+            if (cat.hasSubCategories()) {
+                Double d = this.getSubExpandAnim(cat).getOutput();
+                float expandT = (float)(d != null ? d : 0.0);
+                if (expandT > 0.001f) {
+                    currentY += (float)cat.getSubCategories().length * 16.0f * expandT;
+                }
+            }
+        }
+        currentY += 3.0f + 20.0f + 4.0f;
+        currentY += (float)EVENT_SUBS.length * 18.0f;
+        currentY += 3.0f + 20.0f + 4.0f;
+        for (Category cat : OTHER_CATEGORIES) {
+            float rowT = cat == Category.THEMES ? this.themesRowT : 1.0f;
+            if (rowT <= 0.01f) continue;
+            if (my >= currentY && my <= currentY + 18.0f) {
+                if (cat == Category.THEMES && this.themesRowT < 0.5f) {
+                    return null;
+                }
+                return cat;
+            }
+            currentY += 18.0f;
         }
         return null;
     }
@@ -1295,15 +1524,31 @@ implements GuiCapture.Source {
         float panelW = 110.0f;
         float hitX0 = panelX + 4.0f;
         float hitX1 = panelX + panelW - 4.0f;
-        float colY = y;
-        float subStartY = colY + 34.0f + 20.0f + 4.0f;
-        float eventsHeaderTop = subStartY + (float)MAIN_CATEGORIES.length * 18.0f + 3.0f;
-        float eSubStartY = eventsHeaderTop + 20.0f + 4.0f;
-        int n = EVENT_SUBS.length;
-        for (int i = 0; i < n; ++i) {
-            float top = eSubStartY + (float)i * 18.0f;
-            if (!(mx >= hitX0) || !(mx <= hitX1) || !(my >= top) || !(my <= top + 18.0f)) continue;
-            return i;
+        float clipTop = y + 33.0f;
+        float profCardH = 26.0f;
+        float profCardY = y + 290.0f - profCardH - 7.0f;
+        float clipBottom = profCardY - 4.0f;
+        if (mx < hitX0 || mx > hitX1 || my < clipTop || my > clipBottom) {
+            return -1;
+        }
+        float headerTop = clipTop + 1.0f - this.sidebarScroll;
+        float currentY = headerTop + 20.0f + 4.0f;
+        for (Category cat : MAIN_CATEGORIES) {
+            currentY += 18.0f;
+            if (cat.hasSubCategories()) {
+                Double d = this.getSubExpandAnim(cat).getOutput();
+                float expandT = (float)(d != null ? d : 0.0);
+                if (expandT > 0.001f) {
+                    currentY += (float)cat.getSubCategories().length * 16.0f * expandT;
+                }
+            }
+        }
+        currentY += 3.0f + 20.0f + 4.0f;
+        for (int i = 0; i < EVENT_SUBS.length; ++i) {
+            if (my >= currentY && my <= currentY + 18.0f) {
+                return i;
+            }
+            currentY += 18.0f;
         }
         return -1;
     }
@@ -1379,6 +1624,18 @@ implements GuiCapture.Source {
         float w = 430.0f;
         float x = Companion.panelX();
         float y = Companion.panelY();
+        float panelX = x;
+        float panelW = 110.0f;
+        float clipTop = y + 33.0f;
+        float profCardH = 26.0f;
+        float profCardY = y + 290.0f - profCardH - 7.0f;
+        float clipBottom = profCardY - 4.0f;
+        float clipH = clipBottom - clipTop;
+        if (mx >= (double)panelX && mx <= (double)(panelX + panelW) && my >= (double)clipTop && my <= (double)clipBottom) {
+            float maxScroll = Math.max(0.0f, this.getSidebarContentHeight() - clipH + 10.0f);
+            this.sidebarScrollTarget = MathHelper.clamp(this.sidebarScrollTarget - (float)vertical * 20.0f, 0.0f, maxScroll);
+            return true;
+        }
         float listX = x + 117.0f;
         float listY = y + 5.0f;
         float listW = w - 122.0f;
@@ -1909,7 +2166,7 @@ implements GuiCapture.Source {
         EVENT_SUBS = new String[]{"Events", "Mines"};
         EVENT_SUB_ICONS = new String[]{"b", "m"};
         INSTANCE = new UI();
-        MAIN_CATEGORIES = new Category[]{Category.VISUALS, Category.DISPLAY, Category.UTILS};
+        MAIN_CATEGORIES = new Category[]{Category.COMBAT, Category.MOVEMENT, Category.VISUALS, Category.PLAYER, Category.MISC};
         OTHER_CATEGORIES = new Category[]{Category.CONFIGS, Category.THEMES};
         motionBlurMask = new float[12];
         cardBlurMask = new float[396];
@@ -2458,14 +2715,19 @@ implements GuiCapture.Source {
         }
 
         private final char iconChar(Category category) {
-            return switch (WhenMappings.$EnumSwitchMapping$0[category.ordinal()]) {
-                case 1 -> 'p';
-                case 2 -> 'j';
-                case 3 -> 'r';
-                case 4 -> 'i';
-                case 5 -> 'w';
-                case 6 -> 'B';
-                default -> throw new NoWhenBranchMatchedException();
+            if (category == null) return 'p';
+            return switch (category) {
+                case COMBAT -> 'a';
+                case MOVEMENT -> 'm';
+                case VISUALS -> 'p';
+                case PLAYER -> 'u';
+                case MISC -> 'o';
+                case DISPLAY -> 'j';
+                case UTILS -> 'r';
+                case EVENTS -> 'i';
+                case THEMES -> 'w';
+                case CONFIGS -> 'B';
+                default -> 'p';
             };
         }
 

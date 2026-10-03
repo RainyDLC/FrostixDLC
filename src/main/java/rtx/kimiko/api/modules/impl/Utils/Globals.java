@@ -44,7 +44,7 @@ extends Module {
     private final BooleanSetting remoteGuis = (BooleanSetting)this.register((Setting)new BooleanSetting("Гуй игроков в мире", "Показывает открытые гуи других пользователей RainyDLC у их лица.", true));
 
     public Globals() {
-        super("Globals", "Показывает метку клиента у других пользователей RainyDLC.", Category.UTILS);
+        super("Globals", "Показывает метку клиента у других пользователей RainyDLC.", Category.MISC);
     }
 
     @Override

@@ -120,7 +120,7 @@ extends Module {
     private static final String KIT_POTIONS = "Зелья";
 
     public AutoDuel() {
-        super("Auto Duel", "Автоматически отправляет или принимает дуэли.", Category.UTILS);
+        super("Auto Duel", "Автоматически отправляет или принимает дуэли.", Category.MISC);
         String[] stringArray = new String[]{MODE_ACCEPT, MODE_SEND};
         this.mode = (ModeSetting)this.register((Setting)new ModeSetting("Режим", "Что делать: отправлять дуэли или только принимать.", MODE_ACCEPT, stringArray));
         this.sendSeparator = (SeparatorSetting)this.register((Setting)new SeparatorSetting("Отправка").visibleWhen(() -> AutoDuel.sendSeparator$lambda$0(this)));

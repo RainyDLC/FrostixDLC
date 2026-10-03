@@ -66,6 +66,7 @@ import rtx.kimiko.api.events.EventHandler;
 import rtx.kimiko.api.events.impl.render.WorldRenderEvent;
 import rtx.kimiko.api.liteapi.Feature;
 import rtx.kimiko.api.modules.Category;
+import rtx.kimiko.api.modules.SubCategory;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.restrict.Server;
 import rtx.kimiko.api.modules.restrict.ServerRule;
@@ -117,7 +118,7 @@ extends Module {
     private static final double SNOW_SPEED = 1.5;
 
     public FuntimeHelper() {
-        super("Funtime Helper", "Показывает радиусы FunTime-предметов в руке.", Category.UTILS);
+        super("Funtime Helper", "Показывает радиусы FunTime-предметов в руке.", Category.COMBAT, SubCategory.UTILS);
     }
 
     @EventHandler
