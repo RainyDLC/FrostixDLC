@@ -72,4 +72,24 @@ public final class PlayerWorldHelper {
         double dot = (targetVel.x / speed) * dirX + (targetVel.z / speed) * dirZ;
         return dot < -0.15; // Target is moving towards the player
     }
+
+    public static double getMoveAngle(float yaw, double forward, double strafe) {
+        if (forward < 0.0) {
+            yaw += 180.0f;
+        }
+        float factor = 1.0f;
+        if (forward < 0.0) {
+            factor = -0.5f;
+        } else if (forward > 0.0) {
+            factor = 0.5f;
+        }
+        if (strafe > 0.0) {
+            yaw -= 90.0f * factor;
+        }
+        if (strafe < 0.0) {
+            yaw += 90.0f * factor;
+        }
+        return Math.toRadians(yaw);
+    }
 }
+

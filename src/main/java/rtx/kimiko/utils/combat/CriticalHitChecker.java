@@ -11,7 +11,7 @@ public final class CriticalHitChecker {
         if (player == null) {
             return false;
         }
-        if (player.getAbilities().flying) {
+        if (player.getAbilities().flying || player.hasVehicle()) {
             return false;
         }
         if (player.hasStatusEffect(StatusEffects.BLINDNESS) || player.hasStatusEffect(StatusEffects.SLOW_FALLING)) {
@@ -21,18 +21,9 @@ public final class CriticalHitChecker {
     }
 
     public static boolean isCritical(PlayerEntity player) {
-        if (player == null || !player.isSprinting()) {
+        if (player == null || !canCrit(player) || player.isOnGround()) {
             return false;
         }
-        if (player.getAttackCooldownProgress(1.0f) < 0.75f) {
-            return false;
-        }
-        if (!canCrit(player)) {
-            return false;
-        }
-        if (player.isOnGround()) {
-            return false;
-        }
-        return player.getVelocity().y < 0.0;
+        return player.getVelocity().y < 0.0 || player.fallDistance > 0.0f;
     }
 }

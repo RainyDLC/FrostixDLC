@@ -2,7 +2,7 @@ package rtx.kimiko.utils.math.rotation;
 
 public enum RotationApplyMode {
     NONE(false, false, false, false, false),
-    DIRECT(true, true, false, false, false),
+    DIRECT(true, true, false, false, true),
     STRICT(true, true, false, false, false),
     SILENT(true, true, true, false, false),
     SMOOTH_SILENT(true, true, false, true, false),

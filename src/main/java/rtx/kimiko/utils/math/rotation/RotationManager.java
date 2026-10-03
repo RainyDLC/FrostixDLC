@@ -5,10 +5,16 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
+import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
+import net.minecraft.network.packet.s2c.play.PositionFlag;
+import net.minecraft.util.PlayerInput;
 import net.minecraft.util.math.MathHelper;
 import rtx.kimiko.api.events.EventHandler;
+import rtx.kimiko.api.events.impl.input.InputEvent;
+import rtx.kimiko.api.events.impl.network.PacketReceiveEvent;
 import rtx.kimiko.api.events.impl.network.PacketSendEvent;
 import rtx.kimiko.utils.math.MathUtil;
+import rtx.kimiko.utils.player.PlayerWorldHelper;
 
 public class RotationManager {
     public static final RotationManager INSTANCE = new RotationManager();
@@ -75,6 +81,8 @@ public class RotationManager {
         this.prevRotation = this.currentRotation;
         if (this.activeRequest == null) {
             this.currentRotation = this.getPlayerRotation();
+            this.state = RotationState.IDLE;
+            this.sentRotation = null;
             return;
         }
 
@@ -85,12 +93,14 @@ public class RotationManager {
                 float yaw = setClientRotation(this.currentRotation.getYaw(), pitch);
                 this.currentRotation = new Rotation(yaw, pitch);
                 this.state = RotationState.IDLE;
+                this.sentRotation = null;
                 this.activeRequest = null;
                 return;
             }
             if (returnMode == RotationMode.NONE) {
                 this.currentRotation = this.getPlayerRotation();
                 this.state = RotationState.IDLE;
+                this.sentRotation = null;
                 this.activeRequest = null;
                 return;
             }
@@ -98,6 +108,7 @@ public class RotationManager {
             if (this.getPlayerRotation().distanceTo(this.currentRotation) < Math.max(0.1f, RotationUtil.getRotationStep())) {
                 setClientRotation(this.currentRotation.getYaw(), this.currentRotation.getPitch());
                 this.state = RotationState.IDLE;
+                this.sentRotation = null;
                 this.activeRequest = null;
             } else {
                 this.state = RotationState.ROTATING_BACK;
@@ -122,6 +133,9 @@ public class RotationManager {
 
         this.state = RotationState.ROTATING;
         this.stepTowardTarget();
+        if (this.activeRequest != null && this.activeRequest.getConfig() != null && this.activeRequest.getConfig().movesClientView()) {
+            setClientRotation(this.currentRotation.getYaw(), this.currentRotation.getPitch());
+        }
     }
 
     public void interpolate(float tickDelta) {
@@ -166,48 +180,121 @@ public class RotationManager {
         if (this.isIdle()) return;
 
         if (event.getPacket() instanceof PlayerInteractItemC2SPacket packet) {
-            if (this.sentRotation == null) {
-                this.sentRotation = new Rotation(this.currentRotation.getYaw(), this.currentRotation.getPitch());
-            }
-            this.serverRotation.setYaw(this.sentRotation.getYaw());
-            this.serverRotation.setPitch(this.sentRotation.getPitch());
-            if (packet.getYaw() != this.sentRotation.getYaw() || packet.getPitch() != this.sentRotation.getPitch()) {
-                event.setPacket(new PlayerInteractItemC2SPacket(packet.getHand(), packet.getSequence(), this.sentRotation.getYaw(), this.sentRotation.getPitch()));
+            float yaw = this.currentRotation.getYaw();
+            float pitch = this.currentRotation.getPitch();
+            this.serverRotation.setYaw(yaw);
+            this.serverRotation.setPitch(pitch);
+            if (packet.getYaw() != yaw || packet.getPitch() != pitch) {
+                event.setPacket(new PlayerInteractItemC2SPacket(packet.getHand(), packet.getSequence(), yaw, pitch));
             }
             return;
         }
 
         if (event.getPacket() instanceof PlayerMoveC2SPacket packet) {
-            if (this.sentRotation == null) {
-                this.sentRotation = new Rotation(this.currentRotation.getYaw(), this.currentRotation.getPitch());
+            float targetYaw = this.currentRotation.getYaw();
+            float targetPitch = this.currentRotation.getPitch();
+            this.serverRotation.setYaw(targetYaw);
+            this.serverRotation.setPitch(targetPitch);
+
+            if (packet.changesPosition()) {
+                event.setPacket(new PlayerMoveC2SPacket.Full(
+                        packet.getX(0.0),
+                        packet.getY(0.0),
+                        packet.getZ(0.0),
+                        targetYaw,
+                        targetPitch,
+                        packet.isOnGround(),
+                        packet.horizontalCollision()
+                ));
+            } else {
+                event.setPacket(new PlayerMoveC2SPacket.LookAndOnGround(
+                        targetYaw,
+                        targetPitch,
+                        packet.isOnGround(),
+                        packet.horizontalCollision()
+                ));
             }
-            this.serverRotation.setYaw(this.sentRotation.getYaw());
-            this.serverRotation.setPitch(this.sentRotation.getPitch());
+        }
+    }
 
-            if (packet.changesLook()) {
-                float targetYaw = this.sentRotation.getYaw();
-                float targetPitch = this.sentRotation.getPitch();
+    @EventHandler
+    public void onPacketReceive(PacketReceiveEvent event) {
+        if (event.getPacket() instanceof PlayerPositionLookS2CPacket packet) {
+            float newYaw = packet.change().yaw();
+            float newPitch = packet.change().pitch();
+            if (packet.relatives().contains(PositionFlag.Y_ROT)) {
+                newYaw += this.currentRotation.getYaw();
+            }
+            if (packet.relatives().contains(PositionFlag.X_ROT)) {
+                newPitch += this.currentRotation.getPitch();
+            }
+            this.currentRotation = new Rotation(newYaw, newPitch);
+            this.serverRotation = new Rotation(newYaw, newPitch);
+            this.prevRotation = new Rotation(newYaw, newPitch);
+            this.sentRotation = null;
+        }
+    }
 
-                if (packet.changesPosition()) {
-                    event.setPacket(new PlayerMoveC2SPacket.Full(
-                            packet.getX(0.0),
-                            packet.getY(0.0),
-                            packet.getZ(0.0),
-                            targetYaw,
-                            targetPitch,
-                            packet.isOnGround(),
-                            packet.horizontalCollision()
-                    ));
-                } else {
-                    event.setPacket(new PlayerMoveC2SPacket.LookAndOnGround(
-                            targetYaw,
-                            targetPitch,
-                            packet.isOnGround(),
-                            packet.horizontalCollision()
-                    ));
+    @EventHandler
+    public void onInput(InputEvent event) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc.player == null || this.isIdle() || this.activeRequest == null) {
+            return;
+        }
+
+        RotationApplyMode applyMode = this.activeRequest.getConfig();
+        if (applyMode == null) {
+            return;
+        }
+
+        if (applyMode.movesClientView()) {
+            setClientRotation(this.currentRotation.getYaw(), this.currentRotation.getPitch());
+            return;
+        }
+
+        if (applyMode.isSilent()) {
+            correctMovement(event, this.currentRotation.getYaw(), mc.player.getYaw());
+        }
+    }
+
+    public static void correctMovement(InputEvent event, float targetYaw, float playerYaw) {
+        PlayerInput input = event.getInput();
+        float forward = (input.forward() ? 1.0f : 0.0f) - (input.backward() ? 1.0f : 0.0f);
+        float strafe = (input.left() ? 1.0f : 0.0f) - (input.right() ? 1.0f : 0.0f);
+        if (forward == 0.0f && strafe == 0.0f) {
+            return;
+        }
+
+        double moveAngle = Math.toDegrees(PlayerWorldHelper.getMoveAngle(playerYaw, forward, strafe));
+        moveAngle = MathHelper.wrapDegrees((float) moveAngle);
+
+        float bestForward = 0.0f;
+        float bestStrafe = 0.0f;
+        double minDiff = Double.MAX_VALUE;
+
+        for (float f = -1.0f; f <= 1.0f; f += 1.0f) {
+            for (float s = -1.0f; s <= 1.0f; s += 1.0f) {
+                if (f == 0.0f && s == 0.0f) continue;
+                double candidateAngle = Math.toDegrees(PlayerWorldHelper.getMoveAngle(targetYaw, f, s));
+                candidateAngle = MathHelper.wrapDegrees((float) candidateAngle);
+                double diff = Math.abs(MathHelper.wrapDegrees((float) (moveAngle - candidateAngle)));
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    bestForward = f;
+                    bestStrafe = s;
                 }
             }
         }
+
+        event.setDirectional(
+                bestForward > 0.0f,
+                bestForward < 0.0f,
+                bestStrafe > 0.0f,
+                bestStrafe < 0.0f,
+                input.sneak(),
+                input.sprint(),
+                input.jump()
+        );
     }
 
     public boolean isIdle() {

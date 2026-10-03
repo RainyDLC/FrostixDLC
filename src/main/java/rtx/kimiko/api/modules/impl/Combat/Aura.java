@@ -23,7 +23,6 @@ import rtx.kimiko.api.events.EventBus;
 import rtx.kimiko.api.events.EventHandler;
 import rtx.kimiko.api.events.impl.game.TickEvent;
 import rtx.kimiko.api.events.impl.network.PacketSendEvent;
-import rtx.kimiko.api.events.impl.player.PlayerMoveEvent;
 import rtx.kimiko.api.modules.Category;
 import rtx.kimiko.api.modules.Module;
 import rtx.kimiko.api.modules.SubCategory;
@@ -127,6 +126,8 @@ public class Aura extends Module {
     protected void onDisable() {
         EventBus.Companion.get().unsubscribe(RotationManager.INSTANCE);
         RotationManager.INSTANCE.setActiveRequest(null);
+        RotationManager.INSTANCE.setState(rtx.kimiko.utils.math.rotation.RotationState.IDLE);
+        RotationManager.INSTANCE.setSentRotation(null);
         this.neuroMode.targetNull();
         PendingTargetAction.clearTarget(this.mc.player);
         TargetManager.INSTANCE.resetTarget();
@@ -182,9 +183,7 @@ public class Aura extends Module {
             }
 
             if (canAttack(livingTarget)) {
-                if (handleSprintReset(livingTarget)) {
-                    return;
-                }
+                handleSprintReset(livingTarget);
                 performAttack(livingTarget);
             }
         } else {
@@ -194,39 +193,8 @@ public class Aura extends Module {
     }
 
     @EventHandler
-    public void onPlayerMove(PlayerMoveEvent event) {
-        if (this.mc.player == null || RotationManager.INSTANCE.isIdle()) {
-            return;
-        }
-        if (this.moveCorrectionSetting.is("Silent")) {
-            float playerYaw = this.mc.player.getYaw();
-            float targetYaw = RotationManager.INSTANCE.getCurrentRotation().getYaw();
-            correctMovement(event, playerYaw, targetYaw);
-        }
-    }
-
-    @EventHandler
     public void onPacketSend(PacketSendEvent event) {
         RotationManager.INSTANCE.onPacketSend(event);
-    }
-
-    private void correctMovement(PlayerMoveEvent event, float playerYaw, float rotationYaw) {
-        float diff = MathHelper.wrapDegrees(rotationYaw - playerYaw);
-        float forward = (event.isForward() ? 1.0f : 0.0f) + (event.isBackward() ? -1.0f : 0.0f);
-        float strafe = (event.isLeft() ? 1.0f : 0.0f) + (event.isRight() ? -1.0f : 0.0f);
-        if (forward == 0.0f && strafe == 0.0f) return;
-
-        double rad = Math.toRadians(diff);
-        double cos = Math.cos(rad);
-        double sin = Math.sin(rad);
-
-        double newForward = forward * cos + strafe * sin;
-        double newStrafe = strafe * cos - forward * sin;
-
-        event.setForward(newForward > 0.3);
-        event.setBackward(newForward < -0.3);
-        event.setLeft(newStrafe > 0.3);
-        event.setRight(newStrafe < -0.3);
     }
 
     private void applyRotations(LivingEntity target) {
@@ -320,9 +288,12 @@ public class Aura extends Module {
     private boolean isCritCondition() {
         if (this.mc.player == null) return false;
         if (this.smartCriticals.getValue()) {
-            return !this.mc.player.isOnGround() || this.mc.options.jumpKey.isPressed();
+            if (!this.mc.player.isOnGround()) {
+                return CriticalHitChecker.isCritical(this.mc.player);
+            }
+            return !this.mc.options.jumpKey.isPressed();
         }
-        return !this.mc.player.isOnGround();
+        return CriticalHitChecker.isCritical(this.mc.player);
     }
 
     private boolean isAttackTimingReady() {
@@ -372,36 +343,42 @@ public class Aura extends Module {
 
     private boolean handlePreAttackSprintReset() {
         if (this.mc.player == null) return false;
-        if (PendingTargetAction.hasPending()) return true;
         if (isNeuroMode() && this.neuroFightSetting.isSelected("Sprint") && !this.neuroMode.isMovementAllowed()) {
-            return false;
-        }
-        if (this.onlyCrits.getValue() && CriticalHitChecker.isCritical(this.mc.player)) {
-            PendingTargetAction.watch(this.mc.player);
             return true;
         }
         return false;
     }
 
-    private boolean handleSprintReset(LivingEntity target) {
-        if (this.mc.player == null) return false;
-        if (this.sprintResetSetting.is("None")) return false;
-        if (isNeuroMode() && this.neuroFightSetting.isSelected("Sprint")) return false;
+    private void handleSprintReset(LivingEntity target) {
+        if (this.mc.player == null) return;
+        if (this.sprintResetSetting.is("None")) return;
+        if (isNeuroMode() && this.neuroFightSetting.isSelected("Sprint")) return;
 
-        if (PendingTargetAction.hasPending() || PendingTargetAction.isTarget(this.mc.player)) {
-            return true;
+        // Strictly do NOT reset sprint in mid-air (jumping/falling)
+        // Modifying sprint state in air causes instant speed / friction flags on anti-cheats (GrimAC, Vulcan)
+        if (!this.mc.player.isOnGround()) {
+            return;
         }
+
         if (!this.mc.player.isSprinting()) {
-            PendingTargetAction.clearTarget(this.mc.player);
-            return false;
+            return;
         }
 
-        boolean isPacket = this.sprintResetSetting.is("Packet");
-        PendingTargetAction.arm(this.mc.player, () -> performAttack(target), isPacket);
-        if (isPacket && this.mc.getNetworkHandler() != null) {
-            this.mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(this.mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
+        if (this.sprintResetSetting.is("Packet")) {
+            if (this.mc.getNetworkHandler() != null) {
+                this.mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(this.mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
+            }
+            this.mc.player.setSprinting(false);
+        } else if (this.sprintResetSetting.is("Normal")) {
+            this.mc.player.setSprinting(false);
+        } else if (this.sprintResetSetting.is("Smart")) {
+            if (canHit(target)) {
+                if (this.mc.getNetworkHandler() != null) {
+                    this.mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(this.mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
+                }
+                this.mc.player.setSprinting(false);
+            }
         }
-        return true;
     }
 
     private void performAttack(LivingEntity target) {
@@ -415,6 +392,18 @@ public class Aura extends Module {
 
         this.mc.interactionManager.attackEntity(this.mc.player, target);
         this.mc.player.swingHand(Hand.MAIN_HAND);
+
+        // Re-sprint after attack if on ground and moving forward
+        if (this.mc.player.isOnGround() && !this.sprintResetSetting.is("None") && !this.mc.player.isSprinting()) {
+            if (this.mc.player.input != null && this.mc.player.input.hasForwardMovement() || this.mc.options.sprintKey.isPressed()) {
+                if (this.sprintResetSetting.is("Packet") || this.sprintResetSetting.is("Smart")) {
+                    if (this.mc.getNetworkHandler() != null) {
+                        this.mc.getNetworkHandler().sendPacket(new ClientCommandC2SPacket(this.mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
+                    }
+                }
+                this.mc.player.setSprinting(true);
+            }
+        }
 
         this.lastAttackTime = System.currentTimeMillis();
         this.hitCount++;
