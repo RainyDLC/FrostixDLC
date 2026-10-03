@@ -545,7 +545,6 @@ implements GuiCapture.Source {
             this.placeholderAnim.setDirection(Direction.BACKWARDS);
             if (this.contentCategory == category && this.contentSubCategory != null) {
                 this.moduleList.beginFadeOut(category, this.contentSubCategory);
-                this.contentSubCategory = null;
                 this.categoryT = 0.0f;
             }
             return;
@@ -574,7 +573,6 @@ implements GuiCapture.Source {
         this.placeholderAnim.setDirection(Direction.BACKWARDS);
         if (this.contentCategory == category && this.contentSubCategory != subCategory) {
             this.moduleList.beginFadeOut(category, this.contentSubCategory);
-            this.contentSubCategory = subCategory;
             this.categoryT = 0.0f;
         }
     }
