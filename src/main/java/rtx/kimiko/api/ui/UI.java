@@ -470,8 +470,6 @@ implements GuiCapture.Source {
             }
         }
         totalH += 3.0f + 24.0f;
-        totalH += (float)EVENT_SUBS.length * 18.0f;
-        totalH += 3.0f + 24.0f;
         for (Category cat : OTHER_CATEGORIES) {
             float rowT = cat == Category.THEMES ? this.themesRowT : 1.0f;
             if (rowT > 0.01f) {
@@ -752,18 +750,24 @@ implements GuiCapture.Source {
         float y = Companion.panelY();
         float shatterFade = Companion.guiCaptureActive() && GuiShatterAnimation.isActive() ? 1.0f - Math.min(1.0f, Math.max(0.0f, Companion.guiShatterProgress())) : 1.0f;
         float dimDrawAlpha = dimAlpha * shatterFade;
-        if (dimDrawAlpha > 0.002f) {
-            // True fullscreen rect (no zoom math — the old math left uncovered strips at the edges).
-            float sw = Position.Companion.screenWidth();
-            float sh = Position.Companion.screenHeight();
+        boolean isClosingOrCapturing = this.screenAnim.isClosing() || worldDetached || GuiShatterAnimation.isActive() || WorldGuiCloseAnimation.isActive() || Companion.guiCaptureActive();
+        if (!isClosingOrCapturing && dimDrawAlpha > 0.002f) {
+            float prevZoom = Render2DCoordinateSpace.pushUiZoom(1.0f);
+            try {
+                // True fullscreen rect (no zoom math — the old math left uncovered strips at the edges).
+                float sw = Position.Companion.screenWidth();
+                float sh = Position.Companion.screenHeight();
 
-            // Custom matte backdrop blur: samples the world snapshot captured before GUI render
-            // (see BlurFramebuffer.captureWorldSnapshot), so the background is a real blurred
-            // world instead of black.
-            Render2D.blur(Render2D.blurBuilder().rectangle(0.0f, 0.0f, sw, sh).radius(0.0f).blurRadius(20.0f * dimDrawAlpha).smoothness(1.0f).color(UI.Companion.color(255, 255, 255, 255, dimDrawAlpha)).build());
+                // Custom matte backdrop blur: samples the world snapshot captured before GUI render
+                // (see BlurFramebuffer.captureWorldSnapshot), so the background is a real blurred
+                // world instead of black.
+                Render2D.blur(Render2D.blurBuilder().rectangle(0.0f, 0.0f, sw, sh).radius(0.0f).blurRadius(20.0f * dimDrawAlpha).smoothness(1.0f).color(UI.Companion.color(255, 255, 255, 255, dimDrawAlpha)).build());
 
-            // Matte dimming: dark frosted tint, slightly transparent so the blur shows through.
-            Render2D.rect(0.0f, 0.0f, sw, sh, 0.0f, UI.Companion.color(4, 5, 8, 70, dimDrawAlpha));
+                // Matte dimming: dark frosted tint, slightly transparent so the blur shows through.
+                Render2D.rect(0.0f, 0.0f, sw, sh, 0.0f, UI.Companion.color(4, 5, 8, 70, dimDrawAlpha));
+            } finally {
+                Render2DCoordinateSpace.popUiZoom(prevZoom);
+            }
         }
         this.moduleList.resetCardBlur();
         this.themesRenderer.resetCardBlur();
@@ -1145,31 +1149,6 @@ implements GuiCapture.Source {
                 }
             }
 
-            float eventsHeaderTop = currentY + 3.0f;
-            float ehcY = eventsHeaderTop + 10.0f;
-            Double d3 = this.eventsHeaderAnim.getOutput();
-            float eventsAnim = (float)(d3 != null ? d3 : 0.0);
-            if (eventsAnim > 0.004f) {
-                Render2D.rect(panelX + 4.0f, eventsHeaderTop + 4.5f, panelW - 8.0f, 13.333333f, 5.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)16 * eventsAnim)), alpha));
-            }
-            String eIcon = "e";
-            float eIconW = Fonts.KIMIKO.msdfWidth(eIcon, 8.0f);
-            AccentGradient.msdfIcon(Fonts.KIMIKO, eIcon, left, ehcY - 4.0f + 1.5f, 8.0f, (200.0f + 55.0f * eventsAnim) * alpha, 0.6f);
-            Fonts.MEDIUM.draw("Server", left + eIconW + 6.0f, ehcY - 4.0f + 0.5f, 8.0f, UI.Companion.color(255, 255, 255, MathKt.roundToInt((float)((float)215 + (float)40 * eventsAnim)), alpha));
-            float eSubStartY = eventsHeaderTop + 20.0f + 4.0f;
-            currentY = eSubStartY;
-            for (int i = 0; i < EVENT_SUBS.length; ++i) {
-                float rowTop = currentY;
-                float cy = rowTop + 9.0f;
-                float p = this.eventsSubT[i];
-                int a = Math.min(255, 140 + MathKt.roundToInt((float)(p * (float)115)));
-                int col = UI.Companion.color(255, 255, 255, a, alpha);
-                String icon = EVENT_SUB_ICONS[i];
-                float iconW2 = Fonts.KIMIKO.msdfWidth(icon, 7.0f);
-                AccentGradient.msdfIcon(Fonts.KIMIKO, icon, subIconX, cy - 3.5f + 1.5f - rowLift, 7.0f, (float)a * alpha, 0.6f);
-                Fonts.MEDIUM.draw(EVENT_SUBS[i], subIconX + iconW2 + 5.0f, cy - 3.5f + 0.5f - rowLift, 7.0f, col);
-                currentY += 18.0f;
-            }
 
             float clientHeaderTop = currentY + 3.0f;
             float chcY = clientHeaderTop + 10.0f;
@@ -1503,8 +1482,6 @@ implements GuiCapture.Source {
             }
         }
         currentY += 3.0f + 20.0f + 4.0f;
-        currentY += (float)EVENT_SUBS.length * 18.0f;
-        currentY += 3.0f + 20.0f + 4.0f;
         for (Category cat : OTHER_CATEGORIES) {
             float rowT = cat == Category.THEMES ? this.themesRowT : 1.0f;
             if (rowT <= 0.01f) continue;
@@ -1520,36 +1497,6 @@ implements GuiCapture.Source {
     }
 
     private final int eventsSubAt(float x, float y, float mx, float my) {
-        float panelX = x;
-        float panelW = 110.0f;
-        float hitX0 = panelX + 4.0f;
-        float hitX1 = panelX + panelW - 4.0f;
-        float clipTop = y + 33.0f;
-        float profCardH = 26.0f;
-        float profCardY = y + 290.0f - profCardH - 7.0f;
-        float clipBottom = profCardY - 4.0f;
-        if (mx < hitX0 || mx > hitX1 || my < clipTop || my > clipBottom) {
-            return -1;
-        }
-        float headerTop = clipTop + 1.0f - this.sidebarScroll;
-        float currentY = headerTop + 20.0f + 4.0f;
-        for (Category cat : MAIN_CATEGORIES) {
-            currentY += 18.0f;
-            if (cat.hasSubCategories()) {
-                Double d = this.getSubExpandAnim(cat).getOutput();
-                float expandT = (float)(d != null ? d : 0.0);
-                if (expandT > 0.001f) {
-                    currentY += (float)cat.getSubCategories().length * 16.0f * expandT;
-                }
-            }
-        }
-        currentY += 3.0f + 20.0f + 4.0f;
-        for (int i = 0; i < EVENT_SUBS.length; ++i) {
-            if (my >= currentY && my <= currentY + 18.0f) {
-                return i;
-            }
-            currentY += 18.0f;
-        }
         return -1;
     }
 

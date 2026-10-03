@@ -1210,8 +1210,7 @@ public final class GuiLayerBlurRenderer {
                 }
                 SimpleFramebuffer tempHForShatter = tempH;
                 Intrinsics.checkNotNull((Object)tempHForShatter);
-                INSTANCE.frostedBlur(encoder, tempHForShatter.getColorAttachmentView(), blurRadius);
-                INSTANCE.writeCompositeUniform(encoder, 1.0f, 1.0f, 1.0f);
+                INSTANCE.writeCompositeUniform(encoder, 1.0f, 1.0f, 0.0f);
                 Supplier<String> supplier = GuiLayerBlurRenderer::composite$lambda$0;
                 GpuTextureView gpuTextureView = main.getColorAttachmentView();
                 Intrinsics.checkNotNull((Object)gpuTextureView);
@@ -1223,14 +1222,11 @@ public final class GuiLayerBlurRenderer {
                     RenderPipeline renderPipeline = compositePipeline;
                     Intrinsics.checkNotNull((Object)renderPipeline);
                     pass.setPipeline(renderPipeline);
-                    SimpleFramebuffer simpleFramebuffer7 = frostH;
-                    Intrinsics.checkNotNull((Object)simpleFramebuffer7);
-                    pass.bindTexture("uGui", simpleFramebuffer7.getColorAttachmentView(), RenderSampler.linear());
+                    pass.bindTexture("uGui", tempHForShatter.getColorAttachmentView(), RenderSampler.linear());
                     GpuBuffer gpuBuffer = compositeUniform;
                     Intrinsics.checkNotNull((Object)gpuBuffer);
                     pass.setUniform("CompositeData", gpuBuffer);
                     pass.draw(0, 6);
-// pass = Unit.INSTANCE;
                 }
                 catch (Throwable bl) {
                     throwable = bl;
