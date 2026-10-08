@@ -66,6 +66,10 @@ public final class LoadedClassAdapter implements Opcodes {
             }
         }
         if (!moved.isEmpty()) {
+            // Moved Mixin methods now live in the companion class. Rewrite calls
+            // between them before emitting that class, or they still target
+            // methods that were removed from the already-loaded Minecraft class.
+            for (MethodNode method : moved) rewriteCalls(method, after.name, helper, moved, names);
             byte[] bytes = companion(helper, after, moved, target.getClassLoader());
             if (NativeBridge.defineClassNative(helper.replace('/', '.'), bytes, target.getClassLoader()) == null)
                 throw new IllegalStateException("Companion definition returned null: " + helper);

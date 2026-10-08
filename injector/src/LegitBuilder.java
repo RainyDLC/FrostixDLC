@@ -364,8 +364,18 @@ public final class LegitBuilder {
                     if ($line) {
                         $line = $line.Replace([char]92, [char]47)
                         $match = [regex]::Match($line, 'com/mojang/minecraft/([^/;]+)/minecraft-[^/;]+-client[.]jar')
+                        $version = $null
                         if ($match.Success) {
-                            [Console]::Out.WriteLine([string]$_.ProcessId + [char]9 + $match.Groups[1].Value)
+                            $version = $match.Groups[1].Value
+                        } elseif ($line -match 'net[./]fabricmc[./]loader[./]impl[./]launch[./]knot[./]KnotClient') {
+                            # Some launchers use a single profile JAR instead of Mojang's
+                            # versioned client JAR. For Fabric, read the game's --version
+                            # argument (for example, "Fabric 26.2") and normalize it.
+                            $profile = [regex]::Match($line, '(?i)--version\\s+"?(?:Fabric\\s+)?(\\d+\\.\\d+(?:\\.\\d+)?)')
+                            if ($profile.Success) { $version = $profile.Groups[1].Value }
+                        }
+                        if ($version) {
+                            [Console]::Out.WriteLine([string]$_.ProcessId + [char]9 + $version)
                         }
                     }
                 }

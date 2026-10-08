@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "rainy.fun.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "LightmapAmbienceMixin",
+    "SkyRendererAmbienceMixin",
+    "ShaderManagerAmbienceResourcesMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

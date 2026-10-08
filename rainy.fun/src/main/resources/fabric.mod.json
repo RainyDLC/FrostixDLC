@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "rainyfun",
+  "version": "${version}",
+  "name": "Rainy.fun",
+  "description": "Client framework template for LegitBuilder.",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "rainy.fun.client.RainyClient"
+    ]
+  },
+  "mixins": [
+    "rainyfun.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "fabric-api": "*",
+    "minecraft": "~26.2",
+    "java": ">=25"
+  }
+}
