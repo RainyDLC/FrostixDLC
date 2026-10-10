@@ -61,6 +61,8 @@ public final class AimAssist extends Module {
     private final SliderSetting strength = new SliderSetting("Сила доводки, %", 55.0, 0.0, 100.0, 1.0);
     private final SliderSetting speed = new SliderSetting("Скорость, °/сек", 120.0, 20.0, 360.0, 5.0);
     private final SliderSetting smoothness = new SliderSetting("Плавность", 6.0, 1.0, 20.0, 1.0);
+    private final BoolSetting autoSpeed = new BoolSetting("Авто-скорость (из записи)", true);
+    private final BoolSetting autoSmooth = new BoolSetting("Авто-плавность (из записи)", true);
     private final SliderSetting range = new SliderSetting("Дистанция", 4.5, 1.0, 8.0, 0.1);
     private final SliderSetting fov = new SliderSetting("FOV захвата", 60.0, 10.0, 180.0, 1.0);
     private final BoolSetting onlyWhileAttacking = new BoolSetting("Только при атаке", true);
@@ -89,7 +91,8 @@ public final class AimAssist extends Module {
                 Category.COMBAT);
         instance = this;
         keybind(GLFW.GLFW_KEY_UNKNOWN);
-        with(this.aimPoint, this.strength, this.speed, this.smoothness, this.range, this.fov,
+        with(this.aimPoint, this.strength, this.speed, this.smoothness,
+                this.autoSpeed, this.autoSmooth, this.range, this.fov,
                 this.onlyWhileAttacking, this.useBrain, this.trainButton, this.learnButton);
         this.learnButton.enabled(false);
         AimHud.init();
@@ -207,7 +210,9 @@ public final class AimAssist extends Module {
                 this.activeProfile = profile;
                 saveActiveProfile();
                 learnStatus = "Готово: «" + profile + "», " + samples.size()
-                        + " сэмплов · loss " + String.format("%.4f", next.lastLoss);
+                        + " сэмплов · loss " + String.format("%.4f", next.lastLoss)
+                        + " · авто: " + (int) Math.round(next.autoSpeedDps) + "°/с, пл. "
+                        + String.format("%.2f", next.autoSmoothAlpha);
             } catch (Exception e) {
                 learnStatus = "Ошибка: " + e.getMessage();
             } finally {
@@ -294,12 +299,14 @@ public final class AimAssist extends Module {
         }
 
         // Плавность: сглаживание итогового доворота (чем выше — тем мягче).
-        float alpha = Mth.clamp(2.7f / (float) this.smoothness.value(), 0.05f, 1.0f);
+        // В авто-режиме альфа берётся из твоей записи.
+        float alpha = currentAlpha();
         this.velYaw += (turnYaw - this.velYaw) * alpha;
         this.velPitch += (turnPitch - this.velPitch) * alpha;
 
         // Скорость: жёсткий лимит в градусах/секунду.
-        float maxTurn = (float) (this.speed.value() / 20.0);
+        // В авто-режиме лимит — твоя скорость из записи.
+        float maxTurn = currentMaxTurn();
         this.velYaw = Mth.clamp(this.velYaw, -maxTurn, maxTurn);
         this.velPitch = Mth.clamp(this.velPitch, -maxTurn, maxTurn);
 
@@ -333,8 +340,23 @@ public final class AimAssist extends Module {
         return Mth.clamp(predicted / denom, 0.0f, 1.0f);
     }
 
+    /** Лимит доводки за тик: из записи (авто) или из слайдера. */
+    private float currentMaxTurn() {
+        double dps = this.autoSpeed.value() && this.brain.isTrained()
+                ? this.brain.autoSpeedDps : this.speed.value();
+        return (float) (dps / 20.0);
+    }
+
+    /** Сглаживание: из записи (авто) или из слайдера. */
+    private float currentAlpha() {
+        if (this.autoSmooth.value() && this.brain.isTrained()) {
+            return (float) this.brain.autoSmoothAlpha;
+        }
+        return Mth.clamp(2.7f / (float) this.smoothness.value(), 0.05f, 1.0f);
+    }
+
     private void decayVelocity() {
-        float alpha = Mth.clamp(2.7f / (float) this.smoothness.value(), 0.05f, 1.0f);
+        float alpha = currentAlpha();
         this.velYaw *= 1.0f - alpha;
         this.velPitch *= 1.0f - alpha;
         if (Math.abs(this.velYaw) < 0.001f) {
