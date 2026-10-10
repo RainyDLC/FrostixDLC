@@ -46,7 +46,6 @@ public final class AimAssist extends Module {
 
     private static final int MIN_SAMPLES = 50;
     private static final int EPOCHS = 300;
-    private static final float MAX_TURN_PER_TICK = 10.0f;
 
     // ---- состояние обучения (читает HUD) ----
     public static volatile boolean training;
@@ -60,6 +59,8 @@ public final class AimAssist extends Module {
     private final ModeSetting aimPoint = new ModeSetting("Прицел", 2,
             POINT_HEAD, POINT_BODY, POINT_NEAREST);
     private final SliderSetting strength = new SliderSetting("Сила доводки, %", 35.0, 0.0, 100.0, 1.0);
+    private final SliderSetting speed = new SliderSetting("Скорость, °/сек", 120.0, 20.0, 360.0, 5.0);
+    private final SliderSetting smoothness = new SliderSetting("Плавность", 6.0, 1.0, 20.0, 1.0);
     private final SliderSetting range = new SliderSetting("Дистанция", 4.5, 1.0, 8.0, 0.1);
     private final SliderSetting fov = new SliderSetting("FOV захвата", 60.0, 10.0, 180.0, 1.0);
     private final BoolSetting onlyWhileAttacking = new BoolSetting("Только при атаке", true);
@@ -79,13 +80,16 @@ public final class AimAssist extends Module {
     private boolean hasLast;
     private float[] prevFeatures;
     private Vec3 lastTargetPos;
+    /** Текущая скорость доводки (°/тик) — сглаживается для плавности. */
+    private float velYaw;
+    private float velPitch;
 
     public AimAssist() {
         super("AimAssist", "Мягко доводит прицел (голова/тело), учится твоей наводке",
                 Category.COMBAT);
         instance = this;
         keybind(GLFW.GLFW_KEY_UNKNOWN);
-        with(this.aimPoint, this.strength, this.range, this.fov,
+        with(this.aimPoint, this.strength, this.speed, this.smoothness, this.range, this.fov,
                 this.onlyWhileAttacking, this.useBrain, this.trainButton, this.learnButton);
         this.learnButton.enabled(false);
         AimHud.init();
@@ -160,6 +164,8 @@ public final class AimAssist extends Module {
         if (this.dataset != null) {
             try {
                 this.dataset.save();
+                learnStatus = "Записано " + this.dataset.size()
+                        + " сэмплов — нажми «Обучить нейронку»";
             } catch (IOException e) {
                 learnStatus = "Ошибка сохранения: " + e.getMessage();
             }
@@ -191,15 +197,17 @@ public final class AimAssist extends Module {
         new Thread(() -> {
             try {
                 AimBrain next = new AimBrain();
-                next.train(samples, EPOCHS, p -> {
+                next.train(samples, EPOCHS, (p, loss) -> {
                     learnProgress = p;
-                    learnStatus = "Эпоха " + (int) Math.round(p * EPOCHS) + "/" + EPOCHS;
+                    learnStatus = "Эпоха " + (int) Math.round(p * EPOCHS) + "/" + EPOCHS
+                            + " · loss " + String.format("%.4f", loss);
                 });
                 next.save(AimBrain.weightsFileOf(profile));
                 this.brain = next;
                 this.activeProfile = profile;
                 saveActiveProfile();
-                learnStatus = "Готово: профиль «" + profile + "»";
+                learnStatus = "Готово: «" + profile + "», " + samples.size()
+                        + " сэмплов · loss " + String.format("%.4f", next.lastLoss);
             } catch (Exception e) {
                 learnStatus = "Ошибка: " + e.getMessage();
             } finally {
@@ -240,15 +248,16 @@ public final class AimAssist extends Module {
             this.hasLast = true;
             this.lastYaw = mc.player.getYRot();
             this.lastPitch = mc.player.getXRot();
-            return; // во время обучения асист выключен — пишем чистую наводку игрока
+            decayVelocity(); // во время обучения асист выключен
+            return;
         }
 
         this.hasLast = false;
         this.prevFeatures = null;
-        if (target == null) {
-            return;
-        }
-        if (this.onlyWhileAttacking.value() && !mc.options.keyAttack.isDown()) {
+        if (target == null
+                || (this.onlyWhileAttacking.value() && !mc.options.keyAttack.isDown())) {
+            decayVelocity(); // цели нет — плавно останавливаем доводку
+            applyVelocity(mc);
             return;
         }
 
@@ -257,30 +266,53 @@ public final class AimAssist extends Module {
         float[] rot = rotTo(eye, point);
         float dYaw = Mth.wrapDegrees(rot[0] - mc.player.getYRot());
         float dPitch = rot[1] - mc.player.getXRot();
-        if (Math.abs(dYaw) < 0.3f && Math.abs(dPitch) < 0.3f) {
-            return;
-        }
 
         float k = (float) (this.strength.value() / 100.0);
-        float turnYaw;
-        float turnPitch;
-        if (this.useBrain.value() && this.brain.isTrained()) {
+        float desYaw;
+        float desPitch;
+        if (Math.abs(dYaw) < 0.25f && Math.abs(dPitch) < 0.25f) {
+            desYaw = 0.0f;
+            desPitch = 0.0f; // уже наведены — плавно останавливаемся
+        } else if (this.useBrain.value() && this.brain.isTrained()) {
             float[] features = features(target, eye);
             float[] pred = this.brain.predict(features);
             // Нейронка предсказывает доворот игрока — повторяем его с заданной силой.
-            turnYaw = clampTurn(pred[0] * k);
-            turnPitch = clampTurn(pred[1] * k);
+            desYaw = pred[0] * k;
+            desPitch = pred[1] * k;
         } else {
-            turnYaw = clampTurn(dYaw * k * 0.30f);
-            turnPitch = clampTurn(dPitch * k * 0.30f);
+            desYaw = dYaw * k * 0.35f;
+            desPitch = dPitch * k * 0.35f;
         }
 
-        mc.player.setYRot(mc.player.getYRot() + turnYaw);
-        mc.player.setXRot(Mth.clamp(mc.player.getXRot() + turnPitch, -90.0f, 90.0f));
+        // Плавность: текущая скорость доводки догоняет желаемую постепенно.
+        // Чем выше значение — тем мягче и «человечнее» движение.
+        float s = (float) this.smoothness.value();
+        this.velYaw += (desYaw - this.velYaw) / s;
+        this.velPitch += (desPitch - this.velPitch) / s;
+
+        // Скорость: жёсткий лимит в градусах/секунду.
+        float maxTurn = (float) (this.speed.value() / 20.0);
+        this.velYaw = Mth.clamp(this.velYaw, -maxTurn, maxTurn);
+        this.velPitch = Mth.clamp(this.velPitch, -maxTurn, maxTurn);
+
+        applyVelocity(mc);
     }
 
-    private static float clampTurn(float v) {
-        return Mth.clamp(v, -MAX_TURN_PER_TICK, MAX_TURN_PER_TICK);
+    private void applyVelocity(Minecraft mc) {
+        mc.player.setYRot(mc.player.getYRot() + this.velYaw);
+        mc.player.setXRot(Mth.clamp(mc.player.getXRot() + this.velPitch, -90.0f, 90.0f));
+    }
+
+    private void decayVelocity() {
+        float s = (float) this.smoothness.value();
+        this.velYaw -= this.velYaw / s;
+        this.velPitch -= this.velPitch / s;
+        if (Math.abs(this.velYaw) < 0.001f) {
+            this.velYaw = 0.0f;
+        }
+        if (Math.abs(this.velPitch) < 0.001f) {
+            this.velPitch = 0.0f;
+        }
     }
 
     /** Признаки для нейронки: углы до головы/тела, дистанция, скорость цели. */
@@ -380,5 +412,7 @@ public final class AimAssist extends Module {
         if (training) {
             stopTraining();
         }
+        this.velYaw = 0.0f;
+        this.velPitch = 0.0f;
     }
 }
