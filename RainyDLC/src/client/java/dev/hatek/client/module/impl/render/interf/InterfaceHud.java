@@ -3,18 +3,22 @@ package dev.hatek.client.module.impl.render.interf;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import dev.hatek.client.mixin.accessor.BossHealthOverlayAccessor;
 import dev.hatek.client.mixin.accessor.GuiAccessor;
+import dev.hatek.client.module.Module;
+import dev.hatek.client.module.ModuleManager;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.client.module.impl.render.NoRender;
 import dev.hatek.client.ui.Style;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
 import dev.hatek.client.ui.render.Render2D;
+import dev.hatek.client.ui.render.TexCache;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Hud;
 import net.minecraft.client.gui.components.BossHealthOverlay;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
@@ -23,14 +27,17 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Отрисовка HUD модуля Interface: ватермарка, кейбинды,
- * активные эффекты и кастомный хотбар.
+ * Отрисовка HUD модуля Interface в стилистике ClickGUI
+ * (константы Style.HUD_* / Style.WM_*): ватермарка, кейбинды
+ * функций, активные эффекты и кастомный хотбар.
  */
 public final class InterfaceHud {
     private static boolean hooked;
@@ -43,7 +50,7 @@ public final class InterfaceHud {
     private static boolean wmVisible;
 
     // Плавная анимация Y ватермарки в режиме "Center" при появлении боссбара.
-    private static float wmAnimY = 10.0f;
+    private static float wmAnimY = Style.HUD_MARGIN;
 
     private InterfaceHud() {
     }
@@ -73,16 +80,23 @@ public final class InterfaceHud {
         int sh = Render2D.screenHeight();
 
         Render2D.begin(gg);
+        float rightY = Style.HUD_MARGIN;
         if (Interface.showWatermark()) {
             renderWatermark(gg, sw);
+            if (wmVisible && "Right".equals(Interface.watermarkPos())) {
+                rightY = wmY + wmH + 8.0f;
+            }
         } else {
             wmVisible = false;
         }
         if (Interface.showKeybinds()) {
-            renderKeybinds(gg, sh);
+            float h = renderKeybinds(gg, sw, rightY);
+            if (h > 0.0f) {
+                rightY += h + 8.0f;
+            }
         }
         if (Interface.showEffects()) {
-            renderEffects(gg, sw);
+            renderEffects(gg, sw, rightY);
         }
         if (Interface.showHotbar()) {
             renderHotbar(gg, sw, sh);
@@ -96,13 +110,29 @@ public final class InterfaceHud {
         Minecraft mc = Minecraft.getInstance();
         HFont title = Fonts.title();
         HFont label = Fonts.label();
+        float h = Style.WM_H;
 
-        String part1 = "Frostix";
-        String part2 = "DLC";
-        String info = mc.getFps() + " FPS";
-        float nameW = title.width(part1) + title.width(part2);
-        float w = 10.0f + nameW + 8.0f + label.width(info) + 12.0f;
-        float h = 24.0f;
+        String name1 = "Rainy";
+        String name2 = "DLC";
+        float nameW = title.width(name1) + title.width(name2);
+
+        String fps = mc.getFps() + " FPS";
+        float fpsW = label.width(fps);
+
+        int ping = ping();
+        String pingS = ping >= 0 ? ping + " ms" : null;
+        float pingW = pingS == null ? 0.0f : label.width(pingS);
+
+        float logoS = 16.0f;
+        float iconS = 11.0f;
+        float w = Style.WM_PAD + logoS + 8.0f + nameW
+                + Style.WM_SEP_GAP + Style.WM_SEP_W + Style.WM_SEP_GAP
+                + iconS + Style.WM_UNIT_GAP + fpsW;
+        if (pingS != null) {
+            w += Style.WM_SEP_GAP + Style.WM_SEP_W + Style.WM_SEP_GAP
+                    + iconS + Style.WM_UNIT_GAP + pingW;
+        }
+        w += Style.WM_PAD;
 
         String pos = Interface.watermarkPos();
         float x;
@@ -110,16 +140,16 @@ public final class InterfaceHud {
         if ("Center".equals(pos)) {
             x = (sw - w) / 2.0f;
             int bosses = bossBarCount();
-            float target = 10.0f + Math.min(bosses, 3) * 20.0f;
+            float target = Style.HUD_MARGIN + Math.min(bosses, 3) * 20.0f;
             wmAnimY += (target - wmAnimY) * 0.18f;
             if (Math.abs(target - wmAnimY) < 0.1f) {
                 wmAnimY = target;
             }
             y = wmAnimY;
         } else {
-            wmAnimY = 10.0f;
-            y = 10.0f;
-            x = "Right".equals(pos) ? sw - w - 10.0f : 10.0f;
+            wmAnimY = Style.HUD_MARGIN;
+            y = Style.HUD_MARGIN;
+            x = "Right".equals(pos) ? sw - w - Style.HUD_MARGIN : Style.HUD_MARGIN;
         }
 
         wmX = x;
@@ -128,12 +158,53 @@ public final class InterfaceHud {
         wmH = h;
         wmVisible = true;
 
-        Render2D.round(gg, x, y, w, h, 8.0f, Style.HUD_PANEL);
-        float baseline = title.centeredBaseline(y, h);
-        float cx = x + 10.0f;
-        cx = title.draw(gg, part1, cx, baseline, Style.WHITE);
-        cx = title.draw(gg, part2, cx, baseline, Style.accent());
-        label.draw(gg, info, cx + 8.0f, label.centeredBaseline(y, h), Style.WHITE_45);
+        Render2D.round(gg, x, y, w, h, Style.WM_R, Style.HUD_PANEL);
+
+        float cx = x + Style.WM_PAD;
+        Render2D.icon(gg, "logo", cx, y + (h - logoS) / 2.0f, logoS, logoS, Style.WHITE);
+        cx += logoS + 8.0f;
+
+        float baseline = y + Style.WM_BASELINE;
+        cx = title.draw(gg, name1, cx, baseline, Style.WHITE);
+        cx = title.draw(gg, name2, cx, baseline, Style.accent());
+
+        float unitBaseline = label.centeredBaseline(y, h);
+        cx = separator(gg, cx, y, h);
+        cx = unit(gg, "fps", fps, fpsW, cx, y, h, unitBaseline);
+
+        if (pingS != null) {
+            cx = separator(gg, cx, y, h);
+            unit(gg, "ping", pingS, pingW, cx, y, h, unitBaseline);
+        }
+    }
+
+    private static float separator(GuiGraphicsExtractor gg, float cx, float y, float h) {
+        cx += Style.WM_SEP_GAP;
+        Render2D.rect(gg, cx, y + (h - Style.WM_SEP_H) / 2.0f,
+                Style.WM_SEP_W, Style.WM_SEP_H, Style.WHITE_08);
+        return cx + Style.WM_SEP_W + Style.WM_SEP_GAP;
+    }
+
+    private static float unit(GuiGraphicsExtractor gg, String icon, String text, float textW,
+                              float cx, float y, float h, float baseline) {
+        float iconS = 11.0f;
+        Render2D.icon(gg, icon, cx, y + (h - iconS) / 2.0f, iconS, iconS, Style.WHITE_45);
+        cx += iconS + Style.WM_UNIT_GAP;
+        Fonts.label().draw(gg, text, cx, baseline, Style.WHITE);
+        return cx + textW;
+    }
+
+    private static int ping() {
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.getConnection() == null || mc.player == null) {
+                return -1;
+            }
+            PlayerInfo info = mc.getConnection().getPlayerInfo(mc.player.getUUID());
+            return info == null ? -1 : info.getLatency();
+        } catch (Exception e) {
+            return -1;
+        }
     }
 
     /** Количество активных боссбаров (0, если они скрыты NoRender). */
@@ -183,38 +254,80 @@ public final class InterfaceHud {
         return false;
     }
 
-    // ---------------- кейбинды ----------------
+    // ---------------- кейбинды функций ----------------
 
-    private static void renderKeybinds(GuiGraphicsExtractor gg, int sh) {
-        Minecraft mc = Minecraft.getInstance();
-        float cell = 26.0f;
-        float gap = 4.0f;
-        float x0 = 10.0f;
-        float totalH = cell * 3.0f + gap * 2.0f;
-        float y0 = (sh - totalH) / 2.0f;
+    /**
+     * Карточка биндов: какие клавиши назначены на функции.
+     * Возвращает высоту карточки (0 — нечего показать).
+     */
+    private static float renderKeybinds(GuiGraphicsExtractor gg, int sw, float topY) {
+        List<Module> bound = new ArrayList<>();
+        for (Module module : ModuleManager.all()) {
+            if (module.keyCode() != GLFW.GLFW_KEY_UNKNOWN) {
+                bound.add(module);
+            }
+        }
+        if (bound.isEmpty()) {
+            return 0.0f;
+        }
+        bound.sort(Comparator.comparing(Module::name));
 
-        HFont font = Fonts.label();
-        keyCell(gg, font, "W", x0 + cell + gap, y0, cell, cell, mc.options.keyUp.isDown());
-        keyCell(gg, font, "A", x0, y0 + cell + gap, cell, cell, mc.options.keyLeft.isDown());
-        keyCell(gg, font, "S", x0 + cell + gap, y0 + cell + gap, cell, cell, mc.options.keyDown.isDown());
-        keyCell(gg, font, "D", x0 + 2.0f * (cell + gap), y0 + cell + gap, cell, cell, mc.options.keyRight.isDown());
-        keyCell(gg, font, "SPACE", x0, y0 + 2.0f * (cell + gap),
-                cell * 2.0f + gap, cell, mc.options.keyJump.isDown());
-        keyCell(gg, font, "SHIFT", x0 + 2.0f * (cell + gap), y0 + 2.0f * (cell + gap),
-                cell, cell, mc.options.keyShift.isDown());
+        HFont title = Fonts.title();
+        HFont body = Fonts.body();
+        HFont label = Fonts.label();
+
+        float headerW = Style.HUD_TITLE_X + title.width("Keybinds") + Style.HUD_PAD;
+        float rowsW = 0.0f;
+        for (Module module : bound) {
+            float badgeW = label.width(module.keyLabel()) + Style.HUD_BADGE_PAD * 2.0f;
+            float rowW = 23.0f + body.width(module.name()) + 8.0f + badgeW + Style.HUD_PAD;
+            rowsW = Math.max(rowsW, rowW);
+        }
+        float w = Math.max(Style.HUD_MIN_W, Math.max(headerW, rowsW));
+        float rowH = Style.HUD_ROW_H;
+        float h = Style.HUD_HEADER_H + bound.size() * rowH + Style.HUD_BOTTOM_PAD;
+        float x = sw - w - Style.HUD_MARGIN;
+        float y = topY;
+
+        Render2D.round(gg, x, y, w, h, Style.HUD_CARD_R, Style.HUD_PANEL);
+        drawCardHeader(gg, x, y, "keyboard", "Keybinds");
+
+        float ry = y + Style.HUD_HEADER_H;
+        for (Module module : bound) {
+            boolean enabled = module.isEnabled();
+            if (enabled) {
+                Render2D.round(gg, x + Style.HUD_PAD, ry + (rowH - Style.HUD_STUB_H) / 2.0f,
+                        Style.HUD_STUB_W, Style.HUD_STUB_H, 1.0f, Style.accent());
+            }
+            body.draw(gg, module.name(), x + 23.0f,
+                    body.centeredBaseline(ry, rowH),
+                    enabled ? Style.WHITE : Style.WHITE_45);
+
+            String key = module.keyLabel();
+            float badgeW = label.width(key) + Style.HUD_BADGE_PAD * 2.0f;
+            float bx = x + w - Style.HUD_PAD - badgeW;
+            float by = ry + (rowH - Style.HUD_BADGE_H) / 2.0f;
+            Render2D.round(gg, bx, by, badgeW, Style.HUD_BADGE_H, Style.HUD_BADGE_R,
+                    enabled ? Render2D.withAlpha(Style.accent(), 0.22f) : Style.WHITE_04);
+            label.drawCentered(gg, key, bx + badgeW / 2.0f,
+                    label.centeredBaseline(by, Style.HUD_BADGE_H),
+                    enabled ? Style.WHITE : Style.WHITE_45);
+            ry += rowH;
+        }
+        return h;
     }
 
-    private static void keyCell(GuiGraphicsExtractor gg, HFont font, String text,
-                                float x, float y, float w, float h, boolean pressed) {
-        int bg = pressed ? Render2D.withAlpha(Style.accent(), 0.85f) : Style.HUD_PANEL;
-        Render2D.round(gg, x, y, w, h, 6.0f, bg);
-        font.drawCentered(gg, text, x + w / 2.0f, font.centeredBaseline(y, h),
-                pressed ? Style.WHITE : Style.WHITE_45);
+    private static void drawCardHeader(GuiGraphicsExtractor gg, float x, float y,
+                                       String icon, String titleText) {
+        Render2D.icon(gg, icon, x + Style.HUD_ICON_X, y + Style.HUD_ICON_Y,
+                Style.HUD_ICON, Style.HUD_ICON, Style.WHITE_45);
+        Fonts.title().draw(gg, titleText, x + Style.HUD_TITLE_X,
+                y + Style.HUD_TITLE_BASELINE, Style.WHITE);
     }
 
     // ---------------- эффекты ----------------
 
-    private static void renderEffects(GuiGraphicsExtractor gg, int sw) {
+    private static void renderEffects(GuiGraphicsExtractor gg, int sw, float topY) {
         Minecraft mc = Minecraft.getInstance();
         List<MobEffectInstance> effects = new ArrayList<>(mc.player.getActiveEffects());
         effects.removeIf(instance -> !instance.showIcon());
@@ -222,43 +335,61 @@ public final class InterfaceHud {
             return;
         }
 
+        HFont title = Fonts.title();
+        HFont body = Fonts.body();
         HFont label = Fonts.label();
-        float rowW = 170.0f;
-        float rowH = 24.0f;
-        float gap = 4.0f;
-        float x = sw - rowW - 10.0f;
-        float y = 10.0f;
-        if (wmVisible && "Right".equals(Interface.watermarkPos())) {
-            y = wmY + wmH + 8.0f;
+
+        float rowH = 22.0f;
+        float headerW = Style.HUD_TITLE_X + title.width("Effects") + Style.HUD_PAD;
+        float rowsW = 0.0f;
+        for (int i = 0; i < Math.min(8, effects.size()); i++) {
+            MobEffectInstance instance = effects.get(i);
+            String name = effectName(instance);
+            float rowW = Style.HUD_PAD + 14.0f + 6.0f + body.width(name)
+                    + 8.0f + label.width(formatDuration(instance.getDuration()))
+                    + Style.HUD_PAD;
+            rowsW = Math.max(rowsW, rowW);
         }
+        float w = Math.max(Style.HUD_MIN_W, Math.max(headerW, rowsW));
+        int shown = Math.min(8, effects.size());
+        float h = Style.HUD_HEADER_H + shown * rowH + Style.HUD_BOTTOM_PAD;
+        float x = sw - w - Style.HUD_MARGIN;
+        float y = topY;
+
+        Render2D.round(gg, x, y, w, h, Style.HUD_CARD_R, Style.HUD_PANEL);
+        Render2D.texture(gg, TexCache.flask(Style.HUD_ICON),
+                x + Style.HUD_ICON_X, y + Style.HUD_ICON_Y,
+                Style.HUD_ICON, Style.HUD_ICON, Style.WHITE_45);
+        title.draw(gg, "Effects", x + Style.HUD_TITLE_X,
+                y + Style.HUD_TITLE_BASELINE, Style.WHITE);
 
         RenderPipeline pipeline = RenderPipelines.GUI_TEXTURED;
-        int shown = 0;
-        for (MobEffectInstance instance : effects) {
-            if (shown >= 8) {
-                break;
-            }
-            float ry = y + shown * (rowH + gap);
-            Render2D.round(gg, x, ry, rowW, rowH, 7.0f, Style.HUD_PANEL);
-
+        float ry = y + Style.HUD_HEADER_H;
+        for (int i = 0; i < shown; i++) {
+            MobEffectInstance instance = effects.get(i);
             Holder<MobEffect> holder = instance.getEffect();
-            Identifier sprite = Hud.getMobEffectSprite(holder);
-            Render2D.pushTranslate(gg, x + 4.0f, ry + 4.0f);
-            gg.blitSprite(pipeline, sprite, 0, 0, 16, 16);
+
+            Render2D.pushTranslate(gg, x + Style.HUD_PAD, ry + (rowH - 14.0f) / 2.0f);
+            gg.blitSprite(pipeline, Hud.getMobEffectSprite(holder), 0, 0, 14, 14);
             Render2D.popTransform();
 
-            String name = Component.translatable(
-                    holder.value().getDescriptionId()).getString();
-            int amp = instance.getAmplifier();
-            if (amp > 0) {
-                name += " " + toRoman(amp + 1);
-            }
-            float baseline = label.centeredBaseline(ry, rowH);
-            label.draw(gg, name, x + 26.0f, baseline, Style.WHITE);
+            float baseline = body.centeredBaseline(ry, rowH);
+            body.draw(gg, effectName(instance), x + Style.HUD_PAD + 20.0f,
+                    baseline, Style.WHITE);
             label.drawRight(gg, formatDuration(instance.getDuration()),
-                    x + rowW - 8.0f, baseline, Style.WHITE_45);
-            shown++;
+                    x + w - Style.HUD_PAD, label.centeredBaseline(ry, rowH), Style.WHITE_45);
+            ry += rowH;
         }
+    }
+
+    private static String effectName(MobEffectInstance instance) {
+        String name = Component.translatable(
+                instance.getEffect().value().getDescriptionId()).getString();
+        int amp = instance.getAmplifier();
+        if (amp > 0) {
+            name += " " + toRoman(amp + 1);
+        }
+        return name;
     }
 
     private static String formatDuration(int ticks) {
