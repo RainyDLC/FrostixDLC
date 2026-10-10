@@ -17,6 +17,7 @@
     "NoRenderOverlayMixin",
     "InterfaceHudMixin",
     "InterfaceMouseMixin",
+    "MediaBillboardMixin",
     "accessor.LivingEntityAccessor",
     "accessor.MinecraftAccessor",
     "accessor.ScreenInvoker",

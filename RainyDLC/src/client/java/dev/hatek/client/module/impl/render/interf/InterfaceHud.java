@@ -1,6 +1,8 @@
 package dev.hatek.client.module.impl.render.interf;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+import dev.hatek.client.media.MediaClip;
+import dev.hatek.client.media.MediaManager;
 import dev.hatek.client.mixin.accessor.BossHealthOverlayAccessor;
 import dev.hatek.client.mixin.accessor.GuiAccessor;
 import dev.hatek.client.module.Module;
@@ -100,6 +102,9 @@ public final class InterfaceHud {
         }
         if (Interface.showHotbar()) {
             renderHotbar(gg, sw, sh);
+        }
+        if (Interface.showMedia2D()) {
+            renderMedia2D(gg, sw, sh);
         }
         Render2D.end(gg);
     }
@@ -406,6 +411,21 @@ public final class InterfaceHud {
             return romans[n - 1];
         }
         return String.valueOf(n);
+    }
+
+    // ---------------- медиа 2D ----------------
+
+    private static void renderMedia2D(GuiGraphicsExtractor gg, int sw, int sh) {
+        MediaClip clip = MediaManager.get(Interface.mediaFile());
+        if (clip == null) {
+            return;
+        }
+        MediaClip.Frame frame = clip.frameAt(System.currentTimeMillis());
+        float h = (float) Interface.mediaSize();
+        float w = h * frame.width() / (float) frame.height();
+        float x = sw * (float) Interface.mediaX() / 100.0f - w / 2.0f;
+        float y = sh * (float) Interface.mediaY() / 100.0f - h / 2.0f;
+        Render2D.texture(gg, frame.texture(), x, y, w, h, Style.WHITE);
     }
 
     // ---------------- кастомный хотбар ----------------
