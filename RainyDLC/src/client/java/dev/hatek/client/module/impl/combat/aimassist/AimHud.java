@@ -5,9 +5,10 @@ import dev.hatek.client.ui.Style;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
 import dev.hatek.client.ui.render.Render2D;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.resources.Identifier;
 
 /**
  * Полоса прогресса обучения сверху экрана.
@@ -24,7 +25,9 @@ public final class AimHud {
             return;
         }
         hooked = true;
-        HudRenderCallback.EVENT.register((gg, tickCounter) -> render(gg));
+        HudElementRegistry.addLast(
+                Identifier.fromNamespaceAndPath("hatek_client", "aim_hud"),
+                (gg, tickCounter) -> render(gg));
     }
 
     private static void render(GuiGraphicsExtractor gg) {

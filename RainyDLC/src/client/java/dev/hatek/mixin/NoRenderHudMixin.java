@@ -1,86 +1,82 @@
 package dev.hatek.mixin;
 
 import dev.hatek.client.module.impl.render.NoRender;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.hud.InGameHud;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.entity.Entity;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.Hud;
+import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(InGameHud.class)
+@Mixin(Hud.class)
 public abstract class NoRenderHudMixin {
-    @Inject(method = "renderVignetteOverlay", at = @At("HEAD"), cancellable = true)
-    private void hatek$noRenderVignette(DrawContext context, Entity entity, CallbackInfo ci) {
+    @Inject(method = "extractVignette", at = @At("HEAD"), cancellable = true)
+    private void hatek$noRenderVignette(GuiGraphicsExtractor extractor, Entity entity, CallbackInfo ci) {
         if (NoRender.hideVignette()) {
             ci.cancel();
         }
     }
 
-    @Inject(method = "renderNauseaOverlay", at = @At("HEAD"), cancellable = true)
-    private void hatek$noRenderNausea(DrawContext context, float nauseaStrength, CallbackInfo ci) {
+    @Inject(method = "extractConfusionOverlay", at = @At("HEAD"), cancellable = true)
+    private void hatek$noRenderNausea(GuiGraphicsExtractor extractor, float strength, CallbackInfo ci) {
         if (NoRender.hideNausea()) {
             ci.cancel();
         }
     }
 
-    @Inject(method = "renderPortalOverlay", at = @At("HEAD"), cancellable = true)
-    private void hatek$noRenderPortal(DrawContext context, float nauseaStrength, CallbackInfo ci) {
+    @Inject(method = "extractPortalOverlay", at = @At("HEAD"), cancellable = true)
+    private void hatek$noRenderPortal(GuiGraphicsExtractor extractor, float strength, CallbackInfo ci) {
         if (NoRender.hidePortal()) {
             ci.cancel();
         }
     }
 
-    @Inject(method = "renderSpyglassOverlay", at = @At("HEAD"), cancellable = true)
-    private void hatek$noRenderSpyglass(DrawContext context, float scale, CallbackInfo ci) {
+    @Inject(method = "extractSpyglassOverlay", at = @At("HEAD"), cancellable = true)
+    private void hatek$noRenderSpyglass(GuiGraphicsExtractor extractor, float scale, CallbackInfo ci) {
         if (NoRender.hideSpyglass()) {
             ci.cancel();
         }
     }
 
-    @Inject(method = "renderSleepOverlay", at = @At("HEAD"), cancellable = true)
-    private void hatek$noRenderSleep(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+    @Inject(method = "extractSleepOverlay", at = @At("HEAD"), cancellable = true)
+    private void hatek$noRenderSleep(GuiGraphicsExtractor extractor, DeltaTracker deltaTracker, CallbackInfo ci) {
         if (NoRender.hideSleep()) {
             ci.cancel();
         }
     }
 
-    @Inject(method = "renderBossBarHud", at = @At("HEAD"), cancellable = true)
-    private void hatek$noRenderBossBar(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+    @Inject(method = "extractBossOverlay", at = @At("HEAD"), cancellable = true)
+    private void hatek$noRenderBossBar(GuiGraphicsExtractor extractor, DeltaTracker deltaTracker, CallbackInfo ci) {
         if (NoRender.hideBossBar()) {
             ci.cancel();
         }
     }
 
-    @Inject(
-            method = "renderScoreboardSidebar(Lnet/minecraft/client/gui/DrawContext;Lnet/minecraft/client/render/RenderTickCounter;)V",
-            at = @At("HEAD"),
-            cancellable = true
-    )
-    private void hatek$noRenderScoreboard(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+    @Inject(method = "extractScoreboardSidebar", at = @At("HEAD"), cancellable = true)
+    private void hatek$noRenderScoreboard(GuiGraphicsExtractor extractor, DeltaTracker deltaTracker, CallbackInfo ci) {
         if (NoRender.hideScoreboard()) {
             ci.cancel();
         }
     }
 
-    @Inject(method = "renderTitleAndSubtitle", at = @At("HEAD"), cancellable = true)
-    private void hatek$noRenderTitles(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+    @Inject(method = "extractTitle", at = @At("HEAD"), cancellable = true)
+    private void hatek$noRenderTitles(GuiGraphicsExtractor extractor, DeltaTracker deltaTracker, CallbackInfo ci) {
         if (NoRender.hideTitles()) {
             ci.cancel();
         }
     }
 
-    @Inject(method = "renderStatusEffectOverlay", at = @At("HEAD"), cancellable = true)
-    private void hatek$noRenderEffectIcons(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+    @Inject(method = "extractEffects", at = @At("HEAD"), cancellable = true)
+    private void hatek$noRenderEffectIcons(GuiGraphicsExtractor extractor, DeltaTracker deltaTracker, CallbackInfo ci) {
         if (NoRender.hideEffectIcons()) {
             ci.cancel();
         }
     }
 
-    @Inject(method = "renderCrosshair", at = @At("HEAD"), cancellable = true)
-    private void hatek$noRenderCrosshair(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+    @Inject(method = "extractCrosshair", at = @At("HEAD"), cancellable = true)
+    private void hatek$noRenderCrosshair(GuiGraphicsExtractor extractor, DeltaTracker deltaTracker, CallbackInfo ci) {
         if (NoRender.hideCrosshair()) {
             ci.cancel();
         }
