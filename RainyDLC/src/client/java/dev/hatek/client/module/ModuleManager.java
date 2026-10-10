@@ -7,6 +7,7 @@ import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
 import dev.hatek.client.module.impl.player.NoFall;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
+import dev.hatek.client.module.impl.render.NoRender;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.ButtonSetting;
 import dev.hatek.client.module.setting.ColorSetting;
@@ -71,6 +72,8 @@ public final class ModuleManager {
         MODULES.add(new NoJumpDelay());
 
         MODULES.add(new NoFall());
+
+        MODULES.add(new NoRender().expanded(true));
 
         MODULES.add(new VoiceControl());
 

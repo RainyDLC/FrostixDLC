@@ -12,6 +12,9 @@
     "NoFallKeyboardMixin",
     "NoFallPacketMixin",
     "NoFallPlayerMixin",
+    "NoRenderGameMixin",
+    "NoRenderHudMixin",
+    "NoRenderOverlayMixin",
     "accessor.LivingEntityAccessor",
     "accessor.MinecraftAccessor",
     "accessor.ScreenInvoker"
