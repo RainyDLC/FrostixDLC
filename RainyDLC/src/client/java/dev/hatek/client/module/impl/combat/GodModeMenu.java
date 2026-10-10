@@ -14,7 +14,7 @@ import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -179,8 +179,8 @@ public final class GodModeMenu extends Module {
             if (onlyPvp.value() && !inPvp()) {
                 return;
             }
-            mc.gameMode.handleInventoryMouseClick(cachedContainerId, cachedEndSlot, 0,
-                    ClickType.PICKUP, mc.player);
+            mc.gameMode.handleContainerInput(cachedContainerId, cachedEndSlot, 0,
+                    ContainerInput.PICKUP, mc.player);
         }
     }
 
@@ -210,8 +210,8 @@ public final class GodModeMenu extends Module {
         int target = findSlot(menu, containerSize, false);
         if (target >= 0 && mc.gameMode != null) {
             lastScanMs = now;
-            mc.gameMode.handleInventoryMouseClick(menu.containerId, target, 0,
-                    ClickType.PICKUP, mc.player);
+            mc.gameMode.handleContainerInput(menu.containerId, target, 0,
+                    ContainerInput.PICKUP, mc.player);
         }
     }
 
@@ -266,7 +266,7 @@ public final class GodModeMenu extends Module {
     private void message(String text) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null) {
-            mc.player.displayClientMessage(Component.literal("[GodModeMenu] " + text), false);
+            mc.player.sendSystemMessage(Component.literal("[GodModeMenu] " + text));
         }
     }
 }
