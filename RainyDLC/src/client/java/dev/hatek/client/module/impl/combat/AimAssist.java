@@ -58,7 +58,7 @@ public final class AimAssist extends Module {
 
     private final ModeSetting aimPoint = new ModeSetting("Прицел", 2,
             POINT_HEAD, POINT_BODY, POINT_NEAREST);
-    private final SliderSetting strength = new SliderSetting("Сила доводки, %", 35.0, 0.0, 100.0, 1.0);
+    private final SliderSetting strength = new SliderSetting("Сила доводки, %", 55.0, 0.0, 100.0, 1.0);
     private final SliderSetting speed = new SliderSetting("Скорость, °/сек", 120.0, 20.0, 360.0, 5.0);
     private final SliderSetting smoothness = new SliderSetting("Плавность", 6.0, 1.0, 20.0, 1.0);
     private final SliderSetting range = new SliderSetting("Дистанция", 4.5, 1.0, 8.0, 0.1);
@@ -267,33 +267,52 @@ public final class AimAssist extends Module {
         float dYaw = Mth.wrapDegrees(rot[0] - mc.player.getYRot());
         float dPitch = rot[1] - mc.player.getXRot();
 
-        float k = (float) (this.strength.value() / 100.0);
-        float desYaw;
-        float desPitch;
-        if (Math.abs(dYaw) < 0.25f && Math.abs(dPitch) < 0.25f) {
-            desYaw = 0.0f;
-            desPitch = 0.0f; // уже наведены — плавно останавливаемся
-        } else if (this.useBrain.value() && this.brain.isTrained()) {
-            float[] features = features(target, eye);
-            float[] pred = this.brain.predict(features);
-            // Нейронка предсказывает доворот игрока — повторяем его с заданной силой.
-            desYaw = pred[0] * k;
-            desPitch = pred[1] * k;
-        } else {
-            desYaw = dYaw * k * 0.35f;
-            desPitch = dPitch * k * 0.35f;
+        // Уже наведены — плавно гасим доводку, не мешаем мыши.
+        if (Math.abs(dYaw) < 0.2f && Math.abs(dPitch) < 0.2f) {
+            decayVelocity();
+            applyVelocity(mc);
+            return;
         }
 
-        // Плавность: текущая скорость доводки догоняет желаемую постепенно.
-        // Чем выше значение — тем мягче и «человечнее» движение.
-        float s = (float) this.smoothness.value();
-        this.velYaw += (desYaw - this.velYaw) / s;
-        this.velPitch += (desPitch - this.velPitch) / s;
+        float k = (float) (this.strength.value() / 100.0);
+        // Агрессия: какую долю ошибки закрываем за тик (0.15..1.0).
+        float aggression = 0.15f + 0.85f * k;
+        // Плавность: чем выше значение — тем мягче и спокойнее доводка.
+        float response = aggression / (float) this.smoothness.value();
+
+        float turnYaw = dYaw * response;
+        float turnPitch = dPitch * response;
+
+        if (this.useBrain.value() && this.brain.isTrained()) {
+            float[] features = features(target, eye);
+            float[] pred = this.brain.predict(features);
+            // Выход сети ограничиваем величиной ошибки: нейронка не может
+            // дёрнуть прицел через цель или в обратную сторону.
+            float pYaw = Mth.clamp(pred[0], -Math.abs(dYaw), Math.abs(dYaw)) * aggression;
+            float pPitch = Mth.clamp(pred[1], -Math.abs(dPitch), Math.abs(dPitch)) * aggression;
+            turnYaw = Mth.lerp(turnYaw, pYaw, 0.7f);
+            turnPitch = Mth.lerp(turnPitch, pPitch, 0.7f);
+        }
+
+        // Лёгкое сглаживание итогового доворота — убирает микро-дёрганье.
+        this.velYaw += (turnYaw - this.velYaw) * 0.45f;
+        this.velPitch += (turnPitch - this.velPitch) * 0.45f;
 
         // Скорость: жёсткий лимит в градусах/секунду.
         float maxTurn = (float) (this.speed.value() / 20.0);
         this.velYaw = Mth.clamp(this.velYaw, -maxTurn, maxTurn);
         this.velPitch = Mth.clamp(this.velPitch, -maxTurn, maxTurn);
+
+        // Анти-overshoot: доводка никогда не перелетает через цель,
+        // поэтому не может осциллировать и дёргаться вокруг неё.
+        if (Math.signum(this.velYaw) == Math.signum(dYaw)
+                && Math.abs(this.velYaw) > Math.abs(dYaw)) {
+            this.velYaw = dYaw;
+        }
+        if (Math.signum(this.velPitch) == Math.signum(dPitch)
+                && Math.abs(this.velPitch) > Math.abs(dPitch)) {
+            this.velPitch = dPitch;
+        }
 
         applyVelocity(mc);
     }
