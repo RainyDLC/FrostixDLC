@@ -44,6 +44,15 @@ public final class AimBrain {
     private final double[] yStd = new double[OUTPUT_SIZE];
 
     private volatile boolean trained;
+    /** Последний посчитанный loss (MSE на нормализованных данных). */
+    public volatile double lastLoss = Double.NaN;
+    private volatile int trainedSamples;
+
+    /** Колбэк обучения: progress 0..1, loss — текущий MSE. */
+    @FunctionalInterface
+    public interface TrainListener {
+        void onEpoch(double progress, double loss);
+    }
 
     public AimBrain() {
         Random rnd = new Random(1337L);
@@ -77,6 +86,15 @@ public final class AimBrain {
         for (int i = 0; i < INPUT_SIZE; i++) {
             xn[i] = (input[i] - this.xMean[i]) / this.xStd[i];
         }
+        double[] out = forwardNorm(xn);
+        float[] res = new float[OUTPUT_SIZE];
+        for (int o = 0; o < OUTPUT_SIZE; o++) {
+            res[o] = (float) (out[o] * this.yStd[o] + this.yMean[o]);
+        }
+        return res;
+    }
+
+    private double[] forwardNorm(double[] xn) {
         double[] hidden = new double[HIDDEN_SIZE];
         for (int h = 0; h < HIDDEN_SIZE; h++) {
             double sum = this.b1[h];
@@ -85,13 +103,13 @@ public final class AimBrain {
             }
             hidden[h] = Math.tanh(sum);
         }
-        float[] out = new float[OUTPUT_SIZE];
+        double[] out = new double[OUTPUT_SIZE];
         for (int o = 0; o < OUTPUT_SIZE; o++) {
             double sum = this.b2[o];
             for (int h = 0; h < HIDDEN_SIZE; h++) {
                 sum += this.w2[o][h] * hidden[h];
             }
-            out[o] = (float) (sum * this.yStd[o] + this.yMean[o]);
+            out[o] = sum;
         }
         return out;
     }
@@ -99,13 +117,14 @@ public final class AimBrain {
     /**
      * Обучить на датасете. Тяжёлая операция — вызывать в фоне.
      *
-     * @param progress принимает 0.0..1.0 по мере эпох
+     * @param listener принимает (progress 0.0..1.0, loss) по мере эпох
      */
-    public void train(List<AimSample> rawSamples, int epochs, DoubleConsumer progress) {
+    public void train(List<AimSample> rawSamples, int epochs, TrainListener listener) {
         List<AimSample> samples = new ArrayList<>(rawSamples);
         if (samples.size() < 10) {
             return;
         }
+        this.trainedSamples = samples.size();
         computeNormalization(samples);
 
         final int batch = 32;
@@ -118,11 +137,42 @@ public final class AimBrain {
                 int to = Math.min(from + batch, samples.size());
                 step(samples.subList(from, to), lr);
             }
-            if (progress != null && (epoch % 5 == 0 || epoch == epochs - 1)) {
-                progress.accept((epoch + 1.0) / epochs);
+            if (listener != null && (epoch % 10 == 0 || epoch == epochs - 1)) {
+                double loss = mse(samples);
+                this.lastLoss = loss;
+                listener.onEpoch((epoch + 1.0) / epochs, loss);
             }
         }
         this.trained = true;
+    }
+
+    /** Совместимость со старым колбэком (только прогресс). */
+    public void train(List<AimSample> rawSamples, int epochs, DoubleConsumer progress) {
+        train(rawSamples, epochs, progress == null ? null
+                : (p, loss) -> progress.accept(p));
+    }
+
+    /** MSE на нормализованных данных — честная метрика обучения. */
+    private double mse(List<AimSample> samples) {
+        double sum = 0.0;
+        int n = 0;
+        double[] xn = new double[INPUT_SIZE];
+        double[] yn = new double[OUTPUT_SIZE];
+        for (AimSample s : samples) {
+            for (int i = 0; i < INPUT_SIZE; i++) {
+                xn[i] = (s.input[i] - this.xMean[i]) / this.xStd[i];
+            }
+            for (int o = 0; o < OUTPUT_SIZE; o++) {
+                yn[o] = (s.output[o] - this.yMean[o]) / this.yStd[o];
+            }
+            double[] pred = forwardNorm(xn);
+            for (int o = 0; o < OUTPUT_SIZE; o++) {
+                double d = pred[o] - yn[o];
+                sum += d * d;
+            }
+            n++;
+        }
+        return n == 0 ? Double.NaN : sum / (n * OUTPUT_SIZE);
     }
 
     private void computeNormalization(List<AimSample> samples) {
@@ -267,6 +317,9 @@ public final class AimBrain {
         }
         root.add("w2", w2);
         root.add("b2", doubles(this.b2));
+        root.addProperty("final_loss", this.lastLoss);
+        root.addProperty("samples", this.trainedSamples);
+        root.addProperty("trained_at", System.currentTimeMillis());
         Files.createDirectories(file.getParent());
         Files.writeString(file, gson.toJson(root), java.nio.charset.StandardCharsets.UTF_8);
     }
