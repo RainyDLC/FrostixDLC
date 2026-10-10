@@ -5,8 +5,10 @@ import dev.hatek.client.module.Module;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.module.setting.TextSetting;
+import dev.hatek.mixin.accessor.AbstractContainerScreenAccessor;
 import dev.hatek.mixin.accessor.GuiAccessor;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
@@ -16,6 +18,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -33,6 +36,12 @@ import net.minecraft.world.item.ItemStack;
  * - После закрытия меню сервером модуль НЕ хватает следующее открытое меню сам:
  *   иначе ручное открытие /warp игроком превращается в бесконечный цикл
  *   "открыл -> спрятал -> открыл -> сервер закрыл". Нужно перевключение модуля.
+ * - Ручной выбор варпа (Manual Select): игрок сам открывает /warp, наводит курсор
+ *   на варп и нажимает бинд модуля — модуль захватывает наведённый слот через
+ *   AbstractContainerScreenAccessor#hoveredSlot, прячет меню и вооружается.
+ * - Диагностика закрытия: запоминает позицию в момент вооружения; если меню
+ *   закрылось после того, как игрок сдвинулся, — сообщает, что сервер, возможно,
+ *   закрывает меню при движении.
  */
 public final class GodModeMenu extends Module {
     private static GodModeMenu instance;
@@ -44,6 +53,7 @@ public final class GodModeMenu extends Module {
     private final BoolSetting autoOpen = new BoolSetting("Auto Open", true);
     private final BoolSetting onlyPvp = new BoolSetting("Only In PVP", true);
     private final BoolSetting findByNumber = new BoolSetting("Find By Slot", false);
+    private final BoolSetting manualSelect = new BoolSetting("Manual Select", false);
     private final TextSetting menuName = new TextSetting("Menu Name", "Серверные варпы", "Серверные варпы");
     private final TextSetting warpName = new TextSetting("Warp Name", "end", "end");
     private final TextSetting warpCommand = new TextSetting("Warp Command", "warp", "warp");
@@ -65,11 +75,29 @@ public final class GodModeMenu extends Module {
     private double lastY;
     private double lastZ;
     private boolean hasLastPos;
+    private double armX;
+    private double armY;
+    private double armZ;
+    private boolean hasArmPos;
 
     public GodModeMenu() {
         super("GodModeMenu", "Десинк меню варпов + спам кликов", Category.COMBAT);
         instance = this;
-        with(autoOpen, onlyPvp, findByNumber, menuName, warpName, warpCommand, menuSlot, endSlot);
+        with(autoOpen, onlyPvp, findByNumber, manualSelect, menuName, warpName, warpCommand, menuSlot, endSlot);
+    }
+
+    /**
+     * В ручном режиме повторное нажатие бинда во время ожидания — это захват
+     * наведённого слота, а не выключение. Если захватить нечего — обычный тоггл.
+     */
+    @Override
+    public void toggle() {
+        if (manualSelect.value() && isEnabled() && !armedOnce && phase == Phase.OPENING) {
+            if (tryManualCapture()) {
+                return;
+            }
+        }
+        super.toggle();
     }
 
     public static GodModeMenu instance() {
@@ -104,6 +132,13 @@ public final class GodModeMenu extends Module {
         reset();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
+            return;
+        }
+        if (manualSelect.value()) {
+            phase = Phase.OPENING;
+            if (!tryManualCapture()) {
+                message("открой /" + warpCommand.value() + ", наведи курсор на варп и нажми бинд модуля");
+            }
             return;
         }
         if (autoOpen.value() && !inPvp()) {
@@ -165,6 +200,16 @@ public final class GodModeMenu extends Module {
             fakeClosed = false;
             spamming = false;
             phase = Phase.OPENING;
+            if (hasArmPos) {
+                double dx = x - armX;
+                double dy = y - armY;
+                double dz = z - armZ;
+                hasArmPos = false;
+                if (dx * dx + dy * dy + dz * dz > 9.0) {
+                    message("меню закрыто — ты двигался, похоже сервер закрывает меню при движении");
+                    return;
+                }
+            }
             message("меню закрыто — перевключи модуль для новой попытки");
             return;
         }
@@ -175,7 +220,7 @@ public final class GodModeMenu extends Module {
             return;
         }
 
-        if (phase == Phase.OPENING && mc.gui.screen() instanceof ContainerScreen) {
+        if (!manualSelect.value() && phase == Phase.OPENING && mc.gui.screen() instanceof ContainerScreen) {
             scanMenu(mc);
         }
 
@@ -204,15 +249,7 @@ public final class GodModeMenu extends Module {
 
         int end = findSlot(menu, containerSize, true);
         if (end >= 0 && !armedOnce) {
-            cachedContainerId = menu.containerId;
-            cachedEndSlot = end;
-            fakeClosed = true;
-            armedOnce = true;
-            ((GuiAccessor) mc.gui).hatek$setScreenField(null);
-            mc.mouseHandler.grabMouse();
-            phase = Phase.ARMED;
-            message("готов — ударь игрока! НЕ открывай /" + warpCommand.value()
-                    + ", меню скрыто специально");
+            arm(mc, menu.containerId, end);
             return;
         }
 
@@ -222,6 +259,52 @@ public final class GodModeMenu extends Module {
             mc.gameMode.handleContainerInput(menu.containerId, target, 0,
                     ContainerInput.PICKUP, mc.player);
         }
+    }
+
+    /** Общее вооружение: запомнить слот, спрятать меню (десинк), ждать удара. */
+    private void arm(Minecraft mc, int containerId, int slot) {
+        cachedContainerId = containerId;
+        cachedEndSlot = slot;
+        fakeClosed = true;
+        armedOnce = true;
+        armX = mc.player.getX();
+        armY = mc.player.getY();
+        armZ = mc.player.getZ();
+        hasArmPos = true;
+        ((GuiAccessor) mc.gui).hatek$setScreenField(null);
+        mc.mouseHandler.grabMouse();
+        phase = Phase.ARMED;
+        message("готов — ударь игрока! НЕ открывай /" + warpCommand.value()
+                + ", меню скрыто специально");
+    }
+
+    /**
+     * Ручной захват: берёт слот, на который наведён курсор в открытом меню.
+     * Возвращает true, если захват удался и модуль вооружился.
+     */
+    private boolean tryManualCapture() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) {
+            return false;
+        }
+        if (!(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)) {
+            return false;
+        }
+        Slot hovered = ((AbstractContainerScreenAccessor) screen).hatek$getHoveredSlot();
+        if (hovered == null || hovered.getItem().isEmpty()) {
+            return false;
+        }
+        AbstractContainerMenu menu = mc.player.containerMenu;
+        if (menu == null) {
+            return false;
+        }
+        int containerSize = Math.max(0, menu.slots.size() - 36);
+        int idx = menu.slots.indexOf(hovered);
+        if (idx < 0 || idx >= containerSize) {
+            return false;
+        }
+        arm(mc, menu.containerId, idx);
+        return true;
     }
 
     private int findSlot(AbstractContainerMenu menu, int containerSize, boolean target) {
@@ -267,6 +350,7 @@ public final class GodModeMenu extends Module {
         spamming = false;
         fakeClosed = false;
         armedOnce = false;
+        hasArmPos = false;
         cachedContainerId = -1;
         cachedEndSlot = -1;
         lastScanMs = 0L;
