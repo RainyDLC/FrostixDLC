@@ -5,6 +5,7 @@ import dev.hatek.client.module.Module;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.module.setting.TextSetting;
+import dev.hatek.mixin.accessor.GuiAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -27,6 +28,11 @@ import net.minecraft.world.item.ItemStack;
  *   containerMenu вернулся к inventoryMenu; телепорт -> скачок позиции.
  * - Отмена CloseHandledScreen идёт через ConnectionMixin (shouldCancelSend).
  * - playerIsPVP() заменён эвристикой inPvp(): недавний входящий/исходящий урон.
+ * - Скрытие меню идёт прямой записью поля Gui.screen (как mc.currentScreen = null
+ *   в исходнике), а не через setScreen(): так не вызывается removed()/onClose.
+ * - После закрытия меню сервером модуль НЕ хватает следующее открытое меню сам:
+ *   иначе ручное открытие /warp игроком превращается в бесконечный цикл
+ *   "открыл -> спрятал -> открыл -> сервер закрыл". Нужно перевключение модуля.
  */
 public final class GodModeMenu extends Module {
     private static GodModeMenu instance;
@@ -49,6 +55,7 @@ public final class GodModeMenu extends Module {
     private Phase phase = Phase.IDLE;
     private boolean spamming;
     private boolean fakeClosed;
+    private boolean armedOnce;
     private int cachedContainerId = -1;
     private int cachedEndSlot = -1;
     private long lastScanMs;
@@ -158,12 +165,12 @@ public final class GodModeMenu extends Module {
             fakeClosed = false;
             spamming = false;
             phase = Phase.OPENING;
-            message("сервер закрыл меню — открой /" + warpCommand.value() + " заново");
+            message("меню закрыто — перевключи модуль для новой попытки");
             return;
         }
 
         if (fakeClosed && mc.gui.screen() instanceof InventoryScreen) {
-            mc.gui.setScreen(null);
+            ((GuiAccessor) mc.gui).hatek$setScreenField(null);
             mc.mouseHandler.grabMouse();
             return;
         }
@@ -196,14 +203,16 @@ public final class GodModeMenu extends Module {
         int containerSize = Math.max(0, menu.slots.size() - 36);
 
         int end = findSlot(menu, containerSize, true);
-        if (end >= 0) {
+        if (end >= 0 && !armedOnce) {
             cachedContainerId = menu.containerId;
             cachedEndSlot = end;
             fakeClosed = true;
-            mc.gui.setScreen(null);
+            armedOnce = true;
+            ((GuiAccessor) mc.gui).hatek$setScreenField(null);
             mc.mouseHandler.grabMouse();
             phase = Phase.ARMED;
-            message("готов, ударь игрока (containerId=" + cachedContainerId + " слот=" + end + ")");
+            message("готов — ударь игрока! НЕ открывай /" + warpCommand.value()
+                    + ", меню скрыто специально");
             return;
         }
 
@@ -257,6 +266,7 @@ public final class GodModeMenu extends Module {
         phase = Phase.IDLE;
         spamming = false;
         fakeClosed = false;
+        armedOnce = false;
         cachedContainerId = -1;
         cachedEndSlot = -1;
         lastScanMs = 0L;
