@@ -120,6 +120,15 @@ def main() -> None:
     h = np.tanh(xn @ w1.T + b1)
     final_loss = float(np.mean(((h @ w2.T + b2) - yn) ** 2))
     print(f"Финальный loss: {final_loss:.6f} на {n} сэмплах")
+    # Авто-параметры из записи (та же формула, что в AimBrain.computeAutoParams):
+    # макс. скорость — 95-й перцентиль скорости доворотов, плавность — из ровности движений.
+    mags = np.hypot(y[:, 0], y[:, 1])  # °/тик
+    auto_speed_dps = min(360.0, max(30.0, float(np.percentile(mags, 95)) * 20.0))
+    mean_mag = float(mags.mean())
+    jerk = float(np.mean(np.abs(np.diff(mags)))) if n > 1 else 0.0
+    steadiness = mean_mag / (mean_mag + 3.0 * jerk + 1e-9)
+    auto_smooth_alpha = min(0.9, max(0.15, steadiness))
+    print(f"Авто: скорость {auto_speed_dps:.0f}°/с, плавность {auto_smooth_alpha:.2f}")
     payload = {
         "input_size": INPUT_SIZE,
         "hidden_size": HIDDEN_SIZE,
@@ -134,6 +143,8 @@ def main() -> None:
         "b2": b2.tolist(),
         "final_loss": final_loss,
         "samples": n,
+        "auto_speed_dps": auto_speed_dps,
+        "auto_smooth_alpha": auto_smooth_alpha,
     }
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(payload, f)
