@@ -10,6 +10,7 @@
     "LocalPlayerMixin",
     "MouseHandlerMixin",
     "MultiPlayerGameModeMixin",
+    "accessor.AbstractContainerScreenAccessor",
     "accessor.GuiAccessor",
     "accessor.LivingEntityAccessor",
     "accessor.MinecraftAccessor",
