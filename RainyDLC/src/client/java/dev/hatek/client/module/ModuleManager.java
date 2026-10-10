@@ -4,6 +4,7 @@ import dev.hatek.client.ui.Style;
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
+import dev.hatek.client.module.impl.player.NoFall;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.ButtonSetting;
@@ -65,6 +66,8 @@ public final class ModuleManager {
         MODULES.add(new AutoSprint().enabled(true).expanded(true));
 
         MODULES.add(new NoJumpDelay());
+
+        MODULES.add(new NoFall());
 
         MODULES.add(new VoiceControl());
 

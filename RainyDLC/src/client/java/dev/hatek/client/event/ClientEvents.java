@@ -5,6 +5,7 @@ import dev.hatek.client.module.ModuleManager;
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.combat.aura.rotation.ComponentManager;
 import dev.hatek.client.module.impl.movement.AutoSprint;
+import dev.hatek.client.module.impl.player.NoFall;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
 import net.minecraft.client.Minecraft;
 
@@ -25,6 +26,8 @@ public final class ClientEvents {
                 jump.onTick();
             } else if (module instanceof AutoSprint sprint) {
                 sprint.onTick();
+            } else if (module instanceof NoFall noFall) {
+                noFall.onTick();
             }
         }
 
