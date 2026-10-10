@@ -114,7 +114,6 @@ public final class NoFall extends Module {
                     // distance just as well, but is barely visible and silent.
                     Vec3 motion = self.getDeltaMovement();
                     self.setDeltaMovement(motion.x, HOP_VELOCITY, motion.z);
-                    self.hasImpulse = true;
                 }
                 reset();
             } else if (++this.waitTicks > TELEPORT_TIMEOUT) {
