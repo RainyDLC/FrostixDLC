@@ -40,11 +40,12 @@ import java.util.List;
  * landing is not cleanly supported on all four bottom corners. Clean landings are sent
  * with the exact client position, as before.</p>
  *
- * <p>After the Grim sequence completes on ground, the player performs a tiny hop instead
- * of a full jump: it still flushes the server-side fall distance, but is barely visible
- * (and silent).</p>
+ * <p>After the Grim sequence completes on ground, the player performs a full jump via the
+ * forged input. The jump is load-bearing for the bypass (a weaker direct-velocity hop
+ * was tried and broke it), so it stays as a real input jump.</p>
  *
- * <p>Hooks live in {@code dev.hatek.mixin.NoFallPlayerMixin} (sendPosition) and
+ * <p>Hooks live in {@code dev.hatek.mixin.NoFallPlayerMixin} (sendPosition),
+ * {@code dev.hatek.mixin.NoFallKeyboardMixin} (jump input) and
  * {@code dev.hatek.mixin.NoFallPacketMixin} (teleport / velocity tracking).</p>
  */
 public final class NoFall extends Module {
@@ -55,7 +56,6 @@ public final class NoFall extends Module {
     private static final double MIN_LANDING_DROP = 0.05;
     private static final double SPOOF_OFFSET = 0.25;
     private static final double HARD_ENTITY_RANGE = 5.5;
-    private static final double HOP_VELOCITY = 0.18;
     private static final double SUPPORT_EPS = 0.01;
     private static final double CORNER_INSET = 1.0e-3;
     private static final int TELEPORT_TIMEOUT = 12;
@@ -71,6 +71,7 @@ public final class NoFall extends Module {
     private boolean teleported;
     private boolean velocityApplied;
     private int velocityWait;
+    private boolean jumpNow;
     private int owedTicks;
     private boolean movedThisTick;
     private boolean vanillaSpoofArmed;
@@ -89,6 +90,7 @@ public final class NoFall extends Module {
     @Override
     protected void onDisable() {
         reset();
+        this.jumpNow = false;
         this.owedTicks = 0;
     }
 
@@ -97,6 +99,7 @@ public final class NoFall extends Module {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer self = mc.player;
         ClientLevel level = mc.level;
+        this.jumpNow = false;
         if (self == null || level == null) {
             reset();
             return;
@@ -109,12 +112,7 @@ public final class NoFall extends Module {
 
         if (this.waitTicks >= 0) {
             if (this.teleported && (this.velocityApplied || ++this.velocityWait > VELOCITY_WAIT)) {
-                if (self.onGround()) {
-                    // Tiny hop instead of a full jump: flushes the server-side fall
-                    // distance just as well, but is barely visible and silent.
-                    Vec3 motion = self.getDeltaMovement();
-                    self.setDeltaMovement(motion.x, HOP_VELOCITY, motion.z);
-                }
+                this.jumpNow = self.onGround();
                 reset();
             } else if (++this.waitTicks > TELEPORT_TIMEOUT) {
                 reset();
@@ -231,6 +229,16 @@ public final class NoFall extends Module {
         }
         module.movedThisTick = false;
         return cancel;
+    }
+
+    /** Called from {@code NoFallKeyboardMixin}; forces a jump on the forged input. */
+    public static boolean consumeJump() {
+        NoFall module = instance;
+        if (module == null || !module.isEnabled() || !module.jumpNow) {
+            return false;
+        }
+        module.jumpNow = false;
+        return true;
     }
 
     /** Called from {@code NoFallPacketMixin} after the server teleports the player. */
