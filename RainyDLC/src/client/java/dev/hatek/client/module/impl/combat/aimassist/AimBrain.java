@@ -47,6 +47,13 @@ public final class AimBrain {
     /** Последний посчитанный loss (MSE на нормализованных данных). */
     public volatile double lastLoss = Double.NaN;
     private volatile int trainedSamples;
+    /**
+     * Авто-параметры из датасета: максимальная скорость доводки (°/с) —
+     * 95-й перцентиль скорости игрока при записи; и альфа сглаживания —
+     * из ровности движений игрока. Асист повторяет запись, а не слайдеры.
+     */
+    public volatile double autoSpeedDps = 120.0;
+    public volatile double autoSmoothAlpha = 0.45;
 
     /** Колбэк обучения: progress 0..1, loss — текущий MSE. */
     @FunctionalInterface
@@ -126,6 +133,7 @@ public final class AimBrain {
         }
         this.trainedSamples = samples.size();
         computeNormalization(samples);
+        computeAutoParams(samples);
 
         final int batch = 32;
         final double lr = 0.01;
@@ -173,6 +181,40 @@ public final class AimBrain {
             n++;
         }
         return n == 0 ? Double.NaN : sum / (n * OUTPUT_SIZE);
+    }
+
+    /**
+     * Авто-параметры из записи игрока: максимальная скорость доводки —
+     * 95-й перцентиль скорости его доворотов (°/с); альфа сглаживания —
+     * из ровности его движений (ровная запись → точный повтор,
+     * рваная → сглаживается сильнее).
+     */
+    private void computeAutoParams(List<AimSample> samples) {
+        int n = samples.size();
+        if (n == 0) {
+            return;
+        }
+        double[] mags = new double[n];
+        double mean = 0.0;
+        for (int i = 0; i < n; i++) {
+            float[] out = samples.get(i).output;
+            mags[i] = Math.hypot(out[0], out[1]); // °/тик
+            mean += mags[i];
+        }
+        mean /= n;
+        double jerk = 0.0;
+        for (int i = 1; i < n; i++) {
+            jerk += Math.abs(mags[i] - mags[i - 1]);
+        }
+        jerk /= Math.max(1, n - 1);
+
+        double[] sorted = mags.clone();
+        java.util.Arrays.sort(sorted);
+        double p95 = sorted[Math.min(n - 1, (int) (n * 0.95))];
+        this.autoSpeedDps = Math.max(30.0, Math.min(360.0, p95 * 20.0));
+
+        double steadiness = mean / (mean + 3.0 * jerk + 1e-9);
+        this.autoSmoothAlpha = Math.max(0.15, Math.min(0.9, steadiness));
     }
 
     private void computeNormalization(List<AimSample> samples) {
@@ -319,6 +361,8 @@ public final class AimBrain {
         root.add("b2", doubles(this.b2));
         root.addProperty("final_loss", this.lastLoss);
         root.addProperty("samples", this.trainedSamples);
+        root.addProperty("auto_speed_dps", this.autoSpeedDps);
+        root.addProperty("auto_smooth_alpha", this.autoSmoothAlpha);
         root.addProperty("trained_at", System.currentTimeMillis());
         Files.createDirectories(file.getParent());
         Files.writeString(file, gson.toJson(root), java.nio.charset.StandardCharsets.UTF_8);
@@ -342,6 +386,8 @@ public final class AimBrain {
             fill(brain.w2[o], w2.get(o).getAsJsonArray());
         }
         fill(brain.b2, root.getAsJsonArray("b2"));
+        brain.autoSpeedDps = optDouble(root, "auto_speed_dps", 120.0);
+        brain.autoSmoothAlpha = optDouble(root, "auto_smooth_alpha", 0.45);
         brain.trained = true;
         return brain;
     }
@@ -363,6 +409,14 @@ public final class AimBrain {
     private static void fill(double[] dst, JsonArray arr) {
         for (int i = 0; i < dst.length && i < arr.size(); i++) {
             dst[i] = arr.get(i).getAsDouble();
+        }
+    }
+
+    private static double optDouble(JsonObject root, String key, double def) {
+        try {
+            return root.has(key) ? root.get(key).getAsDouble() : def;
+        } catch (Exception e) {
+            return def;
         }
     }
 }
