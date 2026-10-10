@@ -117,6 +117,9 @@ def main() -> None:
             print(f"Эпоха {epoch}/{args.epochs}  loss={loss:.6f}")
 
     out_path = dataset_path[:-5] + ".weights.json"
+    h = np.tanh(xn @ w1.T + b1)
+    final_loss = float(np.mean(((h @ w2.T + b2) - yn) ** 2))
+    print(f"Финальный loss: {final_loss:.6f} на {n} сэмплах")
     payload = {
         "input_size": INPUT_SIZE,
         "hidden_size": HIDDEN_SIZE,
@@ -129,6 +132,8 @@ def main() -> None:
         "b1": b1.tolist(),
         "w2": w2.tolist(),
         "b2": b2.tolist(),
+        "final_loss": final_loss,
+        "samples": n,
     }
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(payload, f)
