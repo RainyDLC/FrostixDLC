@@ -15,9 +15,13 @@
     "NoRenderGameMixin",
     "NoRenderHudMixin",
     "NoRenderOverlayMixin",
+    "InterfaceHudMixin",
+    "InterfaceMouseMixin",
     "accessor.LivingEntityAccessor",
     "accessor.MinecraftAccessor",
-    "accessor.ScreenInvoker"
+    "accessor.ScreenInvoker",
+    "accessor.GuiAccessor",
+    "accessor.BossHealthOverlayAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
