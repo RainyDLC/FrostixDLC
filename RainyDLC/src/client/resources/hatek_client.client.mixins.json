@@ -9,6 +9,9 @@
     "LocalPlayerMixin",
     "MouseHandlerMixin",
     "MultiPlayerGameModeMixin",
+    "NoFallKeyboardMixin",
+    "NoFallPacketMixin",
+    "NoFallPlayerMixin",
     "accessor.LivingEntityAccessor",
     "accessor.MinecraftAccessor",
     "accessor.ScreenInvoker"
