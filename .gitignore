@@ -11,3 +11,8 @@
 *.class
 *.log
 __pycache__/
+.idea/
+.gradle/
+**/build/
+**/.gradle/
+**/run/
