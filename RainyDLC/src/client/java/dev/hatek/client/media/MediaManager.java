@@ -235,12 +235,8 @@ public final class MediaManager {
         NativeImage nativeImage = new NativeImage(w, h, false);
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                int argb = img.getRGB(x, y);
-                int abgr = (argb & 0xFF000000)
-                        | ((argb & 0xFF) << 16)
-                        | (argb & 0xFF00)
-                        | ((argb & 0xFF0000) >> 16);
-                nativeImage.setPixel(x, y, abgr);
+                // setPixel принимает ARGB (конвертацию в ABGR делает сам).
+                nativeImage.setPixel(x, y, img.getRGB(x, y));
             }
         }
         Identifier id = Identifier.fromNamespaceAndPath("hatek_client",
