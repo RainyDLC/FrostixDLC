@@ -122,7 +122,8 @@ public final class GodModeMenu extends Module {
         }
         if (manualSelect.value()) {
             phase = Phase.OPENING;
-            message("открой /" + warpCommand.value() + " и кликни по нужному варпу");
+            message("открой /" + warpCommand.value() + " и кликни по нужному варпу "
+                    + "(«" + menuName.value() + "» откроется как обычно)");
             return;
         }
         if (autoOpen.value() && !inPvp()) {
@@ -267,6 +268,8 @@ public final class GodModeMenu extends Module {
      * Ручной захват: вызывается из ManualWarpCaptureMixin при клике по слоту.
      * Возвращает true, если слот захвачен, меню спрятано и модуль вооружился
      * (клик при этом отменяется — телепорта не будет).
+     * Клик по пункту-категории (название из Menu Name, напр. "Серверные варпы")
+     * пропускается — он должен открыть подменю как обычно.
      */
     public boolean tryManualClickCapture(Slot slot) {
         if (!manualSelect.value() || !isEnabled() || armedOnce || phase != Phase.OPENING) {
@@ -279,6 +282,11 @@ public final class GodModeMenu extends Module {
         if (slot.getItem().isEmpty()) {
             return false;
         }
+        String name = slot.getItem().getHoverName().getString();
+        if (!findByNumber.value()
+                && name.toLowerCase().contains(menuName.value().toLowerCase())) {
+            return false;
+        }
         AbstractContainerMenu menu = mc.player.containerMenu;
         if (menu == null) {
             return false;
@@ -288,7 +296,7 @@ public final class GodModeMenu extends Module {
         if (idx < 0 || idx >= containerSize) {
             return false;
         }
-        arm(mc, menu.containerId, idx, slot.getItem().getHoverName().getString());
+        arm(mc, menu.containerId, idx, name);
         return true;
     }
 
