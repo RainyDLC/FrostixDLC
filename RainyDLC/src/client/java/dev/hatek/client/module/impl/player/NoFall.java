@@ -6,6 +6,8 @@ import dev.hatek.client.module.setting.ModeSetting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundClientTickEndPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
@@ -14,7 +16,10 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.happyghast.HappyGhast;
 import net.minecraft.world.entity.monster.Shulker;
 import net.minecraft.world.entity.vehicle.boat.AbstractBoat;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.List;
 
@@ -23,12 +28,23 @@ import java.util.List;
  *
  * <p>Grim mode desyncs the landing: when the client lands after a damaging fall it
  * cancels the vanilla movement packet and sends a forged on-ground sequence instead
- * (StatusOnly + ClientTickEnd + Pos/PosRot), then suppresses further movement packets
- * until the server teleports the player back. Vanilla mode simply spoofs the onGround
- * flag on outgoing movement packets once the fall distance is lethal.</p>
+ * (StatusOnly + ClientTickEnd + Pos/PosRot, or a +0.25 y-spoofed packet near boats/shulkers/happy
+ * ghasts), then suppresses further movement packets until the server teleports the player
+ * back. Vanilla mode simply spoofs the onGround flag on outgoing movement packets once the
+ * fall distance is lethal.</p>
  *
- * <p>Hooks live in {@code dev.hatek.mixin.NoFallPlayerMixin} (sendPosition),
- * {@code dev.hatek.mixin.NoFallKeyboardMixin} (jump input) and
+ * <p>Edge landings: Grim validates the grounded state itself instead of trusting the
+ * client's onGround flag, so a forged position hanging over an edge (e.g. next to a lower
+ * block) is treated as airborne and the damage goes through. To counter that, the forged
+ * landing position is snapped to the center/top of the supporting block whenever the
+ * landing is not cleanly supported on all four bottom corners. Clean landings are sent
+ * with the exact client position, as before.</p>
+ *
+ * <p>After the Grim sequence completes on ground, the player performs a tiny hop instead
+ * of a full jump: it still flushes the server-side fall distance, but is barely visible
+ * (and silent).</p>
+ *
+ * <p>Hooks live in {@code dev.hatek.mixin.NoFallPlayerMixin} (sendPosition) and
  * {@code dev.hatek.mixin.NoFallPacketMixin} (teleport / velocity tracking).</p>
  */
 public final class NoFall extends Module {
@@ -39,6 +55,9 @@ public final class NoFall extends Module {
     private static final double MIN_LANDING_DROP = 0.05;
     private static final double SPOOF_OFFSET = 0.25;
     private static final double HARD_ENTITY_RANGE = 5.5;
+    private static final double HOP_VELOCITY = 0.18;
+    private static final double SUPPORT_EPS = 0.01;
+    private static final double CORNER_INSET = 1.0e-3;
     private static final int TELEPORT_TIMEOUT = 12;
     private static final int VELOCITY_WAIT = 2;
     private static final int MAX_OWED_TICKS = 4;
@@ -52,7 +71,6 @@ public final class NoFall extends Module {
     private boolean teleported;
     private boolean velocityApplied;
     private int velocityWait;
-    private boolean jumpNow;
     private int owedTicks;
     private boolean movedThisTick;
     private boolean vanillaSpoofArmed;
@@ -71,7 +89,6 @@ public final class NoFall extends Module {
     @Override
     protected void onDisable() {
         reset();
-        this.jumpNow = false;
         this.owedTicks = 0;
     }
 
@@ -80,7 +97,6 @@ public final class NoFall extends Module {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer self = mc.player;
         ClientLevel level = mc.level;
-        this.jumpNow = false;
         if (self == null || level == null) {
             reset();
             return;
@@ -93,7 +109,13 @@ public final class NoFall extends Module {
 
         if (this.waitTicks >= 0) {
             if (this.teleported && (this.velocityApplied || ++this.velocityWait > VELOCITY_WAIT)) {
-                this.jumpNow = self.onGround();
+                if (self.onGround()) {
+                    // Tiny hop instead of a full jump: flushes the server-side fall
+                    // distance just as well, but is barely visible and silent.
+                    Vec3 motion = self.getDeltaMovement();
+                    self.setDeltaMovement(motion.x, HOP_VELOCITY, motion.z);
+                    self.hasImpulse = true;
+                }
                 reset();
             } else if (++this.waitTicks > TELEPORT_TIMEOUT) {
                 reset();
@@ -136,17 +158,27 @@ public final class NoFall extends Module {
         float yaw = self.getYRot();
         float pitch = self.getXRot();
         boolean horizontalCollision = self.horizontalCollision;
+
+        // On edge landings Grim re-checks the grounded state itself and rejects positions
+        // hanging over the edge, so snap the forged position onto solid support.
+        Vec3 snap = module.landingSnap(self);
+        double forgeX = snap != null ? snap.x : x;
+        double forgeY = snap != null ? snap.y : y;
+        double forgeZ = snap != null ? snap.z : z;
+
         boolean rotated = yaw != sentYaw || pitch != sentPitch;
         ServerboundMovePlayerPacket landing = rotated
-                ? new ServerboundMovePlayerPacket.PosRot(x, y, z, yaw, pitch, true, horizontalCollision)
-                : new ServerboundMovePlayerPacket.Pos(x, y, z, true, horizontalCollision);
+                ? new ServerboundMovePlayerPacket.PosRot(forgeX, forgeY, forgeZ, yaw, pitch, true,
+                horizontalCollision)
+                : new ServerboundMovePlayerPacket.Pos(forgeX, forgeY, forgeZ, true, horizontalCollision);
 
         List<Packet<?>> replacement;
         if (module.nearHardEntity(self)) {
             ServerboundMovePlayerPacket spoofed = rotated
-                    ? new ServerboundMovePlayerPacket.PosRot(x, y + SPOOF_OFFSET, z, yaw, pitch, true,
-                    horizontalCollision)
-                    : new ServerboundMovePlayerPacket.Pos(x, y + SPOOF_OFFSET, z, true, horizontalCollision);
+                    ? new ServerboundMovePlayerPacket.PosRot(forgeX, forgeY + SPOOF_OFFSET, forgeZ, yaw, pitch,
+                    true, horizontalCollision)
+                    : new ServerboundMovePlayerPacket.Pos(forgeX, forgeY + SPOOF_OFFSET, forgeZ, true,
+                    horizontalCollision);
             replacement = List.of(spoofed);
         } else {
             replacement = List.of(
@@ -202,16 +234,6 @@ public final class NoFall extends Module {
         return cancel;
     }
 
-    /** Called from {@code NoFallKeyboardMixin}; forces a jump on the forged input. */
-    public static boolean consumeJump() {
-        NoFall module = instance;
-        if (module == null || !module.isEnabled() || !module.jumpNow) {
-            return false;
-        }
-        module.jumpNow = false;
-        return true;
-    }
-
     /** Called from {@code NoFallPacketMixin} after the server teleports the player. */
     public static void onTeleportApplied() {
         NoFall module = instance;
@@ -228,6 +250,50 @@ public final class NoFall extends Module {
         if (module != null && module.teleported && mc.player != null && entityId == mc.player.getId()) {
             module.velocityApplied = true;
         }
+    }
+
+    /**
+     * Returns a snapped landing spot (center/top of the supporting block) when the player
+     * is landing on an edge, or {@code null} when all four bottom corners are cleanly
+     * supported and the exact client position can be used.
+     */
+    private Vec3 landingSnap(LocalPlayer self) {
+        Minecraft mc = Minecraft.getInstance();
+        ClientLevel level = mc.level;
+        if (level == null) {
+            return null;
+        }
+        AABB box = self.getBoundingBox();
+        double feetY = box.minY;
+        double bestTop = Double.NEGATIVE_INFINITY;
+        BlockPos best = null;
+        boolean clean = true;
+        double[] xs = {box.minX + CORNER_INSET, box.maxX - CORNER_INSET};
+        double[] zs = {box.minZ + CORNER_INSET, box.maxZ - CORNER_INSET};
+        for (double cx : xs) {
+            for (double cz : zs) {
+                BlockPos pos = BlockPos.containing(cx, feetY - 0.5, cz);
+                BlockState state = level.getBlockState(pos);
+                VoxelShape shape = state.getCollisionShape(level, pos);
+                if (shape.isEmpty()) {
+                    clean = false;
+                    continue;
+                }
+                double top = pos.getY() + shape.max(Direction.Axis.Y);
+                if (Math.abs(top - feetY) <= SUPPORT_EPS) {
+                    if (top > bestTop) {
+                        bestTop = top;
+                        best = pos;
+                    }
+                } else {
+                    clean = false;
+                }
+            }
+        }
+        if (clean || best == null) {
+            return null;
+        }
+        return new Vec3(best.getX() + 0.5, bestTop, best.getZ() + 0.5);
     }
 
     private boolean landingHurts(LocalPlayer self) {
