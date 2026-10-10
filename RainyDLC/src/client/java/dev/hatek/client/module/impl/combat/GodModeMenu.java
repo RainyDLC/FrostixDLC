@@ -356,4 +356,9 @@ public final class GodModeMenu extends Module {
             mc.player.sendSystemMessage(Component.literal("[GodModeMenu] " + text));
         }
     }
+
+    /** Вызывается из ContainerCloseMixin. */
+    public void debug(String text) {
+        message(text);
+    }
 }
