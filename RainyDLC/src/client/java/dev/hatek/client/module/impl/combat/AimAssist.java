@@ -275,28 +275,28 @@ public final class AimAssist extends Module {
         }
 
         float k = (float) (this.strength.value() / 100.0);
-        // Агрессия: какую долю ошибки закрываем за тик (0.15..1.0).
-        float aggression = 0.15f + 0.85f * k;
-        // Плавность: чем выше значение — тем мягче и спокойнее доводка.
-        float response = aggression / (float) this.smoothness.value();
-
-        float turnYaw = dYaw * response;
-        float turnPitch = dPitch * response;
-
+        float turnYaw;
+        float turnPitch;
         if (this.useBrain.value() && this.brain.isTrained()) {
             float[] features = features(target, eye);
             float[] pred = this.brain.predict(features);
-            // Выход сети ограничиваем величиной ошибки: нейронка не может
-            // дёрнуть прицел через цель или в обратную сторону.
-            float pYaw = Mth.clamp(pred[0], -Math.abs(dYaw), Math.abs(dYaw)) * aggression;
-            float pPitch = Mth.clamp(pred[1], -Math.abs(dPitch), Math.abs(dPitch)) * aggression;
-            turnYaw = Mth.lerp(turnYaw, pYaw, 0.7f);
-            turnPitch = Mth.lerp(turnPitch, pPitch, 0.7f);
+            // Нейронка повторяет ТЕБЯ: берём не абсолютный доворот, а долю
+            // ошибки, которую ты сам закрываешь за тик. Доля всегда в [0, 1],
+            // поэтому сеть физически не может дёрнуть мимо цели
+            // или крутануть камеру не в ту сторону.
+            turnYaw = dYaw * brainFraction(pred[0], dYaw) * k;
+            turnPitch = dPitch * brainFraction(pred[1], dPitch) * k;
+        } else {
+            // Без нейронки: классика — доля ошибки за тик.
+            float aggression = 0.15f + 0.85f * k;
+            turnYaw = dYaw * aggression;
+            turnPitch = dPitch * aggression;
         }
 
-        // Лёгкое сглаживание итогового доворота — убирает микро-дёрганье.
-        this.velYaw += (turnYaw - this.velYaw) * 0.45f;
-        this.velPitch += (turnPitch - this.velPitch) * 0.45f;
+        // Плавность: сглаживание итогового доворота (чем выше — тем мягче).
+        float alpha = Mth.clamp(2.7f / (float) this.smoothness.value(), 0.05f, 1.0f);
+        this.velYaw += (turnYaw - this.velYaw) * alpha;
+        this.velPitch += (turnPitch - this.velPitch) * alpha;
 
         // Скорость: жёсткий лимит в градусах/секунду.
         float maxTurn = (float) (this.speed.value() / 20.0);
@@ -322,10 +322,21 @@ public final class AimAssist extends Module {
         mc.player.setXRot(Mth.clamp(mc.player.getXRot() + this.velPitch, -90.0f, 90.0f));
     }
 
+    /**
+     * Доля ошибки, которую игрок закрывает за тик, по предсказанию сети.
+     * Всегда в [0, 1]: предсказания «не в ту сторону» дают 0, безумно большие —
+     * дают 1 (не больше самой ошибки). Поэтому сеть физически не способна
+     * крутить камеру непонятно как — худшее, что она может, это ничего не делать.
+     */
+    private static float brainFraction(float predicted, float error) {
+        float denom = error + (error >= 0.0f ? 0.5f : -0.5f);
+        return Mth.clamp(predicted / denom, 0.0f, 1.0f);
+    }
+
     private void decayVelocity() {
-        float s = (float) this.smoothness.value();
-        this.velYaw -= this.velYaw / s;
-        this.velPitch -= this.velPitch / s;
+        float alpha = Mth.clamp(2.7f / (float) this.smoothness.value(), 0.05f, 1.0f);
+        this.velYaw *= 1.0f - alpha;
+        this.velPitch *= 1.0f - alpha;
         if (Math.abs(this.velYaw) < 0.001f) {
             this.velYaw = 0.0f;
         }
