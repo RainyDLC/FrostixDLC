@@ -9,7 +9,6 @@
     "LocalPlayerMixin",
     "MouseHandlerMixin",
     "MultiPlayerGameModeMixin",
-    "NoFallKeyboardMixin",
     "NoFallPacketMixin",
     "NoFallPlayerMixin",
     "accessor.LivingEntityAccessor",
