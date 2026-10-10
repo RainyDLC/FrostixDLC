@@ -6,13 +6,9 @@
   "client": [
     "CameraMixin",
     "ConnectionMixin",
-    "ContainerCloseMixin",
-    "GodModeMenuMixin",
     "LocalPlayerMixin",
-    "ManualWarpCaptureMixin",
     "MouseHandlerMixin",
     "MultiPlayerGameModeMixin",
-    "accessor.GuiAccessor",
     "accessor.LivingEntityAccessor",
     "accessor.MinecraftAccessor",
     "accessor.ScreenInvoker"

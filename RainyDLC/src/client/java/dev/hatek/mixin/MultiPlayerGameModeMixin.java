@@ -1,6 +1,5 @@
 package dev.hatek.mixin;
 
-import dev.hatek.client.module.impl.combat.GodModeMenu;
 import dev.hatek.client.module.impl.combat.aura.Attack;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.world.entity.Entity;
@@ -19,10 +18,6 @@ public class MultiPlayerGameModeMixin {
             cancellable = true
     )
     private void hatek$onAttack(Player player, Entity target, CallbackInfo ci) {
-        GodModeMenu godMode = GodModeMenu.instance();
-        if (godMode != null) {
-            godMode.onAttack(target);
-        }
         if (!Attack.allowAttack()) {
             ci.cancel();
         }
