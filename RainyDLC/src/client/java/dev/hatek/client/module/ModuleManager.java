@@ -1,7 +1,6 @@
 package dev.hatek.client.module;
 
 import dev.hatek.client.ui.Style;
-import dev.hatek.client.module.impl.combat.AimAssist;
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
@@ -64,8 +63,6 @@ public final class ModuleManager {
 
     private static void register() {
         MODULES.add(new AttackAura().expanded(true));
-
-        MODULES.add(new AimAssist().expanded(true));
 
         MODULES.add(new AutoSprint().enabled(true).expanded(true));
 
