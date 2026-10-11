@@ -122,6 +122,7 @@ public final class InterfaceHud {
         if (screenOpen) {
             return; // HUD явно рисует сам открытый экран.
         }
+        HudMover.tickInGame();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) {
             return;
@@ -359,15 +360,27 @@ public final class InterfaceHud {
 
     // ---------------- кейбинды функций ----------------
 
+    private static final class KbRow {
+        final String name;
+        final String keyLabel;
+        final boolean enabled;
+
+        KbRow(String name, String keyLabel, boolean enabled) {
+            this.name = name;
+            this.keyLabel = keyLabel;
+            this.enabled = enabled;
+        }
+    }
+
     private static final class KbData implements Sized {
         final float w;
         final float h;
-        final List<Module> bound;
+        final List<KbRow> rows;
 
-        KbData(float w, float h, List<Module> bound) {
+        KbData(float w, float h, List<KbRow> rows) {
             this.w = w;
             this.h = h;
-            this.bound = bound;
+            this.rows = rows;
         }
 
         @Override
@@ -382,16 +395,16 @@ public final class InterfaceHud {
     }
 
     private static KbData measureKeybinds(float s) {
-        List<Module> bound = new ArrayList<>();
+        List<KbRow> rows = new ArrayList<>();
         for (Module module : ModuleManager.all()) {
             if (module.keyCode() != GLFW.GLFW_KEY_UNKNOWN) {
-                bound.add(module);
+                rows.add(new KbRow(module.name(), module.keyLabel(), module.isEnabled()));
             }
         }
-        if (bound.isEmpty()) {
+        if (rows.isEmpty()) {
             return null;
         }
-        bound.sort(Comparator.comparing(Module::name));
+        rows.sort(Comparator.comparing(r -> r.name));
 
         HFont title = sTitle(s);
         HFont body = sBody(s);
@@ -399,16 +412,16 @@ public final class InterfaceHud {
 
         float headerW = Style.HUD_TITLE_X * s + title.width("Keybinds") + Style.HUD_PAD * s;
         float rowsW = 0.0f;
-        for (Module module : bound) {
-            float badgeW = label.width(module.keyLabel()) + Style.HUD_BADGE_PAD * 2.0f * s;
-            float rowW = 23.0f * s + body.width(module.name()) + 8.0f * s + badgeW
+        for (KbRow row : rows) {
+            float badgeW = label.width(row.keyLabel) + Style.HUD_BADGE_PAD * 2.0f * s;
+            float rowW = 23.0f * s + body.width(row.name) + 8.0f * s + badgeW
                     + Style.HUD_PAD * s;
             rowsW = Math.max(rowsW, rowW);
         }
         float w = Math.max(Style.HUD_MIN_W * s, Math.max(headerW, rowsW));
         float rowH = Style.HUD_ROW_H * s;
-        float h = Style.HUD_HEADER_H * s + bound.size() * rowH + Style.HUD_BOTTOM_PAD * s;
-        return new KbData(w, h, bound);
+        float h = Style.HUD_HEADER_H * s + rows.size() * rowH + Style.HUD_BOTTOM_PAD * s;
+        return new KbData(w, h, rows);
     }
 
     /** Рисует карточку кейбиндов в origin (0,0) с ручным масштабом. */
@@ -422,28 +435,26 @@ public final class InterfaceHud {
 
         float rowH = Style.HUD_ROW_H * s;
         float ry = Style.HUD_HEADER_H * s;
-        for (Module module : d.bound) {
-            boolean enabled = module.isEnabled();
-            if (enabled) {
+        for (KbRow row : d.rows) {
+            if (row.enabled) {
                 Render2D.round(gg, Style.HUD_PAD * s,
                         ry + (rowH - Style.HUD_STUB_H * s) / 2.0f,
                         Style.HUD_STUB_W * s, Style.HUD_STUB_H * s, 1.0f * s,
                         Style.accent());
             }
-            body.draw(gg, module.name(), 23.0f * s,
+            body.draw(gg, row.name, 23.0f * s,
                     body.centeredBaseline(ry, rowH),
-                    enabled ? Style.WHITE : Style.WHITE_45);
+                    row.enabled ? Style.WHITE : Style.WHITE_45);
 
-            String key = module.keyLabel();
-            float badgeW = label.width(key) + Style.HUD_BADGE_PAD * 2.0f * s;
+            float badgeW = label.width(row.keyLabel) + Style.HUD_BADGE_PAD * 2.0f * s;
             float bx = w - Style.HUD_PAD * s - badgeW;
             float by = ry + (rowH - Style.HUD_BADGE_H * s) / 2.0f;
             Render2D.round(gg, bx, by, badgeW, Style.HUD_BADGE_H * s,
                     Style.HUD_BADGE_R * s,
-                    enabled ? Render2D.withAlpha(Style.accent(), 0.22f) : Style.WHITE_04);
-            label.drawCentered(gg, key, bx + badgeW / 2.0f,
+                    row.enabled ? Render2D.withAlpha(Style.accent(), 0.22f) : Style.WHITE_04);
+            label.drawCentered(gg, row.keyLabel, bx + badgeW / 2.0f,
                     label.centeredBaseline(by, Style.HUD_BADGE_H * s),
-                    enabled ? Style.WHITE : Style.WHITE_45);
+                    row.enabled ? Style.WHITE : Style.WHITE_45);
             ry += rowH;
         }
     }
@@ -459,15 +470,27 @@ public final class InterfaceHud {
 
     // ---------------- эффекты ----------------
 
+    private static final class FxRow {
+        final Holder<MobEffect> holder;
+        final String name;
+        final String duration;
+
+        FxRow(Holder<MobEffect> holder, String name, String duration) {
+            this.holder = holder;
+            this.name = name;
+            this.duration = duration;
+        }
+    }
+
     private static final class FxData implements Sized {
         final float w;
         final float h;
-        final List<MobEffectInstance> shown;
+        final List<FxRow> rows;
 
-        FxData(float w, float h, List<MobEffectInstance> shown) {
+        FxData(float w, float h, List<FxRow> rows) {
             this.w = w;
             this.h = h;
-            this.shown = shown;
+            this.rows = rows;
         }
 
         @Override
@@ -483,12 +506,18 @@ public final class InterfaceHud {
 
     private static FxData measureEffects(float s) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) {
-            return null;
+        List<FxRow> rows = new ArrayList<>();
+        if (mc.player != null) {
+            List<MobEffectInstance> effects = new ArrayList<>(mc.player.getActiveEffects());
+            effects.removeIf(instance -> !instance.showIcon());
+            int count = Math.min(8, effects.size());
+            for (int i = 0; i < count; i++) {
+                MobEffectInstance instance = effects.get(i);
+                rows.add(new FxRow(instance.getEffect(), effectName(instance),
+                        formatDuration(instance.getDuration())));
+            }
         }
-        List<MobEffectInstance> effects = new ArrayList<>(mc.player.getActiveEffects());
-        effects.removeIf(instance -> !instance.showIcon());
-        if (effects.isEmpty()) {
+        if (rows.isEmpty()) {
             return null;
         }
 
@@ -499,18 +528,16 @@ public final class InterfaceHud {
         float rowH = 22.0f * s;
         float headerW = Style.HUD_TITLE_X * s + title.width("Effects") + Style.HUD_PAD * s;
         float rowsW = 0.0f;
-        int count = Math.min(8, effects.size());
-        for (int i = 0; i < count; i++) {
-            MobEffectInstance instance = effects.get(i);
+        for (FxRow row : rows) {
             float rowW = Style.HUD_PAD * s + 14.0f * s + 6.0f * s
-                    + body.width(effectName(instance))
-                    + 8.0f * s + label.width(formatDuration(instance.getDuration()))
+                    + body.width(row.name)
+                    + 8.0f * s + label.width(row.duration)
                     + Style.HUD_PAD * s;
             rowsW = Math.max(rowsW, rowW);
         }
         float w = Math.max(Style.HUD_MIN_W * s, Math.max(headerW, rowsW));
-        float h = Style.HUD_HEADER_H * s + count * rowH + Style.HUD_BOTTOM_PAD * s;
-        return new FxData(w, h, effects.subList(0, count));
+        float h = Style.HUD_HEADER_H * s + rows.size() * rowH + Style.HUD_BOTTOM_PAD * s;
+        return new FxData(w, h, rows);
     }
 
     /** Рисует карточку эффектов в origin (0,0) с ручным масштабом. */
@@ -530,18 +557,21 @@ public final class InterfaceHud {
 
         RenderPipeline pipeline = RenderPipelines.GUI_TEXTURED;
         float ry = Style.HUD_HEADER_H * s;
-        for (MobEffectInstance instance : d.shown) {
-            Holder<MobEffect> holder = instance.getEffect();
-
+        for (FxRow row : d.rows) {
             float spriteY = ry + (rowH - iconS) / 2.0f;
-            gg.blitSprite(pipeline, Hud.getMobEffectSprite(holder),
-                    (int) (Style.HUD_PAD * s), (int) spriteY,
-                    (int) iconS, (int) iconS);
+            if (row.holder != null) {
+                gg.blitSprite(pipeline, Hud.getMobEffectSprite(row.holder),
+                        (int) (Style.HUD_PAD * s), (int) spriteY,
+                        (int) iconS, (int) iconS);
+            } else {
+                Render2D.texture(gg, TexCache.flask((int) iconS),
+                        Style.HUD_PAD * s, spriteY, iconS, iconS, Style.WHITE);
+            }
 
             float baseline = body.centeredBaseline(ry, rowH);
-            body.draw(gg, effectName(instance), Style.HUD_PAD * s + 20.0f * s,
+            body.draw(gg, row.name, Style.HUD_PAD * s + 20.0f * s,
                     baseline, Style.WHITE);
-            label.drawRight(gg, formatDuration(instance.getDuration()),
+            label.drawRight(gg, row.duration,
                     d.w - Style.HUD_PAD * s, label.centeredBaseline(ry, rowH),
                     Style.WHITE_45);
             ry += rowH;

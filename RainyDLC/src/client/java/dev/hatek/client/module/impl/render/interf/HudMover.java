@@ -1,7 +1,10 @@
 package dev.hatek.client.module.impl.render.interf;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.client.ui.render.Render2D;
+import net.minecraft.client.Minecraft;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -9,9 +12,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Прямое перетаскивание HUD модуля Interface в ClickGUI:
- * ЛКМ по элементу и тянуть — двигать, колесо над элементом — размер.
- * Никакого отдельного редактора и подсказок.
+ * Перемещение (зажать ЛКМ) и масштабирование (колесико мыши) элементов HUD.
+ * Работает прямо в игре и в ClickGUI. Сохраняется сразу в hud.json.
  */
 public final class HudMover {
     private static boolean dragging;
@@ -28,13 +30,21 @@ public final class HudMover {
         return dragging;
     }
 
+    public static HudLayout.Element dragElement() {
+        return dragElement;
+    }
+
+    public static boolean dragMedia() {
+        return dragMedia;
+    }
+
     private static boolean canInteract() {
         Interface module = Interface.instance();
         return module != null && module.isEnabled();
     }
 
     /**
-     * Хит-тест и старт перетаскивания. Вызывается из ClickGuiScreen.
+     * Хит-тест и старт перетаскивания. Вызывается из ClickGuiScreen или in-game.
      */
     public static boolean tryStart(double mx, double my) {
         if (dragging || !canInteract()) {
@@ -61,6 +71,20 @@ public final class HudMover {
         return false;
     }
 
+    /**
+     * Старт перетаскивания в игре по ЛКМ на элементе HUD.
+     */
+    public static boolean tryStartInGame() {
+        if (dragging || !canInteract()) {
+            return false;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.gui == null || mc.gui.screen() != null) {
+            return false;
+        }
+        return tryStart(Render2D.mouseX(), Render2D.mouseY());
+    }
+
     private static void start(HudLayout.Element el, boolean media,
                               float[] b, double mx, double my) {
         dragging = true;
@@ -70,7 +94,21 @@ public final class HudMover {
         grabDY = (float) my - b[1];
     }
 
-    /** Движение за курсором. Вызывается из ClickGuiScreen.mouseDragged. */
+    /** Движение за курсором в игре. Вызывается каждый кадр HUD. */
+    public static void tickInGame() {
+        if (!dragging) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || !canInteract()
+                || (mc.gui != null && mc.gui.screen() != null)) {
+            stop();
+            return;
+        }
+        dragTo(Render2D.mouseX(), Render2D.mouseY());
+    }
+
+    /** Движение за курсором. */
     public static void dragTo(double mx, double my) {
         if (!dragging) {
             return;
@@ -104,13 +142,13 @@ public final class HudMover {
     }
 
     /**
-     * Колесо над элементом — размер. Возвращает true, если обработано.
+     * Колесо над элементом — размер. Сохраняется сразу.
      */
     public static boolean onScroll(double mx, double my, double scrollY) {
         if (!canInteract() || scrollY == 0) {
             return false;
         }
-        float factor = scrollY > 0 ? 1.1f : 1.0f / 1.1f;
+        float factor = scrollY > 0 ? 1.08f : 1.0f / 1.08f;
         if (Interface.showMedia2D()) {
             float[] b = InterfaceHud.media2DBounds();
             if (hit(b, mx, my)) {
@@ -125,10 +163,25 @@ public final class HudMover {
         for (HudLayout.Element el : order) {
             if (hit(bounds.get(el), mx, my)) {
                 HudLayout.setScale(el, HudLayout.get(el).scale * factor);
+                HudLayout.save();
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * Изменение размера колесиком мыши в игре над элементом HUD.
+     */
+    public static boolean onScrollInGame(double scrollY) {
+        if (!canInteract() || scrollY == 0) {
+            return false;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.gui == null || mc.gui.screen() != null) {
+            return false;
+        }
+        return onScroll(Render2D.mouseX(), Render2D.mouseY(), scrollY);
     }
 
     public static void stop() {

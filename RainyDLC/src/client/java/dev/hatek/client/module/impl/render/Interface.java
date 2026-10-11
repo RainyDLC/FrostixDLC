@@ -6,11 +6,12 @@ import dev.hatek.client.module.impl.render.interf.InterfaceHud;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.module.setting.TextSetting;
+import net.minecraft.client.Minecraft;
 
 /**
  * Модуль "Interface": HUD клиента.
  * Ватермарка, кейбинды, активные эффекты и кастомный хотбар.
- * Элементы свободно двигаются ЛКМ и масштабируются колесом прямо в ClickGUI.
+ * Перемещение (зажать ЛКМ) и масштабирование (колесико мыши) работают прямо в игре.
  */
 public final class Interface extends Module {
     private static Interface instance;
