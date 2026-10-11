@@ -97,25 +97,13 @@ public final class AttackPlanner {
             planTarget = target;
             ticksLeft = computeDelayTicks();
             matured = ticksLeft <= 0;
-        } else {
-            // Игрок прыгнул посреди обратного отсчёта — появилось ожидание крита.
-            // Продлеваем план до крита, а не бьём в фазе подъёма без крита.
-            if (!planCrit) {
-                int crit = ticksUntilCrit();
-                if (crit > 0 && crit <= ticksLeft + 12) {
-                    planCrit = true;
-                    critExtra = 0;
-                    ticksLeft = Math.max(ticksLeft, crit);
-                }
-            }
-            if (ticksLeft > 0) {
-                ticksLeft--;
-                if (ticksLeft <= 0) {
-                    matured = true;
-                }
-            } else {
+        } else if (ticksLeft > 0) {
+            ticksLeft--;
+            if (ticksLeft <= 0) {
                 matured = true;
             }
+        } else {
+            matured = true;
         }
     }
 

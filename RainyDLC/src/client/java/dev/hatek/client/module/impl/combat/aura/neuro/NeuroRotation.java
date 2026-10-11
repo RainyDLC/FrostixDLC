@@ -573,7 +573,7 @@ public final class NeuroRotation {
 
         // Микро-пауза из моторики игрока: в слежении рука иногда замирает.
         // Вероятность и длительность — из его калибровки, не из головы.
-        if (checkFreeze(totErr, readyToHit, attackScale)) {
+        if (checkFreeze(totErr, readyToHit)) {
             decayVelocity();
             gcdAccumYaw = 0.0f;
             gcdAccumPitch = 0.0f;
@@ -700,15 +700,13 @@ public final class NeuroRotation {
      * калибровки. Решение принимается раз в тик, длительность — в тиках,
      * поэтому поведение не зависит от FPS.
      */
-    private static boolean checkFreeze(float totErr, boolean readyToHit, float attackScale) {
+    private static boolean checkFreeze(float totErr, boolean readyToHit) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             return false;
         }
         int tick = mc.player.tickCount;
-        // Пауза никогда не ломает тайминг удара: при приближении момента удара
-        // (а не только в сам момент) — выходим из паузы и догоняем цель.
-        if (readyToHit || attackScale >= 0.65f) {
+        if (readyToHit) {
             freezeUntilTick = Integer.MIN_VALUE;
             return false;
         }
@@ -719,11 +717,6 @@ public final class NeuroRotation {
             return false;
         }
         lastFreezeRollTick = tick;
-        // Паузы — только в начале замаха (естественная расслабленность руки
-        // сразу после удара), никогда перед самым ударом.
-        if (attackScale >= 0.5f) {
-            return false;
-        }
         if (totErr > 12.0f || !hasBrain()) {
             return false;
         }
