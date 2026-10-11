@@ -81,25 +81,6 @@ public final class HudLayout {
         e.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
     }
 
-    public static float minScale() {
-        return MIN_SCALE;
-    }
-
-    public static float maxScale() {
-        return MAX_SCALE;
-    }
-
-    /** Сброс всех позиций и масштабов к якорям по умолчанию. */
-    public static void reset() {
-        load();
-        for (Entry e : ENTRIES.values()) {
-            e.x = null;
-            e.y = null;
-            e.scale = 1.0f;
-        }
-        save();
-    }
-
     public static void save() {
         try {
             Path path = file();

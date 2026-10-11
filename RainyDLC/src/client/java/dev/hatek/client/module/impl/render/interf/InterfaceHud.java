@@ -31,7 +31,6 @@ import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 /**
@@ -62,7 +61,11 @@ public final class InterfaceHud {
     private static final Map<HudLayout.Element, float[]> BOUNDS =
             new EnumMap<>(HudLayout.Element.class);
 
-    public record Size(float w, float h) {
+    /** Данные замера элемента (включают размер). Замер — один раз за кадр. */
+    private interface Sized {
+        float w();
+
+        float h();
     }
 
     private InterfaceHud() {
@@ -167,63 +170,92 @@ public final class InterfaceHud {
 
     /**
      * Ставит элемент на позицию из HudLayout (или якорь по умолчанию)
-     * и рисует с ручным масштабом. Замер выполняется до позиционирования,
-     * чтобы якоря справа/снизу знали размер.
+     * и рисует с ручным масштабом. Замер выполняется один раз за кадр
+     * до позиционирования, чтобы якоря справа/снизу знали размер.
      */
-    private static void place(GuiGraphicsExtractor gg, HudLayout.Element el,
-                              boolean visible, int sw, int sh,
-                              Function<Float, Size> measure,
-                              BiConsumer<GuiGraphicsExtractor, Float> draw) {
+    private interface Drawer<D extends Sized> {
+        void draw(GuiGraphicsExtractor gg, float s, D data);
+    }
+
+    private static <D extends Sized> void place(GuiGraphicsExtractor gg,
+                                                HudLayout.Element el, boolean visible,
+                                                int sw, int sh,
+                                                Function<Float, D> measure,
+                                                Drawer<D> drawer) {
         if (!visible) {
             return;
         }
         HudLayout.Entry e = HudLayout.get(el);
         float s = e.scale;
-        Size sz = measure.apply(s);
-        if (sz == null || sz.w() <= 0 || sz.h() <= 0) {
+        D data = measure.apply(s);
+        if (data == null || data.w() <= 0 || data.h() <= 0) {
             return;
         }
-        float[] a = anchor(el, sz, sw, sh);
+        float[] a = anchor(el, data.w(), data.h(), sw, sh);
         float x = e.positioned() ? e.x : a[0];
         float y = e.positioned() ? e.y : a[1];
 
         Render2D.pushTranslate(gg, x, y);
-        draw.accept(gg, s);
+        drawer.draw(gg, s, data);
         Render2D.popTransform(gg);
 
-        BOUNDS.put(el, new float[]{x, y, sz.w(), sz.h()});
+        BOUNDS.put(el, new float[]{x, y, data.w(), data.h()});
     }
 
     /** Якорь по умолчанию для элемента (размер уже с учётом масштаба). */
-    private static float[] anchor(HudLayout.Element el, Size sz, int sw, int sh) {
+    private static float[] anchor(HudLayout.Element el, float w, float h, int sw, int sh) {
         float m = Style.HUD_MARGIN;
         switch (el) {
             case WATERMARK:
                 return new float[]{m, m};
             case KEYBINDS:
-                return new float[]{sw - sz.w() - m, m};
+                return new float[]{sw - w - m, m};
             case EFFECTS: {
                 float[] kb = BOUNDS.get(HudLayout.Element.KEYBINDS);
                 float top = (kb != null) ? kb[1] + kb[3] + 8.0f : m;
-                return new float[]{sw - sz.w() - m, top};
+                return new float[]{sw - w - m, top};
             }
             case HOTBAR:
             default:
-                return new float[]{(sw - sz.w()) / 2.0f, sh - sz.h() - 8.0f};
+                return new float[]{(sw - w) / 2.0f, sh - h - 8.0f};
         }
     }
 
     // ---------------- ватермарка ----------------
 
-    private record WmData(float w, float h, String fps, String pingS) {
+    private static final class WmData implements Sized {
+        final float w;
+        final float h;
+        final String fps;
+        final String pingS;
+
+        WmData(float w, float h, String fps, String pingS) {
+            this.w = w;
+            this.h = h;
+            this.fps = fps;
+            this.pingS = pingS;
+        }
+
+        @Override
+        public float w() {
+            return this.w;
+        }
+
+        @Override
+        public float h() {
+            return this.h;
+        }
+
+        public String fps() {
+            return this.fps;
+        }
+
+        public String pingS() {
+            return this.pingS;
+        }
     }
 
-    private static Size measureWatermark(float s) {
-        WmData d = measureWatermarkData(s);
-        return new Size(d.w(), d.h());
-    }
-
-    private static WmData measureWatermarkData(float s) {
+    private static WmData measureWatermark(float s) {
         Minecraft mc = Minecraft.getInstance();
         HFont title = sTitle(s);
         HFont label = sLabel(s);
@@ -252,8 +284,7 @@ public final class InterfaceHud {
     }
 
     /** Рисует ватермарку в origin (0,0) с ручным масштабом. */
-    private static void drawWatermark(GuiGraphicsExtractor gg, float s) {
-        WmData d = measureWatermarkData(s);
+    private static void drawWatermark(GuiGraphicsExtractor gg, float s, WmData d) {
         float w = d.w();
         float h = d.h();
         HFont title = sTitle(s);
@@ -299,7 +330,21 @@ public final class InterfaceHud {
         return cx + textW;
     }
 
+    private static int cachedPing = -2;
+    private static long pingAt;
+
+    /** Пинг меняется редко — опрашиваем не чаще раза в секунду. */
     private static int ping() {
+        long now = System.currentTimeMillis();
+        if (now - pingAt < 1000 && cachedPing != -2) {
+            return cachedPing;
+        }
+        pingAt = now;
+        cachedPing = pingNow();
+        return cachedPing;
+    }
+
+    private static int pingNow() {
         try {
             Minecraft mc = Minecraft.getInstance();
             if (mc.getConnection() == null || mc.player == null) {
@@ -314,7 +359,7 @@ public final class InterfaceHud {
 
     // ---------------- кейбинды функций ----------------
 
-    private static final class KbData {
+    private static final class KbData implements Sized {
         final float w;
         final float h;
         final List<Module> bound;
@@ -324,14 +369,19 @@ public final class InterfaceHud {
             this.h = h;
             this.bound = bound;
         }
+
+        @Override
+        public float w() {
+            return this.w;
+        }
+
+        @Override
+        public float h() {
+            return this.h;
+        }
     }
 
-    private static Size measureKeybinds(float s) {
-        KbData d = measureKeybindsData(s);
-        return d == null ? null : new Size(d.w, d.h);
-    }
-
-    private static KbData measureKeybindsData(float s) {
+    private static KbData measureKeybinds(float s) {
         List<Module> bound = new ArrayList<>();
         for (Module module : ModuleManager.all()) {
             if (module.keyCode() != GLFW.GLFW_KEY_UNKNOWN) {
@@ -362,11 +412,7 @@ public final class InterfaceHud {
     }
 
     /** Рисует карточку кейбиндов в origin (0,0) с ручным масштабом. */
-    private static void drawKeybinds(GuiGraphicsExtractor gg, float s) {
-        KbData d = measureKeybindsData(s);
-        if (d == null) {
-            return;
-        }
+    private static void drawKeybinds(GuiGraphicsExtractor gg, float s, KbData d) {
         float w = d.w;
         HFont body = sBody(s);
         HFont label = sLabel(s);
@@ -413,7 +459,7 @@ public final class InterfaceHud {
 
     // ---------------- эффекты ----------------
 
-    private static final class FxData {
+    private static final class FxData implements Sized {
         final float w;
         final float h;
         final List<MobEffectInstance> shown;
@@ -423,14 +469,19 @@ public final class InterfaceHud {
             this.h = h;
             this.shown = shown;
         }
+
+        @Override
+        public float w() {
+            return this.w;
+        }
+
+        @Override
+        public float h() {
+            return this.h;
+        }
     }
 
-    private static Size measureEffects(float s) {
-        FxData d = measureEffectsData(s);
-        return d == null ? null : new Size(d.w, d.h);
-    }
-
-    private static FxData measureEffectsData(float s) {
+    private static FxData measureEffects(float s) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             return null;
@@ -463,11 +514,7 @@ public final class InterfaceHud {
     }
 
     /** Рисует карточку эффектов в origin (0,0) с ручным масштабом. */
-    private static void drawEffects(GuiGraphicsExtractor gg, float s) {
-        FxData d = measureEffectsData(s);
-        if (d == null) {
-            return;
-        }
+    private static void drawEffects(GuiGraphicsExtractor gg, float s, FxData d) {
         HFont title = sTitle(s);
         HFont body = sBody(s);
         HFont label = sLabel(s);
@@ -501,22 +548,36 @@ public final class InterfaceHud {
         }
     }
 
+    private static final Map<String, String> EFFECT_NAMES = new java.util.HashMap<>();
+
+    /** Имя эффекта резолвится через translation-систему — кэшируем. */
     private static String effectName(MobEffectInstance instance) {
+        String key = instance.getEffect().value().getDescriptionId()
+                + "#" + instance.getAmplifier();
+        String cached = EFFECT_NAMES.get(key);
+        if (cached != null) {
+            return cached;
+        }
         String name = Component.translatable(
                 instance.getEffect().value().getDescriptionId()).getString();
         int amp = instance.getAmplifier();
         if (amp > 0) {
             name += " " + toRoman(amp + 1);
         }
-        return String.valueOf(name);
+        if (EFFECT_NAMES.size() < 256) {
+            EFFECT_NAMES.put(key, name);
+        }
+        return name;
     }
 
     private static String formatDuration(int ticks) {
         if (ticks < 0 || ticks > 1_000_000) {
             return "∞";
         }
-        int s = ticks / 20;
-        return (s / 60) + ":" + String.format("%02d", s % 60);
+        int total = ticks / 20;
+        int mm = total / 60;
+        int ss = total % 60;
+        return mm + ":" + (ss < 10 ? "0" : "") + ss;
     }
 
     private static String toRoman(int n) {
@@ -529,14 +590,34 @@ public final class InterfaceHud {
 
     // ---------------- кастомный хотбар ----------------
 
-    private static Size measureHotbar(float s) {
+    private static final class HbData implements Sized {
+        final float w;
+        final float h;
+
+        HbData(float w, float h) {
+            this.w = w;
+            this.h = h;
+        }
+
+        @Override
+        public float w() {
+            return this.w;
+        }
+
+        @Override
+        public float h() {
+            return this.h;
+        }
+    }
+
+    private static HbData measureHotbar(float s) {
         float slot = 22.0f * s;
         float gap = 2.0f * s;
-        return new Size(slot * 9.0f + gap * 8.0f, slot);
+        return new HbData(slot * 9.0f + gap * 8.0f, slot);
     }
 
     /** Рисует хотбар в origin (0,0) с ручным масштабом. */
-    private static void drawHotbar(GuiGraphicsExtractor gg, float s) {
+    private static void drawHotbar(GuiGraphicsExtractor gg, float s, HbData data) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             return;
