@@ -62,13 +62,29 @@ def forward(p, X):
 
 
 def train(X, Y, epochs=250, lr=0.003, batch=64, seed=7):
+    # Горизонтальная симметрия
+    X_sym = X.copy()
+    X_sym[:, 0] = -X_sym[:, 0]  # -yawErr
+    X_sym[:, 3] = -X_sym[:, 3]  # -tgtYawVel
+    Y_sym = Y.copy()
+    Y_sym[:, 0] = -Y_sym[:, 0]  # -dYaw
+    X = np.concatenate([X, X_sym], axis=0)
+    Y = np.concatenate([Y, Y_sym], axis=0)
+
     rng = np.random.default_rng(seed)
     n = len(X)
     # z-нормализация по train
     x_mean, x_std = X.mean(axis=0), X.std(axis=0)
     y_mean, y_std = Y.mean(axis=0), Y.std(axis=0)
-    x_std[x_std < 1e-6] = 1.0
-    y_std[y_std < 1e-6] = 1.0
+
+    # Обнуляем средние по симметричным осям (устраняет дрифт)
+    x_mean[0] = 0.0
+    x_mean[3] = 0.0
+    y_mean[0] = 0.0
+    y_mean[1] = 0.0
+
+    x_std[x_std < 1e-4] = 1.0
+    y_std[y_std < 1e-4] = 1.0
     Xn = (X - x_mean) / x_std
     Yn = (Y - y_mean) / y_std
 

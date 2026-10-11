@@ -39,5 +39,9 @@ public final class ClientEvents {
 
     public static void render3D() {
         ComponentManager.render3D();
+        dev.hatek.client.module.impl.combat.AimAssist aim = dev.hatek.client.module.impl.combat.AimAssist.instance();
+        if (aim != null && aim.isEnabled()) {
+            aim.onRenderFrame();
+        }
     }
 }

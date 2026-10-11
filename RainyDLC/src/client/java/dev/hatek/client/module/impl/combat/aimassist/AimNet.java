@@ -113,24 +113,31 @@ public final class AimNet {
         return this.autoMaxDegPerSec;
     }
 
+    private static final ThreadLocal<double[]> SCRATCH = ThreadLocal.withInitial(() -> new double[IN + H1 + H2 + OUT]);
+
     // ---------------- инференс ----------------
 
-    /** Предсказать доворот игрока для данных признаков. */
+    /** Предсказать доворот игрока для данных признаков (без аллокаций памяти в куче). */
     public float[] predict(float[] input) {
-        double[] xn = new double[IN];
+        double[] buf = SCRATCH.get();
         for (int i = 0; i < IN; i++) {
-            xn[i] = (input[i] - this.xMean[i]) / this.xStd[i];
+            buf[i] = (input[i] - this.xMean[i]) / this.xStd[i];
         }
-        double[] a1 = new double[H1];
-        double[] a2 = new double[H2];
-        double[] out = new double[OUT];
-        forward(xn, a1, a2, out);
+        int a1Off = IN;
+        int a2Off = IN + H1;
+        int outOff = IN + H1 + H2;
+        forward(buf, 0, buf, a1Off, buf, a2Off, buf, outOff);
         return new float[]{
-                (float) (out[0] * this.yStd[0] + this.yMean[0]),
-                (float) (out[1] * this.yStd[1] + this.yMean[1])};
+                (float) (buf[outOff] * this.yStd[0] + this.yMean[0]),
+                (float) (buf[outOff + 1] * this.yStd[1] + this.yMean[1])};
     }
 
     private void forward(double[] xn, double[] a1, double[] a2, double[] out) {
+        forward(xn, 0, a1, 0, a2, 0, out, 0);
+    }
+
+    private void forward(double[] xn, int xOff, double[] a1, int a1Off,
+                         double[] a2, int a2Off, double[] out, int outOff) {
         double[] W1 = this.w1.v;
         double[] B1 = this.b1.v;
         double[] W2 = this.w2.v;
@@ -141,25 +148,25 @@ public final class AimNet {
             double s = B1[h];
             int base = h * IN;
             for (int i = 0; i < IN; i++) {
-                s += W1[base + i] * xn[i];
+                s += W1[base + i] * xn[xOff + i];
             }
-            a1[h] = Math.tanh(s);
+            a1[a1Off + h] = Math.tanh(s);
         }
         for (int h = 0; h < H2; h++) {
             double s = B2[h];
             int base = h * H1;
             for (int j = 0; j < H1; j++) {
-                s += W2[base + j] * a1[j];
+                s += W2[base + j] * a1[a1Off + j];
             }
-            a2[h] = Math.tanh(s);
+            a2[a2Off + h] = Math.tanh(s);
         }
         for (int o = 0; o < OUT; o++) {
             double s = B3[o];
             int base = o * H2;
             for (int h = 0; h < H2; h++) {
-                s += W3[base + h] * a2[h];
+                s += W3[base + h] * a2[a2Off + h];
             }
-            out[o] = s;
+            out[outOff + o] = s;
         }
     }
 
@@ -201,10 +208,24 @@ public final class AimNet {
         if (clean.size() < MIN_TRAIN_SAMPLES) {
             return false;
         }
-        if (clean.size() > 12000) {
-            List<AimSample> sub = new ArrayList<>(12000);
-            double step = (double) clean.size() / 12000.0;
-            for (int i = 0; i < 12000; i++) {
+
+        // Горизонтальная симметрия: отражение по yaw гарантирует лево/право баланс и исключает дрифт
+        List<AimSample> augmented = new ArrayList<>(clean.size() * 2);
+        for (AimSample s : clean) {
+            augmented.add(s);
+            float[] symIn = s.input.clone();
+            symIn[0] = -symIn[0]; // -yawErr
+            symIn[3] = -symIn[3]; // -tgtYawVel
+            float[] symOut = s.output.clone();
+            symOut[0] = -symOut[0]; // -dYaw
+            augmented.add(new AimSample(symIn, symOut));
+        }
+        clean = augmented;
+
+        if (clean.size() > 14000) {
+            List<AimSample> sub = new ArrayList<>(14000);
+            double step = (double) clean.size() / 14000.0;
+            for (int i = 0; i < 14000; i++) {
                 sub.add(clean.get((int) (i * step)));
             }
             clean = sub;
@@ -243,7 +264,8 @@ public final class AimNet {
         }
 
         final int batch = 64;
-        final double lr = 0.003;
+        final double lrMin = 0.0004;
+        final double lrMax = 0.0035;
         Random rnd = new Random(7L);
         int[] order = new int[n];
         for (int i = 0; i < n; i++) {
@@ -270,6 +292,7 @@ public final class AimNet {
         double valLoss = Double.NaN;
         int step = 0;
         for (int e = 0; e < epochs; e++) {
+            double curLr = lrMin + 0.5 * (lrMax - lrMin) * (1.0 + Math.cos(Math.PI * e / epochs));
             shuffle(order, rnd);
             for (int from = 0; from < n; from += batch) {
                 int to = Math.min(from + batch, n);
@@ -316,12 +339,12 @@ public final class AimNet {
                     }
                 }
                 step++;
-                adam(this.w1, gw1, lr, step);
-                adam(this.b1, gb1, lr, step);
-                adam(this.w2, gw2, lr, step);
-                adam(this.b2, gb2, lr, step);
-                adam(this.w3, gw3, lr, step);
-                adam(this.b3, gb3, lr, step);
+                adam(this.w1, gw1, curLr, step);
+                adam(this.b1, gb1, curLr, step);
+                adam(this.w2, gw2, curLr, step);
+                adam(this.b2, gb2, curLr, step);
+                adam(this.w3, gw3, curLr, step);
+                adam(this.b3, gb3, curLr, step);
             }
             trainLoss = mse(X, Y, a1, a2, pr);
             valLoss = nv == 0 ? Double.NaN : mse(Xv, Yv, a1, a2, pr);
@@ -351,10 +374,11 @@ public final class AimNet {
         final double b1 = 0.9;
         final double b2 = 0.999;
         final double eps = 1e-8;
+        final double weightDecay = 1e-4;
         double bc1 = 1.0 - Math.pow(b1, t);
         double bc2 = 1.0 - Math.pow(b2, t);
         for (int i = 0; i < p.v.length; i++) {
-            double g = grad[i];
+            double g = grad[i] + weightDecay * p.v[i];
             p.m[i] = b1 * p.m[i] + (1.0 - b1) * g;
             p.vv[i] = b2 * p.vv[i] + (1.0 - b2) * g * g;
             double mh = p.m[i] / bc1;
@@ -393,6 +417,13 @@ public final class AimNet {
         for (int o = 0; o < OUT; o++) {
             this.yMean[o] /= n;
         }
+
+        // Обнуляем средние по симметричным осям — полностью убирает увод/дрифт прицела вбок или по вертикали
+        this.xMean[0] = 0.0; // средняя ошибка yaw
+        this.xMean[3] = 0.0; // средняя угловая скорость yaw цели
+        this.yMean[0] = 0.0; // средний доворот yaw игрока (должен быть 0 на цели)
+        this.yMean[1] = 0.0; // средний доворот pitch игрока (должен быть 0 на цели)
+
         Arrays.fill(this.xStd, 0.0);
         Arrays.fill(this.yStd, 0.0);
         for (AimSample s : samples) {
@@ -407,13 +438,13 @@ public final class AimNet {
         }
         for (int i = 0; i < IN; i++) {
             this.xStd[i] = Math.sqrt(this.xStd[i] / n);
-            if (this.xStd[i] < 1e-6) {
+            if (this.xStd[i] < 1e-4) {
                 this.xStd[i] = 1.0;
             }
         }
         for (int o = 0; o < OUT; o++) {
             this.yStd[o] = Math.sqrt(this.yStd[o] / n);
-            if (this.yStd[o] < 1e-6) {
+            if (this.yStd[o] < 1e-4) {
                 this.yStd[o] = 1.0;
             }
         }

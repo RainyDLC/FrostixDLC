@@ -9,6 +9,8 @@ import dev.hatek.client.module.impl.combat.aimassist.AimSample;
 import dev.hatek.client.module.impl.combat.aimassist.AimStore;
 import dev.hatek.client.module.impl.combat.aimassist.AimTrainScreen;
 import dev.hatek.client.module.impl.combat.aimassist.DynamicButtonSetting;
+import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
+import dev.hatek.client.module.impl.combat.aura.util.GCDUtil;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.SliderSetting;
@@ -24,8 +26,11 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * AimAssist — мягкая доводка прицела с раздельными хитбоксами
+ * AimAssist — мягкая, ультра-плавная доводка прицела с раздельными хитбоксами
  * головы и тела и по-настоящему обучаемой нейронкой.
+ *
+ * <p>Работает покадрово (независимо от FPS/герцовки монитора) с точным
+ * квантованием по сетке GCD чувствительности мыши Minecraft.
  *
  * <p>Как обучить:
  * <ol>
@@ -48,7 +53,6 @@ public final class AimAssist extends Module {
     public static final int MIN_SAMPLES = 120;
     private static final int MAX_SAMPLES = 20000;
     private static final int EPOCHS = 250;
-    private static final float FALLBACK_MAX_TURN = 8.0f;
 
     // ---- состояние для HUD и менюшки ----
     public static volatile boolean training;
@@ -61,12 +65,12 @@ public final class AimAssist extends Module {
 
     private final ModeSetting aimPoint = new ModeSetting("Прицел", 0,
             POINT_HEAD, POINT_BODY, POINT_NEAREST);
-    private final SliderSetting strength = new SliderSetting("Сила доводки, %", 40.0, 0.0, 100.0, 1.0);
+    private final SliderSetting strength = new SliderSetting("Сила доводки, %", 60.0, 0.0, 100.0, 1.0);
     private final SliderSetting range = new SliderSetting("Дистанция", 4.5, 1.0, 8.0, 0.1);
     private final SliderSetting fov = new SliderSetting("FOV захвата", 60.0, 10.0, 180.0, 1.0);
     private final BoolSetting onlyWhileAttacking = new BoolSetting("Только при атаке", true);
     private final BoolSetting useBrain = new BoolSetting("Умная доводка (нейронка)", true);
-    private final SliderSetting smoothness = new SliderSetting("Плавность", 45.0, 0.0, 90.0, 1.0);
+    private final SliderSetting smoothness = new SliderSetting("Плавность", 40.0, 0.0, 90.0, 1.0);
 
     private final DynamicButtonSetting trainButton =
             new DynamicButtonSetting("Обучение", "Обучить наводку", this::openTrainScreen);
@@ -77,7 +81,7 @@ public final class AimAssist extends Module {
     private volatile AimNet net = new AimNet();
     private String activeProfile = "";
 
-    // ---- трекинг между тиками ----
+    // ---- трекинг между тиками (запись и атаки) ----
     private float lastViewYaw;
     private float lastViewPitch;
     private boolean hasLastView;
@@ -86,8 +90,16 @@ public final class AimAssist extends Module {
     private float lastFeatYawErr;
     private float lastFeatPitchErr;
     private int ticksSinceAttack = 999;
-    private float smoothYaw;
-    private float smoothPitch;
+    private int stabilizationSamples;
+
+    // ---- покадровый рендеринг и сглаживание ----
+    private long lastFrameNanos;
+    private float currentVelYaw;
+    private float currentVelPitch;
+    private float gcdAccumYaw;
+    private float gcdAccumPitch;
+    private LivingEntity currentTarget;
+    private boolean lastPointHead;
 
     /** Точка прицеливания: позиция + углы до неё + это голова или тело. */
     private record AimPoint(Vec3 pos, float yaw, float pitch, boolean head) {
@@ -151,7 +163,7 @@ public final class AimAssist extends Module {
         return nearestPoint(target, eye, viewYaw, viewPitch);
     }
 
-    /** Та из двух точек, к которой ближе текущий прицел игрока. */
+    /** Та из двух точек, к которой ближе текущий прицел игрока (с гистерезисом против дрожания шеи). */
     private AimPoint nearestPoint(LivingEntity target, Vec3 eye, float viewYaw, float viewPitch) {
         Vec3 head = headPoint(target);
         Vec3 body = bodyPoint(target);
@@ -159,7 +171,12 @@ public final class AimAssist extends Module {
         float[] rb = rotTo(eye, body);
         double ah = Math.hypot(Mth.wrapDegrees(rh[0] - viewYaw), rh[1] - viewPitch);
         double ab = Math.hypot(Mth.wrapDegrees(rb[0] - viewYaw), rb[1] - viewPitch);
-        return ah <= ab ? new AimPoint(head, rh[0], rh[1], true)
+
+        // Гистерезис 2.0 градуса для стабильности на шее
+        boolean pickHead = this.lastPointHead ? (ah <= ab + 2.0) : (ah + 2.0 <= ab);
+        this.lastPointHead = pickHead;
+
+        return pickHead ? new AimPoint(head, rh[0], rh[1], true)
                 : new AimPoint(body, rb[0], rb[1], false);
     }
 
@@ -184,8 +201,8 @@ public final class AimAssist extends Module {
         this.prevFeat = null;
         this.prevTargetId = -1;
         this.ticksSinceAttack = 999;
-        this.smoothYaw = 0.0f;
-        this.smoothPitch = 0.0f;
+        this.stabilizationSamples = 0;
+        resetFrame();
         refreshCaptions();
     }
 
@@ -333,12 +350,10 @@ public final class AimAssist extends Module {
 
         float viewYaw = mc.player.getYRot();
         float viewPitch = mc.player.getXRot();
-        LivingEntity target = findTarget(mc);
+        LivingEntity target = getOrFindTarget(mc, viewYaw, viewPitch);
 
         if (training) {
             recordTick(mc, target, viewYaw, viewPitch, attackDown);
-        } else {
-            assistTick(mc, target, viewYaw, viewPitch, attackDown);
         }
 
         this.lastViewYaw = viewYaw;
@@ -347,104 +362,226 @@ public final class AimAssist extends Module {
     }
 
     private void resetFrame() {
+        this.lastFrameNanos = 0;
+        this.currentVelYaw = 0.0f;
+        this.currentVelPitch = 0.0f;
+        this.gcdAccumYaw = 0.0f;
+        this.gcdAccumPitch = 0.0f;
         this.hasLastView = false;
         this.prevFeat = null;
         this.prevTargetId = -1;
-        this.smoothYaw *= 0.6f;
-        this.smoothPitch *= 0.6f;
+        this.currentTarget = null;
+    }
+
+    private void decayVelocity() {
+        this.currentVelYaw *= 0.7f;
+        this.currentVelPitch *= 0.7f;
+        if (Math.abs(this.currentVelYaw) < 0.01f) this.currentVelYaw = 0.0f;
+        if (Math.abs(this.currentVelPitch) < 0.01f) this.currentVelPitch = 0.0f;
     }
 
     /**
-     * Запись: признаки цели прошлого тика + реальный доворот игрока за тик.
-     * Во время записи асист выключен — пишется чистая наводка игрока.
+     * Запись датасета: записывает реальную моторику игрока, фильтруя
+     * смену целей, побег/уворот в противоположную сторону и аномалии телепортации.
      */
     private void recordTick(Minecraft mc, LivingEntity target,
                             float viewYaw, float viewPitch, boolean attackDown) {
         float dYaw = this.hasLastView ? Mth.wrapDegrees(viewYaw - this.lastViewYaw) : 0.0f;
         float dPitch = this.hasLastView ? viewPitch - this.lastViewPitch : 0.0f;
 
-        // Пишем только в бою: игрок атакует или только что атаковал.
-        boolean engaged = attackDown || this.ticksSinceAttack < 8;
+        boolean engaged = attackDown || this.ticksSinceAttack < 10;
+        int targetId = target != null ? target.getId() : -1;
+
         if (target != null && this.hasLastView && this.prevFeat != null && engaged
-                && this.dataset != null && this.dataset.size() < MAX_SAMPLES
-                && Math.abs(dYaw) + Math.abs(dPitch) > 0.004f
-                && Math.abs(dYaw) < 30.0f && Math.abs(dPitch) < 30.0f) {
-            this.dataset.add(new AimSample(this.prevFeat, new float[]{dYaw, dPitch}));
-            trainingSamples = this.dataset.size();
+                && this.prevTargetId == targetId
+                && this.dataset != null && this.dataset.size() < MAX_SAMPLES) {
+
+            float yawErr = this.prevFeat[0];
+            float pitchErr = this.prevFeat[1];
+            float absErr = (float) Math.hypot(yawErr, pitchErr);
+            float absTurn = (float) Math.hypot(dYaw, dPitch);
+
+            // Фильтр от выбросов телепортаций и резких разворотов
+            if (Math.abs(dYaw) < 45.0f && Math.abs(dPitch) < 45.0f) {
+                boolean validSample = false;
+
+                if (absErr < 2.0f) {
+                    // Стабилизация на цели: учим нейросеть останавливаться на прицеле, а не продолжать дергаться
+                    if (this.stabilizationSamples < this.dataset.size() * 0.25 + 10) {
+                        validSample = true;
+                        this.stabilizationSamples++;
+                    }
+                } else {
+                    // Проверяем направление доворота: игрок действительно доворачивает к цели, а не убегает спиной
+                    boolean yawMatches = Math.abs(yawErr) < 2.5f || (Math.signum(dYaw) == Math.signum(yawErr));
+                    boolean pitchMatches = Math.abs(pitchErr) < 2.0f || (Math.signum(dPitch) == Math.signum(pitchErr));
+
+                    if ((yawMatches || Math.abs(dYaw) < 0.5f) && (pitchMatches || Math.abs(dPitch) < 0.5f) && absTurn > 0.02f) {
+                        validSample = true;
+                    }
+                }
+
+                if (validSample) {
+                    this.dataset.add(new AimSample(this.prevFeat, new float[]{dYaw, dPitch}));
+                    trainingSamples = this.dataset.size();
+                }
+            }
         }
 
         if (target != null) {
             Vec3 eye = mc.player.getEyePosition(1.0f);
-            AimPoint ap = nearestPoint(target, eye, viewYaw, viewPitch);
-            this.prevFeat = buildFeatures(target, eye, viewYaw, viewPitch, ap,
-                    Mth.wrapDegrees(ap.yaw() - viewYaw), ap.pitch() - viewPitch);
+            AimPoint ap = chooseAimPoint(target, eye, viewYaw, viewPitch);
+            float curYawErr = Mth.wrapDegrees(ap.yaw() - viewYaw);
+            float curPitchErr = ap.pitch() - viewPitch;
+            this.prevFeat = buildFeatures(target, eye, viewYaw, viewPitch, ap, curYawErr, curPitchErr);
+            this.prevTargetId = targetId;
         } else {
             this.prevFeat = null;
             this.prevTargetId = -1;
         }
     }
 
-    /** Доводка прицела: нейронка предсказывает доворот игрока. */
-    private void assistTick(Minecraft mc, LivingEntity target,
-                            float viewYaw, float viewPitch, boolean attackDown) {
-        if (target == null) {
-            decaySmooth();
-            this.prevTargetId = -1;
+    /**
+     * Покадровый рендер-ассист: вызывается каждый кадр (60-240+ FPS) из ClientEvents.render3D().
+     * Обеспечивает идеальную шелковистую плавность, точное повторение скорости и стиля игрока,
+     * а также квантование углов по сетке GCD мыши Minecraft.
+     */
+    public void onRenderFrame() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) {
+            resetFrame();
             return;
         }
-        if (this.onlyWhileAttacking.value() && !attackDown && this.ticksSinceAttack > 8) {
-            decaySmooth();
+        if (mc.gui.screen() != null) {
+            resetFrame();
+            return;
+        }
+        if (training) {
+            return;
+        }
+        if (RotationProcess.isRotating()) {
+            resetFrame();
+            return;
+        }
+
+        long now = System.nanoTime();
+        if (this.lastFrameNanos == 0) {
+            this.lastFrameNanos = now;
+            return;
+        }
+        float deltaSec = (float) ((now - this.lastFrameNanos) / 1_000_000_000.0);
+        this.lastFrameNanos = now;
+        deltaSec = Mth.clamp(deltaSec, 0.0005f, 0.05f); // защита от лаг-спайков
+
+        boolean attackDown = mc.options.keyAttack.isDown();
+        if (this.onlyWhileAttacking.value() && !attackDown && this.ticksSinceAttack > 10) {
+            decayVelocity();
+            return;
+        }
+
+        float viewYaw = mc.player.getYRot();
+        float viewPitch = mc.player.getXRot();
+        LivingEntity target = getOrFindTarget(mc, viewYaw, viewPitch);
+        if (target == null) {
+            decayVelocity();
             return;
         }
 
         Vec3 eye = mc.player.getEyePosition(1.0f);
         AimPoint ap = chooseAimPoint(target, eye, viewYaw, viewPitch);
+
         float yawErr = Mth.wrapDegrees(ap.yaw() - viewYaw);
         float pitchErr = ap.pitch() - viewPitch;
-        if (Math.hypot(yawErr, pitchErr) < 0.25) {
-            decaySmooth();
+        float totErr = (float) Math.hypot(yawErr, pitchErr);
+
+        // Плавный спад в мертвой зоне: ниже 0.05° плавно отпускаем, без скачков
+        if (totErr < 0.05f) {
+            decayVelocity();
             return;
         }
+        float deadzoneScale = Mth.clamp((totErr - 0.05f) / 0.35f, 0.0f, 1.0f);
 
-        float[] feat = buildFeatures(target, eye, viewYaw, viewPitch, ap, yawErr, pitchErr);
-        float turnYaw;
-        float turnPitch;
+        float targetVelYaw;
+        float targetVelPitch;
         AimNet brain = this.net;
+
         if (this.useBrain.value() && brain.isTrained()) {
-            float[] pred = brain.predict(feat);
-            float k = (float) (this.strength.value() / 100.0);
-            turnYaw = pred[0] * k;
-            turnPitch = pred[1] * k;
-            // Не крутимся дальше цели — убирает дрожание и осцилляции.
-            turnYaw = clampToErr(turnYaw, yawErr);
-            turnPitch = clampToErr(turnPitch, pitchErr);
-            // Кап скорости — p95 скорости самого игрока из обучения.
-            float cap = (float) (brain.autoMaxDegPerSec() / 20.0);
-            turnYaw = Mth.clamp(turnYaw, -cap, cap);
-            turnPitch = Mth.clamp(turnPitch, -cap, cap);
+            float[] feat = buildFeatures(target, eye, viewYaw, viewPitch, ap, yawErr, pitchErr);
+            float[] pred = brain.predict(feat); // [dYaw, dPitch] за 50мс
+
+            float strengthK = (float) (this.strength.value() / 100.0);
+
+            // Переводим в градусы/сек (1 тик = 0.05с -> множитель 20.0f)
+            float speedYaw = pred[0] * 20.0f * strengthK * deadzoneScale;
+            float speedPitch = pred[1] * 20.0f * strengthK * deadzoneScale;
+
+            // Направленная безопасность: ассист обязан тянуть к цели, а не от неё
+            if (yawErr > 0 && speedYaw < 0) speedYaw = -speedYaw * 0.5f;
+            else if (yawErr < 0 && speedYaw > 0) speedYaw = -speedYaw * 0.5f;
+
+            if (pitchErr > 0 && speedPitch < 0) speedPitch = -speedPitch * 0.5f;
+            else if (pitchErr < 0 && speedPitch > 0) speedPitch = -speedPitch * 0.5f;
+
+            float maxDegPerSec = (float) Math.max(brain.autoMaxDegPerSec(), 180.0);
+            targetVelYaw = Mth.clamp(speedYaw, -maxDegPerSec, maxDegPerSec);
+            targetVelPitch = Mth.clamp(speedPitch, -maxDegPerSec, maxDegPerSec);
         } else {
-            float k = (float) (this.strength.value() / 100.0) * 0.35f;
-            turnYaw = Mth.clamp(yawErr * k, -FALLBACK_MAX_TURN, FALLBACK_MAX_TURN);
-            turnPitch = Mth.clamp(pitchErr * k, -FALLBACK_MAX_TURN, FALLBACK_MAX_TURN);
+            float strengthK = (float) (this.strength.value() / 100.0);
+            targetVelYaw = calculateFallbackSpeed(yawErr, totErr) * strengthK * deadzoneScale;
+            targetVelPitch = calculateFallbackSpeed(pitchErr, totErr) * strengthK * deadzoneScale;
         }
 
-        // Плавность: экспоненциальное сглаживание доворота.
-        float a = 1.0f - (float) (this.smoothness.value() / 100.0);
-        this.smoothYaw += (turnYaw - this.smoothYaw) * a;
-        this.smoothPitch += (turnPitch - this.smoothPitch) * a;
+        // Инерционное сглаживание:
+        // Низкая плавность -> моментальный отклик
+        // Высокая плавность -> мягкий плавный вход и выход
+        float smoothVal = (float) (this.smoothness.value() / 100.0);
+        float responsiveness = 45.0f * (1.0f - smoothVal * 0.72f);
+        float blend = Mth.clamp(deltaSec * responsiveness, 0.05f, 1.0f);
 
-        mc.player.setYRot(viewYaw + this.smoothYaw);
-        mc.player.setXRot(Mth.clamp(viewPitch + this.smoothPitch, -90.0f, 90.0f));
+        this.currentVelYaw += (targetVelYaw - this.currentVelYaw) * blend;
+        this.currentVelPitch += (targetVelPitch - this.currentVelPitch) * blend;
+
+        float rawStepYaw = this.currentVelYaw * deltaSec;
+        float rawStepPitch = this.currentVelPitch * deltaSec;
+
+        // Не перелетаем за цель за один кадр
+        rawStepYaw = Mth.clamp(rawStepYaw, -Math.abs(yawErr) * 0.9f, Math.abs(yawErr) * 0.9f);
+        rawStepPitch = Mth.clamp(rawStepPitch, -Math.abs(pitchErr) * 0.9f, Math.abs(pitchErr) * 0.9f);
+
+        // Квантование по сетке GCD чувствительности мыши игрока
+        this.gcdAccumYaw += rawStepYaw;
+        this.gcdAccumPitch += rawStepPitch;
+
+        float gcd = GCDUtil.getGCDValue();
+        float stepYaw;
+        float stepPitch;
+        if (gcd > 0.0001f) {
+            stepYaw = Math.round(this.gcdAccumYaw / gcd) * gcd;
+            stepPitch = Math.round(this.gcdAccumPitch / gcd) * gcd;
+            this.gcdAccumYaw -= stepYaw;
+            this.gcdAccumPitch -= stepPitch;
+        } else {
+            stepYaw = this.gcdAccumYaw;
+            stepPitch = this.gcdAccumPitch;
+            this.gcdAccumYaw = 0.0f;
+            this.gcdAccumPitch = 0.0f;
+        }
+
+        if (Math.abs(stepYaw) > 1e-5f || Math.abs(stepPitch) > 1e-5f) {
+            float newYaw = viewYaw + stepYaw;
+            float newPitch = Mth.clamp(viewPitch + stepPitch, -90.0f, 90.0f);
+
+            mc.player.setYRot(newYaw);
+            mc.player.setXRot(newPitch);
+            mc.player.yRotO += stepYaw;
+            mc.player.xRotO += stepPitch;
+        }
     }
 
-    private void decaySmooth() {
-        this.smoothYaw *= 0.6f;
-        this.smoothPitch *= 0.6f;
-    }
-
-    private static float clampToErr(float turn, float err) {
-        float a = Math.abs(err);
-        return Mth.clamp(turn, -a, a);
+    private static float calculateFallbackSpeed(float err, float totErr) {
+        float abs = Math.abs(err);
+        float speed = (float) Math.min(320.0, 18.0 + abs * 9.5);
+        return Math.copySign(speed, err);
     }
 
     /**
@@ -462,6 +599,8 @@ public final class AimAssist extends Module {
                     + (viewYaw - this.lastViewYaw));
             tgtPitchVel = (pitchErr - this.lastFeatPitchErr)
                     + (viewPitch - this.lastViewPitch);
+            tgtYawVel = Mth.clamp(tgtYawVel, -30.0f, 30.0f);
+            tgtPitchVel = Mth.clamp(tgtPitchVel, -30.0f, 30.0f);
         } else {
             tgtYawVel = 0.0f;
             tgtPitchVel = 0.0f;
@@ -473,6 +612,24 @@ public final class AimAssist extends Module {
         float dist = (float) eye.distanceTo(ap.pos());
         return new float[]{yawErr, pitchErr, dist, tgtYawVel, tgtPitchVel,
                 ap.head() ? 1.0f : 0.0f};
+    }
+
+    private LivingEntity getOrFindTarget(Minecraft mc, float viewYaw, float viewPitch) {
+        if (this.currentTarget != null) {
+            if (this.currentTarget.isAlive() && !this.currentTarget.isRemoved()
+                    && mc.player.distanceTo(this.currentTarget) <= this.range.value() * 1.25) {
+                Vec3 eye = mc.player.getEyePosition(1.0f);
+                float[] rot = rotTo(eye, bodyPoint(this.currentTarget));
+                double fovDist = Math.hypot(
+                        Mth.wrapDegrees(rot[0] - viewYaw),
+                        rot[1] - viewPitch);
+                if (fovDist <= this.fov.value() * 1.3) {
+                    return this.currentTarget;
+                }
+            }
+        }
+        this.currentTarget = findTarget(mc);
+        return this.currentTarget;
     }
 
     private LivingEntity findTarget(Minecraft mc) {
@@ -524,6 +681,7 @@ public final class AimAssist extends Module {
 
     @Override
     protected void onDisable() {
+        resetFrame();
         if (training) {
             stopTraining();
         }
