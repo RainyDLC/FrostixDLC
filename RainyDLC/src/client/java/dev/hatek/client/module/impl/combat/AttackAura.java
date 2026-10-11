@@ -257,7 +257,8 @@ public final class AttackAura extends Module {
             return;
         }
 
-        if (!MovementManager.getInstance().isMovementLocked()) {
+        if (!MovementManager.getInstance().isMovementLocked()
+                && !NeuroRotation.isTraining()) {
             boolean steer = this.movementType.is(MOVE_DEFAULT) && target != null;
             MoveUtil.fixMovement(steer ? bearingToTarget() : FreeLookUtil.freeYaw);
         }
@@ -274,12 +275,14 @@ public final class AttackAura extends Module {
                 && !mc.player.isInLava()
                 && !mc.player.onClimbable();
 
-        if (!packetSprint() && Attack.resetSprintTick(target, getRanges()) || airNoSprint) {
-            holdSprint();
-        } else {
-            releaseSprint();
+        if (!NeuroRotation.isTraining()) {
+            if (!packetSprint() && Attack.resetSprintTick(target, getRanges()) || airNoSprint) {
+                holdSprint();
+            } else {
+                releaseSprint();
 
-            MoveUtil.restoreSprintKey();
+                MoveUtil.restoreSprintKey();
+            }
         }
 
         if (!checkToAttack() && !NeuroRotation.isTraining()) {
