@@ -166,6 +166,11 @@ public final class AttackAura extends Module {
                 && !NeuroRotation.isTraining() && NeuroRotation.hasBrain();
     }
 
+    /** Выбран ли режим свободного движения. */
+    public static boolean isFreeMove() {
+        return instance != null && instance.isEnabled() && instance.movementType.is(MOVE_FREE);
+    }
+
     private void onNeuroTrainButton() {
         if (NeuroRotation.isTraining()) {
             NeuroRotation.stopTraining();
@@ -201,28 +206,21 @@ public final class AttackAura extends Module {
         this.neuroTrain.caption(
                 NeuroRotation.isTraining() ? "Стоп" : "Обучить ротации");
 
+        // При обучении игрок наводится и двигается 100% сам — аура не перехватывает управление
+        if (NeuroRotation.isTraining()) {
+            target = null;
+            MoveUtil.restoreSprintKey();
+            MoveUtil.restoreMovementKeys();
+            return;
+        }
+
         onUpdate();
 
         if (target != null) {
             updateRotation();
-            idleSwing();
         } else if (neuroMode()) {
             NeuroRotation.setTarget(null);
         }
-    }
-
-    private void idleSwing() {
-        Minecraft mc = mc();
-        if (mc.player == null || mc.player.isUsingItem() || mc.player.isBlocking()) {
-            return;
-        }
-        if (Attack.msCooldownPC01() > 0.55F || mc.player.getAttackStrengthScale(0.5F) > 0.6F) {
-            return;
-        }
-        if (!AuraRandom.chance(0.006F)) {
-            return;
-        }
-        mc.player.swing(InteractionHand.MAIN_HAND);
     }
 
     private void onUpdate() {
@@ -253,8 +251,12 @@ public final class AttackAura extends Module {
         }
 
         if (!MovementManager.getInstance().isMovementLocked()) {
-            boolean steer = this.movementType.is(MOVE_DEFAULT) && target != null;
-            MoveUtil.fixMovement(steer ? bearingToTarget() : FreeLookUtil.freeYaw);
+            if (this.movementType.is(MOVE_FREE)) {
+                MoveUtil.restoreMovementKeys();
+            } else {
+                boolean steer = this.movementType.is(MOVE_DEFAULT) && target != null;
+                MoveUtil.fixMovement(steer ? bearingToTarget() : FreeLookUtil.freeYaw);
+            }
         }
 
         boolean nearEnough = target != null
@@ -269,7 +271,10 @@ public final class AttackAura extends Module {
                 && !mc.player.isInLava()
                 && !mc.player.onClimbable();
 
-        if (!packetSprint() && Attack.resetSprintTick(target, getRanges()) || airNoSprint) {
+        boolean shouldHoldSprint = !this.movementType.is(MOVE_FREE)
+                && (!packetSprint() && Attack.resetSprintTick(target, getRanges()) || airNoSprint);
+
+        if (shouldHoldSprint) {
             holdSprint();
         } else {
             releaseSprint();
@@ -426,11 +431,6 @@ public final class AttackAura extends Module {
         if (misc(DROP_SHIELD) && mc.player.getUseItem().getItem().equals(Items.SHIELD)
                 && mc.player.isUsingItem()) {
             mc.gameMode.releaseUsingItem(mc.player);
-        }
-
-        if (!canPacket) {
-            mc.player.setSprinting(false);
-            mc.options.keySprint.setDown(false);
         }
 
         Attack.useEntity(target, preHit, postHit, InteractionHand.MAIN_HAND, true);

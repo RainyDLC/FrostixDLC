@@ -245,13 +245,17 @@ public class RotationProcess extends Component {
         return Mth.clamp(Mth.clamp(amount, -limit, limit), -cap, cap);
     }
 
-    public void stopRotation() {
+    public static void halt() {
         currentTask = RotationTask.IDLE;
         currentPriority = 0;
         lastYawStep = 0.0F;
         lastPitchStep = 0.0F;
         lastStepTick = Integer.MIN_VALUE;
         FreeLookUtil.active = false;
+    }
+
+    public void stopRotation() {
+        halt();
     }
 
     public enum RotationTask {

@@ -133,8 +133,14 @@ public final class NeuroRotation {
         learnStatus = "";
         learnLog = "";
         resetInference();
+        // Полностью глушим авто-ротации и отдаём управление руками игроку:
+        dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.forget();
+        RotationProcess.halt();
+        dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil.active = false;
+        dev.hatek.client.module.impl.combat.aura.util.MoveUtil.restoreMovementKeys();
+        dev.hatek.client.module.impl.combat.aura.util.MoveUtil.restoreSprintKey();
         tell("§d● §fЗапись нейро-ротации «" + name + "»: целься и бей сам, как обычно.");
-        tell("§7Аура включена, но НЕ бьёт. Можно тренироваться на спавне.");
+        tell("§7Аура НЕ вмешивается: целься мышкой во врага/жителя для записи датасета.");
     }
 
     /** Остановить запись, сохранить датасет. */
@@ -151,7 +157,7 @@ public final class NeuroRotation {
             }
         }
         tell("§a■ §fЗапись остановлена: " + trainingSamples
-                + " сэмплов. Теперь обучи нейронку через Python.");
+                + " сэмплов. Нажми «Обучить (быстро, Java)» в меню.");
     }
 
     /** Вызывается каждый клиентский тик из AttackAura. */
@@ -471,25 +477,37 @@ public final class NeuroRotation {
         float pitchErr = targetRot[1] - curPitch;
         float totErr = (float) Math.hypot(yawErr, pitchErr);
 
-        // Расчёт динамической скорости, чтобы наводка НЕ длилась дольше кулдауна атаки:
         float attackScale = mc.player.getAttackStrengthScale(0.5f);
+        boolean inCritPhase = !mc.player.onGround() && (mc.player.getDeltaMovement().y < 0.0 || mc.player.fallDistance > 0.0F);
+
+        // Если оружие только перезаряжается (кулдаун < 60%) и мы не в крит-фазе — не насилуем ротации,
+        // даём телу и руке двигаться свободно без рывков:
+        if (attackScale < 0.60f && !inCritPhase) {
+            if (totErr > 35.0f && RotationProcess.isRotating()) {
+                RotationProcess.requestReset();
+            }
+            aimed = false;
+            return;
+        }
+
+        // Расчёт динамической скорости, чтобы наводка НЕ длилась дольше кулдауна атаки:
         double attackSpeed = mc.player.getAttributeValue(Attributes.ATTACK_SPEED);
         float timeUntilHit = Math.max(0.02f, (1.0f - attackScale) / (float) attackSpeed);
         float neededSpeed = totErr / timeUntilHit;
 
-        float baseSpeed = hasBrain() ? (float) Math.max(net.autoMaxDegPerSec(), 180.0) : 240.0f;
+        float baseSpeed = hasBrain() ? (float) Math.max(net.autoMaxDegPerSec(), 200.0) : 260.0f;
         float finalSpeed = Math.max(baseSpeed, neededSpeed);
 
         // Если оружие готово к удару или в прыжке фаза падения для крита — мгновенно доводим на цель
-        if (attackScale >= 0.90f || (mc.player.getDeltaMovement().y < 0.0 && !mc.player.onGround())) {
-            finalSpeed = Math.max(finalSpeed, 540.0f);
+        if (attackScale >= 0.88f || inCritPhase) {
+            finalSpeed = Math.max(finalSpeed, 560.0f);
         }
         finalSpeed = Math.min(finalSpeed, 720.0f);
 
         RotationProcess.updateFrame(new Rotation(targetRot[0], targetRot[1]),
                 finalSpeed, finalSpeed, finalSpeed, finalSpeed, 10, 1);
 
-        float eps = Math.max(5.5f, AttackAura.targetAngularHalf() * 0.85f);
+        float eps = Math.max(6.5f, AttackAura.targetAngularHalf() * 0.95f);
         aimed = (Math.abs(yawErr) <= eps && Math.abs(pitchErr) <= eps)
                 || RayTraceUtil.rayTraceEntity(curYaw, curPitch, AttackAura.attackRange() + 0.5, t);
     }
@@ -502,7 +520,7 @@ public final class NeuroRotation {
         }
         float yaw = ServerView.yaw(mc.player.getYRot());
         float pitch = ServerView.pitch(mc.player.getXRot());
-        float eps = Math.max(5.5f, AttackAura.targetAngularHalf() * 0.85f);
+        float eps = Math.max(6.5f, AttackAura.targetAngularHalf() * 0.95f);
         Vec3 eye = mc.player.getEyePosition(1.0f);
         float[] rot = rotTo(eye, target.getBoundingBox().getCenter());
         float yawErr = Math.abs(Mth.wrapDegrees(rot[0] - yaw));

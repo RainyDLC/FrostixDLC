@@ -60,13 +60,16 @@ public final class ComponentManager extends HashMap<Class<? extends Component>, 
     }
 
     public static void render3D() {
+        if (NeuroRotation.isTraining()) {
+            return;
+        }
         RotationProcess process = INSTANCE.process;
         if (process != null) {
             process.onRender3D();
         }
         if (AttackAura.neuroActive()) {
             NeuroRotation.onFrame();
-        } else {
+        } else if (!AttackAura.neuroMode()) {
             SpaceTime.onFrame();
         }
     }

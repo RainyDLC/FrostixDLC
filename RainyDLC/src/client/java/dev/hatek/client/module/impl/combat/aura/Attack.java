@@ -183,7 +183,13 @@ public final class Attack {
         }, () -> {
         }};
         Minecraft mc = mc();
-        if (!enabled || mc.player == null || mc.getConnection() == null) {
+        if (mc.player == null || mc.getConnection() == null) {
+            return prePost;
+        }
+        boolean inAir = !mc.player.onGround() && (mc.player.fallDistance > 0.0F || mc.player.getDeltaMovement().y < 0.0);
+        // Для крита сброс спринта на момент удара ОБЯЗАТЕЛЕН, иначе Minecraft считает удар обычным спринтовым
+        boolean shouldSkip = enabled || inAir;
+        if (!shouldSkip) {
             return prePost;
         }
         if (!serverSprinting && !mc.player.isSprinting()) {
@@ -256,12 +262,18 @@ public final class Attack {
         if (critImpossible()) {
             return true;
         }
+        // Если игрока бьют (hurtTime > 0) — отвечаем ударом, чтобы не попасть в комбо противника:
+        if (mc.player.hurtTime > 0) {
+            return true;
+        }
         if (critStateReady()) {
             return true;
         }
         if (!mc.player.onGround()) {
+            // В воздухе бьём только в фазе падения (y < 0 или fallDistance > 0):
             return mc.player.getDeltaMovement().y < 0.0 || mc.player.fallDistance > 0.0F;
         }
+        // На земле: если зажат пробел, ждём 1 тик начала прыжка для крита
         if (mc.options != null && mc.options.keyJump.isDown()) {
             return false;
         }
@@ -287,21 +299,22 @@ public final class Attack {
 
     private static boolean critImpossible() {
         Minecraft mc = mc();
+        if (mc.player == null || mc.level == null) {
+            return true;
+        }
         boolean isInWeb = mc.level.getBlockState(mc.player.blockPosition()).is(Blocks.COBWEB);
-        boolean jumping = ((LivingEntityAccessor) mc.player).hatek$isJumping();
-        boolean badLiquidMoment = !jumping && (mc.player.isInWater() || mc.player.isInLava())
+        boolean inLiquid = mc.player.isInWater() || mc.player.isInLava()
                 || mc.player.isEyeInFluid(FluidTags.WATER)
-                || mc.player.isEyeInFluid(FluidTags.LAVA)
-                || isInWeb;
+                || mc.player.isEyeInFluid(FluidTags.LAVA);
 
-        return badLiquidMoment
+        return inLiquid
+                || isInWeb
                 || mc.player.onClimbable()
                 || mc.player.isPassenger()
                 || mc.player.hasEffect(MobEffects.BLINDNESS)
                 || mc.player.hasEffect(MobEffects.LEVITATION)
                 || mc.player.hasEffect(MobEffects.SLOW_FALLING)
-                || mc.player.getAbilities().flying
-                || getYCapacityOnPlayerPos(2) < 0.1F;
+                || mc.player.getAbilities().flying;
     }
 
     private static final float SMASH_FALL = 1.6F;
@@ -407,7 +420,7 @@ public final class Attack {
         if (mc.player == null) {
             return true;
         }
-        return mc.player.getAttackStrengthScale(0.5F) > chargeFloor();
+        return mc.player.getAttackStrengthScale(0.5F) >= chargeFloor();
     }
 
     private static float chargeFloor() {
@@ -521,14 +534,17 @@ public final class Attack {
                 && !AuraUtil.validDistance(livingTarget, ranges[0], true)) {
             return false;
         }
-        if (!msCooldownReached(cooldownMSOffset)) {
-            return false;
-        }
-        if (!attackTickGapReached()) {
-            return false;
-        }
         if (!chargeReached()) {
             return false;
+        }
+        boolean critReady = critStateReady();
+        if (!critReady) {
+            if (!msCooldownReached(cooldownMSOffset)) {
+                return false;
+            }
+            if (!attackTickGapReached()) {
+                return false;
+            }
         }
         boolean validNext = isBestMomentToHit(fallCheck);
         if (validNext && rayCast && !anyEntityOnRay(livingTarget, ranges[0])) {
