@@ -54,6 +54,14 @@ public final class TexCache {
         });
     }
 
+    /** Белая текстура 4×4 для цветной 3D-геометрии (цвет задаётся вершинами). */
+    public static Identifier whitePixel() {
+        return get("white_px", 4, 4, g -> {
+            g.setColor(Color.WHITE);
+            g.fillRect(0, 0, 4, 4);
+        });
+    }
+
     public static Identifier circle(int d) {
         return get("circle_" + d, d, d, g -> {
             g.setColor(Color.WHITE);

@@ -8,6 +8,7 @@ import dev.hatek.client.module.impl.misc.VoiceControl;
 import dev.hatek.client.module.impl.player.NoFall;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
 import dev.hatek.client.module.impl.render.ClickGui;
+import dev.hatek.client.module.impl.render.Cosmetics;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.client.module.impl.render.NoRender;
 import dev.hatek.client.module.setting.BoolSetting;
@@ -57,6 +58,13 @@ public final class ModuleManager {
         boolean handled = false;
         for (Module module : all()) {
             if (module.keyCode() == key) {
+                if (module instanceof Cosmetics) {
+                    // Бинд косметики открывает колесо, а не переключает функцию.
+                    net.minecraft.client.Minecraft.getInstance().gui.setScreen(
+                            new dev.hatek.client.ui.screen.CosmeticsScreen(key));
+                    handled = true;
+                    continue;
+                }
                 module.toggle();
                 handled = true;
             }
@@ -80,6 +88,8 @@ public final class ModuleManager {
         MODULES.add(new Interface().expanded(true));
 
         MODULES.add(new ClickGui().enabled(true).expanded(true));
+
+        MODULES.add(new Cosmetics().enabled(true).expanded(true));
 
         MODULES.add(new VoiceControl());
 
