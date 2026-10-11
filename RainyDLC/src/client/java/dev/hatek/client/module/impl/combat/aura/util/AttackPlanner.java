@@ -212,7 +212,7 @@ public final class AttackPlanner {
         double y = mc.player.getY();
         double vy = airborne ? mc.player.getDeltaMovement().y : 0.42;
         double groundY = y;
-        float fall = airborne ? mc.player.fallDistance : 0.0F;
+        float fall = airborne ? (float) mc.player.fallDistance : 0.0F;
         float need = Attack.critFallHeightValue();
         for (int t = 1; t <= FALL_SIM_TICKS; t++) {
             vy = (vy - 0.08) * 0.98;
