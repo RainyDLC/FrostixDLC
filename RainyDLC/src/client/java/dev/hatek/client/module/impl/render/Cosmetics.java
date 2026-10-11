@@ -1,23 +1,23 @@
 package dev.hatek.client.module.impl.render;
 
-import dev.hatek.client.cosmetic.SwordModel;
-import dev.hatek.client.cosmetic.Swords;
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
-import dev.hatek.client.module.setting.ModeSetting;
+import dev.hatek.client.module.setting.TextSetting;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Косметика: кастомные 3D-мечи. Бинд функции открывает колесо косметики,
- * переключатель включает/выключает показ косметики.
+ * Косметика: 3D-мечи из ресурспака Blades of Majestica.
+ * Бинд функции открывает колесо косметики, переключатель включает/выключает показ.
  */
 public final class Cosmetics extends Module {
     private static Cosmetics instance;
 
-    private final ModeSetting sword = new ModeSetting("Sword", 0, Swords.names());
+    /** Название меча из пака; пусто — обычный меч. */
+    private final TextSetting sword = new TextSetting("Sword", "", "Vanilla");
 
     public Cosmetics() {
-        super("Cosmetics", "Custom 3D swords. Press the bind to open the cosmetics wheel", Category.RENDER);
+        super("Cosmetics", "3D swords from Blades of Majestica. Press the bind to open the cosmetics wheel",
+                Category.RENDER);
         instance = this;
         keybind(GLFW.GLFW_KEY_B);
         with(this.sword);
@@ -28,20 +28,21 @@ public final class Cosmetics extends Module {
     }
 
     /** Выбранный меч или null, если косметика выключена / выбран обычный меч. */
-    public static SwordModel selectedSword() {
+    public static String selectedSword() {
         if (instance == null || !instance.isEnabled()) {
             return null;
         }
-        return Swords.byName(instance.sword.value());
+        String value = instance.sword.value();
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     public static String selectedName() {
-        return instance == null ? Swords.DEFAULT : instance.sword.value();
+        return instance == null ? "" : instance.sword.value();
     }
 
     public static void select(String name) {
         if (instance != null) {
-            instance.sword.value(name);
+            instance.sword.value(name == null ? "" : name);
         }
     }
 }

@@ -20,7 +20,6 @@
     "HudDragMixin",
     "MediaBillboardMixin",
     "CosmeticItemModelMixin",
-    "CosmeticItemStateMixin",
     "accessor.LivingEntityAccessor",
     "accessor.LocalPlayerAccessor",
     "accessor.MinecraftAccessor",

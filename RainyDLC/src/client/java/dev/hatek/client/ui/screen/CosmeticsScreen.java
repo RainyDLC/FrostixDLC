@@ -1,9 +1,8 @@
 package dev.hatek.client.ui.screen;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import dev.hatek.client.cosmetic.SwordModel;
-import dev.hatek.client.cosmetic.SwordRenderer;
-import dev.hatek.client.cosmetic.Swords;
+import dev.hatek.client.cosmetic.MajesticaSwords;
+import dev.hatek.client.cosmetic.SwordCosmetics;
 import dev.hatek.client.module.impl.render.ClickGui;
 import dev.hatek.client.module.impl.render.Cosmetics;
 import dev.hatek.client.ui.Style;
@@ -27,17 +26,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Колесо косметики: по кругу — мечи, в центре — моделька игрока в полный рост
- * с выбранным (или наведённым) мечом в руке.
- * Удерживай бинд и отпусти над мечом — или кликни по нему.
+ * Колесо косметики: по кругу — 3D-мечи из Blades of Majestica (по страницам),
+ * в центре — моделька игрока в полный рост с выбранным (или наведённым) мечом в руке.
+ * Удерживай бинд и отпусти над мечом — или кликни по нему. Колёсико мыши листает страницы.
  */
 public final class CosmeticsScreen extends Screen {
     private static final long HOLD_MS = 250L;
+    private static final int PER_PAGE = 12;
+    private static final String VANILLA = "Vanilla";
+    private static int page;
 
     private final int bindKey;
     private final long openedAt = System.currentTimeMillis();
-    private final String[] names = Swords.names();
+    private final List<String> all = new ArrayList<>();
     private final List<Anim> hover = new ArrayList<>();
+    private final Anim pageAnim = new Anim(1.0f, 12.0f);
     private final Anim openAnim = new Anim(0.0f, 14.0f);
     private final Anim labelAnim = new Anim(0.0f, 16.0f);
     private long lastFrame = System.nanoTime();
@@ -48,9 +51,30 @@ public final class CosmeticsScreen extends Screen {
     public CosmeticsScreen(int bindKey) {
         super(Component.literal("Cosmetics"));
         this.bindKey = bindKey;
-        for (int i = 0; i < this.names.length; i++) {
+        this.all.add(VANILLA);
+        this.all.addAll(MajesticaSwords.reload());
+        for (int i = 0; i < PER_PAGE; i++) {
             this.hover.add(new Anim(0.0f, 18.0f));
         }
+        // Открываемся на странице с выбранным мечом.
+        int selected = this.all.indexOf(Cosmetics.selectedName());
+        if (selected > 0) {
+            page = selected / PER_PAGE;
+        }
+        page = Math.floorMod(page, pages());
+    }
+
+    private int pages() {
+        return Math.max(1, (this.all.size() + PER_PAGE - 1) / PER_PAGE);
+    }
+
+    private int pageCount() {
+        return Math.min(PER_PAGE, this.all.size() - page * PER_PAGE);
+    }
+
+    private String entry(int slot) {
+        int index = page * PER_PAGE + slot;
+        return index < this.all.size() ? this.all.get(index) : null;
     }
 
     @Override
@@ -98,7 +122,7 @@ public final class CosmeticsScreen extends Screen {
     }
 
     private float angleOf(int index) {
-        return (float) (-Math.PI / 2.0 + index * Math.PI * 2.0 / this.names.length);
+        return (float) (-Math.PI / 2.0 + index * Math.PI * 2.0 / PER_PAGE);
     }
 
     private int pick(double mx, double my) {
@@ -109,9 +133,9 @@ public final class CosmeticsScreen extends Screen {
             return -1;
         }
         double angle = Math.atan2(dy, dx) + Math.PI / 2.0;
-        double step = Math.PI * 2.0 / this.names.length;
-        int index = (int) Math.floor((angle + step / 2.0) / step);
-        return Math.floorMod(index, this.names.length);
+        double step = Math.PI * 2.0 / PER_PAGE;
+        int index = Math.floorMod((int) Math.floor((angle + step / 2.0) / step), PER_PAGE);
+        return index < pageCount() ? index : -1;
     }
 
     // ------------------------------------------------------------------ рендер
@@ -151,9 +175,15 @@ public final class CosmeticsScreen extends Screen {
         Render2D.texture(gg, TexCache.glassRim(d, d, d / 2.0f), cx - ri, cy - ri, d, d, Style.WHITE);
         Render2D.texture(gg, TexCache.glow(Math.round(ri * 1.6f)), cx - ri * 0.8f, cy - ri * 0.8f,
                 Math.round(ri * 1.6f), Math.round(ri * 1.6f),
-                Render2D.withAlpha(previewAccent(), 0.18f));
+                Render2D.withAlpha(Style.accent(), 0.18f));
 
-        renderRing(gg, mx, my, cx, cy);
+        this.pageAnim.to(1.0f);
+        float appear = Anim.easeOut(this.pageAnim.get());
+        Render2D.pushAlpha(appear);
+        Render2D.pushScale(gg, cx, cy, 0.94f + 0.06f * appear);
+        renderRing(gg, cx, cy);
+        Render2D.popTransform(gg);
+        Render2D.popAlpha();
         renderLabels(gg, cx, cy, ri);
 
         Render2D.popTransform(gg);
@@ -165,21 +195,23 @@ public final class CosmeticsScreen extends Screen {
         }
     }
 
-    private int previewAccent() {
-        SwordModel model = previewModel();
-        return model == null ? Style.accent() : model.iconColor();
+    /** Название наведённого меча, иначе выбранного; null — обычный меч. */
+    private String previewName() {
+        String name = this.hovered >= 0 ? entry(this.hovered) : Cosmetics.selectedName();
+        return name == null || name.isBlank() || VANILLA.equals(name) ? null : name;
     }
 
-    private SwordModel previewModel() {
-        String name = this.hovered >= 0 ? this.names[this.hovered] : Cosmetics.selectedName();
-        return Swords.byName(name);
+    private static ItemStack icon(String name) {
+        ItemStack sword = new ItemStack(Items.NETHERITE_SWORD);
+        return name == null || VANILLA.equals(name) ? sword : SwordCosmetics.named(sword, name);
     }
 
-    private void renderRing(GuiGraphicsExtractor gg, double mx, double my, float cx, float cy) {
+    private void renderRing(GuiGraphicsExtractor gg, float cx, float cy) {
         float cell = cellSize();
         float radius = ringRadius();
         String selected = Cosmetics.selectedName();
-        for (int i = 0; i < this.names.length; i++) {
+        for (int i = 0; i < pageCount(); i++) {
+            String name = entry(i);
             float a = angleOf(i);
             Anim anim = this.hover.get(i);
             anim.to(i == this.hovered);
@@ -190,45 +222,48 @@ public final class CosmeticsScreen extends Screen {
             float size = cell * (1.0f + 0.12f * k);
             float left = x - size / 2.0f;
             float top = y - size / 2.0f;
-            boolean isSelected = this.names[i].equalsIgnoreCase(selected);
+            boolean isSelected = VANILLA.equals(name) ? selected == null || selected.isBlank()
+                    : name.equalsIgnoreCase(selected);
 
-            SwordModel model = Swords.byName(this.names[i]);
-            int accent = model == null ? Style.accent() : model.iconColor();
             Render2D.round(gg, left, top, size, size, size * 0.28f, Style.PANEL_GLASS);
             Render2D.round(gg, left, top, size, size, size * 0.28f,
-                    Render2D.lerp(Style.WHITE_02, Render2D.withAlpha(accent, 0.22f), Math.max(k, isSelected ? 0.8f : 0.0f)));
+                    Render2D.lerp(Style.WHITE_02, Render2D.withAlpha(Style.accent(), 0.22f),
+                            Math.max(k, isSelected ? 0.8f : 0.0f)));
             Render2D.texture(gg, TexCache.glassRim(Math.round(size), Math.round(size), size * 0.28f),
                     left, top, size, size, Style.WHITE);
             if (isSelected) {
-                Render2D.round(gg, x - 4.0f * unit(), top + size - 7.0f * unit(), 8.0f * unit(), 2.0f * unit(), 1.0f,
-                        Style.accent());
+                Render2D.round(gg, x - 4.0f * unit(), top + size - 7.0f * unit(), 8.0f * unit(),
+                        2.0f * unit(), 1.0f, Style.accent());
             }
 
-            if (model == null) {
-                Fonts.body().drawCentered(gg, "Vanilla", x, Fonts.body().centeredBaseline(top, size),
-                        Render2D.lerp(Style.WHITE_45, Style.WHITE, k));
-            } else {
-                SwordRenderer.icon(gg, model, x, y, size * 0.72f);
-                if (model.animated()) {
-                    Render2D.circle(gg, left + size - 12.0f * unit(), top + 6.0f * unit(), 5.0f * unit(),
-                            Render2D.withAlpha(accent, 0.6f + 0.4f * (float) Math.sin(SwordRenderer.time() * 4.0f)));
-                }
-            }
+            // Иконка меча из пака (тот же рендер предметов, что в инвентаре).
+            float iconSize = size * 0.62f;
+            gg.pose().pushMatrix();
+            gg.pose().translate(x - iconSize / 2.0f, y - iconSize / 2.0f);
+            gg.pose().scale(iconSize / 16.0f, iconSize / 16.0f);
+            gg.item(icon(name), 0, 0);
+            gg.pose().popMatrix();
         }
     }
 
     private void renderLabels(GuiGraphicsExtractor gg, float cx, float cy, float ri) {
-        String name = this.hovered >= 0 ? this.names[this.hovered] : Cosmetics.selectedName();
-        SwordModel model = Swords.byName(name);
-        this.labelAnim.to(1.0f);
+        String name = previewName();
         float base = cy + ri + 34.0f * unit();
-        Fonts.title().drawCentered(gg, name, cx, base, Style.WHITE);
-        String sub = model == null ? "Standard sword" : model.animated() ? "Animated" : "Custom 3D sword";
-        Fonts.body().drawCentered(gg, sub, cx, base + 18.0f, model != null && model.animated()
-                ? Render2D.withAlpha(model.iconColor(), 1.0f) : Style.WHITE_45);
-        Fonts.body().drawCentered(gg, "Click a sword to equip  ·  Esc to close", cx,
-                Render2D.screenHeight() - 40.0f * unit(), Style.WHITE_25);
-        Fonts.title().drawCentered(gg, "Cosmetics", cx, cy - ringRadius() - cellSize() - 6.0f * unit(), Style.WHITE);
+        Fonts.title().drawCentered(gg, name == null ? VANILLA : name, cx, base, Style.WHITE);
+        String sub = name == null ? "Standard sword" : "Blades of Majestica";
+        Fonts.body().drawCentered(gg, sub, cx, base + 18.0f, Style.WHITE_45);
+
+        float topY = cy - ringRadius() - cellSize() - 6.0f * unit();
+        Fonts.title().drawCentered(gg, "Cosmetics", cx, topY, Style.WHITE);
+        if (pages() > 1) {
+            Fonts.body().drawCentered(gg, "< " + (page + 1) + " / " + pages() + " >", cx, topY + 20.0f,
+                    Style.WHITE_45);
+        }
+        String hint = MajesticaSwords.available()
+                ? "Click a sword to equip  \u00b7  Scroll to change page  \u00b7  Esc to close"
+                : "Install and enable the Blades of Majestica resource pack: " + MajesticaSwords.PACK_URL;
+        Fonts.body().drawCentered(gg, hint, cx, Render2D.screenHeight() - 40.0f * unit(),
+                MajesticaSwords.available() ? Style.WHITE_25 : Style.accent());
     }
 
     /** Моделька игрока в полный рост; если в руке не меч — на время кадра даём ему меч. */
@@ -243,15 +278,15 @@ public final class CosmeticsScreen extends Screen {
         int y2 = Math.round((cy + ri * 0.80f) / g);
         int size = Math.round((y2 - y1) * 0.42f);
 
-        SwordModel preview = previewModel();
+        String preview = previewName();
         Inventory inventory = this.minecraft.player.getInventory();
         int slot = inventory.getSelectedSlot();
         ItemStack original = inventory.getItem(slot);
         boolean swap = preview != null && !original.is(ItemTags.SWORDS);
-        SwordRenderer.beginPreview(preview);
+        SwordCosmetics.beginPreview(preview);
         try {
             if (swap) {
-                inventory.setItem(slot, new ItemStack(Items.NETHERITE_SWORD));
+                inventory.setItem(slot, icon(preview));
             }
             InventoryScreen.extractEntityInInventoryFollowsMouse(gg, x1, y1, x2, y2, size, 0.0625f,
                     mouseX, mouseY, this.minecraft.player);
@@ -259,7 +294,7 @@ public final class CosmeticsScreen extends Screen {
             if (swap) {
                 inventory.setItem(slot, original);
             }
-            SwordRenderer.endPreview();
+            SwordCosmetics.endPreview();
         }
     }
 
@@ -284,13 +319,33 @@ public final class CosmeticsScreen extends Screen {
         }
     }
 
-    private void choose(int index) {
-        String name = this.names[index];
-        Cosmetics.select(name);
+    private void choose(int slot) {
+        String name = entry(slot);
+        if (name == null) {
+            return;
+        }
+        boolean vanilla = VANILLA.equals(name);
+        Cosmetics.select(vanilla ? "" : name);
         Cosmetics module = Cosmetics.instance();
-        if (module != null && Swords.byName(name) != null && !module.isEnabled()) {
+        if (module != null && !vanilla && !module.isEnabled()) {
             module.setEnabled(true);
         }
+    }
+
+    private void turnPage(int delta) {
+        int next = Math.floorMod(page + delta, pages());
+        if (next != page) {
+            page = next;
+            this.pageAnim.snap(0.0f);
+        }
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (scrollY != 0.0) {
+            turnPage(scrollY < 0 ? 1 : -1);
+        }
+        return true;
     }
 
     private void close() {
@@ -316,6 +371,14 @@ public final class CosmeticsScreen extends Screen {
         int key = event.key();
         if (key == GLFW.GLFW_KEY_ESCAPE || (!this.holdMode && key == this.bindKey)) {
             close();
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_RIGHT || key == GLFW.GLFW_KEY_D) {
+            turnPage(1);
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_A) {
+            turnPage(-1);
             return true;
         }
         return super.keyPressed(event);
