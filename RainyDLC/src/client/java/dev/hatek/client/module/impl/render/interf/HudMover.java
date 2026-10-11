@@ -31,6 +31,15 @@ public final class HudMover {
         return dragging;
     }
 
+    /** Элемент, который сейчас тащат (null — не тащат / тащат медиа). */
+    public static HudLayout.Element dragElement() {
+        return dragElement;
+    }
+
+    public static boolean dragMedia() {
+        return dragMedia;
+    }
+
     public static boolean altDown() {
         Minecraft mc = Minecraft.getInstance();
         return InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
@@ -92,13 +101,15 @@ public final class HudMover {
         grabDY = (float) my - b[1];
     }
 
-    /** Движение за курсором. Вызывается каждый клиентский тик. */
+    /** Движение за курсором. Вызывается каждый клиентский тик и каждый кадр HUD. */
     public static void tick() {
         if (!dragging) {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || !altDown() || mc.gui.screen() != null) {
+        Interface module = Interface.instance();
+        if (mc.player == null || module == null || !module.isEnabled()
+                || !altDown() || mc.gui.screen() != null) {
             stop();
             return;
         }
