@@ -499,7 +499,10 @@ public final class NeuroRotation {
         }
 
         Vec3 eye = mc.player.getEyePosition(1.0f);
-        boolean inCritPhase = !mc.player.onGround() && mc.player.getDeltaMovement().y < -0.01;
+        boolean inCritPhase = !mc.player.onGround()
+                && !mc.player.isFallFlying()
+                && !mc.player.getAbilities().flying
+                && mc.player.getDeltaMovement().y < -0.01;
         float attackScale = mc.player.getAttackStrengthScale(0.5f);
         boolean readyToHit = attackScale >= 0.88f || inCritPhase;
 
@@ -533,13 +536,14 @@ public final class NeuroRotation {
             float timeUntilHit = Math.max(0.02f, (1.0f - attackScale) / (float) attackSpeed);
             float neededSpeed = totErr / timeUntilHit;
 
-            float baseSpeed = hasBrain() ? (float) Math.max(net.autoMaxDegPerSec(), 220.0) : 280.0f;
+            float baseSpeed = hasBrain() ? (float) Math.max(net.autoMaxDegPerSec(), 200.0) : 260.0f;
             finalSpeed = Math.max(baseSpeed, neededSpeed);
 
             if (readyToHit) {
-                finalSpeed = Math.max(finalSpeed, 540.0f);
+                finalSpeed = Math.max(finalSpeed, 480.0f);
             }
-            finalSpeed = Math.min(finalSpeed, 720.0f);
+            float maxCap = mc.player.isFallFlying() ? 360.0f : 600.0f;
+            finalSpeed = Math.min(finalSpeed, maxCap);
         }
 
         // Микроджиттер (GCD-квантуется в applyFrame): ломает идеальную гладкость трекинга.

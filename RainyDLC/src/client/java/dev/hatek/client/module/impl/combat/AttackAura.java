@@ -10,7 +10,6 @@ import dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
 import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
 import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
 import dev.hatek.client.module.impl.combat.aura.util.AuraRandom;
 import dev.hatek.client.module.impl.combat.aura.util.AuraUtil;
@@ -260,8 +259,11 @@ public final class AttackAura extends Module {
 
         updateRotation();
 
+        boolean inFlight = mc.player.isFallFlying() || mc.player.getAbilities().flying;
+
         if (!MovementManager.getInstance().isMovementLocked()
-                && !NeuroRotation.isTraining()) {
+                && !NeuroRotation.isTraining()
+                && !inFlight) {
             boolean steer = this.movementType.is(MOVE_DEFAULT) && target != null;
             MoveUtil.fixMovement(steer ? bearingToTarget() : FreeLookUtil.freeYaw);
         }
@@ -272,6 +274,7 @@ public final class AttackAura extends Module {
         boolean airNoSprint = nearEnough
                 && !packetSprint()
                 && !mc.player.onGround()
+                && !inFlight
                 && mc.player.getDeltaMovement().y <= 0.08
                 && !mc.player.isInWater()
                 && !mc.player.isUnderWater()
@@ -413,14 +416,6 @@ public final class AttackAura extends Module {
                 canPacket, serverSprinting, Attack.critPending());
 
         Runnable preHit = () -> {
-            if (mc.getConnection() != null && mc.player != null) {
-                float curYaw = mc.player.getYRot();
-                float curPitch = mc.player.getXRot();
-                if (curYaw != ServerView.yaw(curYaw) || curPitch != ServerView.pitch(curPitch)) {
-                    mc.getConnection().send(new ServerboundMovePlayerPacket.Rot(
-                            curYaw, curPitch, mc.player.onGround(), mc.player.horizontalCollision));
-                }
-            }
             skipSilentSprint[0].run();
             shieldPressBypass[0].run();
             shieldBreak[0].run();

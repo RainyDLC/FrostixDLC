@@ -316,6 +316,7 @@ public final class Attack {
         return badLiquidMoment
                 || mc.player.onClimbable()
                 || mc.player.isPassenger()
+                || mc.player.isFallFlying()
                 || mc.player.hasEffect(MobEffects.BLINDNESS)
                 || mc.player.hasEffect(MobEffects.LEVITATION)
                 || mc.player.hasEffect(MobEffects.SLOW_FALLING)
