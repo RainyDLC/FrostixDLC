@@ -91,6 +91,111 @@ public final class InterfaceHud {
         return new EnumMap<>(BOUNDS);
     }
 
+    /** Результат хит-теста: элемент (null = 2D-медиа) и его границы. */
+    public static final class Hit {
+        public final HudLayout.Element element;
+        public final boolean media;
+        public final float[] bounds;
+
+        Hit(HudLayout.Element element, boolean media, float[] bounds) {
+            this.element = element;
+            this.media = media;
+            this.bounds = bounds;
+        }
+    }
+
+    /**
+     * Синхронный хит-тест: границы считаются в момент вызова,
+     * не зависят от того, когда последний раз отрисовывался HUD.
+     */
+    public static Hit hitTest(double mx, double my) {
+        Interface module = Interface.instance();
+        if (module == null || !module.isEnabled()) {
+            return null;
+        }
+        // Медиа рисуется последним = верхнее.
+        if (Interface.showMedia2D()) {
+            float[] b = media2DBounds();
+            if (hit(b, mx, my)) {
+                return new Hit(null, true, b);
+            }
+        }
+        Map<HudLayout.Element, float[]> bounds = computeBounds();
+        java.util.List<HudLayout.Element> order =
+                new java.util.ArrayList<>(bounds.keySet());
+        java.util.Collections.reverse(order);
+        for (HudLayout.Element el : order) {
+            float[] b = bounds.get(el);
+            if (hit(b, mx, my)) {
+                return new Hit(el, false, b);
+            }
+        }
+        return null;
+    }
+
+    /** Свежие границы всех видимых элементов (замер без отрисовки). */
+    public static Map<HudLayout.Element, float[]> computeBounds() {
+        Map<HudLayout.Element, float[]> out = new EnumMap<>(HudLayout.Element.class);
+        int sw = Render2D.screenWidth();
+        int sh = Render2D.screenHeight();
+        putBound(out, HudLayout.Element.WATERMARK, Interface.showWatermark(), sw, sh,
+                InterfaceHud::measureWatermark);
+        putBound(out, HudLayout.Element.KEYBINDS, Interface.showKeybinds(), sw, sh,
+                InterfaceHud::measureKeybinds);
+        putBound(out, HudLayout.Element.EFFECTS, Interface.showEffects(), sw, sh,
+                InterfaceHud::measureEffects);
+        putBound(out, HudLayout.Element.HOTBAR, Interface.showHotbar(), sw, sh,
+                InterfaceHud::measureHotbar);
+        return out;
+    }
+
+    private static <D extends Sized> void putBound(Map<HudLayout.Element, float[]> out,
+                                                   HudLayout.Element el, boolean visible,
+                                                   int sw, int sh,
+                                                   Function<Float, D> measure) {
+        if (!visible) {
+            return;
+        }
+        HudLayout.Entry e = HudLayout.get(el);
+        D data = measure.apply(e.scale);
+        if (data == null || data.w() <= 0 || data.h() <= 0) {
+            return;
+        }
+        float[] p = resolvePos(el, e, data.w(), data.h(), sw, sh);
+        out.put(el, new float[]{p[0], p[1], data.w(), data.h()});
+    }
+
+    /** Применить перемещение хита (с клэмпом). x/y — новый левый верхний угол. */
+    public static void moveHit(Hit hit, float x, float y) {
+        int sw = Render2D.screenWidth();
+        int sh = Render2D.screenHeight();
+        float w = hit.bounds[2];
+        float h = hit.bounds[3];
+        x = Math.max(-w + 24.0f, Math.min(sw - 24.0f, x));
+        y = Math.max(-h + 24.0f, Math.min(sh - 24.0f, y));
+        if (hit.media) {
+            Interface.setMediaGeometry(Interface.mediaSize(),
+                    (x + w / 2.0f) / sw * 100.0, (y + h / 2.0f) / sh * 100.0);
+        } else {
+            HudLayout.setPos(hit.element, x, y);
+        }
+    }
+
+    /** Масштабировать хит колесом. factor > 1 — больше. */
+    public static void resizeHit(Hit hit, float factor) {
+        if (hit.media) {
+            double size = Interface.mediaSize() * factor;
+            Interface.setMediaGeometry(size, Interface.mediaX(), Interface.mediaY());
+        } else {
+            HudLayout.setScale(hit.element, HudLayout.get(hit.element).scale * factor);
+        }
+    }
+
+    private static boolean hit(float[] b, double mx, double my) {
+        return b != null && mx >= b[0] && mx <= b[0] + b[2]
+                && my >= b[1] && my <= b[1] + b[3];
+    }
+
     // ---------------- масштабированные шрифты ----------------
 
     /** Квантование размера шрифта, чтобы кэш Fonts.of не разрастался. */
@@ -122,7 +227,6 @@ public final class InterfaceHud {
         if (screenOpen) {
             return; // HUD явно рисует сам открытый экран.
         }
-        HudMover.tickInGame();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) {
             return;
@@ -192,15 +296,22 @@ public final class InterfaceHud {
         if (data == null || data.w() <= 0 || data.h() <= 0) {
             return;
         }
-        float[] a = anchor(el, data.w(), data.h(), sw, sh);
-        float x = e.positioned() ? e.x : a[0];
-        float y = e.positioned() ? e.y : a[1];
+        float[] p = resolvePos(el, e, data.w(), data.h(), sw, sh);
+        float x = p[0];
+        float y = p[1];
 
         Render2D.pushTranslate(gg, x, y);
         drawer.draw(gg, s, data);
         Render2D.popTransform(gg);
 
         BOUNDS.put(el, new float[]{x, y, data.w(), data.h()});
+    }
+
+    /** Позиция элемента: из HudLayout или якорь по умолчанию. */
+    private static float[] resolvePos(HudLayout.Element el, HudLayout.Entry e,
+                                      float w, float h, int sw, int sh) {
+        float[] a = anchor(el, w, h, sw, sh);
+        return new float[]{e.positioned() ? e.x : a[0], e.positioned() ? e.y : a[1]};
     }
 
     /** Якорь по умолчанию для элемента (размер уже с учётом масштаба). */
@@ -360,27 +471,15 @@ public final class InterfaceHud {
 
     // ---------------- кейбинды функций ----------------
 
-    private static final class KbRow {
-        final String name;
-        final String keyLabel;
-        final boolean enabled;
-
-        KbRow(String name, String keyLabel, boolean enabled) {
-            this.name = name;
-            this.keyLabel = keyLabel;
-            this.enabled = enabled;
-        }
-    }
-
     private static final class KbData implements Sized {
         final float w;
         final float h;
-        final List<KbRow> rows;
+        final List<Module> bound;
 
-        KbData(float w, float h, List<KbRow> rows) {
+        KbData(float w, float h, List<Module> bound) {
             this.w = w;
             this.h = h;
-            this.rows = rows;
+            this.bound = bound;
         }
 
         @Override
@@ -395,16 +494,16 @@ public final class InterfaceHud {
     }
 
     private static KbData measureKeybinds(float s) {
-        List<KbRow> rows = new ArrayList<>();
+        List<Module> bound = new ArrayList<>();
         for (Module module : ModuleManager.all()) {
             if (module.keyCode() != GLFW.GLFW_KEY_UNKNOWN) {
-                rows.add(new KbRow(module.name(), module.keyLabel(), module.isEnabled()));
+                bound.add(module);
             }
         }
-        if (rows.isEmpty()) {
+        if (bound.isEmpty()) {
             return null;
         }
-        rows.sort(Comparator.comparing(r -> r.name));
+        bound.sort(Comparator.comparing(Module::name));
 
         HFont title = sTitle(s);
         HFont body = sBody(s);
@@ -412,16 +511,16 @@ public final class InterfaceHud {
 
         float headerW = Style.HUD_TITLE_X * s + title.width("Keybinds") + Style.HUD_PAD * s;
         float rowsW = 0.0f;
-        for (KbRow row : rows) {
-            float badgeW = label.width(row.keyLabel) + Style.HUD_BADGE_PAD * 2.0f * s;
-            float rowW = 23.0f * s + body.width(row.name) + 8.0f * s + badgeW
+        for (Module module : bound) {
+            float badgeW = label.width(module.keyLabel()) + Style.HUD_BADGE_PAD * 2.0f * s;
+            float rowW = 23.0f * s + body.width(module.name()) + 8.0f * s + badgeW
                     + Style.HUD_PAD * s;
             rowsW = Math.max(rowsW, rowW);
         }
         float w = Math.max(Style.HUD_MIN_W * s, Math.max(headerW, rowsW));
         float rowH = Style.HUD_ROW_H * s;
-        float h = Style.HUD_HEADER_H * s + rows.size() * rowH + Style.HUD_BOTTOM_PAD * s;
-        return new KbData(w, h, rows);
+        float h = Style.HUD_HEADER_H * s + bound.size() * rowH + Style.HUD_BOTTOM_PAD * s;
+        return new KbData(w, h, bound);
     }
 
     /** Рисует карточку кейбиндов в origin (0,0) с ручным масштабом. */
@@ -435,26 +534,28 @@ public final class InterfaceHud {
 
         float rowH = Style.HUD_ROW_H * s;
         float ry = Style.HUD_HEADER_H * s;
-        for (KbRow row : d.rows) {
-            if (row.enabled) {
+        for (Module module : d.bound) {
+            boolean enabled = module.isEnabled();
+            if (enabled) {
                 Render2D.round(gg, Style.HUD_PAD * s,
                         ry + (rowH - Style.HUD_STUB_H * s) / 2.0f,
                         Style.HUD_STUB_W * s, Style.HUD_STUB_H * s, 1.0f * s,
                         Style.accent());
             }
-            body.draw(gg, row.name, 23.0f * s,
+            body.draw(gg, module.name(), 23.0f * s,
                     body.centeredBaseline(ry, rowH),
-                    row.enabled ? Style.WHITE : Style.WHITE_45);
+                    enabled ? Style.WHITE : Style.WHITE_45);
 
-            float badgeW = label.width(row.keyLabel) + Style.HUD_BADGE_PAD * 2.0f * s;
+            String key = module.keyLabel();
+            float badgeW = label.width(key) + Style.HUD_BADGE_PAD * 2.0f * s;
             float bx = w - Style.HUD_PAD * s - badgeW;
             float by = ry + (rowH - Style.HUD_BADGE_H * s) / 2.0f;
             Render2D.round(gg, bx, by, badgeW, Style.HUD_BADGE_H * s,
                     Style.HUD_BADGE_R * s,
-                    row.enabled ? Render2D.withAlpha(Style.accent(), 0.22f) : Style.WHITE_04);
-            label.drawCentered(gg, row.keyLabel, bx + badgeW / 2.0f,
+                    enabled ? Render2D.withAlpha(Style.accent(), 0.22f) : Style.WHITE_04);
+            label.drawCentered(gg, key, bx + badgeW / 2.0f,
                     label.centeredBaseline(by, Style.HUD_BADGE_H * s),
-                    row.enabled ? Style.WHITE : Style.WHITE_45);
+                    enabled ? Style.WHITE : Style.WHITE_45);
             ry += rowH;
         }
     }
@@ -470,27 +571,15 @@ public final class InterfaceHud {
 
     // ---------------- эффекты ----------------
 
-    private static final class FxRow {
-        final Holder<MobEffect> holder;
-        final String name;
-        final String duration;
-
-        FxRow(Holder<MobEffect> holder, String name, String duration) {
-            this.holder = holder;
-            this.name = name;
-            this.duration = duration;
-        }
-    }
-
     private static final class FxData implements Sized {
         final float w;
         final float h;
-        final List<FxRow> rows;
+        final List<MobEffectInstance> shown;
 
-        FxData(float w, float h, List<FxRow> rows) {
+        FxData(float w, float h, List<MobEffectInstance> shown) {
             this.w = w;
             this.h = h;
-            this.rows = rows;
+            this.shown = shown;
         }
 
         @Override
@@ -506,18 +595,12 @@ public final class InterfaceHud {
 
     private static FxData measureEffects(float s) {
         Minecraft mc = Minecraft.getInstance();
-        List<FxRow> rows = new ArrayList<>();
-        if (mc.player != null) {
-            List<MobEffectInstance> effects = new ArrayList<>(mc.player.getActiveEffects());
-            effects.removeIf(instance -> !instance.showIcon());
-            int count = Math.min(8, effects.size());
-            for (int i = 0; i < count; i++) {
-                MobEffectInstance instance = effects.get(i);
-                rows.add(new FxRow(instance.getEffect(), effectName(instance),
-                        formatDuration(instance.getDuration())));
-            }
+        if (mc.player == null) {
+            return null;
         }
-        if (rows.isEmpty()) {
+        List<MobEffectInstance> effects = new ArrayList<>(mc.player.getActiveEffects());
+        effects.removeIf(instance -> !instance.showIcon());
+        if (effects.isEmpty()) {
             return null;
         }
 
@@ -528,16 +611,18 @@ public final class InterfaceHud {
         float rowH = 22.0f * s;
         float headerW = Style.HUD_TITLE_X * s + title.width("Effects") + Style.HUD_PAD * s;
         float rowsW = 0.0f;
-        for (FxRow row : rows) {
+        int count = Math.min(8, effects.size());
+        for (int i = 0; i < count; i++) {
+            MobEffectInstance instance = effects.get(i);
             float rowW = Style.HUD_PAD * s + 14.0f * s + 6.0f * s
-                    + body.width(row.name)
-                    + 8.0f * s + label.width(row.duration)
+                    + body.width(effectName(instance))
+                    + 8.0f * s + label.width(formatDuration(instance.getDuration()))
                     + Style.HUD_PAD * s;
             rowsW = Math.max(rowsW, rowW);
         }
         float w = Math.max(Style.HUD_MIN_W * s, Math.max(headerW, rowsW));
-        float h = Style.HUD_HEADER_H * s + rows.size() * rowH + Style.HUD_BOTTOM_PAD * s;
-        return new FxData(w, h, rows);
+        float h = Style.HUD_HEADER_H * s + count * rowH + Style.HUD_BOTTOM_PAD * s;
+        return new FxData(w, h, effects.subList(0, count));
     }
 
     /** Рисует карточку эффектов в origin (0,0) с ручным масштабом. */
@@ -557,21 +642,18 @@ public final class InterfaceHud {
 
         RenderPipeline pipeline = RenderPipelines.GUI_TEXTURED;
         float ry = Style.HUD_HEADER_H * s;
-        for (FxRow row : d.rows) {
+        for (MobEffectInstance instance : d.shown) {
+            Holder<MobEffect> holder = instance.getEffect();
+
             float spriteY = ry + (rowH - iconS) / 2.0f;
-            if (row.holder != null) {
-                gg.blitSprite(pipeline, Hud.getMobEffectSprite(row.holder),
-                        (int) (Style.HUD_PAD * s), (int) spriteY,
-                        (int) iconS, (int) iconS);
-            } else {
-                Render2D.texture(gg, TexCache.flask((int) iconS),
-                        Style.HUD_PAD * s, spriteY, iconS, iconS, Style.WHITE);
-            }
+            gg.blitSprite(pipeline, Hud.getMobEffectSprite(holder),
+                    (int) (Style.HUD_PAD * s), (int) spriteY,
+                    (int) iconS, (int) iconS);
 
             float baseline = body.centeredBaseline(ry, rowH);
-            body.draw(gg, row.name, Style.HUD_PAD * s + 20.0f * s,
+            body.draw(gg, effectName(instance), Style.HUD_PAD * s + 20.0f * s,
                     baseline, Style.WHITE);
-            label.drawRight(gg, row.duration,
+            label.drawRight(gg, formatDuration(instance.getDuration()),
                     d.w - Style.HUD_PAD * s, label.centeredBaseline(ry, rowH),
                     Style.WHITE_45);
             ry += rowH;
