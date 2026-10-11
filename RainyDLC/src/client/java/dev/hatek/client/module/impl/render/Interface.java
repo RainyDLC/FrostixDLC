@@ -2,28 +2,30 @@ package dev.hatek.client.module.impl.render;
 
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
+import dev.hatek.client.module.impl.render.interf.HudEditScreen;
 import dev.hatek.client.module.impl.render.interf.InterfaceHud;
 import dev.hatek.client.module.setting.BoolSetting;
-import dev.hatek.client.module.setting.ModeSetting;
+import dev.hatek.client.module.setting.ButtonSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.module.setting.TextSetting;
+import net.minecraft.client.Minecraft;
 
 /**
  * Модуль "Interface": HUD клиента.
  * Ватермарка, кейбинды, активные эффекты и кастомный хотбар.
- * Позиция ватермарки (слева / по центру / справа) выбирается
- * правым кликом по самой ватермарке.
+ * Все элементы свободно двигаются и масштабируются
+ * в редакторе (кнопка "HUD Editor").
  */
 public final class Interface extends Module {
     private static Interface instance;
 
     private final BoolSetting watermark = new BoolSetting("Watermark", true);
-    private final ModeSetting watermarkPos = new ModeSetting("Watermark Position", 0,
-            "Left", "Center", "Right");
     private final BoolSetting keybinds = new BoolSetting("Keybinds", true);
     private final BoolSetting effects = new BoolSetting("Effects", true);
     private final BoolSetting hotbar = new BoolSetting("Custom Hotbar", true);
     private final BoolSetting hideVanilla = new BoolSetting("Hide Vanilla Hotbar", true);
+    private final ButtonSetting hudEditor = new ButtonSetting("HUD Editor", "Размер худа",
+            () -> Minecraft.getInstance().setScreenAndShow(new HudEditScreen()));
     private final BoolSetting media2d = new BoolSetting("Media 2D", false);
     private final TextSetting mediaFile = new TextSetting("Media File", "logo.gif", "logo.gif");
     private final SliderSetting mediaSize = new SliderSetting("Media Size", 64, 16, 256, 8);
@@ -39,11 +41,11 @@ public final class Interface extends Module {
                 Category.RENDER);
         instance = this;
         with(this.watermark,
-                this.watermarkPos,
                 this.keybinds,
                 this.effects,
                 this.hotbar,
                 this.hideVanilla,
+                this.hudEditor,
                 this.media2d,
                 this.mediaFile,
                 this.mediaSize,
@@ -63,16 +65,6 @@ public final class Interface extends Module {
     public static boolean showWatermark() {
         Interface module = instance;
         return module != null && module.isEnabled() && module.watermark.value();
-    }
-
-    /** "Left", "Center" или "Right". */
-    public static String watermarkPos() {
-        Interface module = instance;
-        return module == null ? "Left" : module.watermarkPos.value();
-    }
-
-    public void setWatermarkPos(String pos) {
-        this.watermarkPos.value(pos);
     }
 
     public static boolean showKeybinds() {
@@ -119,6 +111,17 @@ public final class Interface extends Module {
     public static double mediaY() {
         Interface module = instance;
         return module == null ? 50 : module.mediaY.value();
+    }
+
+    /** Вызывается из редактора HUD: двигать/масштабировать 2D-медиа. */
+    public static void setMediaGeometry(double sizePx, double xPct, double yPct) {
+        Interface module = instance;
+        if (module == null) {
+            return;
+        }
+        module.mediaSize.value(sizePx);
+        module.mediaX.value(xPct);
+        module.mediaY.value(yPct);
     }
 
     public static boolean showMedia3D() {
