@@ -981,7 +981,7 @@ public final class InterfaceHud {
         float maxHp = Math.max(1.0f, t.getMaxHealth());
         float hpFrac = Mth.clamp(t.getHealth() / maxHp, 0.0f, 1.0f);
         float abFrac = Mth.clamp(t.getAbsorptionAmount() / maxHp, 0.0f, 1.0f - hpFrac);
-        String hpText = String.valueOf((int) Math.ceil(t.getHealth()));
+        String hpText = String.valueOf((int) Math.ceil(t.getHealth() + t.getAbsorptionAmount()));
 
         HFont title = sTitle(s);
         String name = title.trim(t.getName().getString(), 140.0f * s);
@@ -997,7 +997,7 @@ public final class InterfaceHud {
         float handsX = nameX + armorW + 10.0f * s;
         float handsW = 2.0f * icon + gap;
         float leftW = Math.max(handsX + handsW, nameX + title.width(name) + 8.0f * s);
-        float circleD = 44.0f * s;
+        float circleD = 38.0f * s;
         float circleGap = 12.0f * s;
         float w = leftW + circleGap + circleD + pad;
         float row2Bottom = row2Y + icon + gap + pctH;
@@ -1052,44 +1052,34 @@ public final class InterfaceHud {
         drawSlot(gg, mc, d.mainHand, handsX, row2Y, icon, s, false);
         drawSlot(gg, mc, d.offHand, handsX + icon + gap, row2Y, icon, s, false);
 
-        // Круг ХП справа.
-        float circleD = 44.0f * s;
-        float cx = d.w - pad - circleD / 2.0f;
-        float cy = d.h / 2.0f;
-        float r = circleD / 2.0f - 3.0f * s;
-        float thick = 5.0f * s;
-        ring(gg, cx, cy, r, thick, 0.0f, 1.0f, 0xFF2A2929);
-        ring(gg, cx, cy, r, thick, 0.0f, d.hpFrac, hpColor(d.hpFrac));
-        if (d.abFrac > 0.001f) {
-            ring(gg, cx, cy, r, thick, d.hpFrac, d.hpFrac + d.abFrac, 0xFFFFC94D);
-        }
+        // Круг ХП справа: гладкие дуги (фон, золото абсорбции, хп).
+        float circleD = 38.0f * s;
+        float circleX = d.w - pad - circleD;
+        float circleY = (d.h - circleD) / 2.0f;
+        float circleCx = circleX + circleD / 2.0f;
+        hpArc(gg, circleX, circleY, circleD, 1.0f, false, 0xFF2A2929);
+        float total = Math.min(1.0f, d.hpFrac + d.abFrac);
+        hpArc(gg, circleX, circleY, circleD, total, true, 0xFFFFC94D);
+        hpArc(gg, circleX, circleY, circleD, d.hpFrac, true, hpColor(d.hpFrac));
         HFont hpFont = sTitle(s * 1.1f);
-        float circleTop = cy - circleD / 2.0f;
-        hpFont.drawCentered(gg, d.hpText, cx,
-                hpFont.centeredBaseline(circleTop, circleD), Style.WHITE);
+        hpFont.drawCentered(gg, d.hpText, circleCx,
+                hpFont.centeredBaseline(circleY, circleD), Style.WHITE);
     }
 
-    /** Кольцо-дуга из точек: from..to — доли окружности от верха. */
-    private static void ring(GuiGraphicsExtractor gg, float cx, float cy, float r,
-                             float thick, float from, float to, int argb) {
-        if (to <= from) {
+    /**
+     * Гладкая дуга ХП: сглаженная текстура из TexCache, тинтится в цвет.
+     * x/y/d — квадрат, в который вписана дуга.
+     */
+    private static void hpArc(GuiGraphicsExtractor gg, float x, float y, float d,
+                              float frac, boolean round, int argb) {
+        if (frac <= 0.0f) {
             return;
         }
-        // Плотно (160 точек с запасом диаметра) — иначе видны отдельные кружки
-        // из-за округления координат до целых пикселей.
-        int seg = 160;
-        float dot = thick * 1.5f;
-        float dotR = dot / 2.0f;
-        for (int i = 0; i < seg; i++) {
-            float f = (float) i / seg;
-            if (f < from || f >= to) {
-                continue;
-            }
-            double a = -Math.PI / 2.0 + f * Math.PI * 2.0;
-            float x = cx + (float) Math.cos(a) * r;
-            float y = cy + (float) Math.sin(a) * r;
-            Render2D.circle(gg, x - dotR, y - dotR, dot, argb);
+        Identifier id = TexCache.arc(128, 14.0f, frac, round);
+        if (id == null) {
+            return;
         }
+        Render2D.texture(gg, id, x, y, d, d, argb);
     }
 
     private static int hpColor(float frac) {

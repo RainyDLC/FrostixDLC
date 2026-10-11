@@ -13,6 +13,7 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
+import java.awt.geom.Arc2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.ConvolveOp;
@@ -57,6 +58,29 @@ public final class TexCache {
         return get("circle_" + d, d, d, g -> {
             g.setColor(Color.WHITE);
             g.fill(new Ellipse2D.Float(0.0f, 0.0f, d, d));
+        });
+    }
+
+    /**
+     * Гладкая сглаженная дуга (белый цвет, тинтится при отрисовке).
+     * frac квантуется до 1/40 — кэш не раздувается.
+     */
+    public static Identifier arc(int size, float thick, float frac, boolean round) {
+        int q = Math.round(frac * 40.0f);
+        if (q <= 0) {
+            return null;
+        }
+        String key = "arc_" + size + "_" + Math.round(thick * 4.0f) + "_" + q + (round ? "_r" : "_b");
+        float f = q / 40.0f;
+        return get(key, size, size, g -> {
+            g.setStroke(new BasicStroke(thick,
+                    round ? BasicStroke.CAP_ROUND : BasicStroke.CAP_BUTT,
+                    BasicStroke.JOIN_ROUND));
+            g.setColor(Color.WHITE);
+            float inset = thick / 2.0f + 2.0f;
+            float d = size - inset * 2.0f;
+            // Старт сверху (90°), по часовой стрелке.
+            g.draw(new Arc2D.Float(inset, inset, d, d, 90.0f, -f * 360.0f, Arc2D.OPEN));
         });
     }
 
