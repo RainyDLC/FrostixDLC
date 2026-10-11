@@ -381,11 +381,27 @@ public final class InterfaceHud {
     }
 
     /** Якорь по умолчанию для элемента (размер уже с учётом масштаба). */
+    private static String lastWatermarkPos;
+
     private static float[] anchor(HudLayout.Element el, float w, float h, int sw, int sh) {
         float m = Style.HUD_MARGIN;
         switch (el) {
-            case WATERMARK:
-                return new float[]{m, m};
+            case WATERMARK: {
+                // Настройка позиции: при смене сбрасываем ручное перетаскивание,
+                // чтобы якорь применился сразу. Перетаскивание после — вручную.
+                String pos = Interface.watermarkPos();
+                if (!pos.equals(lastWatermarkPos)) {
+                    lastWatermarkPos = pos;
+                    HudLayout.clearPos(HudLayout.Element.WATERMARK);
+                }
+                float x = m;
+                if ("Center".equalsIgnoreCase(pos)) {
+                    x = (sw - w) / 2.0f;
+                } else if ("Right".equalsIgnoreCase(pos)) {
+                    x = sw - w - m;
+                }
+                return new float[]{x, m};
+            }
             case KEYBINDS:
                 return new float[]{sw - w - m, m};
             case EFFECTS: {

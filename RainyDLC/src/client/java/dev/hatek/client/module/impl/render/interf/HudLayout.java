@@ -77,6 +77,17 @@ public final class HudLayout {
         e.y = y;
     }
 
+    /** Сбросить сохранённую позицию — снова используется якорь. */
+    public static void clearPos(Element el) {
+        load();
+        Entry e = ENTRIES.get(el);
+        if (e.x != null || e.y != null) {
+            e.x = null;
+            e.y = null;
+            save();
+        }
+    }
+
     public static void setScale(Element el, float scale) {
         load();
         Entry e = ENTRIES.get(el);

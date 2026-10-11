@@ -4,6 +4,7 @@ import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.impl.render.interf.InterfaceHud;
 import dev.hatek.client.module.setting.BoolSetting;
+import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.module.setting.TextSetting;
 
@@ -17,6 +18,8 @@ public final class Interface extends Module {
     private static Interface instance;
 
     private final BoolSetting watermark = new BoolSetting("Watermark", true);
+    private final ModeSetting watermarkPos = new ModeSetting("Watermark Position", 0,
+            "Left", "Center", "Right");
     private final BoolSetting keybinds = new BoolSetting("Keybinds", true);
     private final BoolSetting effects = new BoolSetting("Effects", true);
     private final BoolSetting hotbar = new BoolSetting("Custom Hotbar", true);
@@ -39,6 +42,7 @@ public final class Interface extends Module {
                 Category.RENDER);
         instance = this;
         with(this.watermark,
+                this.watermarkPos,
                 this.keybinds,
                 this.effects,
                 this.hotbar,
@@ -60,6 +64,11 @@ public final class Interface extends Module {
 
     public static Interface instance() {
         return instance;
+    }
+
+    public static String watermarkPos() {
+        Interface module = instance;
+        return module == null ? "Left" : module.watermarkPos.value();
     }
 
     public static boolean showWatermark() {
