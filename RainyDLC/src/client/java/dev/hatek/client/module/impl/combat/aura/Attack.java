@@ -262,22 +262,19 @@ public final class Attack {
         if (critImpossible()) {
             return true;
         }
-        // Если игрока бьют (hurtTime > 0) — отвечаем ударом, чтобы не попасть в комбо противника:
-        if (mc.player.hurtTime > 0) {
+
+        // 1. Стоит на земле — просто бьёт (не блокируем удар, не ждем прыжка):
+        if (mc.player.onGround()) {
             return true;
         }
+
+        // 2. Прыгнул (в воздухе) — ОБЯЗАТЕЛЬНО критует!
+        // На подъёме (y >= 0 и fallDistance <= 0) удар СТРОГО запрещен, чтобы не сжечь кулдаун впустую.
+        // Бьём строго в фазе падения (fallDistance > 0 или y < 0):
         if (critStateReady()) {
             return true;
         }
-        if (!mc.player.onGround()) {
-            // В воздухе бьём только в фазе падения (y < 0 или fallDistance > 0):
-            return mc.player.getDeltaMovement().y < 0.0 || mc.player.fallDistance > 0.0F;
-        }
-        // На земле: если зажат пробел, ждём 1 тик начала прыжка для крита
-        if (mc.options != null && mc.options.keyJump.isDown()) {
-            return false;
-        }
-        return true;
+        return mc.player.fallDistance > 0.0F || mc.player.getDeltaMovement().y < 0.0;
     }
 
     private static boolean critStateReady() {
@@ -345,7 +342,12 @@ public final class Attack {
             preHit.run();
         }
 
-        if (livingIn != null && mc.gameMode != null && mc.player != null && attackTickGapReached()) {
+        boolean canHit = attackTickGapReached() || critStateReady()
+                || (mc.player != null && mc.player.getAttackStrengthScale(0.5F) >= 0.92F);
+        if (livingIn != null && mc.gameMode != null && mc.player != null && canHit) {
+            if (!mc.player.onGround() && mc.player.getDeltaMovement().y < 0.0 && mc.player.fallDistance <= 0.0F) {
+                mc.player.fallDistance = 0.08F;
+            }
             auraAttacking = true;
             try {
                 mc.gameMode.attack(mc.player, livingIn);
@@ -538,7 +540,8 @@ public final class Attack {
             return false;
         }
         boolean critReady = critStateReady();
-        if (!critReady) {
+        boolean fullyCharged = mc().player != null && mc().player.getAttackStrengthScale(0.5F) >= 0.92F;
+        if (!critReady && !fullyCharged) {
             if (!msCooldownReached(cooldownMSOffset)) {
                 return false;
             }
