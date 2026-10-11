@@ -478,7 +478,7 @@ public final class NeuroRotation {
         float totErr = (float) Math.hypot(yawErr, pitchErr);
 
         float attackScale = mc.player.getAttackStrengthScale(0.5f);
-        boolean inCritPhase = !mc.player.onGround() && (mc.player.getDeltaMovement().y < 0.0 || mc.player.fallDistance > 0.0F);
+        boolean inCritPhase = !mc.player.onGround() && mc.player.getDeltaMovement().y < -0.01;
 
         // Если оружие только перезаряжается (кулдаун < 60%) и мы не в крит-фазе — не насилуем ротации,
         // даём телу и руке двигаться свободно без рывков:

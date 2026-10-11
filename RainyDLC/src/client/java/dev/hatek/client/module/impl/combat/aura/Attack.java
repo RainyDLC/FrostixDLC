@@ -186,19 +186,20 @@ public final class Attack {
         if (mc.player == null || mc.getConnection() == null) {
             return prePost;
         }
-        boolean inAir = !mc.player.onGround() && (mc.player.fallDistance > 0.0F || mc.player.getDeltaMovement().y < 0.0);
+        boolean inAir = !mc.player.onGround() && mc.player.getDeltaMovement().y < 0.0;
         // Для крита сброс спринта на момент удара ОБЯЗАТЕЛЕН, иначе Minecraft считает удар обычным спринтовым
         boolean shouldSkip = enabled || inAir;
         if (!shouldSkip) {
             return prePost;
         }
-        if (!serverSprinting && !mc.player.isSprinting()) {
+        if (!inAir && !serverSprinting && !mc.player.isSprinting()) {
             return prePost;
         }
         if (mc.player.isEyeInFluid(FluidTags.WATER)) {
             return prePost;
         }
-        boolean restore = mc.player.isSprinting() || serverSprinting;
+        boolean restore = mc.player.isSprinting() || serverSprinting
+                || (mc.options != null && (mc.options.keySprint.isDown() || mc.options.keyUp.isDown()));
 
         prePost[0] = () -> {
             mc.player.setSprinting(false);
@@ -268,20 +269,17 @@ public final class Attack {
             return true;
         }
 
-        // 2. Прыгнул (в воздухе) — ОБЯЗАТЕЛЬНО критует!
-        // На подъёме (y >= 0 и fallDistance <= 0) удар СТРОГО запрещен, чтобы не сжечь кулдаун впустую.
-        // Бьём строго в фазе падения (fallDistance > 0 или y < 0):
-        if (critStateReady()) {
-            return true;
-        }
-        return mc.player.fallDistance > 0.0F || mc.player.getDeltaMovement().y < 0.0;
+        // 2. В воздухе (прыгнул или подбросило нокбеком) — ОБЯЗАТЕЛЬНО критует!
+        // На подъёме (y >= -0.01) бить СТРОГО запрещено, в том числе при подбросе от нокбека.
+        // Бьём строго когда персонаж падает вниз (y < -0.01):
+        return critStateReady();
     }
 
     private static boolean critStateReady() {
         Minecraft mc = mc();
         return mc.player != null
-                && (mc.player.fallDistance > 0.0F || mc.player.getDeltaMovement().y < 0.0)
                 && !mc.player.onGround()
+                && mc.player.getDeltaMovement().y < -0.01
                 && !mc.player.onClimbable()
                 && !mc.player.isInWater()
                 && !mc.player.isPassenger()
