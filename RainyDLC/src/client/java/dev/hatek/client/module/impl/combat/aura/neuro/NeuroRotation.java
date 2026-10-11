@@ -145,6 +145,16 @@ public final class NeuroRotation {
         dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil.active = false;
         dev.hatek.client.module.impl.combat.aura.util.MoveUtil.restoreMovementKeys();
         dev.hatek.client.module.impl.combat.aura.util.MoveUtil.restoreSprintKey();
+        // AimAssist тоже глушим — иначе он будет «притягивать» прицел и испортит запись.
+        try {
+            dev.hatek.client.module.impl.combat.AimAssist aim =
+                    dev.hatek.client.module.impl.combat.AimAssist.instance();
+            if (aim != null && aim.isEnabled()) {
+                aim.setEnabled(false);
+                tell("§e⚠ §fAimAssist отключён на время записи (портил бы датасет).");
+            }
+        } catch (Exception ignored) {
+        }
         tell("§d● §fЗапись нейро-ротации «" + name + "»: целься и бей сам, как обычно.");
         tell("§7Аура НЕ вмешивается: целься мышкой во врага/жителя для записи датасета.");
     }
@@ -155,6 +165,15 @@ public final class NeuroRotation {
             return;
         }
         training = false;
+        if (trainingSamples < MIN_SAMPLES) {
+            // Мало сэмплов — запись отбрасываем, чтобы не плодить мусорные профили.
+            dataset = null;
+            trainingSamples = 0;
+            learnStatus = "";
+            tell("§c■ §fЗапись отброшена: мало сэмплов (нужно минимум " + MIN_SAMPLES
+                    + "). Начни заново.");
+            return;
+        }
         if (dataset != null) {
             try {
                 NeuroStore.saveDataset(dataset);

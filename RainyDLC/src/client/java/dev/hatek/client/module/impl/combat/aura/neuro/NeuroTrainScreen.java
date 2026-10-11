@@ -237,8 +237,8 @@ public final class NeuroTrainScreen extends Screen {
         float bx = x + PAD;
         float by = y + 156.0f;
         float bw = PANEL_W - PAD * 2;
-        drawButton(gg, bx, by, bw, BTN_H, "Стоп",
-                NeuroRotation.trainingSamples >= NeuroRotation.MIN_SAMPLES,
+        // Стоп всегда доступен: если сэмплов мало — запись просто отбросится.
+        drawButton(gg, bx, by, bw, BTN_H, "Стоп", true,
                 Render2D.hovered(mx, my, bx, by, bw, BTN_H), label);
         label.drawCentered(gg, "Меню закроется само после «Стоп»",
                 bx + bw / 2.0f, by + BTN_H + 22.0f, Style.WHITE_25);
