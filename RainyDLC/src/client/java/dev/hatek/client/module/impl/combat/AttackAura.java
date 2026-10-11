@@ -401,10 +401,6 @@ public final class AttackAura extends Module {
             return;
         }
 
-        if (!canPacket && (serverSprinting || mc.player.isSprinting()) && Attack.critPending()) {
-            return;
-        }
-
         Runnable[] shieldBreak = Attack.hitShieldBreakTaskForUse(target, misc(BREAK_SHIELD));
         Runnable[] shieldPressBypass = Attack.resetShieldSilentTaskForUse(true);
         Runnable[] skipSilentSprint = Attack.skipSilentSprintingTaskForUse(

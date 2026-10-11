@@ -468,11 +468,11 @@ public final class NeuroRotation {
         }
 
         Vec3 eye = mc.player.getEyePosition(1.0f);
-        Vec3 center = t.getBoundingBox().getCenter();
+        Vec3 center = dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.leadedBox(t).getCenter();
         float[] targetRot = rotTo(eye, center);
 
-        float curYaw = ServerView.yaw(mc.player.getYRot());
-        float curPitch = ServerView.pitch(mc.player.getXRot());
+        float curYaw = mc.player.getYRot();
+        float curPitch = mc.player.getXRot();
         float yawErr = Mth.wrapDegrees(targetRot[0] - curYaw);
         float pitchErr = targetRot[1] - curPitch;
         float totErr = (float) Math.hypot(yawErr, pitchErr);
@@ -480,12 +480,9 @@ public final class NeuroRotation {
         float attackScale = mc.player.getAttackStrengthScale(0.5f);
         boolean inCritPhase = !mc.player.onGround() && mc.player.getDeltaMovement().y < -0.01;
 
-        // Если оружие только перезаряжается (кулдаун < 60%) и мы не в крит-фазе — не насилуем ротации,
-        // даём телу и руке двигаться свободно без рывков:
+        // Если оружие только перезаряжается (кулдаун < 60%) и мы не в крит-фазе — не дёргаем
+        // ротацию: просто выходим, НЕ сбрасывая её (ресет давал рывок при повторном наведении).
         if (attackScale < 0.60f && !inCritPhase) {
-            if (totErr > 35.0f && RotationProcess.isRotating()) {
-                RotationProcess.requestReset();
-            }
             aimed = false;
             return;
         }
