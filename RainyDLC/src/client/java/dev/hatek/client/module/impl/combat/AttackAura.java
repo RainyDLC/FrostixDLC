@@ -381,14 +381,6 @@ public final class AttackAura extends Module {
         return true;
     }
 
-    /** Наведена ли ротация на цель — зависит от выбранного режима. */
-    private boolean aimedNow() {
-        if (neuroMode() && NeuroRotation.hasBrain()) {
-            return NeuroRotation.aimed();
-        }
-        return SpaceTime.aimed() && SpaceTime.settled();
-    }
-
     public void attackEntity() {
         Minecraft mc = mc();
         if (target == null || AuraUtil.getStrictDistance(target) >= attackRange()) {
@@ -406,10 +398,6 @@ public final class AttackAura extends Module {
                 true, 0L, ranges);
 
         if (!canAttack) {
-            return;
-        }
-
-        if (!aimedNow()) {
             return;
         }
 
