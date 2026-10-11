@@ -138,17 +138,17 @@ public final class InterfaceHud {
             return;
         }
         HudLayout.Entry e = HudLayout.get(el);
-        float[] anchor = anchor(el, s, e.scale(), sw, sh);
+        float[] anchor = anchor(el, s, e.scale, sw, sh);
         float x = e.positioned() ? e.x : anchor[0];
         float y = e.positioned() ? e.y : anchor[1];
 
         Render2D.pushTranslate(gg, x, y);
-        Render2D.pushScale(gg, 0.0f, 0.0f, e.scale());
+        Render2D.pushScale(gg, 0.0f, 0.0f, e.scale);
         draw.accept(gg);
         Render2D.popTransform(gg);
         Render2D.popTransform(gg);
 
-        BOUNDS.put(el, new float[]{x, y, s.w() * e.scale(), s.h() * e.scale()});
+        BOUNDS.put(el, new float[]{x, y, s.w() * e.scale, s.h() * e.scale});
     }
 
     /** Якорь по умолчанию для элемента (размер уже с учётом масштаба). */

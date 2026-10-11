@@ -51,7 +51,7 @@ public final class HudEditScreen extends Screen {
             if (isMedia()) {
                 return 1.0f;
             }
-            return HudLayout.get(this.element).scale();
+            return HudLayout.get(this.element).scale;
         }
 
         void move(float x, float y, int sw, int sh) {
