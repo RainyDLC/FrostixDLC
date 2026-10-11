@@ -40,7 +40,7 @@ import java.util.Arrays;
 public final class Attack {
     private static final AuraTimer COOLDOWN_TIMER = new AuraTimer();
 
-    public static final double HIT_TOLERANCE = 0.2;
+    public static final double HIT_TOLERANCE = 0.05;
 
     private static final float CHARGE = 1.0F;
 
@@ -54,8 +54,8 @@ public final class Attack {
 
     private static float chargeTarget = CHARGE;
 
-    private static final float AURA_GAP_MIN = 80.0F;
-    private static final float AURA_GAP_SPREAD = 40.0F;
+    private static final float AURA_GAP_MIN = 205.0F;
+    private static final float AURA_GAP_SPREAD = 60.0F;
 
     private static long auraGap = (long) AURA_GAP_MIN;
 
@@ -178,7 +178,26 @@ public final class Attack {
         return prePost;
     }
 
-    public static Runnable[] skipSilentSprintingTaskForUse(boolean enabled, boolean serverSprinting) {
+    /**
+     * Builds the pre/post-hit sprint tasks.
+     *
+     * <p>In packet mode the attack is silently bracketed: sprint is stopped right before
+     * the attack packet and restored right after, so the server never sees a sprinting
+     * attacker.</p>
+     *
+     * <p>In legit mode the sprint is already stopped locally ahead of time
+     * ({@code holdSprint()}), but the server only learns about it through the vanilla
+     * auto-sync which runs later in the client tick than the attack packet itself.
+     * If the attack packet reaches the server first, the server still sees a sprinting
+     * player and the crit is lost (client shows nothing wrong). For crit attempts we
+     * therefore send an explicit STOP_SPRINTING immediately before the attack packet —
+     * packet order guarantees the server processes it first. No restore is sent in
+     * legit mode: sprint is managed by hold/releaseSprint instead. Sprint hits on the
+     * ground are untouched (no STOP), so their knockback behaviour is preserved.</p>
+     */
+    public static Runnable[] skipSilentSprintingTaskForUse(boolean packetMode,
+                                                           boolean serverSprinting,
+                                                           boolean critAttempt) {
         Runnable[] prePost = {() -> {
         }, () -> {
         }};
@@ -186,20 +205,15 @@ public final class Attack {
         if (mc.player == null || mc.getConnection() == null) {
             return prePost;
         }
-        boolean inAir = !mc.player.onGround() && mc.player.getDeltaMovement().y < 0.0;
-        // Для крита сброс спринта на момент удара ОБЯЗАТЕЛЕН, иначе Minecraft считает удар обычным спринтовым
-        boolean shouldSkip = enabled || inAir;
-        if (!shouldSkip) {
-            return prePost;
-        }
-        if (!inAir && !serverSprinting && !mc.player.isSprinting()) {
-            return prePost;
-        }
         if (mc.player.isEyeInFluid(FluidTags.WATER)) {
             return prePost;
         }
-        boolean restore = mc.player.isSprinting() || serverSprinting
-                || (mc.options != null && (mc.options.keySprint.isDown() || mc.options.keyUp.isDown()));
+        boolean wasSprinting = serverSprinting || mc.player.isSprinting();
+        boolean needStop = packetMode ? wasSprinting : critAttempt;
+        if (!needStop) {
+            return prePost;
+        }
+        boolean restore = packetMode && wasSprinting;
 
         prePost[0] = () -> {
             mc.player.setSprinting(false);
@@ -257,29 +271,26 @@ public final class Attack {
         if (!fallCheck || mc.player == null) {
             return true;
         }
-        if (!AttackAura.extra(AttackAura.SMART_CRITS)) {
+        if (critStateReady()) {
             return true;
+        }
+        if (!AttackAura.extra(AttackAura.SMART_CRITS)) {
+            return false;
         }
         if (critImpossible()) {
             return true;
         }
-
-        // 1. Стоит на земле — просто бьёт (не блокируем удар, не ждем прыжка):
         if (mc.player.onGround()) {
-            return true;
+            return !fallComing();
         }
-
-        // 2. В воздухе (прыгнул или подбросило нокбеком) — ОБЯЗАТЕЛЬНО критует!
-        // На подъёме (y >= -0.01) бить СТРОГО запрещено, в том числе при подбросе от нокбека.
-        // Бьём строго когда персонаж падает вниз (y < -0.01):
-        return critStateReady();
+        return false;
     }
 
     private static boolean critStateReady() {
         Minecraft mc = mc();
         return mc.player != null
+                && mc.player.fallDistance > critFallHeight
                 && !mc.player.onGround()
-                && mc.player.getDeltaMovement().y < -0.01
                 && !mc.player.onClimbable()
                 && !mc.player.isInWater()
                 && !mc.player.isPassenger()
@@ -294,22 +305,21 @@ public final class Attack {
 
     private static boolean critImpossible() {
         Minecraft mc = mc();
-        if (mc.player == null || mc.level == null) {
-            return true;
-        }
         boolean isInWeb = mc.level.getBlockState(mc.player.blockPosition()).is(Blocks.COBWEB);
-        boolean inLiquid = mc.player.isInWater() || mc.player.isInLava()
+        boolean jumping = ((LivingEntityAccessor) mc.player).hatek$isJumping();
+        boolean badLiquidMoment = !jumping && (mc.player.isInWater() || mc.player.isInLava())
                 || mc.player.isEyeInFluid(FluidTags.WATER)
-                || mc.player.isEyeInFluid(FluidTags.LAVA);
+                || mc.player.isEyeInFluid(FluidTags.LAVA)
+                || isInWeb;
 
-        return inLiquid
-                || isInWeb
+        return badLiquidMoment
                 || mc.player.onClimbable()
                 || mc.player.isPassenger()
                 || mc.player.hasEffect(MobEffects.BLINDNESS)
                 || mc.player.hasEffect(MobEffects.LEVITATION)
                 || mc.player.hasEffect(MobEffects.SLOW_FALLING)
-                || mc.player.getAbilities().flying;
+                || mc.player.getAbilities().flying
+                || getYCapacityOnPlayerPos(2) < 0.1F;
     }
 
     private static final float SMASH_FALL = 1.6F;
@@ -340,12 +350,7 @@ public final class Attack {
             preHit.run();
         }
 
-        boolean canHit = attackTickGapReached() || critStateReady()
-                || (mc.player != null && mc.player.getAttackStrengthScale(0.5F) >= 0.92F);
-        if (livingIn != null && mc.gameMode != null && mc.player != null && canHit) {
-            if (!mc.player.onGround() && mc.player.getDeltaMovement().y < 0.0 && mc.player.fallDistance <= 0.0F) {
-                mc.player.fallDistance = 0.08F;
-            }
+        if (livingIn != null && mc.gameMode != null && mc.player != null && attackTickGapReached()) {
             auraAttacking = true;
             try {
                 mc.gameMode.attack(mc.player, livingIn);
@@ -386,12 +391,13 @@ public final class Attack {
 
         if (PlayerStats.clickReady()) {
             float sampled = PlayerStats.click(AuraRandom.range(0.0F, 1.0F));
-            auraGap = (long) Math.max(80.0F, sampled);
+            auraGap = (long) Math.max(AURA_GAP_MIN, sampled);
         } else {
-            auraGap = (long) (AuraRandom.human(80.0F, 120.0F) * AuraProfile.tempo());
+            auraGap = (long) (AuraRandom.human(AURA_GAP_MIN, AURA_GAP_MIN + AURA_GAP_SPREAD)
+                    * AuraProfile.tempo());
 
-            if (AuraRandom.chance(0.02F)) {
-                auraGap += (long) AuraRandom.human(10.0F, 30.0F);
+            if (AuraRandom.chance(0.06F)) {
+                auraGap += (long) AuraRandom.human(40.0F, 230.0F);
             }
         }
 
@@ -399,7 +405,7 @@ public final class Attack {
             extraCooldown = 0L;
             return;
         }
-        extraCooldown = (long) AuraRandom.human(0.0F, 5.0F);
+        extraCooldown = (long) AuraRandom.human(0.0F, 10.0F);
     }
 
     private static long nextSprintLead() {
@@ -420,7 +426,7 @@ public final class Attack {
         if (mc.player == null) {
             return true;
         }
-        return mc.player.getAttackStrengthScale(0.5F) >= chargeFloor();
+        return mc.player.getAttackStrengthScale(0.5F) > chargeFloor();
     }
 
     private static float chargeFloor() {
@@ -534,18 +540,14 @@ public final class Attack {
                 && !AuraUtil.validDistance(livingTarget, ranges[0], true)) {
             return false;
         }
-        if (!chargeReached()) {
+        if (!msCooldownReached(cooldownMSOffset)) {
             return false;
         }
-        boolean critReady = critStateReady();
-        boolean fullyCharged = mc().player != null && mc().player.getAttackStrengthScale(0.5F) >= 0.92F;
-        if (!critReady && !fullyCharged) {
-            if (!msCooldownReached(cooldownMSOffset)) {
-                return false;
-            }
-            if (!attackTickGapReached()) {
-                return false;
-            }
+        if (!attackTickGapReached()) {
+            return false;
+        }
+        if (!chargeReached()) {
+            return false;
         }
         boolean validNext = isBestMomentToHit(fallCheck);
         if (validNext && rayCast && !anyEntityOnRay(livingTarget, ranges[0])) {

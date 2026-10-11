@@ -72,7 +72,6 @@ public final class AttackAura extends Module {
 
     private final SliderSetting attackRange = new SliderSetting("Attack Range", 3.0, 3.0, 6.0, 0.1);
     private final SliderSetting preRange = new SliderSetting("Detect Range", 1.0, 0.0, 5.0, 0.1);
-    private final SliderSetting fov = new SliderSetting("FOV", 360.0, 30.0, 360.0, 5.0);
 
     private final ModeSetting movementType =
             new ModeSetting("Movement", 0, MOVE_DEFAULT, MOVE_FREE);
@@ -97,6 +96,8 @@ public final class AttackAura extends Module {
 
     private static final float KEEP_MARGIN = 1.5F;
 
+    private static final float ACQUIRE_FOV = 65.0F;
+
     public static LivingEntity target;
     public static boolean canSwap;
 
@@ -111,7 +112,7 @@ public final class AttackAura extends Module {
                 Category.COMBAT);
         instance = this;
         keybind(GLFW.GLFW_KEY_R);
-        with(this.attackRange, this.preRange, this.fov, this.movementType, this.targets, this.misc,
+        with(this.attackRange, this.preRange, this.movementType, this.targets, this.misc,
                 this.extras, this.chargeSpread, this.rotations, this.neuroTrain);
 
         ComponentManager.getInstance().init();
@@ -166,11 +167,6 @@ public final class AttackAura extends Module {
                 && !NeuroRotation.isTraining() && NeuroRotation.hasBrain();
     }
 
-    /** Выбран ли режим свободного движения. */
-    public static boolean isFreeMove() {
-        return instance != null && instance.isEnabled() && instance.movementType.is(MOVE_FREE);
-    }
-
     private void onNeuroTrainButton() {
         if (NeuroRotation.isTraining()) {
             NeuroRotation.stopTraining();
@@ -206,21 +202,28 @@ public final class AttackAura extends Module {
         this.neuroTrain.caption(
                 NeuroRotation.isTraining() ? "Стоп" : "Обучить ротации");
 
-        // При обучении игрок наводится и двигается 100% сам — аура не перехватывает управление
-        if (NeuroRotation.isTraining()) {
-            target = null;
-            MoveUtil.restoreSprintKey();
-            MoveUtil.restoreMovementKeys();
-            return;
-        }
-
         onUpdate();
 
         if (target != null) {
             updateRotation();
+            idleSwing();
         } else if (neuroMode()) {
             NeuroRotation.setTarget(null);
         }
+    }
+
+    private void idleSwing() {
+        Minecraft mc = mc();
+        if (mc.player == null || mc.player.isUsingItem() || mc.player.isBlocking()) {
+            return;
+        }
+        if (Attack.msCooldownPC01() > 0.55F || mc.player.getAttackStrengthScale(0.5F) > 0.6F) {
+            return;
+        }
+        if (!AuraRandom.chance(0.006F)) {
+            return;
+        }
+        mc.player.swing(InteractionHand.MAIN_HAND);
     }
 
     private void onUpdate() {
@@ -251,12 +254,8 @@ public final class AttackAura extends Module {
         }
 
         if (!MovementManager.getInstance().isMovementLocked()) {
-            if (this.movementType.is(MOVE_FREE)) {
-                MoveUtil.restoreMovementKeys();
-            } else {
-                boolean steer = this.movementType.is(MOVE_DEFAULT) && target != null;
-                MoveUtil.fixMovement(steer ? bearingToTarget() : FreeLookUtil.freeYaw);
-            }
+            boolean steer = this.movementType.is(MOVE_DEFAULT) && target != null;
+            MoveUtil.fixMovement(steer ? bearingToTarget() : FreeLookUtil.freeYaw);
         }
 
         boolean nearEnough = target != null
@@ -271,10 +270,7 @@ public final class AttackAura extends Module {
                 && !mc.player.isInLava()
                 && !mc.player.onClimbable();
 
-        boolean shouldHoldSprint = !this.movementType.is(MOVE_FREE)
-                && (!packetSprint() && Attack.resetSprintTick(target, getRanges()) || airNoSprint);
-
-        if (shouldHoldSprint) {
+        if (!packetSprint() && Attack.resetSprintTick(target, getRanges()) || airNoSprint) {
             holdSprint();
         } else {
             releaseSprint();
@@ -413,9 +409,14 @@ public final class AttackAura extends Module {
             return;
         }
 
+        if (!canPacket && (serverSprinting || mc.player.isSprinting()) && Attack.critPending()) {
+            return;
+        }
+
         Runnable[] shieldBreak = Attack.hitShieldBreakTaskForUse(target, misc(BREAK_SHIELD));
         Runnable[] shieldPressBypass = Attack.resetShieldSilentTaskForUse(true);
-        Runnable[] skipSilentSprint = Attack.skipSilentSprintingTaskForUse(canPacket, serverSprinting);
+        Runnable[] skipSilentSprint = Attack.skipSilentSprintingTaskForUse(
+                canPacket, serverSprinting, Attack.critPending());
 
         Runnable preHit = () -> {
             skipSilentSprint[0].run();
@@ -431,6 +432,11 @@ public final class AttackAura extends Module {
         if (misc(DROP_SHIELD) && mc.player.getUseItem().getItem().equals(Items.SHIELD)
                 && mc.player.isUsingItem()) {
             mc.gameMode.releaseUsingItem(mc.player);
+        }
+
+        if (!canPacket) {
+            mc.player.setSprinting(false);
+            mc.options.keySprint.setDown(false);
         }
 
         Attack.useEntity(target, preHit, postHit, InteractionHand.MAIN_HAND, true);
@@ -462,7 +468,7 @@ public final class AttackAura extends Module {
             if (!(entity instanceof LivingEntity living) || !isValidTarget(living)) {
                 continue;
             }
-            if (this.fov.value() < 360.0 && AuraUtil.calculateFOVFromCamera(living) > this.fov.value()) {
+            if (AuraUtil.calculateFOVFromCamera(living) > ACQUIRE_FOV) {
                 continue;
             }
             double distance = mc.player.distanceToSqr(living);
@@ -550,7 +556,6 @@ public final class AttackAura extends Module {
         reset();
 
         preferred = lookingAt();
-        updateTarget();
     }
 
     @Override
