@@ -53,7 +53,8 @@ public final class AttackAura extends Module {
     public static final String ROT_SPACETIME = "SpaceTime";
     public static final String ROT_NEURO = "Нейро";
 
-    public static final String LEGIT_SPRINT = "Legit Sprint";
+    public static final String SPRINT_RESET_PACKET = "Пакетный";
+    public static final String SPRINT_RESET_LEGIT = "Легитный";
     public static final String SMART_CRITS = "Smart Crits";
     public static final String SLOW_TURN = "Slow Turn";
 
@@ -81,8 +82,11 @@ public final class AttackAura extends Module {
             List.of(THROUGH_WALLS, WEAPON_ONLY, NO_EATING, NO_CONTAINER, BREAK_SHIELD, DROP_SHIELD),
             NO_EATING);
     private final MultiSetting extras = new MultiSetting("Extra",
-            List.of(LEGIT_SPRINT, SMART_CRITS, SLOW_TURN),
-            LEGIT_SPRINT, SMART_CRITS, SLOW_TURN);
+            List.of(SMART_CRITS, SLOW_TURN),
+            SMART_CRITS, SLOW_TURN);
+
+    private final ModeSetting sprintReset = new ModeSetting("Сброс спринта", 1,
+            SPRINT_RESET_PACKET, SPRINT_RESET_LEGIT);
 
     private final BoolSetting chargeSpread = new BoolSetting("Charge Spread", true);
 
@@ -113,7 +117,7 @@ public final class AttackAura extends Module {
         instance = this;
         keybind(GLFW.GLFW_KEY_R);
         with(this.attackRange, this.preRange, this.movementType, this.targets, this.misc,
-                this.extras, this.chargeSpread, this.rotations, this.neuroTrain);
+                this.extras, this.sprintReset, this.chargeSpread, this.rotations, this.neuroTrain);
 
         ComponentManager.getInstance().init();
 
@@ -355,7 +359,7 @@ public final class AttackAura extends Module {
         return mc.player != null
                 && !mc.player.hasEffect(MobEffects.BLINDNESS)
                 && !mc.player.isPassenger()
-                && !extra(LEGIT_SPRINT);
+                && !this.sprintReset.is(SPRINT_RESET_LEGIT);
     }
 
     public static boolean spaceTime() {
