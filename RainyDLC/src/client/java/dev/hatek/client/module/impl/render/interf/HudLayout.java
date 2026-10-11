@@ -28,8 +28,7 @@ public final class HudLayout {
         KEYBINDS("Keybinds"),
         EFFECTS("Effects"),
         HOTBAR("Hotbar"),
-        ARMOR("Armor"),
-        TARGET("Target");
+        ARMOR("Armor");
 
         private final String label;
 
