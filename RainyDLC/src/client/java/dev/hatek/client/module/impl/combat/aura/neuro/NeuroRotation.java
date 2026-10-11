@@ -6,6 +6,7 @@ import dev.hatek.client.module.impl.combat.aimassist.AimSample;
 import dev.hatek.client.module.impl.combat.aura.rotation.Rotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
 import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
+import dev.hatek.client.module.impl.combat.aura.util.EngageDelay;
 import dev.hatek.client.module.impl.combat.aura.util.GCDUtil;
 import dev.hatek.client.module.impl.combat.aura.util.RayTraceUtil;
 import net.minecraft.client.Minecraft;
@@ -75,6 +76,13 @@ public final class NeuroRotation {
     private static Vec3 neuroWanderVel = Vec3.ZERO;
     private static float neuroJitterYaw;
     private static float neuroJitterPitch;
+
+    // Калиброванный анти-детект (статистики из AimNet.Calib, собранные из руки игрока)
+    private static int freezeUntilTick = Integer.MIN_VALUE;
+    private static int lastFreezeRollTick = Integer.MIN_VALUE;
+    private static float residYaw;
+    private static float residPitch;
+    private static int residHoldUntilTick = Integer.MIN_VALUE;
 
     private NeuroRotation() {
     }
@@ -470,10 +478,14 @@ public final class NeuroRotation {
             aimed = false;
             neuroWander = Vec3.ZERO;
             neuroWanderVel = Vec3.ZERO;
+            freezeUntilTick = Integer.MIN_VALUE;
+            residHoldUntilTick = Integer.MIN_VALUE;
         } else if (t.getId() != infPrevTargetId) {
             // Новая цель — сбрасываем блуждание, чтобы не тянуть старое смещение.
             neuroWander = Vec3.ZERO;
             neuroWanderVel = Vec3.ZERO;
+            freezeUntilTick = Integer.MIN_VALUE;
+            residHoldUntilTick = Integer.MIN_VALUE;
         }
     }
 
@@ -510,6 +522,17 @@ public final class NeuroRotation {
             return;
         }
 
+        // Человеческая задержка реакции на новую цель (анти-детект).
+        // aimed пересчитываем честно: ротация ещё не начиналась, stale true
+        // пропускал бы удары без луча в цель.
+        if (EngageDelay.hold(t)) {
+            decayVelocity();
+            Vec3 eye0 = mc.player.getEyePosition(1.0f);
+            aimed = RayTraceUtil.rayTraceEntity(eye0, mc.player.getYRot(), mc.player.getXRot(),
+                    AttackAura.attackRange() + 0.5, t, 0.12);
+            return;
+        }
+
         long now = System.nanoTime();
         float dt = (lastFrameNanos == 0L) ? 0.016f : (float) ((now - lastFrameNanos) / 1_000_000_000.0);
         lastFrameNanos = now;
@@ -527,6 +550,15 @@ public final class NeuroRotation {
         Vec3 aimPoint = wanderAimPoint(leadBox, readyToHit);
         float[] targetRot = rotTo(eye, aimPoint);
 
+        // Калиброванная неточность руки: целимся не в ноль ошибки, а в остаточную
+        // ошибку из распределения самого игрока (error-quantile targeting).
+        // В момент удара не применяем — луч должен гарантированно попадать.
+        if (!readyToHit) {
+            updateResidual();
+            targetRot[0] = Mth.wrapDegrees(targetRot[0] + residYaw);
+            targetRot[1] = Mth.clamp(targetRot[1] + residPitch, -90.0f, 90.0f);
+        }
+
         // Гарантируем, что луч попадает в хитбокс цели (реальный или упреждённый).
         if (!RayTraceUtil.rayTraceEntity(eye, targetRot[0], targetRot[1], AttackAura.attackRange() + 0.5, t, 0.12)) {
             targetRot = rotTo(eye, t.getBoundingBox().getCenter());
@@ -538,6 +570,17 @@ public final class NeuroRotation {
         float yawErr = Mth.wrapDegrees(targetRot[0] - curYaw);
         float pitchErr = targetRot[1] - curPitch;
         float totErr = (float) Math.hypot(yawErr, pitchErr);
+
+        // Микро-пауза из моторики игрока: в слежении рука иногда замирает.
+        // Вероятность и длительность — из его калибровки, не из головы.
+        if (checkFreeze(totErr, readyToHit)) {
+            decayVelocity();
+            gcdAccumYaw = 0.0f;
+            gcdAccumPitch = 0.0f;
+            aimed = RayTraceUtil.rayTraceEntity(eye, curYaw, curPitch,
+                    AttackAura.attackRange() + 0.5, t, 0.12);
+            return;
+        }
 
         float maxSpeed;
         if (readyToHit) {
@@ -614,6 +657,81 @@ public final class NeuroRotation {
         aimed = (Math.abs(yawErr) <= eps && Math.abs(pitchErr) <= eps)
                 || RayTraceUtil.rayTraceEntity(curYaw, curPitch, AttackAura.attackRange() + 0.5, t)
                 || RayTraceUtil.rayTraceEntity(eye, curYaw, curPitch, AttackAura.attackRange() + 0.5, t, 0.12);
+    }
+
+    /**
+     * Остаточная ошибка наведения из калибровки игрока.
+     * Смещение держится 12–30 тиков — как устойчивый «почерк» руки,
+     * а не покадровый шум.
+     */
+    private static void updateResidual() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
+            return;
+        }
+        int tick = mc.player.tickCount;
+        if (tick < residHoldUntilTick) {
+            return;
+        }
+        java.util.concurrent.ThreadLocalRandom rnd =
+                java.util.concurrent.ThreadLocalRandom.current();
+        residHoldUntilTick = tick + 12 + rnd.nextInt(19);
+        if (!hasBrain()) {
+            residYaw = 0.0f;
+            residPitch = 0.0f;
+            return;
+        }
+        AimNet.Calib c = net.calib();
+        residYaw = sampleCalibMag(c.residYawP50, c.residYawP90, rnd)
+                * (rnd.nextBoolean() ? 1.0f : -1.0f);
+        residPitch = sampleCalibMag(c.residPitchP50, c.residPitchP90, rnd)
+                * (rnd.nextBoolean() ? 1.0f : -1.0f);
+    }
+
+    /** Треугольное распределение между p50 и p90 — типичный разброс руки. */
+    private static float sampleCalibMag(double p50, double p90,
+                                        java.util.concurrent.ThreadLocalRandom rnd) {
+        double u = (rnd.nextDouble() + rnd.nextDouble()) * 0.5;
+        return (float) (p50 + Math.max(0.0, p90 - p50) * u);
+    }
+
+    /**
+     * Микро-пауза из моторики игрока: вероятность и длительность — из его
+     * калибровки. Решение принимается раз в тик, длительность — в тиках,
+     * поэтому поведение не зависит от FPS.
+     */
+    private static boolean checkFreeze(float totErr, boolean readyToHit) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
+            return false;
+        }
+        int tick = mc.player.tickCount;
+        if (readyToHit) {
+            freezeUntilTick = Integer.MIN_VALUE;
+            return false;
+        }
+        if (tick < freezeUntilTick) {
+            return true;
+        }
+        if (tick == lastFreezeRollTick) {
+            return false;
+        }
+        lastFreezeRollTick = tick;
+        if (totErr > 12.0f || !hasBrain()) {
+            return false;
+        }
+        AimNet.Calib c = net.calib();
+        double pStart = (c.pausePer100 / 100.0) / Math.max(1.0, c.pauseP50Ticks);
+        java.util.concurrent.ThreadLocalRandom rnd =
+                java.util.concurrent.ThreadLocalRandom.current();
+        if (rnd.nextDouble() < pStart) {
+            double u = rnd.nextDouble();
+            int dur = (int) Math.max(2, Math.round(
+                    c.pauseP50Ticks + Math.max(0.0, c.pauseP90Ticks - c.pauseP50Ticks) * u));
+            freezeUntilTick = tick + dur;
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -718,6 +836,11 @@ public final class NeuroRotation {
         infPrevTargetId = -1;
         aimed = false;
         lastFrameNanos = 0;
+        freezeUntilTick = Integer.MIN_VALUE;
+        lastFreezeRollTick = Integer.MIN_VALUE;
+        residYaw = 0.0f;
+        residPitch = 0.0f;
+        residHoldUntilTick = Integer.MIN_VALUE;
         RotationProcess.requestReset();
     }
 
