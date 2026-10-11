@@ -350,7 +350,6 @@ public final class AttackAura extends Module {
 
     private static int circleSide = 1;
     private static long nextFlip;
-
     private float bearingToTarget() {
         Minecraft mc = mc();
         if (mc.player == null || target == null) {
@@ -358,31 +357,7 @@ public final class AttackAura extends Module {
         }
         double dx = target.getX() - mc.player.getX();
         double dz = target.getZ() - mc.player.getZ();
-        float direct = (float) Math.toDegrees(Math.atan2(-dx, dz));
-
-        double flat = Math.hypot(dx, dz);
-        double outer = STANDOFF * 1.7;
-        if (flat >= outer) {
-            return direct;
-        }
-
-        long now = System.currentTimeMillis();
-        if (mc.options.keyLeft.isDown()) {
-            circleSide = -1;
-        } else if (mc.options.keyRight.isDown()) {
-            circleSide = 1;
-        } else if (now >= nextFlip) {
-            circleSide = AuraRandom.chance(0.5F) ? 1 : -1;
-            nextFlip = now + (long) AuraRandom.range(2600.0F, 7000.0F);
-        }
-
-        float bend;
-        if (flat >= STANDOFF) {
-            bend = 90.0F * (float) ((outer - flat) / (outer - STANDOFF));
-        } else {
-            bend = 90.0F + 28.0F * (float) Mth.clamp(1.0 - flat / STANDOFF, 0.0, 1.0);
-        }
-        return Mth.wrapDegrees(direct + bend * circleSide);
+        return (float) Math.toDegrees(Math.atan2(-dx, dz));
     }
 
     private void holdSprint() {
@@ -456,17 +431,18 @@ public final class AttackAura extends Module {
         Attack.antiMissesHittingUpdate(target, true, isRayCastRuleToAttack(), false);
 
         boolean plannedHit = AttackPlanner.consumePlannedHit(target, ranges);
-        boolean canAttack;
-        if (misc(ATTACK_DEBUG)) {
-            String reason = Attack.shouldAttackReason(target, isRayCastRuleToAttack(), true,
-                    true, 0L, ranges);
-            canAttack = plannedHit || reason == null;
-            if (!canAttack) {
-                AttackDebug.noteReject(reason);
+        boolean canAttack = plannedHit;
+        if (!canAttack && !AttackPlanner.hasPlan()) {
+            if (misc(ATTACK_DEBUG)) {
+                String reason = Attack.shouldAttackReason(target, isRayCastRuleToAttack(), true,
+                        true, 0L, ranges);
+                canAttack = reason == null;
+                if (!canAttack) {
+                    AttackDebug.noteReject(reason);
+                }
+            } else {
+                canAttack = Attack.shouldAttack(target, isRayCastRuleToAttack(), true, true, 0L, ranges);
             }
-        } else {
-            canAttack = plannedHit
-                    || Attack.shouldAttack(target, isRayCastRuleToAttack(), true, true, 0L, ranges);
         }
 
         if (!canAttack) {

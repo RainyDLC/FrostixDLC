@@ -544,7 +544,8 @@ public final class NeuroRotation {
                 && !mc.player.getAbilities().flying
                 && mc.player.getDeltaMovement().y < -0.01;
         float attackScale = mc.player.getAttackStrengthScale(0.5f);
-        boolean readyToHit = attackScale >= 0.88f || inCritPhase;
+        boolean readyToHit = attackScale >= 0.88f || inCritPhase
+                || (dev.hatek.client.module.impl.combat.aura.util.AttackPlanner.hasPlan() && attackScale >= 0.75f);
 
         var leadBox = dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.leadedBox(t);
         Vec3 aimPoint = wanderAimPoint(leadBox, readyToHit);

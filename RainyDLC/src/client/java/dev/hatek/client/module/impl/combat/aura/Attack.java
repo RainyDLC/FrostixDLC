@@ -296,9 +296,9 @@ public final class Attack {
     private static boolean critStateReady() {
         Minecraft mc = mc();
         return mc.player != null
-                && (mc.player.fallDistance > critFallHeight
-                    || (mc.player.fallDistance > 0.005F && mc.player.getDeltaMovement().y < -0.01))
                 && !mc.player.onGround()
+                && mc.player.getDeltaMovement().y < -0.01
+                && (mc.player.fallDistance > critFallHeight || mc.player.fallDistance > 0.005F)
                 && !mc.player.onClimbable()
                 && !mc.player.isInWater()
                 && !mc.player.isPassenger()
@@ -365,12 +365,11 @@ public final class Attack {
     public static boolean useEntity(LivingEntity livingIn, Runnable preHit, Runnable postHit,
                                     InteractionHand hand, boolean cpsBypass, boolean forceGap) {
         Minecraft mc = mc();
-        if (preHit != null) {
-            preHit.run();
-        }
-
         if (livingIn != null && mc.gameMode != null && mc.player != null
                 && (forceGap || attackTickGapReached())) {
+            if (preHit != null) {
+                preHit.run();
+            }
             auraAttacking = true;
             try {
                 mc.gameMode.attack(mc.player, livingIn);
@@ -394,10 +393,10 @@ public final class Attack {
             critFallHeight = nextCritFallHeight();
             sprintLead = nextSprintLead();
             rollNextHit();
-        }
 
-        if (postHit != null) {
-            postHit.run();
+            if (postHit != null) {
+                postHit.run();
+            }
         }
         return livingIn != null;
     }
@@ -765,8 +764,10 @@ public final class Attack {
         if (mc.player == null || mc.options == null) {
             return false;
         }
-        return mc.options.keyJump.isDown()
-                && mc.player.tickCount - lastAirTick <= 3;
+        if (mc.options.keyJump.isDown()) {
+            return true;
+        }
+        return mc.player.tickCount - lastAirTick <= 2;
     }
 
     public static void clampCooldownDebt() {
