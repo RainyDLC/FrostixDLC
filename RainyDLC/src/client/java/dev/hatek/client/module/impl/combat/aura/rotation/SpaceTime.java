@@ -66,6 +66,12 @@ public final class SpaceTime {
     private static final float LEAD_CAP_YAW = 10.0F;
     private static final float LEAD_CAP_PITCH = 6.0F;
 
+    /** Max aim lead per axis, in blocks — guards against lag spikes / teleports. */
+    private static final double MAX_LEAD = 1.5;
+
+    /** Squared velocity below which the target is considered stationary (no lead). */
+    private static final double STILL_VEL_SQR = 1.0E-6;
+
     private static final Multiplier MULTIPLIER = new Multiplier();
     private static final AttackTracker TRACKER = new AttackTracker();
 
@@ -161,6 +167,44 @@ public final class SpaceTime {
         return true;
     }
 
+    /**
+     * How far ahead (in ticks) to aim, compensating the age of the rotation the
+     * server currently sees (movement packet from the previous tick) plus ping.
+     */
+    private static double leadTicks() {
+        int ping = 50;
+        try {
+            Minecraft mc = mc();
+            if (mc.getConnection() != null && mc.player != null) {
+                var info = mc.getConnection().getPlayerInfo(mc.player.getUUID());
+                if (info != null) {
+                    ping = Math.max(0, info.getLatency());
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return 1.0 + ping / 100.0;
+    }
+
+    /**
+     * Target bounding box extrapolated along its velocity, so the server-side
+     * ray (which runs on an older rotation against the target's later position)
+     * still connects on fast-moving targets. Returns the plain box when the
+     * target is (almost) stationary.
+     */
+    public static AABB leadedBox(LivingEntity entity) {
+        AABB box = entity.getBoundingBox();
+        Vec3 vel = entity.getDeltaMovement();
+        if (vel.lengthSqr() < STILL_VEL_SQR) {
+            return box;
+        }
+        double t = leadTicks();
+        return box.move(
+                Mth.clamp(vel.x * t, -MAX_LEAD, MAX_LEAD),
+                Mth.clamp(vel.y * t, -MAX_LEAD, MAX_LEAD),
+                Mth.clamp(vel.z * t, -MAX_LEAD, MAX_LEAD));
+    }
+
     private static void updateRotations(LivingEntity entity) {
         Minecraft mc = mc();
         TRACKER.update();
@@ -224,7 +268,8 @@ public final class SpaceTime {
         boolean windowClosed = System.currentTimeMillis() % 500L >= 370L;
         float gate = windowClosed ? 0.0F : 1.0F;
 
-        Vec3 point = getMultipoint(entity, 128.0);
+        AABB leadBox = leadedBox(entity);
+        Vec3 point = getMultipoint(leadBox, 128.0);
         float[] rot = getRotations(point);
         float aimYaw = rot[0];
         float aimPitch = rot[1];
@@ -405,15 +450,17 @@ public final class SpaceTime {
         aimed = (Math.abs(Mth.wrapDegrees(aimYaw - serverYaw)) <= epsilon
                 && Math.abs(aimPitch - serverPitch) <= epsilon)
                 || rayTraceBox(RayTraceUtil.getVectorForRotation(serverPitch, serverYaw),
-                        AttackAura.attackRange() + 0.5, entity.getBoundingBox());
+                        AttackAura.attackRange() + 0.5, leadBox);
     }
 
-    private static Vec3 getMultipoint(LivingEntity entity, double fovDistance) {
+    private static Vec3 getMultipoint(AABB leadBox, double fovDistance) {
         float minX = 0.005F;
         float maxX = 0.015F;
         float minY = 0.0015F;
         float maxY = 0.015F;
-        AABB box = entity.getBoundingBox();
+        AABB box = leadBox;
+        Vec3 base = new Vec3((box.minX + box.maxX) / 2.0, box.minY,
+                (box.minZ + box.maxZ) / 2.0);
         double lenX = box.getXsize();
         double lenY = box.getYsize();
         double lenZ = box.getZsize();
@@ -447,25 +494,24 @@ public final class SpaceTime {
         Minecraft mc = mc();
         if (!rayTraceBox(mc.player.getLookAngle(), fovDistance, box)) {
             float halfX = (float) (lenX / 2.0) * 0.8F;
-            Vec3 entityPos = new Vec3(entity.getX(), entity.getY(), entity.getZ());
             for (float dx = -halfX; dx <= halfX; dx += 0.1F) {
                 for (float dz = -halfX; dz <= halfX; dz += 0.1F) {
                     for (float dy = (float) (lenY * 0.9); (double) dy >= lenY * 0.3; dy -= 0.1F) {
                         Vec3 candidate = new Vec3(
-                                entity.getX() + (double) dx,
-                                entity.getY() + (double) dy,
-                                entity.getZ() + (double) dz);
+                                base.x + (double) dx,
+                                base.y + (double) dy,
+                                base.z + (double) dz);
                         float[] candRot = fromVec3d(candidate);
                         Vec3 candDir = RayTraceUtil.getVectorForRotation(candRot[1], candRot[0]);
                         if (rayTraceBox(candDir, fovDistance, box)) {
                             wanderOffset = new Vec3(dx, dy, dz);
-                            return entityPos.add(wanderOffset);
+                            return base.add(wanderOffset);
                         }
                     }
                 }
             }
         }
-        return new Vec3(entity.getX(), entity.getY(), entity.getZ()).add(wanderOffset);
+        return base.add(wanderOffset);
     }
 
     private static float getSpeedMultiplier() {

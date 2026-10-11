@@ -2,6 +2,7 @@ package dev.hatek.client.module.impl.combat.aura;
 
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
+import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
 import dev.hatek.client.module.impl.combat.aura.util.AttackPace;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
 import dev.hatek.client.module.impl.combat.aura.util.AuraRandom;
@@ -515,7 +516,9 @@ public final class Attack {
         }
         float yaw = Mth.wrapDegrees(ServerView.yaw(mc.player.getYRot()));
         float pitch = ServerView.pitch(mc.player.getXRot());
-        return onRay(livingIn.getBoundingBox(), yaw, pitch, range, HIT_TOLERANCE);
+        // Check against the leaded box: the server validates the hit against the
+        // target's later position, using the rotation it already received.
+        return onRay(SpaceTime.leadedBox(livingIn), yaw, pitch, range, HIT_TOLERANCE);
     }
 
     public static boolean onRay(AABB box, float yaw, float pitch, double range, double tolerance) {
