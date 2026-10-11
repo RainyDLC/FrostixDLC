@@ -5,8 +5,11 @@ import dev.hatek.client.media.MediaClip;
 import dev.hatek.client.media.MediaManager;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.ModuleManager;
+import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.mixin.accessor.BossHealthOverlayAccessor;
+import dev.hatek.mixin.accessor.GuiAccessor;
+import dev.hatek.mixin.accessor.HudAccessor;
 import dev.hatek.client.ui.Style;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
@@ -16,6 +19,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Hud;
+import net.minecraft.client.gui.components.BossHealthOverlay;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.Holder;
@@ -24,10 +28,18 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.ResolvableProfile;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
+import java.util.Optional;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -152,6 +164,8 @@ public final class InterfaceHud {
                 InterfaceHud::measureHotbar);
         putBound(out, HudLayout.Element.ARMOR, Interface.showArmor(), sw, sh,
                 InterfaceHud::measureArmor);
+        putBound(out, HudLayout.Element.TARGET, Interface.showTarget(), sw, sh,
+                InterfaceHud::measureTarget);
         return out;
     }
 
@@ -320,6 +334,8 @@ public final class InterfaceHud {
                 InterfaceHud::measureHotbar, InterfaceHud::drawHotbar);
         place(gg, HudLayout.Element.ARMOR, Interface.showArmor(), sw, sh,
                 InterfaceHud::measureArmor, InterfaceHud::drawArmor);
+        place(gg, HudLayout.Element.TARGET, Interface.showTarget(), sw, sh,
+                InterfaceHud::measureTarget, InterfaceHud::drawTarget);
         placeMedia2D(gg);
         Render2D.end(gg);
     }
@@ -380,7 +396,11 @@ public final class InterfaceHud {
             if (mc.gui == null) {
                 return 0;
             }
-            Object overlay = mc.gui.getBossOverlay();
+            Hud hud = ((GuiAccessor) mc.gui).hatek$hud();
+            if (hud == null) {
+                return 0;
+            }
+            BossHealthOverlay overlay = ((HudAccessor) hud).hatek$bossOverlay();
             if (overlay instanceof BossHealthOverlayAccessor acc) {
                 java.util.Map events = acc.hatek$events();
                 return events == null ? 0 : events.size();
@@ -434,6 +454,8 @@ public final class InterfaceHud {
             }
             case ARMOR:
                 return new float[]{m, sh - h - 8.0f};
+            case TARGET:
+                return new float[]{(sw - w) / 2.0f, m};
             case HOTBAR:
             default:
                 return new float[]{(sw - w) / 2.0f, sh - h - 8.0f};
@@ -973,6 +995,232 @@ public final class InterfaceHud {
         int max = stack.getMaxDamage();
         float f = max <= 0 ? 1.0f : (max - stack.getDamageValue()) / (float) max;
         return f > 0.6f ? 0xFF4ADE80 : f > 0.3f ? 0xFFFACC15 : 0xFFF87171;
+    }
+
+    // ---------------- цель ----------------
+
+    private static final class TargetData implements Sized {
+        final float w;
+        final float h;
+        final LivingEntity target;
+        final String name;
+        final float hpFrac;
+        final float abFrac;
+        final String hpText;
+        final List<ItemStack> armor;
+        final ItemStack mainHand;
+        final ItemStack offHand;
+
+        TargetData(float w, float h, LivingEntity target, String name,
+                   float hpFrac, float abFrac, String hpText,
+                   List<ItemStack> armor, ItemStack mainHand, ItemStack offHand) {
+            this.w = w;
+            this.h = h;
+            this.target = target;
+            this.name = name;
+            this.hpFrac = hpFrac;
+            this.abFrac = abFrac;
+            this.hpText = hpText;
+            this.armor = armor;
+            this.mainHand = mainHand;
+            this.offHand = offHand;
+        }
+
+        @Override
+        public float w() {
+            return this.w;
+        }
+
+        @Override
+        public float h() {
+            return this.h;
+        }
+    }
+
+    /** Цель: сначала таргет ауры, иначе то, на что смотрим. null — нет цели. */
+    private static TargetData measureTarget(float s) {
+        Minecraft mc = Minecraft.getInstance();
+        LivingEntity t = resolveTarget(mc);
+        if (t == null) {
+            return null;
+        }
+        float maxHp = Math.max(1.0f, t.getMaxHealth());
+        float hpFrac = Mth.clamp(t.getHealth() / maxHp, 0.0f, 1.0f);
+        float abFrac = Mth.clamp(t.getAbsorptionAmount() / maxHp, 0.0f, 1.0f - hpFrac);
+        String hpText = String.valueOf((int) Math.ceil(t.getHealth() + t.getAbsorptionAmount()));
+
+        HFont title = sTitle(s);
+        String name = title.trim(t.getName().getString(), 140.0f * s);
+
+        float pad = 8.0f * s;
+        float head = 34.0f * s;
+        float nameX = pad + head + 8.0f * s;
+        float row2Y = pad + 22.0f * s;
+        float icon = 18.0f * s;
+        float gap = 3.0f * s;
+        float armorW = 4.0f * icon + 3.0f * gap;
+        float pctH = 9.0f * s;
+        float handsX = nameX + armorW + 10.0f * s;
+        float handsW = 2.0f * icon + gap;
+        float leftW = Math.max(handsX + handsW, nameX + title.width(name) + 8.0f * s);
+        float circleD = 38.0f * s;
+        float circleGap = 12.0f * s;
+        float w = leftW + circleGap + circleD + pad;
+        float row2Bottom = row2Y + icon + gap + pctH;
+        float h = Math.max(pad + head, row2Bottom) + pad;
+
+        return new TargetData(w, h, t, name, hpFrac, abFrac, hpText,
+                armorPieces(t), t.getMainHandItem(), t.getOffhandItem());
+    }
+
+    private static void drawTarget(GuiGraphicsExtractor gg, float s, TargetData d) {
+        Render2D.round(gg, 0, 0, d.w, d.h, 10.0f * s, Style.HUD_PANEL);
+        Minecraft mc = Minecraft.getInstance();
+
+        float pad = 8.0f * s;
+        float head = 34.0f * s;
+
+        // Голова цели: предмет PLAYER_HEAD с её профилем (настоящий скин).
+        ItemStack headStack = headStack(d.target, mc);
+        if (!headStack.isEmpty()) {
+            float hs = head / 16.0f;
+            Render2D.pushTranslate(gg, pad, pad);
+            Render2D.pushScale(gg, 0.0f, 0.0f, hs);
+            gg.item(mc.player, headStack, 0, 0, 0);
+            Render2D.popTransform(gg);
+            Render2D.popTransform(gg);
+        } else {
+            drawAvatar(gg, d.name, pad, pad, head, s);
+        }
+
+        // Ник.
+        HFont title = sTitle(s);
+        float nameX = pad + head + 8.0f * s;
+        title.draw(gg, d.name, nameX, pad + 2.0f * s, Style.WHITE);
+
+        // Броня с процентами + руки.
+        float row2Y = pad + 22.0f * s;
+        float icon = 18.0f * s;
+        float gap = 3.0f * s;
+        HFont pct = sLabel(s * 0.7f);
+        for (int i = 0; i < 4; i++) {
+            float x = nameX + i * (icon + gap);
+            ItemStack stack = d.armor.get(i);
+            drawSlot(gg, mc, stack, x, row2Y, icon, s, false);
+            String p = durabilityPct(stack);
+            if (p != null) {
+                float tw = pct.width(p);
+                pct.draw(gg, p, x + (icon - tw) / 2.0f, row2Y + icon + gap,
+                        durabilityColor(stack));
+            }
+        }
+        float handsX = nameX + 4.0f * icon + 3.0f * gap + 10.0f * s;
+        drawSlot(gg, mc, d.mainHand, handsX, row2Y, icon, s, false);
+        drawSlot(gg, mc, d.offHand, handsX + icon + gap, row2Y, icon, s, false);
+
+        // Круг ХП справа: гладкие дуги (фон, золото абсорбции, хп).
+        float circleD = 38.0f * s;
+        float circleX = d.w - pad - circleD;
+        float circleY = (d.h - circleD) / 2.0f;
+        float circleCx = circleX + circleD / 2.0f;
+        hpArc(gg, circleX, circleY, circleD, 1.0f, false, 0xFF2A2929);
+        float total = Math.min(1.0f, d.hpFrac + d.abFrac);
+        hpArc(gg, circleX, circleY, circleD, total, true, 0xFFFFC94D);
+        hpArc(gg, circleX, circleY, circleD, d.hpFrac, true, hpColor(d.hpFrac));
+        HFont hpFont = sTitle(s * 1.1f);
+        hpFont.drawCentered(gg, d.hpText, circleCx,
+                hpFont.centeredBaseline(circleY, circleD), Style.WHITE);
+    }
+
+    /**
+     * Гладкая дуга ХП: сглаженная текстура из TexCache, тинтится в цвет.
+     * x/y/d — квадрат, в который вписана дуга.
+     */
+    private static void hpArc(GuiGraphicsExtractor gg, float x, float y, float d,
+                              float frac, boolean round, int argb) {
+        if (frac <= 0.0f) {
+            return;
+        }
+        Identifier id = TexCache.arc(128, 14.0f, frac, round);
+        if (id == null) {
+            return;
+        }
+        Render2D.texture(gg, id, x, y, d, d, argb);
+    }
+
+    private static int hpColor(float frac) {
+        return frac > 0.6f ? 0xFF4ADE80 : frac > 0.3f ? 0xFFFACC15 : 0xFFF87171;
+    }
+
+    /** Голова игрока как предмет (скин подтягивается из профиля). */
+    private static ItemStack headStack(LivingEntity target, Minecraft mc) {
+        if (!(target instanceof Player) || mc.getConnection() == null) {
+            return ItemStack.EMPTY;
+        }
+        PlayerInfo info = mc.getConnection().getPlayerInfo(target.getUUID());
+        if (info == null) {
+            return ItemStack.EMPTY;
+        }
+        ItemStack head = new ItemStack(Items.PLAYER_HEAD);
+        head.set(DataComponents.PROFILE, ResolvableProfile.createResolved(info.getProfile()));
+        return head;
+    }
+
+    /** Аватарка-заглушка: первая буква ника в цветном квадрате. */
+    private static void drawAvatar(GuiGraphicsExtractor gg, String name,
+                                   float x, float y, float size, float s) {
+        int hash = name.hashCode();
+        float hue = ((hash & 0xFFFF) / (float) 0xFFFF);
+        int col = java.awt.Color.HSBtoRGB(hue, 0.55f, 0.75f) | 0xFF000000;
+        Render2D.round(gg, x, y, size, size, 6.0f * s, col);
+        String letter = name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase();
+        HFont f = sTitle(s * 1.2f);
+        f.drawCentered(gg, letter, x + size / 2.0f,
+                f.centeredBaseline(y, size), Style.WHITE);
+    }
+
+    private static LivingEntity resolveTarget(Minecraft mc) {
+        if (mc.player == null || mc.level == null) {
+            return null;
+        }
+        LivingEntity aura = AttackAura.target;
+        if (isValidHudTarget(mc, aura)) {
+            return aura;
+        }
+        return raycastTarget(mc);
+    }
+
+    private static boolean isValidHudTarget(Minecraft mc, LivingEntity e) {
+        return e != null && e != mc.player && e.isAlive() && !e.isRemoved()
+                && e.distanceTo(mc.player) < 16.0f;
+    }
+
+    private static LivingEntity raycastTarget(Minecraft mc) {
+        Entity cam = mc.getCameraEntity();
+        if (cam == null) {
+            return null;
+        }
+        Vec3 eye = cam.getEyePosition();
+        Vec3 look = cam.getLookAngle();
+        double range = 6.0;
+        Vec3 end = eye.add(look.scale(range));
+        LivingEntity best = null;
+        double bestD = range;
+        for (Entity e : mc.level.entitiesForRendering()) {
+            if (!(e instanceof LivingEntity living) || !isValidHudTarget(mc, living)) {
+                continue;
+            }
+            Optional<Vec3> clip = living.getBoundingBox().inflate(0.35).clip(eye, end);
+            if (clip.isEmpty()) {
+                continue;
+            }
+            double d = eye.distanceTo(clip.get());
+            if (d < bestD) {
+                bestD = d;
+                best = living;
+            }
+        }
+        return best;
     }
 
     // ---------------- медиа 2D ----------------

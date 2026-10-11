@@ -594,9 +594,10 @@ public final class NeuroRotation {
     private static void tell(String msg) {
         try {
             Minecraft mc = Minecraft.getInstance();
-            if (mc.gui != null && mc.gui.getChat() != null) {
+            if (mc.gui != null) {
                 Component text = Component.literal(msg);
-                mc.execute(() -> mc.gui.getChat().addMessage(text));
+                mc.execute(() -> ((dev.hatek.mixin.accessor.GuiAccessor) mc.gui)
+                        .hatek$hud().getChat().addMessage(text));
             }
         } catch (Exception ignored) {
         }
