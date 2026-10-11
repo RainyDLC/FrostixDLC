@@ -8,6 +8,7 @@ import dev.hatek.client.module.impl.combat.aura.util.AuraRandom;
 import dev.hatek.client.module.impl.combat.aura.util.PlayerStats;
 import dev.hatek.client.module.impl.combat.aura.util.AuraTimer;
 import dev.hatek.client.module.impl.combat.aura.util.AuraUtil;
+import dev.hatek.client.module.impl.combat.aura.util.LagGuard;
 import dev.hatek.client.module.impl.combat.aura.util.RayTraceUtil;
 import dev.hatek.mixin.accessor.LivingEntityAccessor;
 import dev.hatek.mixin.accessor.LocalPlayerAccessor;
@@ -377,6 +378,7 @@ public final class Attack {
                 auraAttacking = false;
             }
             attackedLastTick = true;
+            LagGuard.onAttack();
 
             PACE.markAura(mc.player.tickCount);
 
@@ -598,7 +600,7 @@ public final class Attack {
 
     /**
      * Та же логика, что и {@link #shouldAttack}, но возвращает причину отказа
-     * вместо boolean: null — удар разрешён, иначе "dist"/"iframes"/"cooldown"/
+     * вместо boolean: null — удар разрешён, иначе "dist"/"lag"/"iframes"/"cooldown"/
      * "pace"/"charge"/"moment"/"ray". Используется планировщиком и диагностикой.
      */
     public static String shouldAttackReason(LivingEntity livingTarget, boolean rayCast,
@@ -607,6 +609,9 @@ public final class Attack {
         if (distanceCheck && livingTarget != null
                 && !AuraUtil.validDistance(livingTarget, ranges[0], true)) {
             return "dist";
+        }
+        if (lagBlockedNow()) {
+            return "lag";
         }
         if (targetInvulnerable(livingTarget)) {
             return "iframes";
@@ -659,6 +664,21 @@ public final class Attack {
             return 0;
         }
         return (int) Math.ceil(Math.max(0, info.getLatency()) / 50.0);
+    }
+
+    /** Лаг/фриз/сетбек или долг зарядки после стопора сервера. */
+    public static boolean lagBlockedNow() {
+        return LagGuard.blocking() || LagGuard.chargeDebtPending(getMsCooldown());
+    }
+
+    /** Удар вот-вот: зарядка почти добрана (или открыто окно крита). */
+    public static boolean hitImminent() {
+        Minecraft mc = mc();
+        if (mc.player == null || AttackAura.target == null) {
+            return false;
+        }
+        return critWindowOpen()
+                || mc.player.getAttackStrengthScale(0.5F) >= chargeFloor() - 0.15F;
     }
 
     public static boolean targetInvulnerableNow(LivingEntity livingTarget) {

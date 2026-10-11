@@ -27,7 +27,7 @@ import java.util.Set;
  */
 public final class AttackPlanner {
     /** Причины отказа, которые являются таймингами (а не геометрией). */
-    private static final Set<String> TIMING_REASONS = Set.of("iframes", "cooldown", "pace", "charge", "moment");
+    private static final Set<String> TIMING_REASONS = Set.of("lag", "iframes", "cooldown", "pace", "charge", "moment");
 
     /** Сколько тиков подряд геометрия может рваться, прежде чем план сгорит. */
     private static final int GRACE_TICKS = 3;
@@ -156,6 +156,7 @@ public final class AttackPlanner {
         // иначе получим замах с частицами, но без урона (ghost hit).
         if (!AuraUtil.validDistance(target, ranges[0], true)
                 || Attack.targetInvulnerableNow(target)
+                || Attack.lagBlockedNow()
                 || !Attack.chargeReached()
                 || !Attack.anyEntityOnRayStrict(target, ranges[0])
                 || Attack.holdingMaceSmash()) {

@@ -139,6 +139,12 @@ public class RotationProcess extends Component {
      */
     private static float[] limitWindows(float yawStep, float pitchStep) {
         long now = System.nanoTime();
+        // Окно удара окнами не режем: при круговом стрейфе бюджет 170°/0.5с выбирался
+        // слежением, шаг масштабировался в ноль, и луч не доходил до цели в момент
+        // удара — пропуск 1–2 ударов. Шаг всё равно пишется в окна (recordWindow).
+        if (Attack.hitImminent()) {
+            return new float[]{yawStep, pitchStep};
+        }
         if (now - winCapJitterAt > 5_000_000_000L) {
             for (int i = 0; i < winCapJitter.length; i++) {
                 winCapJitter[i] = AuraRandom.range(0.9F, 1.1F);

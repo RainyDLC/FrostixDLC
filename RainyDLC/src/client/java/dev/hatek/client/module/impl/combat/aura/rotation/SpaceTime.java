@@ -66,9 +66,6 @@ public final class SpaceTime {
     private static final float LEAD_CAP_YAW = 10.0F;
     private static final float LEAD_CAP_PITCH = 6.0F;
 
-    /** Max aim lead per axis, in blocks — guards against lag spikes / teleports. */
-    private static final double MAX_LEAD = 1.5;
-
     /** Squared velocity below which the target is considered stationary (no lead). */
     private static final double STILL_VEL_SQR = 1.0E-6;
 
@@ -171,42 +168,63 @@ public final class SpaceTime {
         return true;
     }
 
-    /**
-     * How far ahead (in ticks) to aim, compensating the age of the rotation the
-     * server currently sees (movement packet from the previous tick) plus ping.
-     */
-    private static double leadTicks() {
-        int ping = 50;
-        try {
-            Minecraft mc = mc();
-            if (mc.getConnection() != null && mc.player != null) {
-                var info = mc.getConnection().getPlayerInfo(mc.player.getUUID());
-                if (info != null) {
-                    ping = Math.max(0, info.getLatency());
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return 1.0 + ping / 100.0;
-    }
+    /** Доля тика, на которую упреждаем цель (хедж между «уже сдвинулась» и «ещё нет»). */
+    private static final double LEAD_FRACTION = 0.5;
+
+    /** Предел упреждения за тик — дальше это телепорт/рывок, а не ход. */
+    private static final double MAX_TICK_LEAD = 0.6;
 
     /**
-     * Target bounding box extrapolated along its velocity, so the server-side
-     * ray (which runs on an older rotation against the target's later position)
-     * still connects on fast-moving targets. Returns the plain box when the
-     * target is (almost) stationary.
+     * Бокс цели, сдвинутый на половину её реального хода за тик (x - xo).
+     *
+     * <p>Удар идёт в TAIL нашего тика, и цель в этом же тике может успеть или не успеть
+     * сдвинуться (зависит от порядка тика сущностей). Луч через центр полусдвинутого
+     * бокса попадает в оба варианта, пока шаг меньше ширины хитбокса. Старое упреждение
+     * (getDeltaMovement() × (1 + ping/100)) целилось туда, где цель будет через пинг:
+     * у удалённых игроков deltaMovement почти всегда ноль или протухший нокбэк, а сервер
+     * и античит проверяют удар по позиции, которую видел клиент, — при круговом
+     * стрейфе прицел уезжал с реального бокса и удары пропускались.</p>
      */
     public static AABB leadedBox(LivingEntity entity) {
         AABB box = entity.getBoundingBox();
-        Vec3 vel = entity.getDeltaMovement();
-        if (vel.lengthSqr() < STILL_VEL_SQR) {
+        double dx = entity.getX() - entity.xo;
+        double dy = entity.getY() - entity.yo;
+        double dz = entity.getZ() - entity.zo;
+        if (dx * dx + dy * dy + dz * dz < STILL_VEL_SQR) {
             return box;
         }
-        double t = leadTicks();
         return box.move(
-                Mth.clamp(vel.x * t, -MAX_LEAD, MAX_LEAD),
-                Mth.clamp(vel.y * t, -MAX_LEAD, MAX_LEAD),
-                Mth.clamp(vel.z * t, -MAX_LEAD, MAX_LEAD));
+                Mth.clamp(dx * LEAD_FRACTION, -MAX_TICK_LEAD, MAX_TICK_LEAD),
+                Mth.clamp(dy * LEAD_FRACTION, -MAX_TICK_LEAD, MAX_TICK_LEAD),
+                Mth.clamp(dz * LEAD_FRACTION, -MAX_TICK_LEAD, MAX_TICK_LEAD));
+    }
+
+    /**
+     * В окне удара прижимает точку прицела к центру бокса (±0.08 по горизонтали):
+     * мультипоинт гуляет до края хитбокса, и ход цели за тик выводил луч наружу.
+     */
+    private static Vec3 hitCore(Vec3 point, AABB box) {
+        double cx = (box.minX + box.maxX) / 2.0;
+        double cz = (box.minZ + box.maxZ) / 2.0;
+        return new Vec3(
+                Mth.clamp(point.x, cx - 0.08, cx + 0.08),
+                Mth.clamp(point.y, box.minY + box.getYsize() * 0.3, box.minY + box.getYsize() * 0.8),
+                Mth.clamp(point.z, cz - 0.08, cz + 0.08));
+    }
+
+    /**
+     * Глаза, откуда сервер увидит удар: позиция после нашего хода в этом тике.
+     * Ротация считается до aiStep (HEAD / кадры), а удар — после него; при стрейфе
+     * вокруг цели свой сдвиг до 0.3 блока уводил луч к краю хитбокса.
+     */
+    public static Vec3 predictedEye() {
+        Minecraft mc = mc();
+        Vec3 eye = mc.player.getEyePosition();
+        Vec3 v = mc.player.getDeltaMovement();
+        double vy = mc.player.onGround() ? 0.0 : v.y;
+        return eye.add(Mth.clamp(v.x, -MAX_TICK_LEAD, MAX_TICK_LEAD),
+                Mth.clamp(vy, -MAX_TICK_LEAD, MAX_TICK_LEAD),
+                Mth.clamp(v.z, -MAX_TICK_LEAD, MAX_TICK_LEAD));
     }
 
     private static void updateRotations(LivingEntity entity) {
@@ -281,6 +299,9 @@ public final class SpaceTime {
 
         AABB leadBox = leadedBox(entity);
         Vec3 point = getMultipoint(leadBox, 128.0);
+        if (ready) {
+            point = hitCore(point, leadBox);
+        }
         float[] rot = getRotations(point);
         float aimYaw = rot[0];
         float aimPitch = rot[1];
@@ -552,10 +573,10 @@ public final class SpaceTime {
     }
 
     private static float[] getRotations(Vec3 point) {
-        Minecraft mc = mc();
-        double dx = point.x - mc.player.getX();
-        double dy = point.y - mc.player.getEyeY();
-        double dz = point.z - mc.player.getZ();
+        Vec3 eye = predictedEye();
+        double dx = point.x - eye.x;
+        double dy = point.y - eye.y;
+        double dz = point.z - eye.z;
         float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
         float pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.hypot(dx, dz)));
         return new float[]{yaw, pitch};

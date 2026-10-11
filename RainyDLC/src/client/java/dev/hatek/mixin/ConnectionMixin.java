@@ -1,6 +1,8 @@
 package dev.hatek.mixin;
 
 import dev.hatek.client.module.impl.combat.aura.rotation.ComponentManager;
+import dev.hatek.client.module.impl.combat.aura.util.LagGuard;
+import io.netty.channel.ChannelHandlerContext;
 import dev.hatek.client.module.impl.player.NoFall;
 import io.netty.channel.ChannelFutureListener;
 import net.minecraft.network.Connection;
@@ -24,5 +26,14 @@ public class ConnectionMixin {
         if (NoFall.onPacketSend(packet)) {
             ci.cancel();
         }
+    }
+
+    @Inject(
+            method = "channelRead0(Lio/netty/channel/ChannelHandlerContext;"
+                    + "Lnet/minecraft/network/protocol/Packet;)V",
+            at = @At("HEAD")
+    )
+    private void hatek$onReceive(ChannelHandlerContext ctx, Packet<?> packet, CallbackInfo ci) {
+        LagGuard.onPacketReceived(packet);
     }
 }

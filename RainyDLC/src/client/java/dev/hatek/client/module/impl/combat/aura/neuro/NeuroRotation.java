@@ -548,8 +548,12 @@ public final class NeuroRotation {
                 || (dev.hatek.client.module.impl.combat.aura.util.AttackPlanner.hasPlan() && attackScale >= 0.75f);
 
         var leadBox = dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.leadedBox(t);
+        // В окне удара целимся из глаз «после нашего хода» — удар уходит в TAIL тика.
+        Vec3 aimEye = readyToHit
+                ? dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.predictedEye()
+                : eye;
         Vec3 aimPoint = wanderAimPoint(leadBox, readyToHit);
-        float[] targetRot = rotTo(eye, aimPoint);
+        float[] targetRot = rotTo(aimEye, aimPoint);
 
         // Калиброванная неточность руки: целимся не в ноль ошибки, а в остаточную
         // ошибку из распределения самого игрока (error-quantile targeting).
@@ -560,9 +564,13 @@ public final class NeuroRotation {
             targetRot[1] = Mth.clamp(targetRot[1] + residPitch, -90.0f, 90.0f);
         }
 
-        // Гарантируем, что луч попадает в хитбокс цели (реальный или упреждённый).
-        if (!RayTraceUtil.rayTraceEntity(eye, targetRot[0], targetRot[1], AttackAura.attackRange() + 0.5, t, 0.12)) {
-            targetRot = rotTo(eye, t.getBoundingBox().getCenter());
+        // Гарантируем, что луч попадает в хитбокс цели. В окне удара — так же строго,
+        // как проверяет удар: реальная дальность и бокс, ужатый на 0.06 (запас на
+        // ход цели/свой ход), а не раздутый на 0.12 с лучом +0.5.
+        double guardRange = readyToHit ? AttackAura.attackRange() : AttackAura.attackRange() + 0.5;
+        double guardTol = readyToHit ? -0.06 : 0.12;
+        if (!RayTraceUtil.rayTraceEntity(aimEye, targetRot[0], targetRot[1], guardRange, t, guardTol)) {
+            targetRot = rotTo(aimEye, leadBox.getCenter());
             neuroWander = neuroWander.scale(0.5);
         }
 
@@ -741,7 +749,12 @@ public final class NeuroRotation {
      */
     private static Vec3 wanderAimPoint(net.minecraft.world.phys.AABB box, boolean readyToHit) {
         if (readyToHit) {
-            neuroWander = neuroWander.scale(0.85);
+            // В окне удара блуждание прижимаем к центру: ±0.2 от центра плюс ход цели
+            // за тик выводили луч за край хитбокса 0.6.
+            neuroWander = new Vec3(
+                    Mth.clamp(neuroWander.x * 0.6, -0.05, 0.05),
+                    Mth.clamp(neuroWander.y * 0.6, -0.15, 0.15),
+                    Mth.clamp(neuroWander.z * 0.6, -0.05, 0.05));
             return new Vec3(
                     (box.minX + box.maxX) / 2.0 + neuroWander.x,
                     box.minY + box.getYsize() * 0.55 + neuroWander.y,

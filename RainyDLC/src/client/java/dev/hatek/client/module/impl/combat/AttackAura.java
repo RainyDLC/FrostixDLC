@@ -14,6 +14,7 @@ import dev.hatek.client.module.impl.combat.aura.util.AttackDebug;
 import dev.hatek.client.module.impl.combat.aura.util.AttackPlanner;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
 import dev.hatek.client.module.impl.combat.aura.util.EngageDelay;
+import dev.hatek.client.module.impl.combat.aura.util.LagGuard;
 import dev.hatek.client.module.impl.combat.aura.util.AuraRandom;
 import dev.hatek.client.module.impl.combat.aura.util.AuraUtil;
 import dev.hatek.client.module.impl.combat.aura.util.MoveUtil;
@@ -601,6 +602,7 @@ public final class AttackAura extends Module {
 
         AttackPlanner.cancel();
         AttackDebug.reset();
+        LagGuard.reset();
 
         reset();
 

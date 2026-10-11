@@ -4,6 +4,7 @@ import dev.hatek.client.module.Module;
 import dev.hatek.client.module.ModuleManager;
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.combat.aura.rotation.ComponentManager;
+import dev.hatek.client.module.impl.combat.aura.util.LagGuard;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.player.NoFall;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
@@ -20,6 +21,8 @@ public final class ClientEvents {
         }
 
         ComponentManager.tick();
+
+        LagGuard.tick(AttackAura.target);
 
         for (Module module : ModuleManager.all()) {
             if (module instanceof NoJumpDelay jump) {
