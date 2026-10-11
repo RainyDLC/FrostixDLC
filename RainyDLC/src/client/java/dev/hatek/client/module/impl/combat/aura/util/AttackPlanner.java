@@ -126,9 +126,11 @@ public final class AttackPlanner {
             matured = false;
             return false;
         }
+        // Строгая геометрия: форсированный удар обязан реально попадать лучом,
+        // иначе получим замах с частицами, но без урона (ghost hit).
         if (!AuraUtil.validDistance(target, ranges[0], true)
                 || !Attack.chargeReached()
-                || !Attack.anyEntityOnRay(target, ranges[0])
+                || !Attack.anyEntityOnRayStrict(target, ranges[0])
                 || Attack.holdingMaceSmash()) {
             ticksLeft = 1 + AuraRandom.range(0, 2);
             matured = false;

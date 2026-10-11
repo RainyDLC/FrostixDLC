@@ -229,6 +229,7 @@ public final class AttackAura extends Module {
         }
 
         if (misc(ATTACK_DEBUG)) {
+            AttackDebug.tickGhostCheck();
             AttackDebug.maybeDump();
         }
     }
@@ -475,6 +476,9 @@ public final class AttackAura extends Module {
         }
 
         Attack.useEntity(target, preHit, postHit, InteractionHand.MAIN_HAND, true, plannedHit);
+        if (misc(ATTACK_DEBUG)) {
+            AttackDebug.noteAttackSent(target);
+        }
     }
 
     private void updateRotation() {
