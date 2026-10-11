@@ -7,6 +7,7 @@ import dev.hatek.client.module.Module;
 import dev.hatek.client.module.ModuleManager;
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.render.Interface;
+import dev.hatek.mixin.accessor.BossHealthOverlayAccessor;
 import dev.hatek.client.ui.Style;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
@@ -382,6 +383,25 @@ public final class InterfaceHud {
 
     /** Якорь по умолчанию для элемента (размер уже с учётом масштаба). */
     private static String lastWatermarkPos;
+    /** Сглажённый Y ватермарки по центру (уезд под босс-бар). <0 = не инициализирован. */
+    private static float watermarkBossY = -1.0f;
+
+    /** Сколько босс-баров сейчас показано. */
+    private static int bossBarCount() {
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.gui == null) {
+                return 0;
+            }
+            Object overlay = mc.gui.getBossOverlay();
+            if (overlay instanceof BossHealthOverlayAccessor acc) {
+                java.util.Map events = acc.hatek$events();
+                return events == null ? 0 : events.size();
+            }
+        } catch (Exception ignored) {
+        }
+        return 0;
+    }
 
     private static float[] anchor(HudLayout.Element el, float w, float h, int sw, int sh) {
         float m = Style.HUD_MARGIN;
@@ -393,14 +413,30 @@ public final class InterfaceHud {
                 if (!pos.equals(lastWatermarkPos)) {
                     lastWatermarkPos = pos;
                     HudLayout.clearPos(HudLayout.Element.WATERMARK);
+                    watermarkBossY = -1.0f;
                 }
                 float x = m;
+                float y = m;
                 if ("Center".equalsIgnoreCase(pos)) {
                     x = (sw - w) / 2.0f;
-                } else if ("Right".equalsIgnoreCase(pos)) {
-                    x = sw - w - m;
+                    // Босс-бар сверху по центру: ватермарка уезжает под него,
+                    // а когда бар исчезает — плавно поднимается наверх.
+                    int bosses = bossBarCount();
+                    float targetY = bosses > 0
+                            ? (12.0f + 19.0f * bosses) * Render2D.guiScale()
+                            : m;
+                    if (watermarkBossY < 0.0f) {
+                        watermarkBossY = targetY;
+                    }
+                    watermarkBossY += (targetY - watermarkBossY) * 0.18f;
+                    y = watermarkBossY;
+                } else {
+                    if ("Right".equalsIgnoreCase(pos)) {
+                        x = sw - w - m;
+                    }
+                    watermarkBossY = -1.0f;
                 }
-                return new float[]{x, m};
+                return new float[]{x, y};
             }
             case KEYBINDS:
                 return new float[]{sw - w - m, m};
