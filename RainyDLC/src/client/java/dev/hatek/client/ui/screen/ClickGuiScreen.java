@@ -48,11 +48,6 @@ public final class ClickGuiScreen extends Screen {
     private boolean draggingPanel;
     private float grabX;
     private float grabY;
-    // Прямое перетаскивание HUD — тем же способом, что и панель.
-    private boolean draggingHud;
-    private InterfaceHud.Hit dragHudHit;
-    private float hudGrabX;
-    private float hudGrabY;
     private long lastFrame = System.nanoTime();
     private long lastScroll;
 
@@ -340,17 +335,6 @@ public final class ClickGuiScreen extends Screen {
         double my = Render2D.mouseY();
         int button = event.button();
 
-        // Прямое перетаскивание HUD — как панель: клик по элементу хватает его.
-        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && !overPanel(mx, my)) {
-            InterfaceHud.Hit hit = InterfaceHud.hitTest(mx, my);
-            if (hit != null) {
-                this.draggingHud = true;
-                this.dragHudHit = hit;
-                this.hudGrabX = (float) mx - hit.bounds[0];
-                this.hudGrabY = (float) my - hit.bounds[1];
-                return true;
-            }
-        }
 
         for (Tab value : Tab.values()) {
             float center = panelX + Style.NAV_X + Style.NAV_FIRST
@@ -419,11 +403,6 @@ public final class ClickGuiScreen extends Screen {
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
         double mx = Render2D.mouseX();
         double my = Render2D.mouseY();
-        if (this.draggingHud && this.dragHudHit != null) {
-            InterfaceHud.moveHit(this.dragHudHit,
-                    (float) mx - this.hudGrabX, (float) my - this.hudGrabY);
-            return true;
-        }
         if (this.draggingPanel) {
             panelX = (float) mx - this.grabX;
             panelY = (float) my - this.grabY;
@@ -439,12 +418,6 @@ public final class ClickGuiScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (this.draggingHud) {
-            this.draggingHud = false;
-            this.dragHudHit = null;
-            HudLayout.save();
-            return true;
-        }
         this.draggingPanel = false;
         page().mouseReleased();
         return super.mouseReleased(event);
@@ -454,15 +427,6 @@ public final class ClickGuiScreen extends Screen {
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         double mx = Render2D.mouseX();
         double my = Render2D.mouseY();
-        // Колесо над элементом HUD (мимо панели) — размер элемента.
-        if (!overPanel(mx, my) && scrollY != 0.0) {
-            InterfaceHud.Hit hit = InterfaceHud.hitTest(mx, my);
-            if (hit != null) {
-                InterfaceHud.resizeHit(hit, scrollY > 0 ? 1.1f : 1.0f / 1.1f);
-                HudLayout.save();
-                return true;
-            }
-        }
         if (!Render2D.hovered(mx, my,
                 panelX, panelY, Style.PANEL_W, Style.PANEL_H)) {
             return false;

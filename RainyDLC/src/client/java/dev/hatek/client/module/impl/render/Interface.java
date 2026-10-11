@@ -2,8 +2,10 @@ package dev.hatek.client.module.impl.render;
 
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
+import dev.hatek.client.module.impl.render.interf.HudEditScreen;
 import dev.hatek.client.module.impl.render.interf.InterfaceHud;
 import dev.hatek.client.module.setting.BoolSetting;
+import dev.hatek.client.module.setting.ButtonSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.module.setting.TextSetting;
 import net.minecraft.client.Minecraft;
@@ -11,7 +13,8 @@ import net.minecraft.client.Minecraft;
 /**
  * Модуль "Interface": HUD клиента.
  * Ватермарка, кейбинды, активные эффекты и кастомный хотбар.
- * Перемещение (зажать ЛКМ) и масштабирование (колесико мыши) работают прямо в игре.
+ * Элементы свободно двигаются ЛКМ и масштабируются колесом
+ * на отдельном экране (кнопка "HUD Editor").
  */
 public final class Interface extends Module {
     private static Interface instance;
@@ -30,6 +33,8 @@ public final class Interface extends Module {
     private final TextSetting media3dFile = new TextSetting("Media 3D File", "logo.gif", "logo.gif");
     private final SliderSetting media3dSize = new SliderSetting("Media 3D Size", 1.0, 0.25, 4.0, 0.25);
     private final SliderSetting media3dHeight = new SliderSetting("Media 3D Height", 2.5, 0.5, 6.0, 0.25);
+    private final ButtonSetting hudEditor = new ButtonSetting("HUD Editor", "Размер худа",
+            () -> Minecraft.getInstance().setScreenAndShow(new HudEditScreen()));
 
     public Interface() {
         super("Interface", "Ватермарка клиента, кейбинды, активные эффекты и кастомный хотбар",
@@ -48,7 +53,8 @@ public final class Interface extends Module {
                 this.media3d,
                 this.media3dFile,
                 this.media3dSize,
-                this.media3dHeight);
+                this.media3dHeight,
+                this.hudEditor);
         InterfaceHud.init();
     }
 
