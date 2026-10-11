@@ -14,7 +14,6 @@ import dev.hatek.mixin.accessor.LivingEntityAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
@@ -368,7 +367,6 @@ public final class Attack {
                 && (forceGap || attackTickGapReached())) {
             auraAttacking = true;
             try {
-                sendAimRotation();
                 mc.gameMode.attack(mc.player, livingIn);
             } finally {
                 auraAttacking = false;
@@ -400,25 +398,6 @@ public final class Attack {
 
     private static float nextCritFallHeight() {
         return AuraRandom.human(0.01F, 0.03F);
-    }
-
-    /**
-     * Отправляем свежую ротацию ПЕРЕД пакетом атаки (фикс ghost hits).
-     *
-     * <p>Пакет атаки уходит раньше пакета движения этого тика, поэтому сервер
-     * и античит проверяют удар по ротации прошлого тика: их рейкаст не попадает
-     * в цель, удар отменяется, а клиент уже показал замах и частицы. Явный
-     * Rot-пакет гарантирует порядок: сервер сначала узнаёт наведённую
-     * ротацию, потом обрабатывает атаку.</p>
-     */
-    private static void sendAimRotation() {
-        Minecraft mc = mc();
-        if (mc.player == null || mc.getConnection() == null) {
-            return;
-        }
-        mc.getConnection().send(new ServerboundMovePlayerPacket.Rot(
-                mc.player.getYRot(), mc.player.getXRot(),
-                mc.player.onGround(), mc.player.horizontalCollision));
     }
 
     private static void rollNextHit() {
