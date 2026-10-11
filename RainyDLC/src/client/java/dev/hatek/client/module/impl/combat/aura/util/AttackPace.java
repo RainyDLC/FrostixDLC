@@ -17,6 +17,16 @@ public final class AttackPace {
                 && age - this.lastAttackTick >= AURA_GAP_TICKS;
     }
 
+    /**
+     * Сколько тиков осталось до разрешённого удара (для планировщика).
+     */
+    public int remainingTicks(int age) {
+        rewindIfNewLife(age);
+        int aura = AURA_GAP_TICKS - (age - this.lastAuraAttackTick);
+        int manual = AURA_GAP_TICKS - (age - this.lastAttackTick);
+        return Math.max(0, Math.max(aura, manual));
+    }
+
     public boolean manualRefused(int age) {
         rewindIfNewLife(age);
         return age - this.lastAuraAttackTick < AURA_GAP_TICKS

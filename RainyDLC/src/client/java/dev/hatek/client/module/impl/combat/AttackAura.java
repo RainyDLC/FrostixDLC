@@ -10,6 +10,8 @@ import dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
 import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
 import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
+import dev.hatek.client.module.impl.combat.aura.util.AttackDebug;
+import dev.hatek.client.module.impl.combat.aura.util.AttackPlanner;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
 import dev.hatek.client.module.impl.combat.aura.util.AuraRandom;
 import dev.hatek.client.module.impl.combat.aura.util.AuraUtil;
@@ -65,6 +67,7 @@ public final class AttackAura extends Module {
     public static final String NO_CONTAINER = "Not In Container";
     public static final String BREAK_SHIELD = "Break Shield";
     public static final String DROP_SHIELD = "Drop Shield";
+    public static final String ATTACK_DEBUG = "Attack Debug";
 
     public static final String PLAYERS = "Players";
     public static final String NAKED = "Naked";
@@ -73,6 +76,7 @@ public final class AttackAura extends Module {
     private static AttackAura instance;
 
     private final SliderSetting attackRange = new SliderSetting("Attack Range", 3.0, 3.0, 6.0, 0.1);
+    private final SliderSetting aimRange = new SliderSetting("Aim Range", 5.0, 3.0, 9.0, 0.1);
     private final SliderSetting preRange = new SliderSetting("Detect Range", 1.0, 0.0, 5.0, 0.1);
 
     private final ModeSetting movementType =
@@ -80,7 +84,8 @@ public final class AttackAura extends Module {
     private final MultiSetting targets = new MultiSetting("Targets",
             List.of(PLAYERS, NAKED, MOBS), PLAYERS, NAKED, MOBS);
     private final MultiSetting misc = new MultiSetting("Checks",
-            List.of(THROUGH_WALLS, WEAPON_ONLY, NO_EATING, NO_CONTAINER, BREAK_SHIELD, DROP_SHIELD),
+            List.of(THROUGH_WALLS, WEAPON_ONLY, NO_EATING, NO_CONTAINER, BREAK_SHIELD, DROP_SHIELD,
+                    ATTACK_DEBUG),
             NO_EATING);
     private final MultiSetting extras = new MultiSetting("Extra",
             List.of(SMART_CRITS, SLOW_TURN),
@@ -117,8 +122,9 @@ public final class AttackAura extends Module {
                 Category.COMBAT);
         instance = this;
         keybind(GLFW.GLFW_KEY_R);
-        with(this.attackRange, this.preRange, this.movementType, this.targets, this.misc,
-                this.extras, this.sprintReset, this.chargeSpread, this.rotations, this.neuroTrain);
+        with(this.attackRange, this.aimRange, this.preRange, this.movementType, this.targets,
+                this.misc, this.extras, this.sprintReset, this.chargeSpread, this.rotations,
+                this.neuroTrain);
 
         ComponentManager.getInstance().init();
 
@@ -139,6 +145,11 @@ public final class AttackAura extends Module {
 
     public static float attackRange() {
         return instance == null ? 3.0F : (float) instance.attackRange.value();
+    }
+
+    /** Дальность наведения (может превышать дальность удара — как aimDistance у obrti). */
+    public static float aimRange() {
+        return instance == null ? 5.0F : (float) instance.aimRange.value();
     }
 
     public static float preRange() {
@@ -198,6 +209,7 @@ public final class AttackAura extends Module {
 
         if (mc.gui.screen() != null) {
             target = null;
+            AttackPlanner.cancel();
             MoveUtil.restoreSprintKey();
             MoveUtil.restoreMovementKeys();
             return;
@@ -213,6 +225,10 @@ public final class AttackAura extends Module {
             idleSwing();
         } else if (neuroMode()) {
             NeuroRotation.setTarget(null);
+        }
+
+        if (misc(ATTACK_DEBUG)) {
+            AttackDebug.maybeDump();
         }
     }
 
@@ -282,7 +298,10 @@ public final class AttackAura extends Module {
                 && !mc.player.onClimbable();
 
         if (!NeuroRotation.isTraining()) {
-            if (!packetSprint() && Attack.resetSprintTick(target, getRanges()) || airNoSprint) {
+            // Сброс спринта — только в радиусе удара: догоняя цель на Aim Range,
+            // спринт не трогаем.
+            if ((!packetSprint() && nearEnough && Attack.resetSprintTick(target, getRanges()))
+                    || airNoSprint) {
                 holdSprint();
             } else {
                 releaseSprint();
@@ -291,8 +310,12 @@ public final class AttackAura extends Module {
             }
         }
 
-        if (!checkToAttack() && !NeuroRotation.isTraining()) {
+        if (NeuroRotation.isTraining()) {
+            AttackPlanner.cancel();
+        } else if (!checkToAttack()) {
             attackEntity();
+        } else {
+            AttackPlanner.cancel();
         }
     }
 
@@ -392,23 +415,37 @@ public final class AttackAura extends Module {
 
     public void attackEntity() {
         Minecraft mc = mc();
+        float[] base = getRanges();
+        float[] ranges = new float[]{base[0], base[1], base[0] + base[1]};
+
+        AttackPlanner.onTick(target, ranges);
+
         if (target == null || AuraUtil.getStrictDistance(target) >= attackRange()) {
             return;
         }
-
-        float[] base = getRanges();
-        float[] ranges = new float[]{base[0], base[1], base[0] + base[1]};
 
         boolean canPacket = packetSprint();
 
         Attack.antiMissesHittingUpdate(target, true, isRayCastRuleToAttack(), false);
 
-        boolean canAttack = Attack.shouldAttack(target, isRayCastRuleToAttack(), true,
-                true, 0L, ranges);
+        boolean plannedHit = AttackPlanner.consumePlannedHit(target, ranges);
+        boolean canAttack;
+        if (misc(ATTACK_DEBUG)) {
+            String reason = Attack.shouldAttackReason(target, isRayCastRuleToAttack(), true,
+                    true, 0L, ranges);
+            canAttack = plannedHit || reason == null;
+            if (!canAttack) {
+                AttackDebug.noteReject(reason);
+            }
+        } else {
+            canAttack = plannedHit
+                    || Attack.shouldAttack(target, isRayCastRuleToAttack(), true, true, 0L, ranges);
+        }
 
         if (!canAttack) {
             return;
         }
+        AttackDebug.noteHit(plannedHit);
 
         Runnable[] shieldBreak = Attack.hitShieldBreakTaskForUse(target, misc(BREAK_SHIELD));
         Runnable[] shieldPressBypass = Attack.resetShieldSilentTaskForUse(true);
@@ -436,7 +473,7 @@ public final class AttackAura extends Module {
             mc.options.keySprint.setDown(false);
         }
 
-        Attack.useEntity(target, preHit, postHit, InteractionHand.MAIN_HAND, true);
+        Attack.useEntity(target, preHit, postHit, InteractionHand.MAIN_HAND, true, plannedHit);
     }
 
     private void updateRotation() {
@@ -510,12 +547,17 @@ public final class AttackAura extends Module {
         return attackRange() + preRange();
     }
 
+    /** Радиус захвата цели: наводимся дальше, чем бьём. */
+    private float acquireDist() {
+        return Math.max(aimRange(), auraDist());
+    }
+
     private boolean isValidTarget(LivingEntity entity) {
-        return AuraUtil.getStrictDistance(entity) <= auraDist() && isAllowedTarget(entity);
+        return AuraUtil.getStrictDistance(entity) <= acquireDist() && isAllowedTarget(entity);
     }
 
     private boolean canKeep(LivingEntity entity) {
-        return AuraUtil.getStrictDistance(entity) <= auraDist() + KEEP_MARGIN
+        return AuraUtil.getStrictDistance(entity) <= acquireDist() + KEEP_MARGIN
                 && isAllowedTarget(entity);
     }
 
@@ -551,6 +593,9 @@ public final class AttackAura extends Module {
 
         Attack.getCooldownTimer().reset();
 
+        AttackPlanner.cancel();
+        AttackDebug.reset();
+
         reset();
 
         preferred = lookingAt();
@@ -569,6 +614,8 @@ public final class AttackAura extends Module {
         Minecraft mc = mc();
         target = null;
         preferred = null;
+
+        AttackPlanner.cancel();
 
         SpaceTime.forget();
 

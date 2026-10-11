@@ -119,11 +119,72 @@ public class RotationProcess extends Component {
         idleTicks = 0;
     }
 
+    // Оконные лимиты суммарной ротации (идея из obrti-sources): скользящие окна
+    // ловят нечеловечески долгое быстрое вращение. Капы подобраны под наши
+    // скорости (снап до 720°/с в момент удара — короткий, окнами не режется).
+    private static final long[] WINDOW_MS = {500L, 1000L, 2000L};
+    private static final float[] WINDOW_CAP = {170.0F, 280.0F, 380.0F};
+    private static final int WINDOW_BUF = 256;
+
+    private static final long[] winTime = new long[WINDOW_BUF];
+    private static final float[] winYaw = new float[WINDOW_BUF];
+    private static final float[] winPitch = new float[WINDOW_BUF];
+    private static int winHead;
+    private static final float[] winCapJitter = {1.0F, 1.0F, 1.0F};
+    private static long winCapJitterAt;
+
+    /**
+     * Масштабирует шаг так, чтобы суммарная ротация в каждом скользящем окне
+     * не превышала лимит (с джиттером ±10%, обновляется раз в ~5 секунд).
+     */
+    private static float[] limitWindows(float yawStep, float pitchStep) {
+        long now = System.nanoTime();
+        if (now - winCapJitterAt > 5_000_000_000L) {
+            for (int i = 0; i < winCapJitter.length; i++) {
+                winCapJitter[i] = AuraRandom.range(0.9F, 1.1F);
+            }
+            winCapJitterAt = now;
+        }
+        float mag = Math.abs(yawStep) + Math.abs(pitchStep);
+        if (mag <= 0.0F) {
+            return new float[]{yawStep, pitchStep};
+        }
+        float scale = 1.0F;
+        for (int w = 0; w < WINDOW_MS.length; w++) {
+            float allow = WINDOW_CAP[w] * winCapJitter[w] - windowUsed(now, WINDOW_MS[w]);
+            if (allow < mag * scale) {
+                scale = Math.max(0.0F, allow / mag);
+            }
+        }
+        return new float[]{yawStep * scale, pitchStep * scale};
+    }
+
+    private static float windowUsed(long now, long windowMs) {
+        long cutoff = now - windowMs * 1_000_000L;
+        float sum = 0.0F;
+        for (int i = 0; i < WINDOW_BUF; i++) {
+            if (winTime[i] >= cutoff) {
+                sum += Math.abs(winYaw[i]) + Math.abs(winPitch[i]);
+            }
+        }
+        return sum;
+    }
+
+    private static void recordWindow(float yawStep, float pitchStep) {
+        winTime[winHead] = System.nanoTime();
+        winYaw[winHead] = yawStep;
+        winPitch[winHead] = pitchStep;
+        winHead = (winHead + 1) % WINDOW_BUF;
+    }
+
     private static void applyFrame(float yawStep, float pitchStep) {
         Minecraft mc = mc();
         if (mc.player == null) {
             return;
         }
+        float[] limited = limitWindows(yawStep, pitchStep);
+        yawStep = limited[0];
+        pitchStep = limited[1];
         float cap = maxStep();
         float yawStep2 = Mth.clamp(yawStep, -cap, cap);
         if (yawStep2 != yawStep) {
@@ -140,6 +201,7 @@ public class RotationProcess extends Component {
             room = GCDUtil.floorToGrid(room);
         }
         mc.player.setXRot(pitch + room);
+        recordWindow(yawStep2, room);
     }
 
     private static void apply(float yawStep, float pitchStep) {
@@ -153,10 +215,11 @@ public class RotationProcess extends Component {
         float carriedPitch = carried(lastPitchStep, ACCEL_BLEED);
         lastStepTick = mc.player.tickCount;
 
+        float[] limited = limitWindows(yawStep, pitchStep);
         float accel = AuraProfile.accel();
-        float yawIn = Mth.clamp(yawStep,
+        float yawIn = Mth.clamp(limited[0],
                 Math.min(0.0F, carriedYaw) - accel, Math.max(0.0F, carriedYaw) + accel);
-        float pitchIn = Mth.clamp(pitchStep,
+        float pitchIn = Mth.clamp(limited[1],
                 Math.min(0.0F, carriedPitch) - accel, Math.max(0.0F, carriedPitch) + accel);
 
         float yawStep2 = GCDUtil.floorToGrid(Mth.clamp(yawIn, -cap, cap));
@@ -172,6 +235,7 @@ public class RotationProcess extends Component {
 
         lastYawStep = yawStep2;
         lastPitchStep = pitchStep2;
+        recordWindow(yawStep2, pitchStep2);
     }
 
     private static final float ACCEL_BLEED = 0.45F;

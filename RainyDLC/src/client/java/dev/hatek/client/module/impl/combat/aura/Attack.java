@@ -348,12 +348,23 @@ public final class Attack {
 
     public static boolean useEntity(LivingEntity livingIn, Runnable preHit, Runnable postHit,
                                     InteractionHand hand, boolean cpsBypass) {
+        return useEntity(livingIn, preHit, postHit, hand, cpsBypass, false);
+    }
+
+    /**
+     * @param forceGap true — пропустить проверку attackTickGapReached().
+     *                 Используется планировщиком: пейс уже учтён в плане,
+     *                 повторная проверка в тик удара только вредила бы.
+     */
+    public static boolean useEntity(LivingEntity livingIn, Runnable preHit, Runnable postHit,
+                                    InteractionHand hand, boolean cpsBypass, boolean forceGap) {
         Minecraft mc = mc();
         if (preHit != null) {
             preHit.run();
         }
 
-        if (livingIn != null && mc.gameMode != null && mc.player != null && attackTickGapReached()) {
+        if (livingIn != null && mc.gameMode != null && mc.player != null
+                && (forceGap || attackTickGapReached())) {
             auraAttacking = true;
             try {
                 mc.gameMode.attack(mc.player, livingIn);
@@ -558,27 +569,67 @@ public final class Attack {
         return onRay(box, eyes, yaw, pitch, range, tolerance);
     }
 
+    /**
+     * Та же логика, что и {@link #shouldAttack}, но возвращает причину отказа
+     * вместо boolean: null — удар разрешён, иначе "dist"/"cooldown"/"pace"/
+     * "charge"/"moment"/"ray". Используется планировщиком и диагностикой.
+     */
+    public static String shouldAttackReason(LivingEntity livingTarget, boolean rayCast,
+                                            boolean distanceCheck, boolean fallCheck,
+                                            long cooldownMSOffset, float[] ranges) {
+        if (distanceCheck && livingTarget != null
+                && !AuraUtil.validDistance(livingTarget, ranges[0], true)) {
+            return "dist";
+        }
+        if (!msCooldownReached(cooldownMSOffset)) {
+            return "cooldown";
+        }
+        if (!attackTickGapReached()) {
+            return "pace";
+        }
+        if (!chargeReached()) {
+            return "charge";
+        }
+        if (!isBestMomentToHit(fallCheck)) {
+            return "moment";
+        }
+        if (rayCast && !anyEntityOnRay(livingTarget, ranges[0])) {
+            return "ray";
+        }
+        return null;
+    }
+
     public static boolean shouldAttack(LivingEntity livingTarget, boolean rayCast,
                                        boolean distanceCheck, boolean fallCheck,
                                        long cooldownMSOffset, float[] ranges) {
-        if (distanceCheck && livingTarget != null
-                && !AuraUtil.validDistance(livingTarget, ranges[0], true)) {
-            return false;
-        }
-        if (!msCooldownReached(cooldownMSOffset)) {
-            return false;
-        }
-        if (!attackTickGapReached()) {
-            return false;
-        }
-        if (!chargeReached()) {
-            return false;
-        }
-        boolean validNext = isBestMomentToHit(fallCheck);
-        if (validNext && rayCast && !anyEntityOnRay(livingTarget, ranges[0])) {
-            validNext = false;
-        }
-        return validNext;
+        return shouldAttackReason(livingTarget, rayCast, distanceCheck, fallCheck,
+                cooldownMSOffset, ranges) == null;
+    }
+
+    /** Доступы для планировщика ударов. */
+    public static float chargeFloorValue() {
+        return chargeFloor();
+    }
+
+    public static long cooldownRemainingMs() {
+        return Math.max(0L, attackInterval() - COOLDOWN_TIMER.elapsedTime());
+    }
+
+    public static int paceRemainingTicks() {
+        Minecraft mc = mc();
+        return mc.player == null ? 0 : PACE.remainingTicks(mc.player.tickCount);
+    }
+
+    public static boolean critStateReadyNow() {
+        return critStateReady();
+    }
+
+    public static boolean critImpossibleNow() {
+        return critImpossible();
+    }
+
+    public static float critFallHeightValue() {
+        return critFallHeight;
     }
 
     public static boolean shouldAttack(LivingEntity livingTarget, boolean rayCast,
