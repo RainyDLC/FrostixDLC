@@ -265,8 +265,15 @@ public final class SpaceTime {
 
         tickCounter++;
         noiseSm = noiseSm * 0.85F + (float) rnd.nextGaussian() * 0.045F;
+        // Attack is imminent: charge is full and the last tick said it's a good moment.
+        // Humanization must not eat this exact moment, so pauses and the closed
+        // window are suspended while ready.
+        boolean ready = mc.player.getAttackStrengthScale(1.0F) > 0.9F && lastCanAttack;
+        if (ready) {
+            pauseTicks = 0;
+        }
         boolean windowClosed = System.currentTimeMillis() % 500L >= 370L;
-        float gate = windowClosed ? 0.0F : 1.0F;
+        float gate = (windowClosed && !ready) ? 0.0F : 1.0F;
 
         AABB leadBox = leadedBox(entity);
         Vec3 point = getMultipoint(leadBox, 128.0);
@@ -275,7 +282,6 @@ public final class SpaceTime {
         float aimPitch = rot[1];
 
         float yawDist = Math.abs(Mth.wrapDegrees(aimYaw - serverYaw));
-        boolean ready = mc.player.getAttackStrengthScale(1.0F) > 0.9F && lastCanAttack;
 
         if (!accelerating) {
             float gain = 0.0055F;
@@ -447,6 +453,11 @@ public final class SpaceTime {
         serverPitch = outPitch;
 
         float epsilon = Math.max(AIMED_EPSILON, AttackAura.targetAngularHalf() * 0.55F);
+        if (ready) {
+            // At the perfect moment, don't let a couple degrees of model lag
+            // veto the attack — the raycast checks below are the real hit test.
+            epsilon *= 1.6F;
+        }
         aimed = (Math.abs(Mth.wrapDegrees(aimYaw - serverYaw)) <= epsilon
                 && Math.abs(aimPitch - serverPitch) <= epsilon)
                 || rayTraceBox(RayTraceUtil.getVectorForRotation(serverPitch, serverYaw),
