@@ -52,8 +52,6 @@ import java.util.function.Function;
  */
 public final class InterfaceHud {
     private static boolean hooked;
-    /** true, пока открыт редактор HUD: игровой хук не рисует, рисует редактор. */
-    private static boolean editMode;
 
     /** Последний кадр: элемент -> {x, y, w, h} в GUI-пикселях. */
     private static final Map<HudLayout.Element, float[]> BOUNDS =
@@ -73,10 +71,6 @@ public final class InterfaceHud {
         HudElementRegistry.addLast(
                 Identifier.fromNamespaceAndPath("hatek_client", "interface_hud"),
                 (gg, tickCounter) -> render(gg));
-    }
-
-    public static void setEditMode(boolean edit) {
-        editMode = edit;
     }
 
     /** Копия границ элементов последнего отрисованного кадра. */
@@ -112,11 +106,6 @@ public final class InterfaceHud {
     // ---------------- точка входа ----------------
 
     private static void render(GuiGraphicsExtractor gg) {
-        if (editMode) {
-            return;
-        }
-        // Движение HUD за курсором — каждый кадр для плавности.
-        HudMover.tick();
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) {
             return;
@@ -125,51 +114,9 @@ public final class InterfaceHud {
             return;
         }
         renderAll(gg);
-        // Подсветка перетаскиваемых элементов при зажатом ALT.
-        if (HudMover.altDown() && mc.gui != null && mc.gui.screen() == null) {
-            drawAltOutlines(gg);
-        }
     }
 
-    /** Тонкие контуры вокруг элементов, пока зажат ALT (подсказка про drag). */
-    private static void drawAltOutlines(GuiGraphicsExtractor gg) {
-        Render2D.begin(gg);
-        for (Map.Entry<HudLayout.Element, float[]> kv : BOUNDS.entrySet()) {
-            float[] b = kv.getValue();
-            boolean active = HudMover.isDragging()
-                    && kv.getKey() == HudMover.dragElement();
-            outline(gg, b[0], b[1], b[2], b[3],
-                    active ? Style.accent() : 0x66FFFFFF);
-        }
-        if (Interface.showMedia2D()) {
-            float[] b = media2DBounds();
-            if (b != null) {
-                outline(gg, b[0], b[1], b[2], b[3],
-                        HudMover.isDragging() && HudMover.dragMedia()
-                                ? Style.accent() : 0x66FFFFFF);
-            }
-        }
-        Render2D.end(gg);
-    }
-
-    private static void outline(GuiGraphicsExtractor gg,
-                                float x, float y, float w, float h, int color) {
-        Render2D.rect(gg, x, y, w, 1.5f, color);
-        Render2D.rect(gg, x, y + h - 1.5f, w, 1.5f, color);
-        Render2D.rect(gg, x, y, 1.5f, h, color);
-        Render2D.rect(gg, x + w - 1.5f, y, 1.5f, h, color);
-    }
-
-    /** Отрисовка для редактора HUD (вызывается из HudEditScreen). */
-    public static void renderEditor(GuiGraphicsExtractor gg) {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.level == null) {
-            BOUNDS.clear();
-            return;
-        }
-        renderAll(gg);
-    }
-
+    /** Отрисовка всех элементов (и в игре, и за ClickGUI). */
     private static void renderAll(GuiGraphicsExtractor gg) {
         BOUNDS.clear();
         int sw = Render2D.screenWidth();

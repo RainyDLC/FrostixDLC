@@ -1,10 +1,7 @@
 package dev.hatek.client.module.impl.render.interf;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.client.ui.render.Render2D;
-import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,13 +9,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Свободное перемещение элементов HUD прямо в игре: зажать ALT,
- * нажать ЛКМ по элементу и тянуть. Клик при этом поглощается игрой.
- * Движение применяется каждый тик, пока зажат ALT.
+ * Прямое перетаскивание HUD модуля Interface в ClickGUI:
+ * ЛКМ по элементу и тянуть — двигать, колесо над элементом — размер.
+ * Никакого отдельного редактора и подсказок.
  */
 public final class HudMover {
     private static boolean dragging;
-    /** null = 2D-медиа, иначе элемент HudLayout. */
+    /** null + dragMedia = 2D-медиа, иначе элемент HudLayout. */
     private static HudLayout.Element dragElement;
     private static boolean dragMedia;
     private static float grabDX;
@@ -31,47 +28,19 @@ public final class HudMover {
         return dragging;
     }
 
-    /** Элемент, который сейчас тащат (null — не тащат / тащат медиа). */
-    public static HudLayout.Element dragElement() {
-        return dragElement;
-    }
-
-    public static boolean dragMedia() {
-        return dragMedia;
-    }
-
-    public static boolean altDown() {
-        Minecraft mc = Minecraft.getInstance();
-        return InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
-                || InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
+    private static boolean canInteract() {
+        Interface module = Interface.instance();
+        return module != null && module.isEnabled();
     }
 
     /**
-     * Пробует начать перемещение. Вызывается из миксина при нажатии ЛКМ.
-     * Возвращает true, если клик нужно поглотить (начали двигать HUD).
+     * Хит-тест и старт перетаскивания. Вызывается из ClickGuiScreen.
      */
-    public static boolean tryStart() {
-        if (dragging) {
-            return true;
-        }
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.level == null || mc.gui == null) {
+    public static boolean tryStart(double mx, double my) {
+        if (dragging || !canInteract()) {
             return false;
         }
-        if (!altDown()) {
-            return false;
-        }
-        Interface module = Interface.instance();
-        if (module == null || !module.isEnabled()) {
-            return false;
-        }
-        if (mc.gui.screen() != null) {
-            return false;
-        }
-        double mx = Render2D.mouseX();
-        double my = Render2D.mouseY();
-
-        // Порядок хит-теста: сверху вниз (медиа рисуется последним).
+        // Медиа рисуется последним = верхнее.
         if (Interface.showMedia2D()) {
             float[] b = InterfaceHud.media2DBounds();
             if (hit(b, mx, my)) {
@@ -101,35 +70,20 @@ public final class HudMover {
         grabDY = (float) my - b[1];
     }
 
-    /** Движение за курсором. Вызывается каждый клиентский тик и каждый кадр HUD. */
-    public static void tick() {
+    /** Движение за курсором. Вызывается из ClickGuiScreen.mouseDragged. */
+    public static void dragTo(double mx, double my) {
         if (!dragging) {
             return;
         }
-        Minecraft mc = Minecraft.getInstance();
-        Interface module = Interface.instance();
-        if (mc.player == null || module == null || !module.isEnabled()
-                || !altDown() || mc.gui.screen() != null) {
-            stop();
-            return;
-        }
-        double mx = Render2D.mouseX();
-        double my = Render2D.mouseY();
         int sw = Render2D.screenWidth();
         int sh = Render2D.screenHeight();
-
         if (dragMedia) {
             float[] b = InterfaceHud.media2DBounds();
             if (b == null) {
                 stop();
                 return;
             }
-            float w = b[2];
-            float h = b[3];
-            float x = clamp((float) mx - grabDX, -w + 24.0f, sw - 24.0f);
-            float y = clamp((float) my - grabDY, -h + 24.0f, sh - 24.0f);
-            Interface.setMediaGeometry(Interface.mediaSize(),
-                    (x + w / 2.0f) / sw * 100.0, (y + h / 2.0f) / sh * 100.0);
+            moveMedia((float) mx - grabDX, (float) my - grabDY, b[2], b[3], sw, sh);
         } else {
             float[] b = InterfaceHud.boundsSnapshot().get(dragElement);
             if (b == null) {
@@ -140,6 +94,41 @@ public final class HudMover {
             float y = clamp((float) my - grabDY, -b[3] + 24.0f, sh - 24.0f);
             HudLayout.setPos(dragElement, x, y);
         }
+    }
+
+    private static void moveMedia(float x, float y, float w, float h, int sw, int sh) {
+        x = clamp(x, -w + 24.0f, sw - 24.0f);
+        y = clamp(y, -h + 24.0f, sh - 24.0f);
+        Interface.setMediaGeometry(Interface.mediaSize(),
+                (x + w / 2.0f) / sw * 100.0, (y + h / 2.0f) / sh * 100.0);
+    }
+
+    /**
+     * Колесо над элементом — размер. Возвращает true, если обработано.
+     */
+    public static boolean onScroll(double mx, double my, double scrollY) {
+        if (!canInteract() || scrollY == 0) {
+            return false;
+        }
+        float factor = scrollY > 0 ? 1.1f : 1.0f / 1.1f;
+        if (Interface.showMedia2D()) {
+            float[] b = InterfaceHud.media2DBounds();
+            if (hit(b, mx, my)) {
+                double size = Interface.mediaSize() * factor;
+                Interface.setMediaGeometry(size, Interface.mediaX(), Interface.mediaY());
+                return true;
+            }
+        }
+        Map<HudLayout.Element, float[]> bounds = InterfaceHud.boundsSnapshot();
+        List<HudLayout.Element> order = new ArrayList<>(bounds.keySet());
+        Collections.reverse(order);
+        for (HudLayout.Element el : order) {
+            if (hit(bounds.get(el), mx, my)) {
+                HudLayout.setScale(el, HudLayout.get(el).scale * factor);
+                return true;
+            }
+        }
+        return false;
     }
 
     public static void stop() {

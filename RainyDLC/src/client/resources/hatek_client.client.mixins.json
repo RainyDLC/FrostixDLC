@@ -21,8 +21,7 @@
     "accessor.MinecraftAccessor",
     "accessor.ScreenInvoker",
     "accessor.GuiAccessor",
-    "accessor.BossHealthOverlayAccessor",
-    "HudMoveMixin"
+    "accessor.BossHealthOverlayAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

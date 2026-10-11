@@ -3,6 +3,7 @@ package dev.hatek.client.ui.screen;
 import dev.hatek.client.ui.Style;
 import dev.hatek.client.feature.config.ConfigManager;
 import dev.hatek.client.module.Category;
+import dev.hatek.client.module.impl.render.interf.HudMover;
 import dev.hatek.client.ui.render.Anim;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.Render2D;
@@ -298,6 +299,11 @@ public final class ClickGuiScreen extends Screen {
                 Math.max(0, Render2D.screenHeight() - Style.PANEL_H)));
     }
 
+    /** Курсор над панелью ClickGUI (а не над HUD за ней). */
+    private static boolean overPanel(double mx, double my) {
+        return Render2D.hovered(mx, my, panelX, panelY, Style.PANEL_W, Style.PANEL_H);
+    }
+
     private void switchTo(Tab value) {
         if (tab == value) {
             return;
@@ -316,6 +322,12 @@ public final class ClickGuiScreen extends Screen {
         double mx = Render2D.mouseX();
         double my = Render2D.mouseY();
         int button = event.button();
+
+        // Прямое перетаскивание HUD: клик мимо панели по элементу HUD — двигать его.
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && !overPanel(mx, my)
+                && HudMover.tryStart(mx, my)) {
+            return true;
+        }
 
         for (Tab value : Tab.values()) {
             float center = panelX + Style.NAV_X + Style.NAV_FIRST
@@ -384,6 +396,10 @@ public final class ClickGuiScreen extends Screen {
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
         double mx = Render2D.mouseX();
         double my = Render2D.mouseY();
+        if (HudMover.isDragging()) {
+            HudMover.dragTo(mx, my);
+            return true;
+        }
         if (this.draggingPanel) {
             panelX = (float) mx - this.grabX;
             panelY = (float) my - this.grabY;
@@ -399,6 +415,10 @@ public final class ClickGuiScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        if (HudMover.isDragging()) {
+            HudMover.stop();
+            return true;
+        }
         this.draggingPanel = false;
         page().mouseReleased();
         return super.mouseReleased(event);
@@ -406,7 +426,13 @@ public final class ClickGuiScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (!Render2D.hovered(Render2D.mouseX(), Render2D.mouseY(),
+        double mx = Render2D.mouseX();
+        double my = Render2D.mouseY();
+        // Колесо над элементом HUD (мимо панели) — размер элемента.
+        if (!overPanel(mx, my) && HudMover.onScroll(mx, my, scrollY)) {
+            return true;
+        }
+        if (!Render2D.hovered(mx, my,
                 panelX, panelY, Style.PANEL_W, Style.PANEL_H)) {
             return false;
         }

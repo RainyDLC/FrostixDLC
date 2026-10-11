@@ -2,20 +2,15 @@ package dev.hatek.client.module.impl.render;
 
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
-import dev.hatek.client.module.impl.render.interf.HudEditScreen;
-import dev.hatek.client.module.impl.render.interf.HudMover;
 import dev.hatek.client.module.impl.render.interf.InterfaceHud;
 import dev.hatek.client.module.setting.BoolSetting;
-import dev.hatek.client.module.setting.ButtonSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.module.setting.TextSetting;
-import net.minecraft.client.Minecraft;
 
 /**
  * Модуль "Interface": HUD клиента.
  * Ватермарка, кейбинды, активные эффекты и кастомный хотбар.
- * Все элементы свободно двигаются и масштабируются
- * в редакторе (кнопка "HUD Editor").
+ * Элементы свободно двигаются ЛКМ и масштабируются колесом прямо в ClickGUI.
  */
 public final class Interface extends Module {
     private static Interface instance;
@@ -25,8 +20,6 @@ public final class Interface extends Module {
     private final BoolSetting effects = new BoolSetting("Effects", true);
     private final BoolSetting hotbar = new BoolSetting("Custom Hotbar", true);
     private final BoolSetting hideVanilla = new BoolSetting("Hide Vanilla Hotbar", true);
-    private final ButtonSetting hudEditor = new ButtonSetting("HUD Editor", "Размер худа",
-            () -> Minecraft.getInstance().setScreenAndShow(new HudEditScreen()));
     private final BoolSetting media2d = new BoolSetting("Media 2D", false);
     private final TextSetting mediaFile = new TextSetting("Media File", "logo.gif", "logo.gif");
     private final SliderSetting mediaSize = new SliderSetting("Media Size", 64, 16, 256, 8);
@@ -46,7 +39,6 @@ public final class Interface extends Module {
                 this.effects,
                 this.hotbar,
                 this.hideVanilla,
-                this.hudEditor,
                 this.media2d,
                 this.mediaFile,
                 this.mediaSize,
@@ -61,11 +53,6 @@ public final class Interface extends Module {
 
     public static Interface instance() {
         return instance;
-    }
-
-    @Override
-    public void onClientTick() {
-        HudMover.tick();
     }
 
     public static boolean showWatermark() {
