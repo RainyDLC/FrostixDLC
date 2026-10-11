@@ -25,9 +25,9 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import java.util.Optional;
@@ -904,14 +904,11 @@ public final class InterfaceHud {
     /** Кусочки брони шлем..ботинки. */
     private static List<ItemStack> armorPieces(LivingEntity living) {
         List<ItemStack> out = new ArrayList<>(4);
-        for (ItemStack stack : living.getArmorSlots()) {
-            out.add(stack);
-        }
-        java.util.Collections.reverse(out); // ботинки..шлем -> шлем..ботинки
-        while (out.size() < 4) {
-            out.add(ItemStack.EMPTY);
-        }
-        return out.subList(0, 4);
+        out.add(living.getItemBySlot(EquipmentSlot.HEAD));
+        out.add(living.getItemBySlot(EquipmentSlot.CHEST));
+        out.add(living.getItemBySlot(EquipmentSlot.LEGS));
+        out.add(living.getItemBySlot(EquipmentSlot.FEET));
+        return out;
     }
 
     private static String durabilityPct(ItemStack stack) {
@@ -942,12 +939,10 @@ public final class InterfaceHud {
         final List<ItemStack> armor;
         final ItemStack mainHand;
         final ItemStack offHand;
-        final boolean isPlayer;
 
         TargetData(float w, float h, LivingEntity target, String name,
                    float hpFrac, float abFrac, String hpText,
-                   List<ItemStack> armor, ItemStack mainHand, ItemStack offHand,
-                   boolean isPlayer) {
+                   List<ItemStack> armor, ItemStack mainHand, ItemStack offHand) {
             this.w = w;
             this.h = h;
             this.target = target;
@@ -958,7 +953,6 @@ public final class InterfaceHud {
             this.armor = armor;
             this.mainHand = mainHand;
             this.offHand = offHand;
-            this.isPlayer = isPlayer;
         }
 
         @Override
@@ -1005,8 +999,7 @@ public final class InterfaceHud {
         float h = Math.max(pad + head, row2Bottom) + pad;
 
         return new TargetData(w, h, t, name, hpFrac, abFrac, hpText,
-                armorPieces(t), t.getMainHandItem(), t.getOffhandItem(),
-                t instanceof AbstractClientPlayer);
+                armorPieces(t), t.getMainHandItem(), t.getOffhandItem());
     }
 
     private static void drawTarget(GuiGraphicsExtractor gg, float s, TargetData d) {
@@ -1016,17 +1009,13 @@ public final class InterfaceHud {
         float pad = 8.0f * s;
         float head = 34.0f * s;
 
-        // Аватарка.
-        if (d.isPlayer) {
-            drawHead(gg, (AbstractClientPlayer) d.target, pad, pad, head);
-        } else {
-            Render2D.round(gg, pad, pad, head, head, 6.0f * s, Style.PANEL_RAISED);
-        }
+        // Аватарка: буква ника в цветном квадрате.
+        drawAvatar(gg, d.name, pad, pad, head, s);
 
         // Ник.
         HFont title = sTitle(s);
         float nameX = pad + head + 8.0f * s;
-        title.draw(gg, d.name, nameX, pad + 2.0f * s, Style.TEXT);
+        title.draw(gg, d.name, nameX, pad + 2.0f * s, Style.WHITE);
 
         // Броня с процентами + руки.
         float row2Y = pad + 22.0f * s;
@@ -1062,7 +1051,7 @@ public final class InterfaceHud {
         HFont hpFont = sTitle(s * 1.1f);
         float circleTop = cy - circleD / 2.0f;
         hpFont.drawCentered(gg, d.hpText, cx,
-                hpFont.centeredBaseline(circleTop, circleD), Style.TEXT);
+                hpFont.centeredBaseline(circleTop, circleD), Style.WHITE);
     }
 
     /** Кольцо-дуга из точек: from..to — доли окружности от верха. */
@@ -1089,15 +1078,17 @@ public final class InterfaceHud {
         return frac > 0.6f ? 0xFF4ADE80 : frac > 0.3f ? 0xFFFACC15 : 0xFFF87171;
     }
 
-    /** Голова игрока из скина (лицо + шляпа). */
-    private static void drawHead(GuiGraphicsExtractor gg, AbstractClientPlayer player,
-                                 float x, float y, float size) {
-        Identifier skin = player.getSkin().texture();
-        int px = Math.round(x);
-        int py = Math.round(y);
-        int ps = Math.round(size);
-        Render2D.blit(gg, skin, px, py, 8, 8, ps, ps, 64, 64, 0xFFFFFFFF);
-        Render2D.blit(gg, skin, px, py, 40, 8, ps, ps, 64, 64, 0xFFFFFFFF);
+    /** Аватарка-заглушка: первая буква ника в цветном квадрате. */
+    private static void drawAvatar(GuiGraphicsExtractor gg, String name,
+                                   float x, float y, float size, float s) {
+        int hash = name.hashCode();
+        float hue = ((hash & 0xFFFF) / (float) 0xFFFF);
+        int col = java.awt.Color.HSBtoRGB(hue, 0.55f, 0.75f) | 0xFF000000;
+        Render2D.round(gg, x, y, size, size, 6.0f * s, col);
+        String letter = name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase();
+        HFont f = sTitle(s * 1.2f);
+        f.drawCentered(gg, letter, x + size / 2.0f,
+                f.centeredBaseline(y, size), Style.WHITE);
     }
 
     private static LivingEntity resolveTarget(Minecraft mc) {
