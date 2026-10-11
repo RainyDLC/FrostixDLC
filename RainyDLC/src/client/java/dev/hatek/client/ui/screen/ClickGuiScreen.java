@@ -3,6 +3,7 @@ package dev.hatek.client.ui.screen;
 import dev.hatek.client.ui.Style;
 import dev.hatek.client.feature.config.ConfigManager;
 import dev.hatek.client.module.Category;
+import dev.hatek.client.module.impl.render.ClickGui;
 import dev.hatek.client.module.impl.render.interf.InterfaceHud;
 import dev.hatek.client.ui.render.Anim;
 import dev.hatek.client.ui.render.Fonts;
@@ -105,6 +106,10 @@ public final class ClickGuiScreen extends Screen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor gg, int mouseX, int mouseY, float partialTick) {
+        // Режим Blur: размываем мир за GUI (сила — из настройки "Размытие фона" в Minecraft).
+        if (ClickGui.blur()) {
+            extractBlurredBackground(gg);
+        }
     }
 
     @Override
@@ -135,8 +140,11 @@ public final class ClickGuiScreen extends Screen {
         Render2D.pushAlpha(eased);
 
         Render2D.round(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H,
-                Style.PANEL_R, Style.PANEL_GLASS);
-        renderLiquid(gg, mx, my);
+                Style.PANEL_R, ClickGui.blur() ? Style.PANEL_BLUR
+                        : ClickGui.liquidGlass() ? Style.PANEL_GLASS : Style.PANEL);
+        if (ClickGui.liquidGlass()) {
+            renderLiquid(gg, mx, my);
+        }
         glassRim(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H, Style.PANEL_R);
         renderSidebar(gg, mx, my);
         renderSourceMenu(gg, mx, my);
@@ -226,10 +234,9 @@ public final class ClickGuiScreen extends Screen {
         Render2D.round(gg, x, y, Style.SIDEBAR_W, h, Style.SIDEBAR_R, Style.WHITE_02);
         glassRim(gg, x, y, Style.SIDEBAR_W, h, Style.SIDEBAR_R);
 
-        // Название клиента: "Rainy" белым, "DLC" акцентом.
-        float after = Fonts.title().draw(gg, Style.CLIENT_NAME, x + Style.SIDEBAR_PAD,
+        // Название клиента — однотонное.
+        Fonts.title().draw(gg, Style.CLIENT_NAME + Style.CLIENT_SUFFIX, x + Style.SIDEBAR_PAD,
                 y + Style.NAME_BASELINE, Style.WHITE);
-        Fonts.title().draw(gg, Style.CLIENT_SUFFIX, after, y + Style.NAME_BASELINE, Style.accent());
         Render2D.rect(gg, x + Style.SIDEBAR_PAD, y + Style.NAME_SEP_Y,
                 Style.SIDEBAR_W - Style.SIDEBAR_PAD * 2.0f, 1.0f, Style.WHITE_04);
 

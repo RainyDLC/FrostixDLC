@@ -9,6 +9,7 @@ public final class Style {
 
     // Liquid glass: полупрозрачная основа панели и "жидкость" под стеклом.
     public static final int PANEL_GLASS = 0xE6141313;
+    public static final int PANEL_BLUR = 0xB3141313;
     public static final float GLASS_SPEED = 0.18f;
     public static final float GLASS_BLOB_ALPHA = 0.16f;
     public static final float GLASS_LIGHT_ALPHA = 0.06f;
