@@ -135,7 +135,9 @@ public final class ClickGuiScreen extends Screen {
         Render2D.pushAlpha(eased);
 
         Render2D.round(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H,
-                Style.PANEL_R, Style.PANEL);
+                Style.PANEL_R, Style.PANEL_GLASS);
+        renderLiquid(gg, mx, my);
+        glassRim(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H, Style.PANEL_R);
         renderSidebar(gg, mx, my);
         renderSourceMenu(gg, mx, my);
         renderContent(gg, mx, my);
@@ -155,19 +157,66 @@ public final class ClickGuiScreen extends Screen {
         return panelY + Style.PANEL_H - Style.SIDEBAR_Y - Style.CAT_H - 8.0f;
     }
 
-    /** Цвет буквы названия: волна по оттенку акцента + белый блик, бегущий слева направо. */
-    private static int shimmer(int index, float time) {
+    private float liquidX = Float.NaN;
+    private float liquidY = Float.NaN;
+
+    private static void glassRim(GuiGraphicsExtractor gg, float x, float y, float w, float h, float r) {
+        Render2D.texture(gg, dev.hatek.client.ui.render.TexCache.glassRim(Math.round(w), Math.round(h), r),
+                x, y, w, h, Style.WHITE);
+    }
+
+    private static void blob(GuiGraphicsExtractor gg, float cx, float cy, float d, int argb) {
+        int size = Math.round(d);
+        Render2D.texture(gg, dev.hatek.client.ui.render.TexCache.glow(size),
+                cx - size / 2.0f, cy - size / 2.0f, size, size, argb);
+    }
+
+    /** Переливающаяся "жидкость" под стеклом: медленно плавающие капли цвета акцента. */
+    private void renderLiquid(GuiGraphicsExtractor gg, double mx, double my) {
+        float t = (System.nanoTime() / 1_000_000L) / 1000.0f * Style.GLASS_SPEED;
+        float w = Style.PANEL_W;
+        float h = Style.PANEL_H;
         int accent = Style.accent();
         float[] hsb = java.awt.Color.RGBtoHSB((accent >> 16) & 0xFF, (accent >> 8) & 0xFF,
                 accent & 0xFF, null);
-        float phase = time * Style.NAME_SHIMMER_SPEED - index * Style.NAME_SHIMMER_SPREAD;
-        float wave = (float) Math.sin(phase * Math.PI * 2.0);
-        float hue = hsb[0] + wave * 0.08f;
-        hue -= (float) Math.floor(hue);
-        int color = java.awt.Color.HSBtoRGB(hue, Math.min(1.0f, hsb[1] + 0.1f),
-                Math.max(0.75f, hsb[2])) | 0xFF000000;
-        float highlight = (float) Math.pow(Math.max(0.0, Math.cos(phase * Math.PI)), 12.0);
-        return Render2D.lerp(color, Style.WHITE, highlight * 0.7f);
+        int second = java.awt.Color.HSBtoRGB((hsb[0] + 0.12f) % 1.0f, hsb[1], hsb[2]) | 0xFF000000;
+        int third = java.awt.Color.HSBtoRGB((hsb[0] + 0.88f) % 1.0f, hsb[1], hsb[2]) | 0xFF000000;
+
+        // Капля у курсора догоняет мышь с инерцией — стекло "реагирует" на движение.
+        float targetX = (float) Mth.clamp(mx - panelX, 0.0, w);
+        float targetY = (float) Mth.clamp(my - panelY, 0.0, h);
+        if (Float.isNaN(this.liquidX)) {
+            this.liquidX = targetX;
+            this.liquidY = targetY;
+        }
+        this.liquidX += (targetX - this.liquidX) * 0.06f;
+        this.liquidY += (targetY - this.liquidY) * 0.06f;
+
+        float r = Style.PANEL_R;
+        // Три полосы без углов, чтобы свечение не вылезало за скругления панели.
+        float[][] bands = {
+                {panelX + r, panelY, w - 2.0f * r, r},
+                {panelX, panelY + r, w, h - 2.0f * r},
+                {panelX + r, panelY + h - r, w - 2.0f * r, r}
+        };
+        for (float[] band : bands) {
+            Render2D.pushClip(gg, band[0], band[1], band[2], band[3]);
+            blob(gg, panelX + w * (0.22f + 0.16f * (float) Math.sin(t * 1.3f)),
+                    panelY + h * (0.30f + 0.18f * (float) Math.cos(t * 1.1f)), 520.0f,
+                    Render2D.withAlpha(accent, Style.GLASS_BLOB_ALPHA));
+            blob(gg, panelX + w * (0.70f + 0.18f * (float) Math.cos(t * 0.9f + 1.7f)),
+                    panelY + h * (0.65f + 0.20f * (float) Math.sin(t * 1.4f + 0.6f)), 600.0f,
+                    Render2D.withAlpha(second, Style.GLASS_BLOB_ALPHA * 0.85f));
+            blob(gg, panelX + w * (0.48f + 0.25f * (float) Math.sin(t * 0.7f + 3.1f)),
+                    panelY + h * (0.15f + 0.12f * (float) Math.sin(t * 1.6f + 2.2f)), 420.0f,
+                    Render2D.withAlpha(third, Style.GLASS_BLOB_ALPHA * 0.7f));
+            blob(gg, panelX + w * (0.35f + 0.30f * (float) Math.cos(t * 0.5f)),
+                    panelY + h * (0.85f + 0.08f * (float) Math.sin(t * 1.9f)), 360.0f,
+                    Render2D.withAlpha(Style.WHITE, Style.GLASS_LIGHT_ALPHA));
+            blob(gg, panelX + this.liquidX, panelY + this.liquidY, 300.0f,
+                    Render2D.withAlpha(Style.WHITE, Style.GLASS_CURSOR_ALPHA));
+            Render2D.popClip(gg);
+        }
     }
 
     private void renderSidebar(GuiGraphicsExtractor gg, double mx, double my) {
@@ -175,15 +224,12 @@ public final class ClickGuiScreen extends Screen {
         float y = panelY + Style.SIDEBAR_Y;
         float h = Style.PANEL_H - Style.SIDEBAR_Y * 2.0f;
         Render2D.round(gg, x, y, Style.SIDEBAR_W, h, Style.SIDEBAR_R, Style.WHITE_02);
+        glassRim(gg, x, y, Style.SIDEBAR_W, h, Style.SIDEBAR_R);
 
-        // Название клиента, переливается по буквам.
-        String name = Style.CLIENT_NAME + Style.CLIENT_SUFFIX;
-        float time = (System.nanoTime() / 1_000_000L) / 1000.0f;
-        float cx = x + Style.SIDEBAR_PAD;
-        for (int i = 0; i < name.length(); i++) {
-            cx = Fonts.title().draw(gg, String.valueOf(name.charAt(i)), cx,
-                    y + Style.NAME_BASELINE, shimmer(i, time));
-        }
+        // Название клиента: "Rainy" белым, "DLC" акцентом.
+        float after = Fonts.title().draw(gg, Style.CLIENT_NAME, x + Style.SIDEBAR_PAD,
+                y + Style.NAME_BASELINE, Style.WHITE);
+        Fonts.title().draw(gg, Style.CLIENT_SUFFIX, after, y + Style.NAME_BASELINE, Style.accent());
         Render2D.rect(gg, x + Style.SIDEBAR_PAD, y + Style.NAME_SEP_Y,
                 Style.SIDEBAR_W - Style.SIDEBAR_PAD * 2.0f, 1.0f, Style.WHITE_04);
 
@@ -274,7 +320,8 @@ public final class ClickGuiScreen extends Screen {
         float x = panelX + Style.NAV_X;
         float y = panelY + Style.NAV_Y;
         Render2D.round(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R,
-                Style.PANEL_RAISED);
+                Render2D.withAlpha(Style.PANEL_RAISED, 0.85f));
+        glassRim(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R);
 
         this.navAnim.to(tab.ordinal());
         float slot = this.navAnim.get();

@@ -6,6 +6,13 @@ public final class Style {
 
     public static final int PANEL = 0xFF181717;
     public static final int PANEL_RAISED = 0xFF1D1C1C;
+
+    // Liquid glass: полупрозрачная основа панели и "жидкость" под стеклом.
+    public static final int PANEL_GLASS = 0xE6141313;
+    public static final float GLASS_SPEED = 0.18f;
+    public static final float GLASS_BLOB_ALPHA = 0.16f;
+    public static final float GLASS_LIGHT_ALPHA = 0.06f;
+    public static final float GLASS_CURSOR_ALPHA = 0.07f;
     public static final int DEFAULT_ACCENT = 0xFFFFAFE2;
 
     private static int accent = DEFAULT_ACCENT;
@@ -58,8 +65,6 @@ public final class Style {
     public static final int SELECTOR_W = 2;
     public static final int SELECTOR_H = 7;
     public static final int SELECTOR_X = 4;
-    public static final float NAME_SHIMMER_SPEED = 0.35f;
-    public static final float NAME_SHIMMER_SPREAD = 0.09f;
     public static final String CLIENT_NAME = "Rainy";
     public static final String CLIENT_SUFFIX = "DLC";
 

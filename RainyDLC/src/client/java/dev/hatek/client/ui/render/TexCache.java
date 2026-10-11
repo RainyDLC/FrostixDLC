@@ -288,6 +288,62 @@ public final class TexCache {
         });
     }
 
+    /** Мягкое радиальное свечение (белое, тинтится): капля "жидкости" под стеклом. */
+    public static Identifier glow(int d) {
+        return get("glow_" + d, d, d, g -> {
+            // Пиксели считаем напрямую: текстура рисуется 1:1, без растягивания и ступенек.
+            BufferedImage img = new BufferedImage(d, d, BufferedImage.TYPE_INT_ARGB);
+            float c = d / 2.0f;
+            for (int y = 0; y < d; y++) {
+                for (int x = 0; x < d; x++) {
+                    float dx = (x + 0.5f - c) / c;
+                    float dy = (y + 0.5f - c) / c;
+                    float t = 1.0f - Math.min(1.0f, (float) Math.sqrt(dx * dx + dy * dy));
+                    float a = t * t * (3.0f - 2.0f * t);
+                    img.setRGB(x, y, (Math.round(a * a * 255.0f) << 24) | 0x00FFFFFF);
+                }
+            }
+            g.drawImage(img, 0, 0, null);
+        });
+    }
+
+    /**
+     * Стеклянная окантовка: блик сверху, затухающий к середине, и мягкий
+     * отражённый свет снизу, плюс глянцевая полоса в верхней части.
+     */
+    public static Identifier glassRim(int w, int h, float r) {
+        String key = "glassrim_" + w + "_" + h + "_" + Math.round(r * 2.0f);
+        return get(key, w, h, g -> {
+            int sheen = Math.max(1, Math.round(Math.min(h * 0.35f, 90.0f)));
+            for (int y = 0; y < sheen; y++) {
+                float t = 1.0f - y / (float) sheen;
+                g.setColor(new Color(255, 255, 255, Math.round(t * t * 0.06f * 255.0f)));
+                g.fillRect(0, y, w, 1);
+            }
+            mask(g, w, h, r);
+            BufferedImage edge = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D e = edge.createGraphics();
+            applyQuality(e);
+            for (int y = 0; y < h; y++) {
+                float k = y / (float) Math.max(1, h - 1);
+                float a = k < 0.5f ? 0.28f - 0.24f * (k / 0.5f) : 0.04f + 0.08f * ((k - 0.5f) / 0.5f);
+                e.setColor(new Color(255, 255, 255, Math.round(a * 255.0f)));
+                e.fillRect(0, y, w, 1);
+            }
+            java.awt.geom.Area ring = new java.awt.geom.Area(
+                    new RoundRectangle2D.Float(0.0f, 0.0f, w, h, r * 2.0f, r * 2.0f));
+            ring.subtract(new java.awt.geom.Area(new RoundRectangle2D.Float(1.0f, 1.0f, w - 2.0f, h - 2.0f,
+                    Math.max(0.0f, r * 2.0f - 2.0f), Math.max(0.0f, r * 2.0f - 2.0f))));
+            java.awt.geom.Area outside = new java.awt.geom.Area(new java.awt.Rectangle(0, 0, w, h));
+            outside.subtract(ring);
+            e.setComposite(AlphaComposite.DstOut);
+            e.setColor(Color.WHITE);
+            e.fill(outside);
+            e.dispose();
+            g.drawImage(edge, 0, 0, null);
+        });
+    }
+
     private static void mask(Graphics2D g, int w, int h, float r) {
         java.awt.geom.Area outside = new java.awt.geom.Area(new java.awt.Rectangle(0, 0, w, h));
         outside.subtract(new java.awt.geom.Area(
