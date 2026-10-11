@@ -33,50 +33,47 @@ public final class Style {
         return (Math.round(opacity * 255.0f) << 24) | 0x00FFFFFF;
     }
 
-    public static final int PANEL_W = 924;
+    public static final int PANEL_W = 1015;
     public static final int PANEL_H = 624;
     public static final int PANEL_R = 25;
-    public static final int DESIGN_X = 445;
+    public static final int DESIGN_X = 452;
     public static final int DESIGN_Y = 220;
     public static final int DESIGN_SCREEN_W = 1920;
     public static final int DESIGN_SCREEN_H = 1080;
 
+
+    // Левая колонка: переливающееся название RainyDLC и категории в столбик.
     public static final int SIDEBAR_X = 15;
-    public static final int SIDEBAR_W = 52;
-    public static final int SIDEBAR_H = 221;
+    public static final int SIDEBAR_Y = 15;
+    public static final int SIDEBAR_W = 140;
     public static final int SIDEBAR_R = 15;
-    public static final int SIDEBAR_ICON = 14;
-    public static final float SIDEBAR_STEP = 40.5f;
+    public static final int SIDEBAR_PAD = 16;
+    public static final int NAME_BASELINE = 32;
+    public static final int NAME_SEP_Y = 52;
+    public static final int CAT_TOP = 64;
+    public static final int CAT_H = 32;
+    public static final int CAT_R = 9;
+    public static final int CAT_INSET = 8;
+    public static final int CAT_ICON_GAP = 9;
     public static final int SELECTOR_W = 2;
     public static final int SELECTOR_H = 7;
-    public static final int SELECTOR_R = 1;
-    public static final int SELECTOR_X = 18;
-
-    // Верхняя панель: слева — действия конфигов, справа — RainyDLC и категории.
-    public static final int TOPBAR_Y = 15;
-    public static final int TOPBAR_H = 40;
-    public static final int TOPBAR_R = 15;
-    public static final int TOPBAR_PAD = 16;
-    public static final int TOPBAR_SEP_GAP = 14;
-    public static final int TOPBAR_TAB_PAD = 10;
-    public static final int TOPBAR_TAB_ICON_GAP = 6;
-    public static final int TOPBAR_INDICATOR_W = 7;
-    public static final int TOPBAR_INDICATOR_H = 2;
-    public static final int TOPBAR_INDICATOR_Y = 35;
+    public static final int SELECTOR_X = 4;
+    public static final float NAME_SHIMMER_SPEED = 0.35f;
+    public static final float NAME_SHIMMER_SPREAD = 0.09f;
     public static final String CLIENT_NAME = "Rainy";
     public static final String CLIENT_SUFFIX = "DLC";
 
-    public static final int CONTENT_X = 45;
+    public static final int CONTENT_X = SIDEBAR_X + SIDEBAR_W + 11;
     public static final int CONTENT_RIGHT = CONTENT_X + 2 * 281 + 272;
-    public static final int CONTENT_TOP = TOPBAR_Y + TOPBAR_H + 10;
+    public static final int CONTENT_TOP = 15;
     public static final int COLUMNS = 3;
     public static final int CARD_W = 272;
     public static final int COLUMN_PITCH = 281;
     public static final int CARD_GAP = 9;
     public static final int CARD_R = 15;
 
-    public static final int SCROLLBAR_X = 918;
-    public static final int SCROLLBAR_Y = CONTENT_TOP + 11;
+    public static final int SCROLLBAR_X = PANEL_W - 6;
+    public static final int SCROLLBAR_Y = 26;
     public static final int SCROLLBAR_W = 2;
     public static final int SCROLLBAR_H = 235;
     public static final int SCROLLBAR_MIN_THUMB = 30;
@@ -191,7 +188,6 @@ public final class Style {
     public static final int NAV_INDICATOR_Y = 47;
 
     public static final float SOURCE_STEP = 40.0f;
-    public static final int SOURCE_W = 120;
 
     public static final int HUD_PANEL = 0xDB181717;
     public static final int HUD_MARGIN = 10;
