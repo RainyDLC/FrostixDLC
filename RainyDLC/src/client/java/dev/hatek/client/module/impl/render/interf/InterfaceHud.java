@@ -1106,7 +1106,7 @@ public final class InterfaceHud {
             return ItemStack.EMPTY;
         }
         ItemStack head = new ItemStack(Items.PLAYER_HEAD);
-        head.set(DataComponents.PROFILE, new ResolvableProfile(info.getProfile()));
+        head.set(DataComponents.PROFILE, ResolvableProfile.createResolved(info.getProfile()));
         return head;
     }
 
