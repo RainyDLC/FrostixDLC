@@ -775,10 +775,12 @@ public final class InterfaceHud {
     private static final class HbData implements Sized {
         final float w;
         final float h;
+        final float s; // эффективный масштаб (со слайдером)
 
-        HbData(float w, float h) {
+        HbData(float w, float h, float s) {
             this.w = w;
             this.h = h;
+            this.s = s;
         }
 
         @Override
@@ -792,19 +794,21 @@ public final class InterfaceHud {
         }
     }
 
-    private static HbData measureHotbar(float s) {
+    private static HbData measureHotbar(float scale) {
+        float s = scale * (float) Interface.hotbarSize();
         float slot = 22.0f * s;
         float gap = 2.0f * s;
-        return new HbData(slot * 9.0f + gap * 8.0f, slot);
+        return new HbData(slot * 9.0f + gap * 8.0f, slot, s);
     }
 
     /** Рисует хотбар в origin (0,0) с ручным масштабом. */
-    private static void drawHotbar(GuiGraphicsExtractor gg, float s, HbData data) {
+    private static void drawHotbar(GuiGraphicsExtractor gg, float ignored, HbData data) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             return;
         }
         Inventory inv = mc.player.getInventory();
+        float s = data.s;
 
         float slot = 22.0f * s;
         float gap = 2.0f * s;

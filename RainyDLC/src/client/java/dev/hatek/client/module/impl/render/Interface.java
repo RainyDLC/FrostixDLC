@@ -21,6 +21,7 @@ public final class Interface extends Module {
     private final BoolSetting effects = new BoolSetting("Effects", true);
     private final BoolSetting hotbar = new BoolSetting("Custom Hotbar", true);
     private final BoolSetting hideVanilla = new BoolSetting("Hide Vanilla Hotbar", true);
+    private final SliderSetting hotbarSize = new SliderSetting("Hotbar Size", 1.0, 0.5, 2.0, 0.05);
     private final BoolSetting armorHud = new BoolSetting("Armor HUD", true);
     private final BoolSetting targetHud = new BoolSetting("Target HUD", true);
     private final BoolSetting media2d = new BoolSetting("Media 2D", false);
@@ -42,6 +43,7 @@ public final class Interface extends Module {
                 this.effects,
                 this.hotbar,
                 this.hideVanilla,
+                this.hotbarSize,
                 this.armorHud,
                 this.targetHud,
                 this.media2d,
@@ -83,6 +85,11 @@ public final class Interface extends Module {
     public static boolean showTarget() {
         Interface module = instance;
         return module != null && module.isEnabled() && module.targetHud.value();
+    }
+
+    public static double hotbarSize() {
+        Interface module = instance;
+        return module == null ? 1.0 : module.hotbarSize.value();
     }
 
     public static boolean showHotbar() {
