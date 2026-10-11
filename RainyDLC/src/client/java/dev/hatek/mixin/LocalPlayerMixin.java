@@ -14,6 +14,15 @@ public class LocalPlayerMixin {
         ClientEvents.playerTick();
     }
 
+    /**
+     * После sendPosition(): ротация, позиция и спринт этого тика уже ушли на сервер,
+     * поэтому пакет удара проверяется сервером ровно по тому, что видел клиент.
+     */
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void hatek$onPlayerTickPost(CallbackInfo ci) {
+        ClientEvents.playerTickPost();
+    }
+
     @Inject(method = "aiStep", at = @At("TAIL"))
     private void hatek$stabilizeHandBob(CallbackInfo ci) {
         if (dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil.detached()) {

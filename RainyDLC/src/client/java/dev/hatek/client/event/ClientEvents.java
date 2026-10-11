@@ -37,6 +37,18 @@ public final class ClientEvents {
         }
     }
 
+    /** LocalPlayer.tick TAIL — после отправки движения/ротации этого тика. */
+    public static void playerTickPost() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) {
+            return;
+        }
+        AttackAura aura = AttackAura.instance();
+        if (aura != null) {
+            aura.onPostTick();
+        }
+    }
+
     public static void render3D() {
         ComponentManager.render3D();
         dev.hatek.client.module.impl.combat.AimAssist aim = dev.hatek.client.module.impl.combat.AimAssist.instance();

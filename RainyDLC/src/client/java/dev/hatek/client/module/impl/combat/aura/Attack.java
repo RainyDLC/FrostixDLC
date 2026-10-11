@@ -2,7 +2,6 @@ package dev.hatek.client.module.impl.combat.aura;
 
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
-import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
 import dev.hatek.client.module.impl.combat.aura.util.AttackPace;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
 import dev.hatek.client.module.impl.combat.aura.util.AuraRandom;
@@ -11,7 +10,9 @@ import dev.hatek.client.module.impl.combat.aura.util.AuraTimer;
 import dev.hatek.client.module.impl.combat.aura.util.AuraUtil;
 import dev.hatek.client.module.impl.combat.aura.util.RayTraceUtil;
 import dev.hatek.mixin.accessor.LivingEntityAccessor;
+import dev.hatek.mixin.accessor.LocalPlayerAccessor;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
@@ -52,6 +53,18 @@ public final class Attack {
     private static final float CHARGE_SLACK = 0.04F;
 
     private static final float CRIT_CHARGE = 0.91F;
+
+    /** Порог сервера: Player.attack() даёт крит/полный урон только при scale > 0.9. */
+    private static final float SERVER_CHARGE = 0.9F;
+
+    /**
+     * Запас сверх серверного порога. Тикер зарядки сервер считает сам, по своим тикам:
+     * джиттер пакета на ±1 тик съедает 1/(тиков кулдауна) зарядки. При 0.91 у меча
+     * (0.08/тик) сервер видел 0.83 — крит и часть урона пропадали.
+     */
+    private static final float SERVER_CHARGE_SLACK = 0.01F;
+
+    private static final float MAX_CHARGE_FLOOR = 0.995F;
 
     private static float chargeTarget = CHARGE;
 
@@ -180,25 +193,20 @@ public final class Attack {
     }
 
     /**
-     * Builds the pre/post-hit sprint tasks.
+     * Pre/post-hit sprint tasks.
      *
-     * <p>In packet mode the attack is silently bracketed: sprint is stopped right before
-     * the attack packet and restored right after, so the server never sees a sprinting
-     * attacker.</p>
+     * <p>Удар выполняется в TAIL тика, после sendPosition(), поэтому
+     * {@code wasSprinting} — это ровно то, что сервер считает сейчас.
+     * STOP/START шлются через vanilla {@code sendIsSprintingIfNeeded()}: пакет уходит
+     * только при реальной смене состояния, а {@code wasSprinting} синхронизируется.
+     * Раньше в легит-режиме STOP слался сырым пакетом при каждой попытке крита
+     * (даже без спринта), а vanilla следом слала второй STOP — дубли sprint-пакетов
+     * античит флагает и отменяет удары.</p>
      *
-     * <p>In legit mode the sprint is already stopped locally ahead of time
-     * ({@code holdSprint()}), but the server only learns about it through the vanilla
-     * auto-sync which runs later in the client tick than the attack packet itself.
-     * If the attack packet reaches the server first, the server still sees a sprinting
-     * player and the crit is lost (client shows nothing wrong). For crit attempts we
-     * therefore send an explicit STOP_SPRINTING immediately before the attack packet —
-     * packet order guarantees the server processes it first. No restore is sent in
-     * legit mode: sprint is managed by hold/releaseSprint instead. Sprint hits on the
-     * ground are untouched (no STOP), so their knockback behaviour is preserved.</p>
+     * <p>Packet: спринт снимается перед ударом и возвращается после.
+     * Legit: только STOP перед критом, возврат делает hold/releaseSprint.</p>
      */
-    public static Runnable[] skipSilentSprintingTaskForUse(boolean packetMode,
-                                                           boolean serverSprinting,
-                                                           boolean critAttempt) {
+    public static Runnable[] skipSilentSprintingTaskForUse(boolean packetMode, boolean critAttempt) {
         Runnable[] prePost = {() -> {
         }, () -> {
         }};
@@ -209,25 +217,23 @@ public final class Attack {
         if (mc.player.isEyeInFluid(FluidTags.WATER)) {
             return prePost;
         }
-        boolean wasSprinting = serverSprinting || mc.player.isSprinting();
-        boolean needStop = packetMode ? wasSprinting : critAttempt;
-        if (!needStop) {
+        LocalPlayerAccessor sync = (LocalPlayerAccessor) mc.player;
+        boolean serverSprinting = sync.hatek$wasSprinting();
+        if (!serverSprinting || !(packetMode || critAttempt)) {
             return prePost;
         }
-        boolean restore = packetMode && wasSprinting;
+        boolean restore = packetMode;
 
         prePost[0] = () -> {
             mc.player.setSprinting(false);
-            mc.getConnection().send(new ServerboundPlayerCommandPacket(mc.player,
-                    ServerboundPlayerCommandPacket.Action.STOP_SPRINTING));
+            sync.hatek$sendIsSprintingIfNeeded();
         };
         prePost[1] = () -> {
-            if (!restore) {
+            if (!restore || mc.player == null) {
                 return;
             }
             mc.player.setSprinting(true);
-            mc.getConnection().send(new ServerboundPlayerCommandPacket(mc.player,
-                    ServerboundPlayerCommandPacket.Action.START_SPRINTING));
+            sync.hatek$sendIsSprintingIfNeeded();
         };
         return prePost;
     }
@@ -440,8 +446,20 @@ public final class Attack {
     }
 
     private static float chargeFloor() {
-        float full = Math.max(CRIT_CHARGE, chargeTarget - CHARGE_SLACK);
-        return critWindowOpen() ? CRIT_CHARGE : full;
+        float safe = serverSafeCharge();
+        float full = Math.max(safe, chargeTarget - CHARGE_SLACK);
+        return critWindowOpen() ? safe : full;
+    }
+
+    /** Порог зарядки с запасом в один тик сервера: 0.9 + attackSpeed/20 + slack. */
+    private static float serverSafeCharge() {
+        Minecraft mc = mc();
+        if (mc.player == null) {
+            return CRIT_CHARGE;
+        }
+        double perTick = mc.player.getAttributeValue(Attributes.ATTACK_SPEED) / 20.0;
+        float safe = (float) (SERVER_CHARGE + perTick + SERVER_CHARGE_SLACK);
+        return Mth.clamp(safe, CRIT_CHARGE, MAX_CHARGE_FLOOR);
     }
 
     private static boolean critWindowOpen() {
@@ -521,22 +539,16 @@ public final class Attack {
         return COOLDOWN_TIMER.elapsedTime();
     }
 
+    /**
+     * Гейт удара — только реальная геометрия. Эвристика NeuroRotation.aimed()
+     * (угол до центра ≤ 7°) сюда больше не допускается: она пропускала удары мимо
+     * хитбокса, сервер их отклонял — замах есть, урона нет.
+     */
     public static boolean anyEntityOnRay(LivingEntity livingIn, double range) {
-        Minecraft mc = mc();
-        if (livingIn == null || mc.player == null) {
-            return false;
-        }
-        if (AttackAura.neuroMode() && dev.hatek.client.module.impl.combat.aura.neuro.NeuroRotation.aimed()) {
-            return true;
-        }
-        return rayHitsEntity(livingIn, range);
+        return anyEntityOnRayStrict(livingIn, range);
     }
 
-    /**
-     * Строгая геометрическая проверка луча — без эвристики NeuroRotation.aimed().
-     * Для запланированных (форсированных) ударов: там цена ошибки — удар в пустоту
-     * (частицы есть, урона нет), поэтому доверяем только реальной геометрии.
-     */
+    /** Строгая геометрическая проверка луча по ротации и позиции, известным серверу. */
     public static boolean anyEntityOnRayStrict(LivingEntity livingIn, double range) {
         Minecraft mc = mc();
         if (livingIn == null || mc.player == null) {
@@ -545,27 +557,25 @@ public final class Attack {
         return rayHitsEntity(livingIn, range);
     }
 
+    /**
+     * Удар выполняется после sendPosition(), так что ServerView = ротация/позиция,
+     * с которыми сервер обработает пакет. Проверяем ровно как vanilla-пикинг:
+     * реальный хитбокс (+pickRadius, без запаса), длина луча = дальность удара.
+     * Раньше допускались: фолбэк на ещё не отправленную ротацию клиента,
+     * упреждённый бокс SpaceTime, раздувание 0.12 и луч range+0.5 — всё это
+     * давало удары, которые сервер/античит не засчитывал.
+     */
     private static boolean rayHitsEntity(LivingEntity livingIn, double range) {
         Minecraft mc = mc();
-        AABB box = livingIn.getBoundingBox();
-        AABB leadBox = SpaceTime.leadedBox(livingIn);
-        double tolerance = Math.max(0.12, livingIn.getPickRadius() + 0.08);
-
-        // 1. Проверяем по ротациям, уже известным серверу
-        Vec3 serverEyes = ServerView.eyePos(mc.player);
-        float serverY = Mth.wrapDegrees(ServerView.yaw(mc.player.getYRot()));
-        float serverP = ServerView.pitch(mc.player.getXRot());
-        if (onRay(box, serverEyes, serverY, serverP, range, tolerance)
-                || onRay(leadBox, serverEyes, serverY, serverP, range, tolerance)) {
+        Vec3 eyes = ServerView.eyePos(mc.player);
+        float yaw = ServerView.yaw(mc.player.getYRot());
+        float pitch = ServerView.pitch(mc.player.getXRot());
+        AABB box = livingIn.getBoundingBox().inflate(livingIn.getPickRadius());
+        if (box.contains(eyes)) {
             return true;
         }
-
-        // 2. Проверяем по текущим ротациям клиента (перед ударом синхронизируются в preHit)
-        Vec3 playerEyes = mc.player.getEyePosition();
-        float playerY = Mth.wrapDegrees(mc.player.getYRot());
-        float playerP = mc.player.getXRot();
-        return onRay(box, playerEyes, playerY, playerP, range, tolerance)
-                || onRay(leadBox, playerEyes, playerY, playerP, range, tolerance);
+        Vec3 look = RayTraceUtil.getVectorForRotation(pitch, yaw);
+        return box.clip(eyes, eyes.add(look.scale(range))).isPresent();
     }
 
     public static boolean onRay(AABB box, Vec3 eyes, float yaw, float pitch, double range, double tolerance) {
@@ -589,8 +599,8 @@ public final class Attack {
 
     /**
      * Та же логика, что и {@link #shouldAttack}, но возвращает причину отказа
-     * вместо boolean: null — удар разрешён, иначе "dist"/"cooldown"/"pace"/
-     * "charge"/"moment"/"ray". Используется планировщиком и диагностикой.
+     * вместо boolean: null — удар разрешён, иначе "dist"/"iframes"/"cooldown"/
+     * "pace"/"charge"/"moment"/"ray". Используется планировщиком и диагностикой.
      */
     public static String shouldAttackReason(LivingEntity livingTarget, boolean rayCast,
                                             boolean distanceCheck, boolean fallCheck,
@@ -598,6 +608,9 @@ public final class Attack {
         if (distanceCheck && livingTarget != null
                 && !AuraUtil.validDistance(livingTarget, ranges[0], true)) {
             return "dist";
+        }
+        if (targetInvulnerable(livingTarget)) {
+            return "iframes";
         }
         if (!msCooldownReached(cooldownMSOffset)) {
             return "cooldown";
@@ -622,6 +635,35 @@ public final class Attack {
                                        long cooldownMSOffset, float[] ranges) {
         return shouldAttackReason(livingTarget, rayCast, distanceCheck, fallCheck,
                 cooldownMSOffset, ranges) == null;
+    }
+
+    /**
+     * Цель ещё в i-frames на сервере: первые 10 тиков после урона новый удар
+     * не проходит (замах есть, урона нет). hurtTime на клиенте отстаёт на
+     * пол-пинга, наш пакет летит ещё пол-пинга — вычитаем RTT в тиках (+1 запас,
+     * чтобы не терять реальные удары).
+     */
+    private static boolean targetInvulnerable(LivingEntity livingTarget) {
+        if (livingTarget == null || livingTarget.hurtTime <= 0) {
+            return false;
+        }
+        return livingTarget.hurtTime > pingTicks() + 1;
+    }
+
+    private static int pingTicks() {
+        Minecraft mc = mc();
+        if (mc.player == null || mc.getConnection() == null) {
+            return 0;
+        }
+        PlayerInfo info = mc.getConnection().getPlayerInfo(mc.player.getUUID());
+        if (info == null) {
+            return 0;
+        }
+        return (int) Math.ceil(Math.max(0, info.getLatency()) / 50.0);
+    }
+
+    public static boolean targetInvulnerableNow(LivingEntity livingTarget) {
+        return targetInvulnerable(livingTarget);
     }
 
     /** Доступы для планировщика ударов. */

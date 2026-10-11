@@ -114,7 +114,12 @@ public final class AttackAura extends Module {
 
     private static LivingEntity preferred;
 
-    private static boolean serverSprinting;
+    /**
+     * Удар, подготовленный в HEAD тика и выполняемый в TAIL (после sendPosition).
+     * В HEAD сервер ещё не знает ротацию/позицию этого тика — удар оттуда уходит
+     * с прошлой ротацией и античит режет урон (замах есть, урона нет).
+     */
+    private static boolean attackQueued;
 
     private static boolean sprintHeld;
 
@@ -202,6 +207,8 @@ public final class AttackAura extends Module {
             return;
         }
 
+        attackQueued = false;
+
         Attack.clampCooldownDebt();
 
         Attack.observe();
@@ -254,8 +261,6 @@ public final class AttackAura extends Module {
             setEnabled(false);
             return;
         }
-
-        serverSprinting = mc.player.isSprinting();
 
         if (preferred != null && (!preferred.isAlive() || preferred.isRemoved())) {
             preferred = null;
@@ -312,13 +317,33 @@ public final class AttackAura extends Module {
             }
         }
 
-        if (NeuroRotation.isTraining()) {
+        if (NeuroRotation.isTraining() || checkToAttack()) {
             AttackPlanner.cancel();
-        } else if (!checkToAttack()) {
-            attackEntity();
         } else {
-            AttackPlanner.cancel();
+            attackQueued = true;
         }
+    }
+
+    /** LocalPlayer.tick TAIL: движение и ротация этого тика уже отправлены. */
+    public void onPostTick() {
+        if (!attackQueued) {
+            return;
+        }
+        attackQueued = false;
+        Minecraft mc = mc();
+        if (!isEnabled() || mc.player == null || mc.level == null || mc.gui.screen() != null
+                || !mc.player.isAlive() || NeuroRotation.isTraining()) {
+            return;
+        }
+        if (target == null || !target.isAlive() || target.isRemoved()) {
+            AttackPlanner.cancel();
+            return;
+        }
+        if (checkToAttack()) {
+            AttackPlanner.cancel();
+            return;
+        }
+        attackEntity();
     }
 
     private static final double STANDOFF = 1.0;
@@ -452,7 +477,7 @@ public final class AttackAura extends Module {
         Runnable[] shieldBreak = Attack.hitShieldBreakTaskForUse(target, misc(BREAK_SHIELD));
         Runnable[] shieldPressBypass = Attack.resetShieldSilentTaskForUse(true);
         Runnable[] skipSilentSprint = Attack.skipSilentSprintingTaskForUse(
-                canPacket, serverSprinting, Attack.critPending());
+                canPacket, Attack.critPending());
 
         Runnable preHit = () -> {
             skipSilentSprint[0].run();
@@ -619,6 +644,7 @@ public final class AttackAura extends Module {
         Minecraft mc = mc();
         target = null;
         preferred = null;
+        attackQueued = false;
 
         AttackPlanner.cancel();
         EngageDelay.reset();
