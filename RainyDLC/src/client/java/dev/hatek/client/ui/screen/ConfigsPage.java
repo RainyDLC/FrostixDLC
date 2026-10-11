@@ -38,7 +38,7 @@ public final class ConfigsPage extends Page {
     public void render(GuiGraphicsExtractor gg, float x, float y, float scroll, double mx, double my) {
         List<ConfigEntry> configs = ConfigManager.all();
         if (configs.isEmpty()) {
-            Fonts.body().draw(gg, "No configs yet - use the + on the left to save one", x + 2.0f,
+            Fonts.body().draw(gg, "No configs yet - use the + at the top to save one", x + 2.0f,
                     y + 24.0f, Style.WHITE_25);
             return;
         }

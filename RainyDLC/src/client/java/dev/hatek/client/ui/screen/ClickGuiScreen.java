@@ -52,7 +52,7 @@ public final class ClickGuiScreen extends Screen {
     private long lastScroll;
 
     public ClickGuiScreen() {
-        super(Component.literal("Hatek Client"));
+        super(Component.literal(Style.CLIENT_NAME + Style.CLIENT_SUFFIX));
         for (Category value : Category.values()) {
             this.tabHover.put(value, new Anim(0.0f, 18.0f));
         }
@@ -136,7 +136,7 @@ public final class ClickGuiScreen extends Screen {
 
         Render2D.round(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H,
                 Style.PANEL_R, Style.PANEL);
-        renderSidebar(gg, mx, my);
+        renderTopBar(gg, mx, my);
         renderSourceMenu(gg, mx, my);
         renderContent(gg, mx, my);
         renderNav(gg, mx, my);
@@ -147,39 +147,98 @@ public final class ClickGuiScreen extends Screen {
         Render2D.end(gg);
     }
 
-    private void renderSidebar(GuiGraphicsExtractor gg, double mx, double my) {
-        float x = panelX + Style.SIDEBAR_X;
-        float y = panelY + (Style.PANEL_H - Style.SIDEBAR_H) / 2.0f;
-        Render2D.round(gg, x, y, Style.SIDEBAR_W, Style.SIDEBAR_H,
-                Style.SIDEBAR_R, Style.WHITE_02);
+    /** Позиции вкладок категорий в верхней панели (абсолютные X центров и ширины). */
+    private static final class TopBarLayout {
+        float barX;
+        float barW;
+        float nameX;
+        float sepX;
+        final float[] tabX = new float[Category.values().length];
+        final float[] tabW = new float[Category.values().length];
+    }
+
+    private static float tabWidth(Category value) {
+        return Style.TOPBAR_TAB_PAD * 2.0f + value.iconWidth() + Style.TOPBAR_TAB_ICON_GAP
+                + Fonts.body().width(value.displayName());
+    }
+
+    private static TopBarLayout topBarLayout() {
+        TopBarLayout layout = new TopBarLayout();
+        float nameW = Fonts.title().width(Style.CLIENT_NAME + Style.CLIENT_SUFFIX);
+        Category[] categories = Category.values();
+        float tabsW = 0.0f;
+        for (Category value : categories) {
+            tabsW += tabWidth(value);
+        }
+        float width = Style.TOPBAR_PAD + nameW + Style.TOPBAR_SEP_GAP * 2.0f + 1.0f
+                + tabsW + Style.TOPBAR_PAD - Style.TOPBAR_TAB_PAD;
+        float right = panelX + Style.CONTENT_RIGHT;
+        layout.barX = right - width;
+        layout.barW = width;
+        layout.nameX = layout.barX + Style.TOPBAR_PAD;
+        layout.sepX = layout.nameX + nameW + Style.TOPBAR_SEP_GAP;
+        float cursor = layout.sepX + 1.0f + Style.TOPBAR_SEP_GAP - Style.TOPBAR_TAB_PAD;
+        for (int i = 0; i < categories.length; i++) {
+            layout.tabX[i] = cursor;
+            layout.tabW[i] = tabWidth(categories[i]);
+            cursor += layout.tabW[i];
+        }
+        return layout;
+    }
+
+    private static float tabCenter(TopBarLayout layout, float slot) {
+        int last = layout.tabX.length - 1;
+        int i = Mth.clamp((int) Math.floor(slot), 0, last);
+        int j = Math.min(i + 1, last);
+        float f = Mth.clamp(slot - i, 0.0f, 1.0f);
+        float a = layout.tabX[i] + layout.tabW[i] / 2.0f;
+        float b = layout.tabX[j] + layout.tabW[j] / 2.0f;
+        return a + (b - a) * f;
+    }
+
+    private void renderTopBar(GuiGraphicsExtractor gg, double mx, double my) {
+        TopBarLayout layout = topBarLayout();
+        float y = panelY + Style.TOPBAR_Y;
+        float h = Style.TOPBAR_H;
+        Render2D.round(gg, layout.barX, y, layout.barW, h, Style.TOPBAR_R, Style.WHITE_02);
+
+        // Название клиента: "Rainy" белым, "DLC" акцентом.
+        float baseline = Fonts.title().centeredBaseline(y, h);
+        float after = Fonts.title().draw(gg, Style.CLIENT_NAME, layout.nameX, baseline, Style.WHITE);
+        Fonts.title().draw(gg, Style.CLIENT_SUFFIX, after, baseline, Style.accent());
+
+        Render2D.rect(gg, layout.sepX, y + (h - Style.WM_SEP_H) / 2.0f, Style.WM_SEP_W,
+                Style.WM_SEP_H, Style.WHITE_08);
 
         Category current = MODULES_PAGE.category();
+        boolean modules = tab == Tab.MODULES;
+        Category[] categories = Category.values();
+        float textBaseline = Fonts.body().centeredBaseline(y, h);
+        for (int i = 0; i < categories.length; i++) {
+            Category value = categories[i];
+            boolean active = value == current && modules;
+            boolean hover = Render2D.hovered(mx, my, layout.tabX[i], y, layout.tabW[i], h);
+            Anim anim = this.tabHover.get(value);
+            anim.to(hover || active);
+            float k = anim.get();
+            int tint = active ? Style.accent() : Render2D.lerp(Style.WHITE_25, Style.WHITE_45, k);
+            int text = active ? Style.WHITE : Render2D.lerp(Style.WHITE_25, Style.WHITE_45, k);
+
+            float ix = layout.tabX[i] + Style.TOPBAR_TAB_PAD;
+            Render2D.icon(gg, value.icon(), ix, y + (h - value.iconHeight()) / 2.0f,
+                    value.iconWidth(), value.iconHeight(), tint);
+            Fonts.body().draw(gg, value.displayName(),
+                    ix + value.iconWidth() + Style.TOPBAR_TAB_ICON_GAP, textBaseline, text);
+        }
+
+        // Индикатор активной категории с растяжением при переходе.
         this.selectorAnim.to(current.ordinal());
         float slot = this.selectorAnim.get();
         float travel = Math.abs(slot - current.ordinal());
-        float stretch = Style.SELECTOR_H * (1.0f + Math.min(travel, 1.0f) * 1.6f);
-        Render2D.round(gg, panelX + Style.SELECTOR_X, iconCenter(slot) - stretch / 2.0f,
-                Style.SELECTOR_W, stretch, Style.SELECTOR_R,
-                Render2D.withAlpha(Style.accent(), tab == Tab.MODULES ? 1.0f : 0.45f));
-
-        Category[] categories = Category.values();
-        for (int i = 0; i < categories.length; i++) {
-            Category value = categories[i];
-            float center = iconCenter(i);
-            boolean hover = Render2D.hovered(mx, my, x, center - Style.SIDEBAR_STEP / 2.0f,
-                    Style.SIDEBAR_W, Style.SIDEBAR_STEP);
-            Anim anim = this.tabHover.get(value);
-            anim.to(hover || (value == current && tab == Tab.MODULES));
-            float k = anim.get();
-
-            int tint = value == current && tab == Tab.MODULES
-                    ? Style.accent()
-                    : Render2D.lerp(Style.WHITE_25, Style.WHITE_45, k);
-            Render2D.icon(gg, value.icon(),
-                    x + (Style.SIDEBAR_W - value.iconWidth()) / 2.0f,
-                    center - value.iconHeight() / 2.0f,
-                    value.iconWidth(), value.iconHeight(), tint);
-        }
+        float width = Style.TOPBAR_INDICATOR_W * (1.0f + Math.min(travel, 1.0f) * 1.4f);
+        Render2D.round(gg, tabCenter(layout, slot) - width / 2.0f, y + Style.TOPBAR_INDICATOR_Y,
+                width, Style.TOPBAR_INDICATOR_H, 1.0f,
+                Render2D.withAlpha(Style.accent(), modules ? 1.0f : 0.45f));
     }
 
     private void renderSourceMenu(GuiGraphicsExtractor gg, double mx, double my) {
@@ -188,20 +247,20 @@ public final class ClickGuiScreen extends Screen {
         if (open <= 0.002f) {
             return;
         }
-        float x = panelX + Style.SIDEBAR_X;
-        float y = panelY + Style.SOURCE_Y;
+        float x = panelX + Style.CONTENT_X;
+        float y = panelY + Style.TOPBAR_Y;
 
         Render2D.pushAlpha(open);
-        Render2D.pushTranslate(gg, 0.0f, (1.0f - open) * -10.0f);
-        Render2D.round(gg, x, y, Style.SIDEBAR_W, Style.SOURCE_H,
-                Style.SIDEBAR_R, Style.WHITE_02);
+        Render2D.pushTranslate(gg, (1.0f - open) * -10.0f, 0.0f);
+        Render2D.round(gg, x, y, Style.SOURCE_W, Style.TOPBAR_H,
+                Style.TOPBAR_R, Style.WHITE_02);
         for (int i = 0; i < SOURCE_ICONS.length; i++) {
             float center = sourceCenter(i);
-            this.sourceHover[i].to(Render2D.hovered(mx, my, x, center - Style.SOURCE_STEP / 2.0f,
-                    Style.SIDEBAR_W, Style.SOURCE_STEP));
+            this.sourceHover[i].to(Render2D.hovered(mx, my, center - Style.SOURCE_STEP / 2.0f, y,
+                    Style.SOURCE_STEP, Style.TOPBAR_H));
             float k = this.sourceHover[i].get();
-            Render2D.icon(gg, SOURCE_ICONS[i], x + (Style.SIDEBAR_W - 14.0f) / 2.0f,
-                    center - 7.0f, 14.0f, 14.0f,
+            Render2D.icon(gg, SOURCE_ICONS[i], center - 7.0f,
+                    y + (Style.TOPBAR_H - 14.0f) / 2.0f, 14.0f, 14.0f,
                     Render2D.lerp(Style.WHITE_25, Style.accent(), k));
         }
         Render2D.popTransform(gg);
@@ -295,13 +354,9 @@ public final class ClickGuiScreen extends Screen {
         return Math.round(this.scrollAnim.get());
     }
 
-    private float iconCenter(float index) {
-        return panelY + Style.PANEL_H / 2.0f + (index - 2.0f) * Style.SIDEBAR_STEP;
-    }
-
     private float sourceCenter(int index) {
-        return panelY + Style.SOURCE_Y + Style.SOURCE_H / 2.0f
-                + (index - 1) * Style.SOURCE_STEP;
+        return panelX + Style.CONTENT_X + (Style.SOURCE_W - SOURCE_ICONS.length * Style.SOURCE_STEP) / 2.0f
+                + Style.SOURCE_STEP * (index + 0.5f);
     }
 
     private void clampToScreen() {
@@ -346,12 +401,11 @@ public final class ClickGuiScreen extends Screen {
             }
         }
 
-        float sidebarX = panelX + Style.SIDEBAR_X;
+        TopBarLayout layout = topBarLayout();
+        float barY = panelY + Style.TOPBAR_Y;
         Category[] categories = Category.values();
         for (int i = 0; i < categories.length; i++) {
-            float center = iconCenter(i);
-            if (Render2D.hovered(mx, my, sidebarX, center - Style.SIDEBAR_STEP / 2.0f,
-                    Style.SIDEBAR_W, Style.SIDEBAR_STEP)) {
+            if (Render2D.hovered(mx, my, layout.tabX[i], barY, layout.tabW[i], Style.TOPBAR_H)) {
                 if (tab != Tab.MODULES) {
                     switchTo(Tab.MODULES);
                 }
@@ -367,8 +421,8 @@ public final class ClickGuiScreen extends Screen {
         if (tab == Tab.CONFIGS && this.sourceAnim.get() > 0.5f) {
             for (int i = 0; i < SOURCE_ICONS.length; i++) {
                 float center = sourceCenter(i);
-                if (Render2D.hovered(mx, my, sidebarX, center - Style.SOURCE_STEP / 2.0f,
-                        Style.SIDEBAR_W, Style.SOURCE_STEP)) {
+                if (Render2D.hovered(mx, my, center - Style.SOURCE_STEP / 2.0f, barY,
+                        Style.SOURCE_STEP, Style.TOPBAR_H)) {
                     switch (i) {
                         case 0 -> ConfigManager.openFolder();
                         case 1 -> ConfigManager.save(ConfigManager.nextFreeName());

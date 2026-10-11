@@ -52,8 +52,23 @@ public final class Style {
     public static final int SELECTOR_R = 1;
     public static final int SELECTOR_X = 18;
 
-    public static final int CONTENT_X = 78;
-    public static final int CONTENT_TOP = 15;
+    // Верхняя панель: слева — действия конфигов, справа — RainyDLC и категории.
+    public static final int TOPBAR_Y = 15;
+    public static final int TOPBAR_H = 40;
+    public static final int TOPBAR_R = 15;
+    public static final int TOPBAR_PAD = 16;
+    public static final int TOPBAR_SEP_GAP = 14;
+    public static final int TOPBAR_TAB_PAD = 10;
+    public static final int TOPBAR_TAB_ICON_GAP = 6;
+    public static final int TOPBAR_INDICATOR_W = 7;
+    public static final int TOPBAR_INDICATOR_H = 2;
+    public static final int TOPBAR_INDICATOR_Y = 35;
+    public static final String CLIENT_NAME = "Rainy";
+    public static final String CLIENT_SUFFIX = "DLC";
+
+    public static final int CONTENT_X = 45;
+    public static final int CONTENT_RIGHT = CONTENT_X + 2 * 281 + 272;
+    public static final int CONTENT_TOP = TOPBAR_Y + TOPBAR_H + 10;
     public static final int COLUMNS = 3;
     public static final int CARD_W = 272;
     public static final int COLUMN_PITCH = 281;
@@ -61,7 +76,7 @@ public final class Style {
     public static final int CARD_R = 15;
 
     public static final int SCROLLBAR_X = 918;
-    public static final int SCROLLBAR_Y = 26;
+    public static final int SCROLLBAR_Y = CONTENT_TOP + 11;
     public static final int SCROLLBAR_W = 2;
     public static final int SCROLLBAR_H = 235;
     public static final int SCROLLBAR_MIN_THUMB = 30;
@@ -163,7 +178,7 @@ public final class Style {
     public static final int DANGER = 0xFFFF6164;
     public static final int FAVOURITE = 0xFFFF0055;
 
-    public static final int NAV_X = 767;
+    public static final int NAV_X = CONTENT_RIGHT - 138;
     public static final int NAV_Y = PANEL_H - 52 - 15;
     public static final int NAV_W = 138;
     public static final int NAV_H = 52;
@@ -175,9 +190,8 @@ public final class Style {
     public static final int NAV_INDICATOR_H = 2;
     public static final int NAV_INDICATOR_Y = 47;
 
-    public static final int SOURCE_Y = 431;
-    public static final int SOURCE_H = 137;
-    public static final float SOURCE_STEP = 43.0f;
+    public static final float SOURCE_STEP = 40.0f;
+    public static final int SOURCE_W = 120;
 
     public static final int HUD_PANEL = 0xDB181717;
     public static final int HUD_MARGIN = 10;
