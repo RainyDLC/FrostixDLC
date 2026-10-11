@@ -152,6 +152,21 @@ public final class NeuroStore {
         return Files.isRegularFile(weightsPath(name));
     }
 
+    public static void ensureDefaultWeights() {
+        try {
+            Path defaultPath = weightsPath("default");
+            if (!Files.isRegularFile(defaultPath)) {
+                try (var in = NeuroStore.class.getResourceAsStream("/neuro/default.weights.json")) {
+                    if (in != null) {
+                        Files.createDirectories(defaultPath.getParent());
+                        Files.copy(in, defaultPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     public static String loadActiveProfile() {
         try {
             Path file = dir().resolve("active_profile.txt");

@@ -40,7 +40,7 @@ import java.util.Arrays;
 public final class Attack {
     private static final AuraTimer COOLDOWN_TIMER = new AuraTimer();
 
-    public static final double HIT_TOLERANCE = 0.05;
+    public static final double HIT_TOLERANCE = 0.2;
 
     private static final float CHARGE = 1.0F;
 
@@ -54,8 +54,8 @@ public final class Attack {
 
     private static float chargeTarget = CHARGE;
 
-    private static final float AURA_GAP_MIN = 205.0F;
-    private static final float AURA_GAP_SPREAD = 60.0F;
+    private static final float AURA_GAP_MIN = 80.0F;
+    private static final float AURA_GAP_SPREAD = 40.0F;
 
     private static long auraGap = (long) AURA_GAP_MIN;
 
@@ -250,25 +250,28 @@ public final class Attack {
         if (!fallCheck || mc.player == null) {
             return true;
         }
-        if (critStateReady()) {
-            return true;
-        }
         if (!AttackAura.extra(AttackAura.SMART_CRITS)) {
-            return false;
+            return true;
         }
         if (critImpossible()) {
             return true;
         }
-        if (mc.player.onGround()) {
-            return !fallComing();
+        if (critStateReady()) {
+            return true;
         }
-        return false;
+        if (!mc.player.onGround()) {
+            return mc.player.getDeltaMovement().y < 0.0 || mc.player.fallDistance > 0.0F;
+        }
+        if (mc.options != null && mc.options.keyJump.isDown()) {
+            return false;
+        }
+        return true;
     }
 
     private static boolean critStateReady() {
         Minecraft mc = mc();
         return mc.player != null
-                && mc.player.fallDistance > critFallHeight
+                && (mc.player.fallDistance > 0.0F || mc.player.getDeltaMovement().y < 0.0)
                 && !mc.player.onGround()
                 && !mc.player.onClimbable()
                 && !mc.player.isInWater()
@@ -370,13 +373,12 @@ public final class Attack {
 
         if (PlayerStats.clickReady()) {
             float sampled = PlayerStats.click(AuraRandom.range(0.0F, 1.0F));
-            auraGap = (long) Math.max(AURA_GAP_MIN, sampled);
+            auraGap = (long) Math.max(80.0F, sampled);
         } else {
-            auraGap = (long) (AuraRandom.human(AURA_GAP_MIN, AURA_GAP_MIN + AURA_GAP_SPREAD)
-                    * AuraProfile.tempo());
+            auraGap = (long) (AuraRandom.human(80.0F, 120.0F) * AuraProfile.tempo());
 
-            if (AuraRandom.chance(0.06F)) {
-                auraGap += (long) AuraRandom.human(40.0F, 230.0F);
+            if (AuraRandom.chance(0.02F)) {
+                auraGap += (long) AuraRandom.human(10.0F, 30.0F);
             }
         }
 
@@ -384,7 +386,7 @@ public final class Attack {
             extraCooldown = 0L;
             return;
         }
-        extraCooldown = (long) AuraRandom.human(0.0F, 10.0F);
+        extraCooldown = (long) AuraRandom.human(0.0F, 5.0F);
     }
 
     private static long nextSprintLead() {

@@ -72,6 +72,7 @@ public final class AttackAura extends Module {
 
     private final SliderSetting attackRange = new SliderSetting("Attack Range", 3.0, 3.0, 6.0, 0.1);
     private final SliderSetting preRange = new SliderSetting("Detect Range", 1.0, 0.0, 5.0, 0.1);
+    private final SliderSetting fov = new SliderSetting("FOV", 360.0, 30.0, 360.0, 5.0);
 
     private final ModeSetting movementType =
             new ModeSetting("Movement", 0, MOVE_DEFAULT, MOVE_FREE);
@@ -96,8 +97,6 @@ public final class AttackAura extends Module {
 
     private static final float KEEP_MARGIN = 1.5F;
 
-    private static final float ACQUIRE_FOV = 65.0F;
-
     public static LivingEntity target;
     public static boolean canSwap;
 
@@ -112,7 +111,7 @@ public final class AttackAura extends Module {
                 Category.COMBAT);
         instance = this;
         keybind(GLFW.GLFW_KEY_R);
-        with(this.attackRange, this.preRange, this.movementType, this.targets, this.misc,
+        with(this.attackRange, this.preRange, this.fov, this.movementType, this.targets, this.misc,
                 this.extras, this.chargeSpread, this.rotations, this.neuroTrain);
 
         ComponentManager.getInstance().init();
@@ -409,10 +408,6 @@ public final class AttackAura extends Module {
             return;
         }
 
-        if (!canPacket && (serverSprinting || mc.player.isSprinting()) && Attack.critPending()) {
-            return;
-        }
-
         Runnable[] shieldBreak = Attack.hitShieldBreakTaskForUse(target, misc(BREAK_SHIELD));
         Runnable[] shieldPressBypass = Attack.resetShieldSilentTaskForUse(true);
         Runnable[] skipSilentSprint = Attack.skipSilentSprintingTaskForUse(canPacket, serverSprinting);
@@ -467,7 +462,7 @@ public final class AttackAura extends Module {
             if (!(entity instanceof LivingEntity living) || !isValidTarget(living)) {
                 continue;
             }
-            if (AuraUtil.calculateFOVFromCamera(living) > ACQUIRE_FOV) {
+            if (this.fov.value() < 360.0 && AuraUtil.calculateFOVFromCamera(living) > this.fov.value()) {
                 continue;
             }
             double distance = mc.player.distanceToSqr(living);
@@ -555,6 +550,7 @@ public final class AttackAura extends Module {
         reset();
 
         preferred = lookingAt();
+        updateTarget();
     }
 
     @Override

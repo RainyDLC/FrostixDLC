@@ -90,7 +90,7 @@ public final class NeuroTrainScreen extends Screen {
             return 248.0f;
         }
         if (ready()) {
-            return 340.0f;
+            return 395.0f;
         }
         int rows = Math.min(MAX_ROWS, this.profiles.size());
         return 330.0f + rows * (ROW_H + 4.0f);
@@ -249,33 +249,36 @@ public final class NeuroTrainScreen extends Screen {
         title.draw(gg, "Запись готова", x + PAD, y + 30.0f, Style.WHITE);
         body.draw(gg, "«" + NeuroRotation.datasetName() + "» — "
                 + NeuroRotation.datasetSize() + " сэмплов", x + PAD, y + 54.0f, Style.WHITE_45);
-        body.draw(gg, "Python обучит сеть повторять твою наводку:", x + PAD, y + 78.0f,
+        body.draw(gg, "Нейросеть обучится повторять твою наводку и моторику.", x + PAD, y + 78.0f,
                 Style.WHITE_45);
-        body.draw(gg, "скорость, плавность и манеру наведения.", x + PAD, y + 94.0f, Style.WHITE_45);
-        body.draw(gg, "Всё локально на твоём ПК — в сеть ничего не уходит.", x + PAD, y + 118.0f,
+        body.draw(gg, "Всё локально на твоём ПК — в сеть ничего не уходит.", x + PAD, y + 96.0f,
                 Style.WHITE_25);
 
         String err = NeuroRotation.learnStatus;
         if (!err.isEmpty()) {
-            body.draw(gg, err, x + PAD, y + 142.0f, Style.WHITE_45);
+            body.draw(gg, err, x + PAD, y + 120.0f, Style.WHITE_45);
         }
 
         float bx = x + PAD;
-        float by = y + 172.0f;
+        float by1 = y + 146.0f;
         float bw = PANEL_W - PAD * 2;
-        drawButton(gg, bx, by, bw, BTN_H, "Обучить нейронку (Python)", true,
-                Render2D.hovered(mx, my, bx, by, bw, BTN_H), label);
+        drawButton(gg, bx, by1, bw, BTN_H, "Обучить (быстро, Java)", true,
+                Render2D.hovered(mx, my, bx, by1, bw, BTN_H), label);
 
-        float dbY = by + BTN_H + 10.0f;
+        float by2 = by1 + BTN_H + 8.0f;
+        drawButton(gg, bx, by2, bw, BTN_H, "Обучить (Python)", true,
+                Render2D.hovered(mx, my, bx, by2, bw, BTN_H), label);
+
+        float dbY = by2 + BTN_H + 8.0f;
         drawButton(gg, bx, dbY, bw, BTN_H,
-                NeuroDeps.busy ? "Скачивание…" : "Скачать зависимости",
+                NeuroDeps.busy ? "Скачивание…" : "Скачать зависимости Python",
                 !NeuroDeps.busy && !learning(),
                 Render2D.hovered(mx, my, bx, dbY, bw, BTN_H), label);
         String depsStatus = NeuroDeps.status;
         if (!depsStatus.isEmpty()) {
             label.draw(gg, depsStatus, x + PAD, dbY + BTN_H + 8.0f, Style.WHITE_45);
         }
-        drawClose(gg, x, y + 288.0f, bw, mx, my, label);
+        drawClose(gg, x, y + panelH() - 32.0f, bw, mx, my, label);
     }
 
     private void drawLearning(GuiGraphicsExtractor gg, float x, float y,
@@ -349,17 +352,22 @@ public final class NeuroTrainScreen extends Screen {
             return super.mouseClicked(event, doubleClick);
         }
         if (ready()) {
-            float by = y + 172.0f;
-            if (Render2D.hovered(mx, my, x + PAD, by, bw, BTN_H)) {
+            float by1 = y + 146.0f;
+            if (Render2D.hovered(mx, my, x + PAD, by1, bw, BTN_H)) {
+                NeuroRotation.startJavaTraining();
+                return true;
+            }
+            float by2 = by1 + BTN_H + 8.0f;
+            if (Render2D.hovered(mx, my, x + PAD, by2, bw, BTN_H)) {
                 NeuroRotation.startPythonTraining();
                 return true;
             }
-            float dbY = by + BTN_H + 10.0f;
+            float dbY = by2 + BTN_H + 8.0f;
             if (!NeuroDeps.busy && Render2D.hovered(mx, my, x + PAD, dbY, bw, BTN_H)) {
                 NeuroDeps.ensureAsync();
                 return true;
             }
-            if (Render2D.hovered(mx, my, x + PAD, y + 288.0f, bw, 20.0f)) {
+            if (Render2D.hovered(mx, my, x + PAD, y + panelH() - 32.0f, bw, 20.0f)) {
                 closeToClickGui();
                 return true;
             }

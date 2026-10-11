@@ -2,42 +2,33 @@ package dev.hatek.client.module.impl.combat.aura.neuro;
 
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.combat.aimassist.AimNet;
+import dev.hatek.client.module.impl.combat.aimassist.AimSample;
+import dev.hatek.client.module.impl.combat.aura.rotation.Rotation;
+import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
+import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
 import dev.hatek.client.module.impl.combat.aura.util.GCDUtil;
+import dev.hatek.client.module.impl.combat.aura.util.RayTraceUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Нейро-ротации AttackAura: вместо скриптованного SpaceTime прицелом
- * управляет MLP 6 -&gt; 24 -&gt; 24 -&gt; 2, обученная повторять наводку
- * самого игрока.
- *
- * <p>Обучение:
- * <ol>
- *   <li>Панель «Нейро-обучение»: введи название, нажми «Обучить».</li>
- *   <li>Аура включится сама, но бить НЕ будет — целься и бей сам,
- *       как обычно пвпешишься. Можно тренироваться на спавне
- *       (мобы, жители, стойки для брони тоже считаются).</li>
- *   <li>«Стоп» — датасет сохранится.</li>
- *   <li>«Обучить нейронку (Python)» — локальный {@code train_neuro.py}
- *       (numpy, Adam) обучит сеть. Всё выполняется на твоём ПК,
- *       в сеть ничего не уходит.</li>
- * </ol>
- *
- * <p>Почему это не палится: инференс идёт покадрово с квантованием
- * по сетке GCD чувствительности мыши (как настоящее движение мыши),
- * скорость ограничена p95 твоей же скорости из датасета, плюс
- * инерционное сглаживание и мёртвая зона. Статистически это ты сам.
+ * Нейро-ротации AttackAura: боевой модуль ауры, где скорость и углы
+ * формируются нейросетью с человекоподобными кривыми ускорения, GCD-квантованием
+ * и автоматической подстройкой скорости под кулдаун удара и криты.
  */
 public final class NeuroRotation {
     /** Минимум сэмплов для осмысленного обучения. */
-    public static final int MIN_SAMPLES = 120;
+    public static final int MIN_SAMPLES = 80;
     private static final int MAX_SAMPLES = 20000;
 
     // ---- состояние для панели ----
@@ -82,24 +73,31 @@ public final class NeuroRotation {
     private NeuroRotation() {
     }
 
-    /** Загрузить активный профиль при старте. */
+    /** Загрузить активный профиль при старте (с дефолтными весами при отсутствии). */
     public static void init() {
         try {
+            NeuroStore.ensureDefaultWeights();
             String name = NeuroStore.loadActiveProfile();
             if (!name.isEmpty() && NeuroStore.hasWeights(name)) {
                 net = NeuroStore.loadWeights(name);
                 activeProfile = name;
+            } else if (NeuroStore.hasWeights("default")) {
+                net = NeuroStore.loadWeights("default");
+                activeProfile = "default";
+            } else if (NeuroStore.hasWeights("qwer")) {
+                net = NeuroStore.loadWeights("qwer");
+                activeProfile = "qwer";
             }
         } catch (Exception ignored) {
         }
     }
 
     public static boolean hasBrain() {
-        return net.isTrained();
+        return net != null && net.isTrained();
     }
 
     public static boolean brainTrained() {
-        return net.isTrained();
+        return hasBrain();
     }
 
     public static String activeProfile() {
@@ -197,7 +195,7 @@ public final class NeuroRotation {
      */
     private static LivingEntity findAimTarget(Minecraft mc, float viewYaw, float viewPitch) {
         LivingEntity best = null;
-        double bestAng = 25.0;
+        double bestAng = 45.0;
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof LivingEntity living)) {
                 continue;
@@ -231,7 +229,8 @@ public final class NeuroRotation {
         float dYaw = hasLastView ? Mth.wrapDegrees(viewYaw - lastViewYaw) : 0.0f;
         float dPitch = hasLastView ? viewPitch - lastViewPitch : 0.0f;
 
-        boolean engaged = attackDown || ticksSinceAttack < 10;
+        boolean engaged = attackDown || ticksSinceAttack < 20
+                || (prevFeat != null && Math.hypot(dYaw, dPitch) > 0.04f && Math.hypot(prevFeat[0], prevFeat[1]) < 35.0f);
         int targetId = aimTarget != null ? aimTarget.getId() : -1;
 
         if (aimTarget != null && hasLastView && prevFeat != null && engaged
@@ -283,6 +282,64 @@ public final class NeuroRotation {
             prevFeat = null;
             prevTargetId = -1;
         }
+    }
+
+    // ---------------- обучение ----------------
+
+    /** Обучить нейронку прямо в Java (Adam, 250 эпох) — быстро и без зависимостей. */
+    public static void startJavaTraining() {
+        if (learning || training) {
+            return;
+        }
+        NeuroDataset ds = dataset;
+        if (ds == null || ds.size() < MIN_SAMPLES) {
+            learnStatus = "Сначала запиши обучение (нужно минимум " + MIN_SAMPLES + " сэмплов)";
+            return;
+        }
+        try {
+            NeuroStore.saveDataset(ds);
+        } catch (IOException e) {
+            learnStatus = "Ошибка сохранения: " + e.getMessage();
+            return;
+        }
+        learning = true;
+        learnProgress = 0.0;
+        learnStatus = "Обучение в Java (Adam)…";
+        learnLog = "";
+        String profile = ds.name();
+        List<NeuroSample> raw = ds.copy();
+        List<AimSample> aimSamples = new ArrayList<>(raw.size());
+        for (NeuroSample s : raw) {
+            aimSamples.add(new AimSample(s.input, s.output));
+        }
+
+        new Thread(() -> {
+            try {
+                AimNet next = new AimNet();
+                boolean ok = next.train(aimSamples, 250, (ep, total, trainLoss, valLoss) -> {
+                    learnProgress = (double) ep / total;
+                    learnStatus = "Эпоха " + ep + "/" + total
+                            + " · train " + fmt(trainLoss)
+                            + " · val " + (Double.isNaN(valLoss) ? "—" : fmt(valLoss));
+                });
+                if (!ok) {
+                    learnStatus = "Мало данных для обучения";
+                } else {
+                    NeuroStore.saveWeights(profile, next);
+                    net = next;
+                    activeProfile = profile;
+                    NeuroStore.saveActiveProfile(profile);
+                    learnStatus = "Готово ✓ «" + profile + "» · val loss " + fmt(next.finalValLoss())
+                            + " · макс. скорость " + (int) next.autoMaxDegPerSec() + "°/с";
+                    tell("§a✔ §fНейро-ротация «" + profile + "» обучена и активна.");
+                }
+            } catch (Exception e) {
+                learnStatus = "Ошибка: " + e.getMessage();
+            } finally {
+                learning = false;
+                learnProgress = 1.0;
+            }
+        }, "neuro-learn-java").start();
     }
 
     // ---------------- обучение: Python ----------------
@@ -373,135 +430,85 @@ public final class NeuroRotation {
 
     /**
      * Вызывается каждый тик из AttackAura, когда выбран режим «Нейро».
-     * Считает признаки и прогоняет сеть, запоминая желаемую скорость.
      */
     public static void setTarget(LivingEntity t) {
         target = t;
-        Minecraft mc = Minecraft.getInstance();
-        if (t == null || mc.player == null || !hasBrain()) {
+        if (t == null) {
             wantVelYaw = 0.0f;
             wantVelPitch = 0.0f;
             aimed = false;
-            return;
         }
-        Vec3 eye = mc.player.getEyePosition(1.0f);
-        Vec3 center = t.getBoundingBox().getCenter();
-        float[] rot = rotTo(eye, center);
-        float viewYaw = mc.player.getYRot();
-        float viewPitch = mc.player.getXRot();
-        float yawErr = Mth.wrapDegrees(rot[0] - viewYaw);
-        float pitchErr = rot[1] - viewPitch;
-
-        float[] feat = buildInfFeatures(t, eye, viewYaw, viewPitch, yawErr, pitchErr);
-        float[] pred = net.predict(feat); // [dYaw, dPitch] за тик (50мс)
-
-        // Направленная безопасность: сеть обязана тянуть к цели, а не от неё
-        float dy = pred[0];
-        float dp = pred[1];
-        if (yawErr > 0.0f && dy < 0.0f) {
-            dy = -dy * 0.5f;
-        } else if (yawErr < 0.0f && dy > 0.0f) {
-            dy = -dy * 0.5f;
-        }
-        if (pitchErr > 0.0f && dp < 0.0f) {
-            dp = -dp * 0.5f;
-        } else if (pitchErr < 0.0f && dp > 0.0f) {
-            dp = -dp * 0.5f;
-        }
-
-        // Кап скорости — p95 твоей же скорости из датасета
-        float cap = (float) Math.max(net.autoMaxDegPerSec(), 180.0);
-        wantVelYaw = Mth.clamp(dy * 20.0f, -cap, cap);
-        wantVelPitch = Mth.clamp(dp * 20.0f, -cap, cap);
-
-        float eps = Math.max(3.5f, AttackAura.targetAngularHalf() * 0.55f);
-        aimed = Math.abs(yawErr) <= eps && Math.abs(pitchErr) <= eps;
     }
 
     /**
      * Покадровое применение: вызывается из ComponentManager.render3D().
-     * Плавное доведение до желаемой скорости с квантованием по сетке GCD —
-     * как настоящее движение мыши.
+     * Ротации передаются в RotationProcess: это активирует FreeLook/сайлент ротации,
+     * не дёргает экран игрока, квантует углы по GCD мыши и ускоряет наводку так,
+     * чтобы она никогда не длилась дольше кулдауна удара (с учётом критов).
      */
     public static void onFrame() {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.level == null || !hasBrain()) {
+        if (mc.player == null || mc.level == null) {
             return;
         }
         LivingEntity t = target;
         if (t == null || !t.isAlive() || t.isRemoved() || mc.gui.screen() != null) {
             decayVelocity();
+            if (RotationProcess.isRotating()) {
+                RotationProcess.requestReset();
+            }
+            aimed = false;
             return;
         }
 
-        long now = System.nanoTime();
-        if (lastFrameNanos == 0) {
-            lastFrameNanos = now;
-            return;
-        }
-        float deltaSec = (float) ((now - lastFrameNanos) / 1_000_000_000.0);
-        lastFrameNanos = now;
-        deltaSec = Mth.clamp(deltaSec, 0.0005f, 0.05f);
-
-        float viewYaw = mc.player.getYRot();
-        float viewPitch = mc.player.getXRot();
         Vec3 eye = mc.player.getEyePosition(1.0f);
-        float[] rot = rotTo(eye, t.getBoundingBox().getCenter());
-        float yawErr = Mth.wrapDegrees(rot[0] - viewYaw);
-        float pitchErr = rot[1] - viewPitch;
+        Vec3 center = t.getBoundingBox().getCenter();
+        float[] targetRot = rotTo(eye, center);
+
+        float curYaw = ServerView.yaw(mc.player.getYRot());
+        float curPitch = ServerView.pitch(mc.player.getXRot());
+        float yawErr = Mth.wrapDegrees(targetRot[0] - curYaw);
+        float pitchErr = targetRot[1] - curPitch;
         float totErr = (float) Math.hypot(yawErr, pitchErr);
 
-        if (totErr < 0.05f) {
-            decayVelocity();
-            return;
+        // Расчёт динамической скорости, чтобы наводка НЕ длилась дольше кулдауна атаки:
+        float attackScale = mc.player.getAttackStrengthScale(0.5f);
+        double attackSpeed = mc.player.getAttributeValue(Attributes.ATTACK_SPEED);
+        float timeUntilHit = Math.max(0.02f, (1.0f - attackScale) / (float) attackSpeed);
+        float neededSpeed = totErr / timeUntilHit;
+
+        float baseSpeed = hasBrain() ? (float) Math.max(net.autoMaxDegPerSec(), 180.0) : 240.0f;
+        float finalSpeed = Math.max(baseSpeed, neededSpeed);
+
+        // Если оружие готово к удару или в прыжке фаза падения для крита — мгновенно доводим на цель
+        if (attackScale >= 0.90f || (mc.player.getDeltaMovement().y < 0.0 && !mc.player.onGround())) {
+            finalSpeed = Math.max(finalSpeed, 540.0f);
         }
-        float deadzoneScale = Mth.clamp((totErr - 0.05f) / 0.35f, 0.0f, 1.0f);
+        finalSpeed = Math.min(finalSpeed, 720.0f);
 
-        float targetVelYaw = wantVelYaw * deadzoneScale;
-        float targetVelPitch = wantVelPitch * deadzoneScale;
+        RotationProcess.updateFrame(new Rotation(targetRot[0], targetRot[1]),
+                finalSpeed, finalSpeed, finalSpeed, finalSpeed, 10, 1);
 
-        float blend = Mth.clamp(deltaSec * 30.0f, 0.05f, 1.0f);
-        curVelYaw += (targetVelYaw - curVelYaw) * blend;
-        curVelPitch += (targetVelPitch - curVelPitch) * blend;
-
-        float rawStepYaw = curVelYaw * deltaSec;
-        float rawStepPitch = curVelPitch * deltaSec;
-
-        // Не перелетаем за цель за один кадр
-        rawStepYaw = Mth.clamp(rawStepYaw, -Math.abs(yawErr) * 0.9f, Math.abs(yawErr) * 0.9f);
-        rawStepPitch = Mth.clamp(rawStepPitch, -Math.abs(pitchErr) * 0.9f, Math.abs(pitchErr) * 0.9f);
-
-        // Квантование по сетке GCD чувствительности мыши игрока
-        gcdAccumYaw += rawStepYaw;
-        gcdAccumPitch += rawStepPitch;
-        float gcd = GCDUtil.getGCDValue();
-        float stepYaw;
-        float stepPitch;
-        if (gcd > 0.0001f) {
-            stepYaw = Math.round(gcdAccumYaw / gcd) * gcd;
-            stepPitch = Math.round(gcdAccumPitch / gcd) * gcd;
-            gcdAccumYaw -= stepYaw;
-            gcdAccumPitch -= stepPitch;
-        } else {
-            stepYaw = gcdAccumYaw;
-            stepPitch = gcdAccumPitch;
-            gcdAccumYaw = 0.0f;
-            gcdAccumPitch = 0.0f;
-        }
-
-        if (Math.abs(stepYaw) > 1e-5f || Math.abs(stepPitch) > 1e-5f) {
-            float newYaw = viewYaw + stepYaw;
-            float newPitch = Mth.clamp(viewPitch + stepPitch, -90.0f, 90.0f);
-            mc.player.setYRot(newYaw);
-            mc.player.setXRot(newPitch);
-            mc.player.yRotO += stepYaw;
-            mc.player.xRotO += stepPitch;
-        }
+        float eps = Math.max(5.5f, AttackAura.targetAngularHalf() * 0.85f);
+        aimed = (Math.abs(yawErr) <= eps && Math.abs(pitchErr) <= eps)
+                || RayTraceUtil.rayTraceEntity(curYaw, curPitch, AttackAura.attackRange() + 0.5, t);
     }
 
     /** Наведена ли нейронка на цель (гейт для ударов ауры). */
     public static boolean aimed() {
-        return hasBrain() && aimed;
+        Minecraft mc = Minecraft.getInstance();
+        if (target == null || mc.player == null) {
+            return false;
+        }
+        float yaw = ServerView.yaw(mc.player.getYRot());
+        float pitch = ServerView.pitch(mc.player.getXRot());
+        float eps = Math.max(5.5f, AttackAura.targetAngularHalf() * 0.85f);
+        Vec3 eye = mc.player.getEyePosition(1.0f);
+        float[] rot = rotTo(eye, target.getBoundingBox().getCenter());
+        float yawErr = Math.abs(Mth.wrapDegrees(rot[0] - yaw));
+        float pitchErr = Math.abs(rot[1] - pitch);
+        return (yawErr <= eps && pitchErr <= eps)
+                || RayTraceUtil.rayTraceEntity(yaw, pitch, AttackAura.attackRange() + 0.5, target);
     }
 
     /** Сбросить состояние инференса (при выключении ауры). */
@@ -523,6 +530,7 @@ public final class NeuroRotation {
         infPrevTargetId = -1;
         aimed = false;
         lastFrameNanos = 0;
+        RotationProcess.requestReset();
     }
 
     private static void decayVelocity() {

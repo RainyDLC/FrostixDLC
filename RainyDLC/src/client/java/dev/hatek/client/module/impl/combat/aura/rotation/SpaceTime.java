@@ -390,7 +390,12 @@ public final class SpaceTime {
         float rawDeltaYaw = outYaw - serverYaw;
         float sendYaw = serverYaw + rawDeltaYaw * (1.0F + drift);
 
-        float speed = mc.player.isFallFlying() && entity.isFallFlying() ? 360.0F : 45.0F;
+        float baseSpeed = 90.0F;
+        float charge = mc.player.getAttackStrengthScale(0.5F);
+        if (charge > 0.85F || (mc.player.getDeltaMovement().y < 0.0 && !mc.player.onGround())) {
+            baseSpeed = 240.0F;
+        }
+        float speed = mc.player.isFallFlying() && entity.isFallFlying() ? 360.0F : baseSpeed;
         RotationProcess.updateFrame(new Rotation(sendYaw, outPitch), speed, speed, speed, speed, 10, 1);
 
         serverYaw = sendYaw;
