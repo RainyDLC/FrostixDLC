@@ -22,7 +22,6 @@
     "accessor.MinecraftAccessor",
     "accessor.ScreenInvoker",
     "accessor.GuiAccessor",
-    "accessor.HudAccessor",
     "accessor.BossHealthOverlayAccessor"
   ],
   "injectors": {

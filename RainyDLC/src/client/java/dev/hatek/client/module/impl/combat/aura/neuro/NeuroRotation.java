@@ -597,7 +597,7 @@ public final class NeuroRotation {
             if (mc.gui != null) {
                 Component text = Component.literal(msg);
                 mc.execute(() -> ((dev.hatek.mixin.accessor.GuiAccessor) mc.gui)
-                        .hatek$hud().getChat().addMessage(text));
+                        .hatek$hud().setOverlayMessage(text, false));
             }
         } catch (Exception ignored) {
         }

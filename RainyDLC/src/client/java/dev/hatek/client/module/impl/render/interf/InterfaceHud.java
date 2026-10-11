@@ -9,7 +9,6 @@ import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.mixin.accessor.BossHealthOverlayAccessor;
 import dev.hatek.mixin.accessor.GuiAccessor;
-import dev.hatek.mixin.accessor.HudAccessor;
 import dev.hatek.client.ui.Style;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
@@ -400,7 +399,7 @@ public final class InterfaceHud {
             if (hud == null) {
                 return 0;
             }
-            BossHealthOverlay overlay = ((HudAccessor) hud).hatek$bossOverlay();
+            BossHealthOverlay overlay = hud.getBossOverlay();
             if (overlay instanceof BossHealthOverlayAccessor acc) {
                 java.util.Map events = acc.hatek$events();
                 return events == null ? 0 : events.size();
