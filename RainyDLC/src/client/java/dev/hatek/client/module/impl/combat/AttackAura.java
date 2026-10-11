@@ -8,7 +8,9 @@ import dev.hatek.client.module.impl.combat.aura.neuro.NeuroTrainScreen;
 import dev.hatek.client.module.impl.combat.aura.rotation.ComponentManager;
 import dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
+import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
 import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
 import dev.hatek.client.module.impl.combat.aura.util.AuraRandom;
 import dev.hatek.client.module.impl.combat.aura.util.AuraUtil;
@@ -209,7 +211,6 @@ public final class AttackAura extends Module {
         onUpdate();
 
         if (target != null) {
-            updateRotation();
             idleSwing();
         } else if (neuroMode()) {
             NeuroRotation.setTarget(null);
@@ -256,6 +257,8 @@ public final class AttackAura extends Module {
             reset();
             return;
         }
+
+        updateRotation();
 
         if (!MovementManager.getInstance().isMovementLocked()
                 && !NeuroRotation.isTraining()) {
@@ -410,6 +413,14 @@ public final class AttackAura extends Module {
                 canPacket, serverSprinting, Attack.critPending());
 
         Runnable preHit = () -> {
+            if (mc.getConnection() != null && mc.player != null) {
+                float curYaw = mc.player.getYRot();
+                float curPitch = mc.player.getXRot();
+                if (curYaw != ServerView.yaw(curYaw) || curPitch != ServerView.pitch(curPitch)) {
+                    mc.getConnection().send(new ServerboundMovePlayerPacket.Rot(
+                            curYaw, curPitch, mc.player.onGround(), mc.player.horizontalCollision));
+                }
+            }
             skipSilentSprint[0].run();
             shieldPressBypass[0].run();
             shieldBreak[0].run();

@@ -514,26 +514,44 @@ public final class Attack {
         if (livingIn == null || mc.player == null) {
             return false;
         }
-        float yaw = Mth.wrapDegrees(ServerView.yaw(mc.player.getYRot()));
-        float pitch = ServerView.pitch(mc.player.getXRot());
-        // Check against the leaded box: the server validates the hit against the
-        // target's later position, using the rotation it already received.
-        return onRay(SpaceTime.leadedBox(livingIn), yaw, pitch, range, HIT_TOLERANCE);
+        AABB box = livingIn.getBoundingBox();
+        AABB leadBox = SpaceTime.leadedBox(livingIn);
+        double tolerance = Math.max(0.12, livingIn.getPickRadius() + 0.08);
+
+        // 1. Проверяем по ротациям, уже известным серверу
+        Vec3 serverEyes = ServerView.eyePos(mc.player);
+        float serverY = Mth.wrapDegrees(ServerView.yaw(mc.player.getYRot()));
+        float serverP = ServerView.pitch(mc.player.getXRot());
+        if (onRay(box, serverEyes, serverY, serverP, range, tolerance)
+                || onRay(leadBox, serverEyes, serverY, serverP, range, tolerance)) {
+            return true;
+        }
+
+        // 2. Проверяем по текущим ротациям клиента (перед ударом синхронизируются в preHit)
+        Vec3 playerEyes = mc.player.getEyePosition();
+        float playerY = Mth.wrapDegrees(mc.player.getYRot());
+        float playerP = mc.player.getXRot();
+        return onRay(box, playerEyes, playerY, playerP, range, tolerance)
+                || onRay(leadBox, playerEyes, playerY, playerP, range, tolerance);
     }
 
-    public static boolean onRay(AABB box, float yaw, float pitch, double range, double tolerance) {
-        Minecraft mc = mc();
-        if (mc.player == null || box == null) {
+    public static boolean onRay(AABB box, Vec3 eyes, float yaw, float pitch, double range, double tolerance) {
+        if (box == null || eyes == null) {
             return false;
         }
         AABB target = box.inflate(tolerance);
         if (target.maxX <= target.minX || target.maxY <= target.minY || target.maxZ <= target.minZ) {
             return false;
         }
-        Vec3 eyes = ServerView.eyePos(mc.player);
         Vec3 look = RayTraceUtil.getVectorForRotation(pitch, yaw);
         return target.contains(eyes)
                 || target.clip(eyes, eyes.add(look.scale(range + 0.5))).isPresent();
+    }
+
+    public static boolean onRay(AABB box, float yaw, float pitch, double range, double tolerance) {
+        Minecraft mc = mc();
+        Vec3 eyes = mc.player != null ? ServerView.eyePos(mc.player) : Vec3.ZERO;
+        return onRay(box, eyes, yaw, pitch, range, tolerance);
     }
 
     public static boolean shouldAttack(LivingEntity livingTarget, boolean rayCast,
