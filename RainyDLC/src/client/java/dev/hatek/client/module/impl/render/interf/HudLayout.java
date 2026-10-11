@@ -27,7 +27,9 @@ public final class HudLayout {
         WATERMARK("Watermark"),
         KEYBINDS("Keybinds"),
         EFFECTS("Effects"),
-        HOTBAR("Hotbar");
+        HOTBAR("Hotbar"),
+        ARMOR("Armor"),
+        TARGET("Target");
 
         private final String label;
 
@@ -79,17 +81,6 @@ public final class HudLayout {
         load();
         Entry e = ENTRIES.get(el);
         e.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
-    }
-
-    /** Сброс всех позиций и масштабов к якорям по умолчанию. */
-    public static void reset() {
-        load();
-        for (Entry e : ENTRIES.values()) {
-            e.x = null;
-            e.y = null;
-            e.scale = 1.0f;
-        }
-        save();
     }
 
     public static void save() {
