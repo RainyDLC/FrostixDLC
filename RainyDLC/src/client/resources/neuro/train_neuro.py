@@ -65,7 +65,52 @@ def forward(p, X):
     return out, (X, a1, a2)
 
 
+def compute_calib(X, Y):
+    """Калибровка моторики игрока (та же, что AimNet.computeCalib в Java).
+
+    Остаточная ошибка: насколько игрок оставляет прицел мимо точки после
+    своего доворота, когда «на цели». Паузы: серии тиков почти без доворота
+    в слежении. Возвращает dict для секции "calib" весов.
+    """
+    calib = {
+        "resid_yaw_p50": 0.5, "resid_yaw_p90": 1.4,
+        "resid_pitch_p50": 0.4, "resid_pitch_p90": 1.1,
+        "pause_p50_ticks": 3.0, "pause_p90_ticks": 8.0,
+        "pause_per_100": 7.0,
+    }
+    yaw_err, pitch_err = X[:, 0], X[:, 1]
+    d_yaw, d_pitch = Y[:, 0], Y[:, 1]
+    settled = (np.abs(yaw_err) < 8.0) & (np.abs(pitch_err) < 8.0)
+    n_settled = int(settled.sum())
+    if n_settled < 50:
+        return calib
+    res_yaw = np.abs(yaw_err[settled] - d_yaw[settled])
+    res_pitch = np.abs(pitch_err[settled] - d_pitch[settled])
+    calib["resid_yaw_p50"] = float(np.percentile(res_yaw, 50))
+    calib["resid_yaw_p90"] = float(np.percentile(res_yaw, 90))
+    calib["resid_pitch_p50"] = float(np.percentile(res_pitch, 50))
+    calib["resid_pitch_p90"] = float(np.percentile(res_pitch, 90))
+    # Паузы: серии подряд идущих тиков почти без доворота (во временном порядке)
+    still = (np.hypot(d_yaw, d_pitch) < 0.25) & settled
+    runs, cur = [], 0
+    for v in still:
+        if v:
+            cur += 1
+        elif cur:
+            runs.append(cur)
+            cur = 0
+    if cur:
+        runs.append(cur)
+    if runs:
+        calib["pause_p50_ticks"] = float(np.percentile(runs, 50))
+        calib["pause_p90_ticks"] = float(np.percentile(runs, 90))
+    calib["pause_per_100"] = float(len(runs) * 100.0 / n_settled)
+    return calib
+
+
 def train(X, Y, epochs=250, lr=0.003, batch=64, seed=7):
+    # Калибровка под игрока — до аугментации, во временном порядке
+    calib = compute_calib(X, Y)
     # Горизонтальная симметрия
     X_sym = X.copy()
     X_sym[:, 0] = -X_sym[:, 0]  # -yawErr
@@ -150,10 +195,10 @@ def train(X, Y, epochs=250, lr=0.003, batch=64, seed=7):
         "auto_max_deg_per_sec": auto_max,
     }
     norms = {"x_mean": x_mean, "x_std": x_std, "y_mean": y_mean, "y_std": y_std}
-    return p, norms, meta
+    return p, norms, meta, calib
 
 
-def save_weights(path, p, norms, meta):
+def save_weights(path, p, norms, meta, calib):
     root = {
         "format": "aimnet-v2",
         "in": IN, "h1": H1, "h2": H2, "out": OUT,
@@ -168,6 +213,7 @@ def save_weights(path, p, norms, meta):
         "w3": p["w3"].ravel().tolist(),
         "b3": p["b3"].tolist(),
         "meta": meta,
+        "calib": calib,
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(root, f)
@@ -199,9 +245,9 @@ def main():
         X, Y = X[sel], Y[sel]
         print("урезано до 12000 сэмплов")
 
-    p, norms, meta = train(X, Y, epochs=args.epochs, lr=args.lr)
+    p, norms, meta, calib = train(X, Y, epochs=args.epochs, lr=args.lr)
     out_path = ds_path[: -5] + ".weights.json"
-    save_weights(out_path, p, norms, meta)
+    save_weights(out_path, p, norms, meta, calib)
     print(f"веса записаны: {out_path}")
     print(f"итог: train loss={meta['final_train_loss']:.4f} "
           f"val loss={meta['final_val_loss']:.4f} "
