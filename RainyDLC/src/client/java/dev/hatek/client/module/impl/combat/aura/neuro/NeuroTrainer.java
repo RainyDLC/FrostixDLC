@@ -121,19 +121,32 @@ public final class NeuroTrainer {
         }
     }
 
-    /** Найти интерпретатор Python в PATH. */
-    private static String findPython() {
+    /** Найти интерпретатор Python в PATH или в стандартном месте per-user установки. */
+    public static String findPython() {
+        // Стандартное место тихой per-user установки (NeuroDeps ставит сюда)
+        String localAppData = System.getenv("LOCALAPPDATA");
+        if (localAppData != null) {
+            Path known = Path.of(localAppData, "Programs", "Python", "Python312", "python.exe");
+            if (Files.isRegularFile(known) && probe(known.toAbsolutePath().toString())) {
+                return known.toAbsolutePath().toString();
+            }
+        }
         for (String cmd : new String[]{"python", "python3", "py"}) {
-            try {
-                Process probe = new ProcessBuilder(cmd, "--version")
-                        .redirectErrorStream(true)
-                        .start();
-                if (probe.waitFor(8, TimeUnit.SECONDS) && probe.exitValue() == 0) {
-                    return cmd;
-                }
-            } catch (Exception ignored) {
+            if (probe(cmd)) {
+                return cmd;
             }
         }
         return null;
+    }
+
+    private static boolean probe(String cmd) {
+        try {
+            Process probe = new ProcessBuilder(cmd, "--version")
+                    .redirectErrorStream(true)
+                    .start();
+            return probe.waitFor(8, TimeUnit.SECONDS) && probe.exitValue() == 0;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 }
