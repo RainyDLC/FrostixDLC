@@ -160,6 +160,10 @@ public final class SpaceTime {
         if (aura == null || !aura.isEnabled()) {
             return;
         }
+        // Человеческая задержка реакции на новую цель (анти-детект).
+        if (dev.hatek.client.module.impl.combat.aura.util.EngageDelay.hold(pendingTarget)) {
+            return;
+        }
         updateRotations(pendingTarget);
     }
 

@@ -77,6 +77,32 @@ public final class AimNet {
     /** p95 скорости доворота игрока, градусов/сек — кап для асиста. */
     private double autoMaxDegPerSec = 240.0;
 
+    /**
+     * Калибровка «под игрока»: статистики его естественной моторики,
+     * собранные из того же датасета. Используются инференсом, чтобы вести
+     * себя как рука этого игрока, а не как идеальный трекер:
+     * остаточная ошибка наведения и микро-паузы — как у него.
+     */
+    public static final class Calib {
+        /** p50/p90 остаточной угловой ошибки, когда игрок «на цели», градусы. */
+        public double residYawP50 = 0.5;
+        public double residYawP90 = 1.4;
+        public double residPitchP50 = 0.4;
+        public double residPitchP90 = 1.1;
+        /** p50/p90 длительности микро-пауз в слежении, тики. */
+        public double pauseP50Ticks = 3.0;
+        public double pauseP90Ticks = 8.0;
+        /** Сколько пауз приходится на 100 тиков слежения. */
+        public double pausePer100 = 7.0;
+    }
+
+    private volatile Calib calib = new Calib();
+
+    /** Калибровка моторики игрока (дефолты, если веса старые/без калибровки). */
+    public Calib calib() {
+        return this.calib;
+    }
+
     public AimNet() {
         Random rnd = new Random(0xA1ABE771L);
         xavier(this.w1.v, IN, H1, rnd);
@@ -208,6 +234,9 @@ public final class AimNet {
         if (clean.size() < MIN_TRAIN_SAMPLES) {
             return false;
         }
+
+        // Калибровка под игрока — до аугментации и шаффла, в исходном порядке.
+        this.calib = computeCalib(clean);
 
         // Горизонтальная симметрия: отражение по yaw гарантирует лево/право баланс и исключает дрифт
         List<AimSample> augmented = new ArrayList<>(clean.size() * 2);
@@ -450,6 +479,87 @@ public final class AimNet {
         }
     }
 
+    /**
+     * Калибровка моторики игрока из датасета (в исходном временном порядке).
+     *
+     * <p>Остаточная ошибка: насколько игрок оставляет прицел мимо точки после
+     * своего доворота, когда «на цели» — это его естественный разброс, а не
+     * идеальный трекинг в ноль. Паузы: серии тиков почти без доворота в
+     * слежении — его микро-паузы. Инференс сэмплирует из этих распределений,
+     * поэтому поведение совпадает со статистикой руки игрока.
+     */
+    private static Calib computeCalib(List<AimSample> samples) {
+        Calib c = new Calib();
+        List<Double> resYaw = new ArrayList<>();
+        List<Double> resPitch = new ArrayList<>();
+        List<Integer> pauseRuns = new ArrayList<>();
+        int settled = 0;
+        int runs = 0;
+        int curRun = 0;
+        for (AimSample s : samples) {
+            float yawErr = s.input[0];
+            float pitchErr = s.input[1];
+            float dYaw = s.output[0];
+            float dPitch = s.output[1];
+            // Режим слежения, не флики через пол-экрана.
+            if (Math.abs(yawErr) >= 8.0f || Math.abs(pitchErr) >= 8.0f) {
+                if (curRun > 0) {
+                    pauseRuns.add(curRun);
+                    runs++;
+                    curRun = 0;
+                }
+                continue;
+            }
+            settled++;
+            resYaw.add(Math.abs((double) (yawErr - dYaw)));
+            resPitch.add(Math.abs((double) (pitchErr - dPitch)));
+            if (Math.hypot(dYaw, dPitch) < 0.25) {
+                curRun++;
+            } else if (curRun > 0) {
+                pauseRuns.add(curRun);
+                runs++;
+                curRun = 0;
+            }
+        }
+        if (curRun > 0) {
+            pauseRuns.add(curRun);
+            runs++;
+        }
+        if (settled < 50) {
+            return c; // мало данных — оставляем разумные дефолты
+        }
+        c.residYawP50 = percentile(resYaw, 50.0);
+        c.residYawP90 = percentile(resYaw, 90.0);
+        c.residPitchP50 = percentile(resPitch, 50.0);
+        c.residPitchP90 = percentile(resPitch, 90.0);
+        if (!pauseRuns.isEmpty()) {
+            c.pauseP50Ticks = percentileInt(pauseRuns, 50.0);
+            c.pauseP90Ticks = percentileInt(pauseRuns, 90.0);
+        }
+        c.pausePer100 = runs * 100.0 / settled;
+        return c;
+    }
+
+    private static double percentile(List<Double> values, double p) {
+        if (values.isEmpty()) {
+            return 0.0;
+        }
+        List<Double> sorted = new ArrayList<>(values);
+        Collections.sort(sorted);
+        int idx = (int) Math.min(sorted.size() - 1, Math.floor(sorted.size() * p / 100.0));
+        return sorted.get(Math.max(0, idx));
+    }
+
+    private static double percentileInt(List<Integer> values, double p) {
+        if (values.isEmpty()) {
+            return 0.0;
+        }
+        List<Integer> sorted = new ArrayList<>(values);
+        Collections.sort(sorted);
+        int idx = (int) Math.min(sorted.size() - 1, Math.floor(sorted.size() * p / 100.0));
+        return sorted.get(Math.max(0, idx));
+    }
+
     /** p95 модуля доворота за тик, переведённый в градусы/сек. */
     private static double percentile95(List<AimSample> samples) {
         double[] mags = new double[samples.size()];
@@ -489,6 +599,16 @@ public final class AimNet {
         meta.addProperty("auto_max_deg_per_sec", this.autoMaxDegPerSec);
         meta.addProperty("saved_at", System.currentTimeMillis());
         root.add("meta", meta);
+        JsonObject calib = new JsonObject();
+        Calib c = this.calib;
+        calib.addProperty("resid_yaw_p50", c.residYawP50);
+        calib.addProperty("resid_yaw_p90", c.residYawP90);
+        calib.addProperty("resid_pitch_p50", c.residPitchP50);
+        calib.addProperty("resid_pitch_p90", c.residPitchP90);
+        calib.addProperty("pause_p50_ticks", c.pauseP50Ticks);
+        calib.addProperty("pause_p90_ticks", c.pauseP90Ticks);
+        calib.addProperty("pause_per_100", c.pausePer100);
+        root.add("calib", calib);
         Files.createDirectories(file.getParent());
         Files.writeString(file, gson.toJson(root), StandardCharsets.UTF_8);
     }
@@ -527,8 +647,28 @@ public final class AimNet {
             net.autoMaxDegPerSec = meta.has("auto_max_deg_per_sec")
                     ? meta.get("auto_max_deg_per_sec").getAsDouble() : 240.0;
         }
+        if (root.has("calib") && root.get("calib").isJsonObject()) {
+            JsonObject calib = root.getAsJsonObject("calib");
+            Calib c = new Calib();
+            c.residYawP50 = getDouble(calib, "resid_yaw_p50", c.residYawP50);
+            c.residYawP90 = getDouble(calib, "resid_yaw_p90", c.residYawP90);
+            c.residPitchP50 = getDouble(calib, "resid_pitch_p50", c.residPitchP50);
+            c.residPitchP90 = getDouble(calib, "resid_pitch_p90", c.residPitchP90);
+            c.pauseP50Ticks = getDouble(calib, "pause_p50_ticks", c.pauseP50Ticks);
+            c.pauseP90Ticks = getDouble(calib, "pause_p90_ticks", c.pauseP90Ticks);
+            c.pausePer100 = getDouble(calib, "pause_per_100", c.pausePer100);
+            net.calib = c;
+        }
         net.trained = true;
         return net;
+    }
+
+    private static double getDouble(JsonObject obj, String key, double fallback) {
+        try {
+            return obj.has(key) ? obj.get(key).getAsDouble() : fallback;
+        } catch (Exception e) {
+            return fallback;
+        }
     }
 
     private static JsonArray doubles(double[] values) {
