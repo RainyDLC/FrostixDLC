@@ -70,6 +70,12 @@ public final class NeuroRotation {
     private static boolean aimed;
     private static long lastFrameNanos;
 
+    // ---- анти-детект: блуждание точки прицела ----
+    private static Vec3 neuroWander = Vec3.ZERO;
+    private static Vec3 neuroWanderVel = Vec3.ZERO;
+    private static float neuroJitterYaw;
+    private static float neuroJitterPitch;
+
     private NeuroRotation() {
     }
 
@@ -443,6 +449,12 @@ public final class NeuroRotation {
             wantVelYaw = 0.0f;
             wantVelPitch = 0.0f;
             aimed = false;
+            neuroWander = Vec3.ZERO;
+            neuroWanderVel = Vec3.ZERO;
+        } else if (t.getId() != infPrevTargetId) {
+            // Новая цель — сбрасываем блуждание, чтобы не тянуть старое смещение.
+            neuroWander = Vec3.ZERO;
+            neuroWanderVel = Vec3.ZERO;
         }
     }
 
@@ -468,8 +480,11 @@ public final class NeuroRotation {
         }
 
         Vec3 eye = mc.player.getEyePosition(1.0f);
-        Vec3 center = dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.leadedBox(t).getCenter();
-        float[] targetRot = rotTo(eye, center);
+        var leadBox = dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.leadedBox(t);
+        // Точка прицела блуждает внутри бокса цели (анти-детект: убирает сигнатуру
+        // идеального трекинга центра). Луч всё равно бьёт, т.к. точка остаётся в боксе.
+        Vec3 aimPoint = wanderAimPoint(leadBox);
+        float[] targetRot = rotTo(eye, aimPoint);
 
         float curYaw = mc.player.getYRot();
         float curPitch = mc.player.getXRot();
@@ -495,18 +510,69 @@ public final class NeuroRotation {
         float baseSpeed = hasBrain() ? (float) Math.max(net.autoMaxDegPerSec(), 200.0) : 260.0f;
         float finalSpeed = Math.max(baseSpeed, neededSpeed);
 
-        // Если оружие готово к удару или в прыжке фаза падения для крита — мгновенно доводим на цель
+        // Если оружие готово к удару или в прыжке фаза падения для крита — доводим на цель.
+        // Скорость ограничена человеческим диапазоном (анти-детект): резкие снапы палевны.
         if (attackScale >= 0.88f || inCritPhase) {
-            finalSpeed = Math.max(finalSpeed, 560.0f);
+            finalSpeed = Math.max(finalSpeed, 480.0f);
         }
-        finalSpeed = Math.min(finalSpeed, 720.0f);
+        finalSpeed = Math.min(finalSpeed, 600.0f);
 
-        RotationProcess.updateFrame(new Rotation(targetRot[0], targetRot[1]),
+        // Микроджиттер (GCD-квантуется в applyFrame): ломает идеальную гладкость.
+        java.util.concurrent.ThreadLocalRandom rnd = java.util.concurrent.ThreadLocalRandom.current();
+        neuroJitterYaw = neuroJitterYaw * 0.6f + (rnd.nextFloat() - 0.5f) * 0.35f;
+        neuroJitterPitch = neuroJitterPitch * 0.6f + (rnd.nextFloat() - 0.5f) * 0.25f;
+
+        RotationProcess.updateFrame(
+                new Rotation(targetRot[0] + neuroJitterYaw, targetRot[1] + neuroJitterPitch),
                 finalSpeed, finalSpeed, finalSpeed, finalSpeed, 10, 1);
 
         float eps = Math.max(6.5f, AttackAura.targetAngularHalf() * 0.95f);
         aimed = (Math.abs(yawErr) <= eps && Math.abs(pitchErr) <= eps)
                 || RayTraceUtil.rayTraceEntity(curYaw, curPitch, AttackAura.attackRange() + 0.5, t);
+    }
+
+    /**
+     * Блуждание точки прицела внутри бокса цели.
+     * Случайное блуждание с отражением от границ — как у SpaceTime, но легче.
+     */
+    private static Vec3 wanderAimPoint(net.minecraft.world.phys.AABB box) {
+        java.util.concurrent.ThreadLocalRandom rnd = java.util.concurrent.ThreadLocalRandom.current();
+        if (neuroWanderVel.equals(Vec3.ZERO)) {
+            neuroWanderVel = new Vec3(
+                    (rnd.nextDouble() - 0.5) * 0.04,
+                    (rnd.nextDouble() - 0.5) * 0.03,
+                    (rnd.nextDouble() - 0.5) * 0.04);
+        }
+        double xLim = Math.max(0.05, (box.getXsize() - 0.12) / 2.0);
+        double zLim = Math.max(0.05, (box.getZsize() - 0.12) / 2.0);
+        double yMin = box.minY + box.getYsize() * 0.25;
+        double yMax = box.minY + box.getYsize() * 0.8;
+
+        neuroWander = neuroWander.add(neuroWanderVel);
+        double cx = (box.minX + box.maxX) / 2.0;
+        double cz = (box.minZ + box.maxZ) / 2.0;
+
+        if (Math.abs(neuroWander.x) >= xLim) {
+            neuroWanderVel = new Vec3(-Math.signum(neuroWander.x) * (0.01 + rnd.nextDouble() * 0.03),
+                    neuroWanderVel.y, neuroWanderVel.z);
+        }
+        if (Math.abs(neuroWander.z) >= zLim) {
+            neuroWanderVel = new Vec3(neuroWanderVel.x, neuroWanderVel.y,
+                    -Math.signum(neuroWander.z) * (0.01 + rnd.nextDouble() * 0.03));
+        }
+        double wy = box.minY + box.getYsize() * 0.5 + neuroWander.y;
+        if (wy >= yMax || wy <= yMin) {
+            neuroWanderVel = new Vec3(neuroWanderVel.x,
+                    -Math.signum(neuroWander.y) * (0.008 + rnd.nextDouble() * 0.02),
+                    neuroWanderVel.z);
+        }
+        // Лёгкий шум, чтобы не было идеальных прямых.
+        neuroWander = neuroWander.add((rnd.nextDouble() - 0.5) * 0.01, 0.0, (rnd.nextDouble() - 0.5) * 0.01);
+
+        return new Vec3(
+                Mth.clamp(cx + neuroWander.x, box.minX + 0.05, box.maxX - 0.05),
+                Mth.clamp(box.minY + box.getYsize() * 0.5 + neuroWander.y, yMin, yMax),
+                Mth.clamp(cz + neuroWander.z, box.minZ + 0.05, box.maxZ - 0.05));
     }
 
     /** Наведена ли нейронка на цель (гейт для ударов ауры). */
