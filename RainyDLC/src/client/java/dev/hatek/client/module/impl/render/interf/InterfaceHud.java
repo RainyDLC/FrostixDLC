@@ -29,6 +29,11 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.ResolvableProfile;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import java.util.Optional;
 import org.lwjgl.glfw.GLFW;
@@ -979,7 +984,7 @@ public final class InterfaceHud {
         String hpText = String.valueOf((int) Math.ceil(t.getHealth()));
 
         HFont title = sTitle(s);
-        String name = t.getName().getString();
+        String name = title.trim(t.getName().getString(), 140.0f * s);
 
         float pad = 8.0f * s;
         float head = 34.0f * s;
@@ -1009,8 +1014,18 @@ public final class InterfaceHud {
         float pad = 8.0f * s;
         float head = 34.0f * s;
 
-        // Аватарка: буква ника в цветном квадрате.
-        drawAvatar(gg, d.name, pad, pad, head, s);
+        // Голова цели: предмет PLAYER_HEAD с её профилем (настоящий скин).
+        ItemStack headStack = headStack(d.target, mc);
+        if (!headStack.isEmpty()) {
+            float hs = head / 16.0f;
+            Render2D.pushTranslate(gg, pad, pad);
+            Render2D.pushScale(gg, 0.0f, 0.0f, hs);
+            gg.item(mc.player, headStack, 0, 0, 0);
+            Render2D.popTransform(gg);
+            Render2D.popTransform(gg);
+        } else {
+            drawAvatar(gg, d.name, pad, pad, head, s);
+        }
 
         // Ник.
         HFont title = sTitle(s);
@@ -1060,8 +1075,11 @@ public final class InterfaceHud {
         if (to <= from) {
             return;
         }
-        int seg = 64;
-        float dotR = thick / 2.0f;
+        // Плотно (160 точек с запасом диаметра) — иначе видны отдельные кружки
+        // из-за округления координат до целых пикселей.
+        int seg = 160;
+        float dot = thick * 1.5f;
+        float dotR = dot / 2.0f;
         for (int i = 0; i < seg; i++) {
             float f = (float) i / seg;
             if (f < from || f >= to) {
@@ -1070,12 +1088,26 @@ public final class InterfaceHud {
             double a = -Math.PI / 2.0 + f * Math.PI * 2.0;
             float x = cx + (float) Math.cos(a) * r;
             float y = cy + (float) Math.sin(a) * r;
-            Render2D.circle(gg, x - dotR, y - dotR, thick, argb);
+            Render2D.circle(gg, x - dotR, y - dotR, dot, argb);
         }
     }
 
     private static int hpColor(float frac) {
         return frac > 0.6f ? 0xFF4ADE80 : frac > 0.3f ? 0xFFFACC15 : 0xFFF87171;
+    }
+
+    /** Голова игрока как предмет (скин подтягивается из профиля). */
+    private static ItemStack headStack(LivingEntity target, Minecraft mc) {
+        if (!(target instanceof Player) || mc.getConnection() == null) {
+            return ItemStack.EMPTY;
+        }
+        PlayerInfo info = mc.getConnection().getPlayerInfo(target.getUUID());
+        if (info == null) {
+            return ItemStack.EMPTY;
+        }
+        ItemStack head = new ItemStack(Items.PLAYER_HEAD);
+        head.set(DataComponents.PROFILE, new ResolvableProfile(info.getProfile()));
+        return head;
     }
 
     /** Аватарка-заглушка: первая буква ника в цветном квадрате. */
