@@ -254,8 +254,51 @@ public final class InterfaceHud {
         renderAll(gg);
     }
 
+    // ---- перетаскивание прямо в игре (миксин мыши, экран открыт) ----
+    private static Hit dragHit;
+    private static float dragGrabX;
+    private static float dragGrabY;
+
+    /** Начать drag по координатам мыши. true — попали по элементу HUD. */
+    public static boolean startDrag(double mx, double my) {
+        if (dragHit != null) {
+            return true;
+        }
+        Hit hit = hitTest(mx, my);
+        if (hit == null) {
+            return false;
+        }
+        dragHit = hit;
+        dragGrabX = (float) mx - hit.bounds[0];
+        dragGrabY = (float) my - hit.bounds[1];
+        return true;
+    }
+
+    /** Закончить drag (позиции сохраняются). */
+    public static void stopDrag() {
+        if (dragHit != null) {
+            dragHit = null;
+            HudLayout.save();
+        }
+    }
+
+    /** Каждый кадр тянет элемент за курсором; вызывается из renderAll. */
+    private static void tickDrag() {
+        if (dragHit == null) {
+            return;
+        }
+        if (Minecraft.getInstance().gui.screen() == null) {
+            stopDrag();
+            return;
+        }
+        moveHit(dragHit,
+                (float) Render2D.mouseX() - dragGrabX,
+                (float) Render2D.mouseY() - dragGrabY);
+    }
+
     /** Отрисовка всех элементов (и в игре, и за ClickGUI). */
     private static void renderAll(GuiGraphicsExtractor gg) {
+        tickDrag();
         BOUNDS.clear();
         int sw = Render2D.screenWidth();
         int sh = Render2D.screenHeight();

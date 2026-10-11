@@ -16,13 +16,13 @@
     "NoRenderHudMixin",
     "NoRenderOverlayMixin",
     "InterfaceHudMixin",
+    "HudDragMixin",
     "MediaBillboardMixin",
     "accessor.LivingEntityAccessor",
     "accessor.MinecraftAccessor",
     "accessor.ScreenInvoker",
     "accessor.GuiAccessor",
-    "accessor.BossHealthOverlayAccessor",
-    "HudMoveMixin"
+    "accessor.BossHealthOverlayAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
