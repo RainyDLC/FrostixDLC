@@ -3,6 +3,8 @@ package dev.hatek.client.module.impl.combat;
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.impl.combat.aura.Attack;
+import dev.hatek.client.module.impl.combat.aura.neuro.NeuroRotation;
+import dev.hatek.client.module.impl.combat.aura.neuro.NeuroTrainScreen;
 import dev.hatek.client.module.impl.combat.aura.rotation.ComponentManager;
 import dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
@@ -13,6 +15,7 @@ import dev.hatek.client.module.impl.combat.aura.util.AuraUtil;
 import dev.hatek.client.module.impl.combat.aura.util.MoveUtil;
 import dev.hatek.client.module.impl.combat.aura.util.MovementManager;
 import dev.hatek.client.module.impl.combat.aura.util.RayTraceUtil;
+import dev.hatek.client.module.impl.combat.aimassist.DynamicButtonSetting;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.ModeSetting;
@@ -47,6 +50,9 @@ public final class AttackAura extends Module {
 
     public static final String SPACE_TIME = "SpaceTime";
 
+    public static final String ROT_SPACETIME = "SpaceTime";
+    public static final String ROT_NEURO = "Нейро";
+
     public static final String LEGIT_SPRINT = "Legit Sprint";
     public static final String SMART_CRITS = "Smart Crits";
     public static final String SLOW_TURN = "Slow Turn";
@@ -80,6 +86,12 @@ public final class AttackAura extends Module {
 
     private final BoolSetting chargeSpread = new BoolSetting("Charge Spread", true);
 
+    private final ModeSetting rotations =
+            new ModeSetting("Ротации", 0, ROT_SPACETIME, ROT_NEURO);
+    private final DynamicButtonSetting neuroTrain =
+            new DynamicButtonSetting("Нейро-обучение", "Обучить ротации",
+                    this::onNeuroTrainButton);
+
     private static final double LOOK_RANGE = 32.0;
 
     private static final float KEEP_MARGIN = 1.5F;
@@ -101,9 +113,11 @@ public final class AttackAura extends Module {
         instance = this;
         keybind(GLFW.GLFW_KEY_R);
         with(this.attackRange, this.preRange, this.movementType, this.targets, this.misc,
-                this.extras, this.chargeSpread);
+                this.extras, this.chargeSpread, this.rotations, this.neuroTrain);
 
         ComponentManager.getInstance().init();
+
+        NeuroRotation.init();
     }
 
     private static Minecraft mc() {
@@ -142,6 +156,25 @@ public final class AttackAura extends Module {
         return instance == null || instance.chargeSpread.value();
     }
 
+    /** Выбран ли режим нейро-ротаций. */
+    public static boolean neuroMode() {
+        return instance != null && instance.rotations.is(ROT_NEURO);
+    }
+
+    /** Активна ли прямо сейчас нейро-ротация (режим + обученная сеть + не идёт запись). */
+    public static boolean neuroActive() {
+        return neuroMode() && instance.isEnabled()
+                && !NeuroRotation.isTraining() && NeuroRotation.hasBrain();
+    }
+
+    private void onNeuroTrainButton() {
+        if (NeuroRotation.isTraining()) {
+            NeuroRotation.stopTraining();
+            return;
+        }
+        mc().gui.setScreen(new NeuroTrainScreen(this));
+    }
+
     public static float[] getRanges() {
         return new float[]{attackRange(), preRange()};
     }
@@ -165,11 +198,17 @@ public final class AttackAura extends Module {
             return;
         }
 
+        NeuroRotation.onClientTick();
+        this.neuroTrain.caption(
+                NeuroRotation.isTraining() ? "Стоп" : "Обучить ротации");
+
         onUpdate();
 
         if (target != null) {
             updateRotation();
             idleSwing();
+        } else if (neuroMode()) {
+            NeuroRotation.setTarget(null);
         }
     }
 
@@ -239,7 +278,7 @@ public final class AttackAura extends Module {
             MoveUtil.restoreSprintKey();
         }
 
-        if (!checkToAttack()) {
+        if (!checkToAttack() && !NeuroRotation.isTraining()) {
             attackEntity();
         }
     }
@@ -338,6 +377,14 @@ public final class AttackAura extends Module {
         return true;
     }
 
+    /** Наведена ли ротация на цель — зависит от выбранного режима. */
+    private boolean aimedNow() {
+        if (neuroMode() && NeuroRotation.hasBrain()) {
+            return NeuroRotation.aimed();
+        }
+        return SpaceTime.aimed() && SpaceTime.settled();
+    }
+
     public void attackEntity() {
         Minecraft mc = mc();
         if (target == null || AuraUtil.getStrictDistance(target) >= attackRange()) {
@@ -358,11 +405,7 @@ public final class AttackAura extends Module {
             return;
         }
 
-        if (!SpaceTime.aimed()) {
-            return;
-        }
-
-        if (!SpaceTime.settled()) {
+        if (!aimedNow()) {
             return;
         }
 
@@ -399,6 +442,15 @@ public final class AttackAura extends Module {
     }
 
     private void updateRotation() {
+        if (NeuroRotation.isTraining()) {
+            // Во время обучения игрок наводится сам — ротации не трогаем
+            return;
+        }
+        if (neuroMode() && NeuroRotation.hasBrain()) {
+            NeuroRotation.setTarget(target);
+            return;
+        }
+
         float[] base = getRanges();
         float[] ranges = new float[]{base[0], base[1], base[0] + base[1]};
 
@@ -508,6 +560,8 @@ public final class AttackAura extends Module {
     @Override
     protected void onDisable() {
         reset();
+
+        NeuroRotation.reset();
 
         RotationProcess.requestReset();
     }

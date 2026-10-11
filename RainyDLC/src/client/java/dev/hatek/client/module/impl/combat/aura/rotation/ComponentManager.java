@@ -1,5 +1,7 @@
 package dev.hatek.client.module.impl.combat.aura.rotation;
 
+import dev.hatek.client.module.impl.combat.AttackAura;
+import dev.hatek.client.module.impl.combat.aura.neuro.NeuroRotation;
 import net.minecraft.network.protocol.Packet;
 
 import java.util.HashMap;
@@ -62,7 +64,11 @@ public final class ComponentManager extends HashMap<Class<? extends Component>, 
         if (process != null) {
             process.onRender3D();
         }
-        SpaceTime.onFrame();
+        if (AttackAura.neuroActive()) {
+            NeuroRotation.onFrame();
+        } else {
+            SpaceTime.onFrame();
+        }
     }
 
     public static void packetSent(Packet<?> packet) {
