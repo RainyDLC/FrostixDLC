@@ -173,7 +173,7 @@ public final class InterfaceHud {
             return;
         }
         HudLayout.Entry e = HudLayout.get(el);
-        D data = measure.apply(e.scale);
+        D data = measure.apply(e.scale * Render2D.guiScale());
         if (data == null || data.w() <= 0 || data.h() <= 0) {
             return;
         }
@@ -354,7 +354,10 @@ public final class InterfaceHud {
             return;
         }
         HudLayout.Entry e = HudLayout.get(el);
-        float s = e.scale;
+        // Размер в GUI-единицах: умножаем на guiScale, иначе на большом
+        // GUI-скейле элементы выглядят мельче ванильных (хотбар!).
+        // Позиции остаются в сырых пикселях (мышь), их begin() переводит сам.
+        float s = e.scale * Render2D.guiScale();
         D data = measure.apply(s);
         if (data == null || data.w() <= 0 || data.h() <= 0) {
             return;
