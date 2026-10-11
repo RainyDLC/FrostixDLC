@@ -13,32 +13,31 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Редактор HUD модуля Interface.
+ * Редактор размера HUD модуля Interface.
  * Открывается кнопкой "HUD Editor" ("Размер худа") в настройках модуля:
  * ClickGUI закрывается, игра за экраном затемняется.
- * ЛКМ по элементу — двигать, уголок справа-снизу — размер,
- * колесо мыши над элементом — масштаб, ESC / "Готово" — выйти.
+ * Уголок справа-снизу элемента — размер перетаскиванием,
+ * колесо мыши над элементом — точный масштаб.
+ * Перемещение элементов — прямо в игре: ALT + ЛКМ и тянуть.
+ * ESC / "Готово" — выйти.
  */
 public final class HudEditScreen extends Screen {
     private static final float HANDLE = 13.0f;
     private static final int DIM = 0x66000000;
 
-    private enum DragMode {
-        NONE, MOVE, RESIZE
-    }
-
-    /** Цель для перетаскивания: элемент из HudLayout либо 2D-медиа. */
+    /** Цель для ресайза: элемент из HudLayout либо 2D-медиа. */
     private static final class Target {
+        final String key;
         final String label;
         final HudLayout.Element element; // null = 2D-медиа (настройки модуля)
         float[] bounds; // {x, y, w, h}, обновляется каждый кадр
 
-        Target(String label, HudLayout.Element element) {
+        Target(String key, String label, HudLayout.Element element) {
+            this.key = key;
             this.label = label;
             this.element = element;
         }
@@ -47,26 +46,11 @@ public final class HudEditScreen extends Screen {
             return this.element == null;
         }
 
-        float scale() {
+        float scaleBase() {
             if (isMedia()) {
-                return 1.0f;
+                return (float) Interface.mediaSize();
             }
             return HudLayout.get(this.element).scale;
-        }
-
-        void move(float x, float y, int sw, int sh) {
-            float w = this.bounds[2];
-            float h = this.bounds[3];
-            x = Math.max(-w + 24.0f, Math.min(sw - 24.0f, x));
-            y = Math.max(-h + 24.0f, Math.min(sh - 24.0f, y));
-            if (isMedia()) {
-                float cx = x + w / 2.0f;
-                float cy = y + h / 2.0f;
-                Interface.setMediaGeometry(Interface.mediaSize(),
-                        cx / sw * 100.0, cy / sh * 100.0);
-            } else {
-                HudLayout.setPos(this.element, x, y);
-            }
         }
 
         void scaleBy(float factor) {
@@ -74,34 +58,27 @@ public final class HudEditScreen extends Screen {
                 double size = Interface.mediaSize() * factor;
                 Interface.setMediaGeometry(size, Interface.mediaX(), Interface.mediaY());
             } else {
-                HudLayout.setScale(this.element, scale() * factor);
+                HudLayout.setScale(this.element, HudLayout.get(this.element).scale * factor);
             }
         }
 
-        /** Масштабирование за уголок: factor относительно стартового размера. */
-        void resizeTo(float startScaleOrSize, float factor) {
+        void resizeTo(float base, float factor) {
             factor = Math.max(0.1f, factor);
             if (isMedia()) {
-                Interface.setMediaGeometry(startScaleOrSize * factor,
+                Interface.setMediaGeometry(base * factor,
                         Interface.mediaX(), Interface.mediaY());
             } else {
-                HudLayout.setScale(this.element, startScaleOrSize * factor);
+                HudLayout.setScale(this.element, base * factor);
             }
-        }
-
-        float resizeBase() {
-            if (isMedia()) {
-                return (float) Interface.mediaSize();
-            }
-            return scale();
         }
     }
 
-    private final List<Target> targets = new ArrayList<>();
-    private Target dragTarget;
-    private DragMode dragMode = DragMode.NONE;
-    private float grabDX;
-    private float grabDY;
+    /**
+     * Цели живут между кадрами (иначе drag умирал бы на следующем кадре,
+     * т.к. contains сравнивал бы разные объекты).
+     */
+    private final Map<String, Target> targets = new LinkedHashMap<>();
+    private Target resizeTarget;
     private float resizeStartDist;
     private float resizeBase;
     private Target hoverTarget;
@@ -152,7 +129,7 @@ public final class HudEditScreen extends Screen {
         this.hoverTarget = targetAt(mx, my);
 
         // Рамки и уголки.
-        for (Target t : this.targets) {
+        for (Target t : this.targets.values()) {
             if (t.bounds == null) {
                 continue;
             }
@@ -160,7 +137,7 @@ public final class HudEditScreen extends Screen {
             float y = t.bounds[1];
             float w = t.bounds[2];
             float h = t.bounds[3];
-            boolean active = t == this.hoverTarget || t == this.dragTarget;
+            boolean active = t == this.hoverTarget || t == this.resizeTarget;
             int frame = active ? Style.accent() : 0x4DFFFFFF;
 
             // Уголки рамки.
@@ -179,8 +156,10 @@ public final class HudEditScreen extends Screen {
             float hy = y + h - HANDLE;
             Render2D.round(gg, hx, hy, HANDLE, HANDLE, 3.0f,
                     active ? Style.accent() : 0x99FFFFFF);
-            Render2D.rect(gg, hx + 3.0f, hy + HANDLE - 5.0f, HANDLE - 6.0f, 1.5f, 0xFF141414);
-            Render2D.rect(gg, hx + HANDLE - 5.0f, hy + 3.0f, 1.5f, HANDLE - 6.0f, 0xFF141414);
+            Render2D.rect(gg, hx + 3.0f, hy + HANDLE - 5.0f, HANDLE - 6.0f, 1.5f,
+                    0xFF141414);
+            Render2D.rect(gg, hx + HANDLE - 5.0f, hy + 3.0f, 1.5f, HANDLE - 6.0f,
+                    0xFF141414);
 
             // Подпись.
             HFont label = Fonts.label();
@@ -198,10 +177,10 @@ public final class HudEditScreen extends Screen {
         // Подсказка.
         HFont hint = Fonts.label();
         String text = moduleOn()
-                ? "ЛКМ — двигать   •   уголок — размер   •   колесо — масштаб   •   ESC — готово"
+                ? "Уголок — размер   •   колесо — масштаб   •   ALT + ЛКМ в игре — двигать   •   ESC — готово"
                 : "Включите модуль Interface, чтобы настроить HUD";
         float tw = hint.width(text);
-        hint.draw(gg, text, (this.width - tw) / 2.0f, this.height - 58.0f, Style.WHITE_45);
+        hint.draw(gg, text, (this.width - tw) / 2.0f, this.height - 58.0f, Style.WHITE);
 
         super.extractRenderState(gg, mouseX, mouseY, partialTick);
     }
@@ -212,40 +191,53 @@ public final class HudEditScreen extends Screen {
     }
 
     private void refreshTargets() {
-        this.targets.clear();
         if (!moduleOn()) {
+            this.targets.clear();
+            this.resizeTarget = null;
             return;
         }
         Map<HudLayout.Element, float[]> bounds = InterfaceHud.boundsSnapshot();
+        java.util.Set<String> active = new java.util.HashSet<>();
         for (HudLayout.Element el : HudLayout.Element.values()) {
             float[] b = bounds.get(el);
             if (b == null) {
                 continue;
             }
-            Target t = new Target(el.label(), el);
+            Target t = this.targets.get(el.name());
+            if (t == null) {
+                t = new Target(el.name(), el.label(), el);
+                this.targets.put(el.name(), t);
+            }
             t.bounds = b;
-            this.targets.add(t);
+            active.add(el.name());
         }
         if (Interface.showMedia2D()) {
             float[] b = InterfaceHud.media2DBounds();
             if (b != null) {
-                Target t = new Target("Media 2D", null);
+                Target t = this.targets.get("MEDIA2D");
+                if (t == null) {
+                    t = new Target("MEDIA2D", "Media 2D", null);
+                    this.targets.put("MEDIA2D", t);
+                }
                 t.bounds = b;
-                this.targets.add(t);
+                active.add("MEDIA2D");
             }
         }
-        if (this.dragTarget != null && !this.targets.contains(this.dragTarget)) {
-            this.dragTarget = null;
-            this.dragMode = DragMode.NONE;
+        // Убираем пропавшие.
+        this.targets.keySet().removeIf(key -> !active.contains(key));
+        if (this.resizeTarget != null && !this.targets.containsValue(this.resizeTarget)) {
+            this.resizeTarget = null;
         }
     }
 
     /** Поиск цели сверху вниз (последняя отрисованная — верхняя). */
     private Target targetAt(double mx, double my) {
-        for (int i = this.targets.size() - 1; i >= 0; i--) {
-            Target t = this.targets.get(i);
+        Target[] arr = this.targets.values().toArray(new Target[0]);
+        for (int i = arr.length - 1; i >= 0; i--) {
+            Target t = arr[i];
             float[] b = t.bounds;
-            if (mx >= b[0] && mx <= b[0] + b[2] && my >= b[1] && my <= b[1] + b[3]) {
+            if (b != null && mx >= b[0] && mx <= b[0] + b[2]
+                    && my >= b[1] && my <= b[1] + b[3]) {
                 return t;
             }
         }
@@ -268,49 +260,36 @@ public final class HudEditScreen extends Screen {
         double mx = Render2D.mouseX();
         double my = Render2D.mouseY();
         Target t = targetAt(mx, my);
-        if (t == null) {
+        // Ресайз начинается только с уголка.
+        if (t == null || !onHandle(t, mx, my)) {
             return super.mouseClicked(event, doubleClick);
         }
-        this.dragTarget = t;
-        if (onHandle(t, mx, my)) {
-            this.dragMode = DragMode.RESIZE;
-            float dx = (float) mx - t.bounds[0];
-            float dy = (float) my - t.bounds[1];
-            this.resizeStartDist = Math.max(1.0f, (float) Math.hypot(dx, dy));
-            this.resizeBase = t.resizeBase();
-        } else {
-            this.dragMode = DragMode.MOVE;
-            this.grabDX = (float) mx - t.bounds[0];
-            this.grabDY = (float) my - t.bounds[1];
-        }
+        this.resizeTarget = t;
+        float dx = (float) mx - t.bounds[0];
+        float dy = (float) my - t.bounds[1];
+        this.resizeStartDist = Math.max(1.0f, (float) Math.hypot(dx, dy));
+        this.resizeBase = t.scaleBase();
         return true;
     }
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
-        if (this.dragTarget == null || this.dragMode == DragMode.NONE) {
+        if (this.resizeTarget == null) {
             return super.mouseDragged(event, dragX, dragY);
         }
         double mx = Render2D.mouseX();
         double my = Render2D.mouseY();
-        int sw = Render2D.screenWidth();
-        int sh = Render2D.screenHeight();
-        if (this.dragMode == DragMode.MOVE) {
-            this.dragTarget.move((float) mx - this.grabDX, (float) my - this.grabDY, sw, sh);
-        } else {
-            float dx = (float) mx - this.dragTarget.bounds[0];
-            float dy = (float) my - this.dragTarget.bounds[1];
-            float dist = Math.max(1.0f, (float) Math.hypot(dx, dy));
-            this.dragTarget.resizeTo(this.resizeBase, dist / this.resizeStartDist);
-        }
+        float dx = (float) mx - this.resizeTarget.bounds[0];
+        float dy = (float) my - this.resizeTarget.bounds[1];
+        float dist = Math.max(1.0f, (float) Math.hypot(dx, dy));
+        this.resizeTarget.resizeTo(this.resizeBase, dist / this.resizeStartDist);
         return true;
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (this.dragTarget != null) {
-            this.dragTarget = null;
-            this.dragMode = DragMode.NONE;
+        if (this.resizeTarget != null) {
+            this.resizeTarget = null;
             HudLayout.save();
             return true;
         }

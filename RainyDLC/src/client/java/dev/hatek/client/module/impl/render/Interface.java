@@ -3,6 +3,7 @@ package dev.hatek.client.module.impl.render;
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.impl.render.interf.HudEditScreen;
+import dev.hatek.client.module.impl.render.interf.HudMover;
 import dev.hatek.client.module.impl.render.interf.InterfaceHud;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.ButtonSetting;
@@ -60,6 +61,11 @@ public final class Interface extends Module {
 
     public static Interface instance() {
         return instance;
+    }
+
+    @Override
+    public void onClientTick() {
+        HudMover.tick();
     }
 
     public static boolean showWatermark() {
