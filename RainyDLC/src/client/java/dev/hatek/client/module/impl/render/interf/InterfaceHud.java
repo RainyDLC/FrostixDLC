@@ -52,6 +52,11 @@ import java.util.function.Function;
  */
 public final class InterfaceHud {
     private static boolean hooked;
+    /**
+     * true, пока открыт ClickGUI: игровой хук пропускает кадр,
+     * HUD явно рисует сам экран (иначе за экраном остаётся замороженный кадр).
+     */
+    private static boolean screenOpen;
 
     /** Последний кадр: элемент -> {x, y, w, h} в GUI-пикселях. */
     private static final Map<HudLayout.Element, float[]> BOUNDS =
@@ -71,6 +76,11 @@ public final class InterfaceHud {
         HudElementRegistry.addLast(
                 Identifier.fromNamespaceAndPath("hatek_client", "interface_hud"),
                 (gg, tickCounter) -> render(gg));
+    }
+
+    /** ClickGUI сообщает, открыт ли он, чтобы хук и экран не рисовали дважды. */
+    public static void setScreenOpen(boolean open) {
+        screenOpen = open;
     }
 
     /** Копия границ элементов последнего отрисованного кадра. */
@@ -106,11 +116,31 @@ public final class InterfaceHud {
     // ---------------- точка входа ----------------
 
     private static void render(GuiGraphicsExtractor gg) {
+        if (screenOpen) {
+            return; // HUD явно рисует сам открытый экран.
+        }
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) {
             return;
         }
         if (Interface.instance() == null || !Interface.instance().isEnabled()) {
+            return;
+        }
+        renderAll(gg);
+    }
+
+    /**
+     * Явная отрисовка HUD за открытым экраном (вызывает ClickGuiScreen
+     * каждый кадр). Границы обновляются — перетаскивание видит свежие данные.
+     */
+    public static void renderExplicit(GuiGraphicsExtractor gg) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) {
+            BOUNDS.clear();
+            return;
+        }
+        if (Interface.instance() == null || !Interface.instance().isEnabled()) {
+            BOUNDS.clear();
             return;
         }
         renderAll(gg);

@@ -4,6 +4,7 @@ import dev.hatek.client.ui.Style;
 import dev.hatek.client.feature.config.ConfigManager;
 import dev.hatek.client.module.Category;
 import dev.hatek.client.module.impl.render.interf.HudMover;
+import dev.hatek.client.module.impl.render.interf.InterfaceHud;
 import dev.hatek.client.ui.render.Anim;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.Render2D;
@@ -88,6 +89,14 @@ public final class ClickGuiScreen extends Screen {
         this.sourceAnim.snap(tab == Tab.CONFIGS ? 1.0f : 0.0f);
         this.scrollAnim.snap(SCROLL.getOrDefault(scrollKey(), 0.0f));
         page().onShow();
+        // HUD за экраном рисуем сами каждый кадр (хук в это время пропускает).
+        InterfaceHud.setScreenOpen(true);
+    }
+
+    @Override
+    public void removed() {
+        InterfaceHud.setScreenOpen(false);
+        super.removed();
     }
 
     @Override
@@ -115,6 +124,10 @@ public final class ClickGuiScreen extends Screen {
         double mx = Render2D.mouseX();
         double my = Render2D.mouseY();
         float eased = this.closing ? open : Anim.easeOut(open);
+
+        // HUD за панелью: рисуем явно каждый кадр, чтобы перетаскивание
+        // было видно сразу (игровой хук в это время пропускает).
+        InterfaceHud.renderExplicit(gg);
 
         Render2D.begin(gg);
         Render2D.pushScale(gg, panelX + Style.PANEL_W / 2.0f, panelY + Style.PANEL_H / 2.0f,
