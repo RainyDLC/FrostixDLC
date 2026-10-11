@@ -7,6 +7,7 @@
     "CameraMixin",
     "ConnectionMixin",
     "LocalPlayerMixin",
+    "ItemInHandRendererMixin",
     "MouseHandlerMixin",
     "MultiPlayerGameModeMixin",
     "NoFallKeyboardMixin",

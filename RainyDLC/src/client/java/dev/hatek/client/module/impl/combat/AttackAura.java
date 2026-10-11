@@ -446,6 +446,7 @@ public final class AttackAura extends Module {
         }
         if (neuroMode() && NeuroRotation.hasBrain()) {
             NeuroRotation.setTarget(target);
+            NeuroRotation.onTickRotation(target);
             return;
         }
 

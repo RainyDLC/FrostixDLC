@@ -276,7 +276,7 @@ public final class Attack {
             return true;
         }
         if (!AttackAura.extra(AttackAura.SMART_CRITS)) {
-            return false;
+            return true;
         }
         if (critImpossible()) {
             return true;
@@ -290,7 +290,8 @@ public final class Attack {
     private static boolean critStateReady() {
         Minecraft mc = mc();
         return mc.player != null
-                && mc.player.fallDistance > critFallHeight
+                && (mc.player.fallDistance > critFallHeight
+                    || (mc.player.fallDistance > 0.005F && mc.player.getDeltaMovement().y < -0.01))
                 && !mc.player.onGround()
                 && !mc.player.onClimbable()
                 && !mc.player.isInWater()
@@ -385,7 +386,7 @@ public final class Attack {
     }
 
     private static float nextCritFallHeight() {
-        return AuraRandom.human(0.02F, 0.06F);
+        return AuraRandom.human(0.01F, 0.03F);
     }
 
     private static void rollNextHit() {
@@ -397,10 +398,6 @@ public final class Attack {
         } else {
             auraGap = (long) (AuraRandom.human(AURA_GAP_MIN, AURA_GAP_MIN + AURA_GAP_SPREAD)
                     * AuraProfile.tempo());
-
-            if (AuraRandom.chance(0.06F)) {
-                auraGap += (long) AuraRandom.human(40.0F, 230.0F);
-            }
         }
 
         if (!AttackAura.chargeSpreadEnabled()) {
@@ -447,6 +444,9 @@ public final class Attack {
         }
         double attackSpeed = mc.player.getAttributeValue(Attributes.ATTACK_SPEED);
         long forCharge = (long) (1.0 / attackSpeed * 1000.0 * chargeFloor()) + extraCooldown;
+        if (critWindowOpen()) {
+            return forCharge;
+        }
         return Math.max(Math.min(getMsCooldown(), forCharge), auraGap);
     }
 
@@ -514,6 +514,9 @@ public final class Attack {
         Minecraft mc = mc();
         if (livingIn == null || mc.player == null) {
             return false;
+        }
+        if (AttackAura.neuroMode() && dev.hatek.client.module.impl.combat.aura.neuro.NeuroRotation.aimed()) {
+            return true;
         }
         AABB box = livingIn.getBoundingBox();
         AABB leadBox = SpaceTime.leadedBox(livingIn);
@@ -652,7 +655,7 @@ public final class Attack {
             return false;
         }
         return mc.options.keyJump.isDown()
-                || mc.player.tickCount - lastAirTick <= GROUND_PATIENCE_TICKS;
+                && mc.player.tickCount - lastAirTick <= 3;
     }
 
     public static void clampCooldownDebt() {

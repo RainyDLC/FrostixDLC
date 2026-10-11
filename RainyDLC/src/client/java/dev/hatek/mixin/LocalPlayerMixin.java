@@ -13,4 +13,15 @@ public class LocalPlayerMixin {
     private void hatek$onPlayerTick(CallbackInfo ci) {
         ClientEvents.playerTick();
     }
+
+    @Inject(method = "aiStep", at = @At("TAIL"))
+    private void hatek$stabilizeHandBob(CallbackInfo ci) {
+        if (dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil.detached()) {
+            LocalPlayer self = (LocalPlayer) (Object) this;
+            self.xBob = dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil.freePitch;
+            self.xBobO = dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil.freePitch;
+            self.yBob = dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil.freeYaw;
+            self.yBobO = dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil.freeYaw;
+        }
+    }
 }
