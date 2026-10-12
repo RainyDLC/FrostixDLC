@@ -36,12 +36,12 @@ public final class BlackHoleGen {
     public static final double TAN_HALF = 0.72;
 
     // Компактнее на небе (~±36°); тень крупная, диск прижат к ней.
-    private static final double CAM_DIST = 15.0;
+    private static final double CAM_DIST = 11.5;
     private static final double INCLINATION = Math.toRadians(6.0);
     private static final double ROLL = Math.toRadians(-12);
-    private static final double R_ISCO = 4.2;
+    private static final double R_ISCO = 4.0;
     private static final double R_PLUNGE = 2.6;
-    private static final double R_OUT = 9.0;
+    private static final double R_OUT = 7.2;
     private static final double T_PEAK_K = 5000.0;
     private static final int MAX_HITS = 6;
     private static final int NR = 400;
@@ -58,15 +58,15 @@ public final class BlackHoleGen {
     /** Критический прицельный параметр (край тени), M. */
     private static final double B_CRIT = 3.0 * Math.sqrt(3.0);
     private static final double RING_W = 0.16;
-    private static final double RING_I = 1.6;
+    private static final double RING_I = 0.0;
     private static final double HALO_W = 1.1;
-    private static final double HALO_I = 0.32;
+    private static final double HALO_I = 0.0;
     private static final double[] RING_RGB = {1.0, 0.72, 0.42};
     /** Тень не абсолютно чёрная: тёмно-янтарная заливка + свечение изнутри к краю. */
     private static final double SHADOW_FILL = 0.035;
     private static final double INNER_W = 1.3;
-    private static final double INNER_I = 0.22;
-    private static final double[] SHADOW_RGB = {0.85, 0.42, 0.20};
+    private static final double INNER_I = 0.10;
+    private static final double[] SHADOW_RGB = {0.55, 0.45, 0.42};
     /** Множитель и потолок угловой скорости диска (рад/с) — плавное движение без рывков. */
     private static final double OMEGA_SCALE = 0.45;
     private static final double OMEGA_MAX = 0.6;
@@ -151,7 +151,7 @@ public final class BlackHoleGen {
             // Кеплер вне ISCO; внутри — падение с почти постоянной угловой скоростью.
             double rr = Math.max(r, R_ISCO * 0.85);
             omegaLut[i] = (float) Math.min(OMEGA_MAX, Math.pow(R_ISCO / rr, 1.5) * OMEGA_SCALE);
-            double outer = Noise.smooth(R_OUT, R_OUT * 0.5, r);
+            double outer = Noise.smooth(R_OUT, R_OUT * 0.75, r);
             double inner = r >= R_ISCO ? Noise.smooth(R_ISCO - 0.05, R_ISCO + 0.35, r) * 0.75 + 0.25 : 0.22;
             fadeLut[i] = (float) (outer * inner);
             alphaLut[i] = (float) (r >= R_ISCO ? outer : 0.30 * Noise.smooth(R_PLUNGE, R_ISCO, r));
