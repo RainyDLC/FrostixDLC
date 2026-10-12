@@ -1,6 +1,7 @@
 package dev.hatek.client.module.impl.combat.aura.rotation;
 
 import dev.hatek.client.module.impl.combat.AttackAura;
+import dev.hatek.client.module.impl.combat.aura.Attack;
 import dev.hatek.client.module.impl.combat.aura.util.GCDUtil;
 import dev.hatek.client.module.impl.combat.aura.util.PlayerStats;
 import dev.hatek.client.module.impl.combat.aura.util.RayTraceUtil;
@@ -290,7 +291,10 @@ public final class SpaceTime {
         // Attack is imminent: charge is full and the last tick said it's a good moment.
         // Humanization must not eat this exact moment, so pauses and the closed
         // window are suspended while ready.
-        boolean ready = mc.player.getAttackStrengthScale(1.0F) > 0.9F && lastCanAttack;
+        // Большой доворот к скорому удару — тоже «готов»: без пауз/закрытого окна
+        // и с увеличенным шагом, иначе 120°+ не успевали к моменту удара.
+        boolean ready = (mc.player.getAttackStrengthScale(1.0F) > 0.9F && lastCanAttack)
+                || Attack.turnUrgent();
         if (ready) {
             pauseTicks = 0;
         }

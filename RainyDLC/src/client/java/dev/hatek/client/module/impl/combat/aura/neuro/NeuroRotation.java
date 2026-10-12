@@ -5,6 +5,7 @@ import dev.hatek.client.module.impl.combat.aimassist.AimNet;
 import dev.hatek.client.module.impl.combat.aimassist.AimSample;
 import dev.hatek.client.module.impl.combat.aura.rotation.Rotation;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
+import dev.hatek.client.module.impl.combat.aura.Attack;
 import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
 import dev.hatek.client.module.impl.combat.aura.util.EngageDelay;
 import dev.hatek.client.module.impl.combat.aura.util.GCDUtil;
@@ -70,6 +71,9 @@ public final class NeuroRotation {
     private static float infLastPitchErr;
     private static boolean aimed;
     private static long lastFrameNanos;
+
+    /** Потолок скорости доворота к удару, °/с. */
+    private static final float CATCH_UP_MAX = 720.0f;
 
     // ---- анти-детект: блуждание точки прицела ----
     private static Vec3 neuroWander = Vec3.ZERO;
@@ -473,6 +477,7 @@ public final class NeuroRotation {
     public static void setTarget(LivingEntity t) {
         target = t;
         if (t == null) {
+            resetTrackRate();
             wantVelYaw = 0.0f;
             wantVelPitch = 0.0f;
             aimed = false;
@@ -498,7 +503,57 @@ public final class NeuroRotation {
             return;
         }
         target = t;
+        updateTrackRate(t);
         onFrame();
+    }
+
+    /** Угловая скорость цели относительно нас (°/с) — feed-forward слежения. */
+    private static float trackYawRate;
+    private static float trackPitchRate;
+    private static float trackPrevYaw;
+    private static float trackPrevPitch;
+    private static int trackTargetId = -1;
+
+    /**
+     * Раз в тик: как быстро уезжает пеленг на цель (её ход + наш стрейф).
+     * Без этого скорость = ошибка / время_до_удара, и при кружении 150°/с
+     * прицел в фазе зарядки отставал на десятки градусов, а в окне удара
+     * не успевал догнать.
+     */
+    private static void updateTrackRate(LivingEntity t) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
+            return;
+        }
+        float[] b = rotTo(mc.player.getEyePosition(1.0f), t.getBoundingBox().getCenter());
+        if (t.getId() != trackTargetId) {
+            trackTargetId = t.getId();
+            trackPrevYaw = b[0];
+            trackPrevPitch = b[1];
+            trackYawRate = 0.0f;
+            trackPitchRate = 0.0f;
+            RotationProcess.trackAllowanceDegPerSec = 0.0f;
+            return;
+        }
+        float ry = Mth.wrapDegrees(b[0] - trackPrevYaw) * 20.0f;
+        float rp = (b[1] - trackPrevPitch) * 20.0f;
+        trackPrevYaw = b[0];
+        trackPrevPitch = b[1];
+        if (Math.abs(ry) > 600.0f || Math.abs(rp) > 400.0f) {
+            // телепорт / рывок — это не ход, не тянем за ним
+            ry = 0.0f;
+            rp = 0.0f;
+        }
+        trackYawRate = trackYawRate * 0.5f + Mth.clamp(ry, -400.0f, 400.0f) * 0.5f;
+        trackPitchRate = trackPitchRate * 0.5f + Mth.clamp(rp, -200.0f, 200.0f) * 0.5f;
+        RotationProcess.trackAllowanceDegPerSec = (float) Math.hypot(trackYawRate, trackPitchRate);
+    }
+
+    private static void resetTrackRate() {
+        trackYawRate = 0.0f;
+        trackPitchRate = 0.0f;
+        trackTargetId = -1;
+        RotationProcess.trackAllowanceDegPerSec = 0.0f;
     }
 
     /**
@@ -605,6 +660,17 @@ public final class NeuroRotation {
 
         double attackSpeed = mc.player.getAttributeValue(Attributes.ATTACK_SPEED);
         float timeUntilHit = Math.max(0.04f, (1.0f - attackScale) / (float) attackSpeed);
+
+        // Доворот «к удару»: цель далеко (смотрю в сторону) или кружимся — поднимаем
+        // потолок скорости так, чтобы успеть к моменту зарядки, а не после него.
+        boolean urgent = Attack.turnUrgent();
+        float ffAbs = (float) Math.hypot(trackYawRate, trackPitchRate);
+        if (urgent || readyToHit) {
+            float budget = Math.max(0.06f, timeUntilHit - 0.08f);
+            float catchUp = totErr / budget * 1.15f + ffAbs;
+            maxSpeed = Math.max(maxSpeed, Math.min(catchUp, CATCH_UP_MAX));
+        }
+
         float neededVelYaw = Mth.clamp(yawErr / timeUntilHit, -maxSpeed, maxSpeed);
         float neededVelPitch = Mth.clamp(pitchErr / timeUntilHit, -maxSpeed, maxSpeed);
 
@@ -621,8 +687,17 @@ public final class NeuroRotation {
             wantVelPitch = neededVelPitch;
         }
 
+        // Feed-forward: едем вместе с пеленгом цели, ошибка гасится поверх этого.
+        float velCap = Math.min(maxSpeed + ffAbs, CATCH_UP_MAX);
+        wantVelYaw = Mth.clamp(wantVelYaw + trackYawRate, -velCap, velCap);
+        wantVelPitch = Mth.clamp(wantVelPitch + trackPitchRate, -velCap, velCap);
+
         // Человекоподобное ускорение (deg/s^2) — устраняет резкие рывки и дёргание руки
         float accel = (readyToHit || inCritPhase) ? 3800.0f : 2400.0f;
+        if (urgent) {
+            // успеть разогнаться до нужной скорости за ~0.12 с
+            accel = Math.max(accel, maxSpeed / 0.12f);
+        }
         float maxVelChange = accel * dt;
         curVelYaw += Mth.clamp(wantVelYaw - curVelYaw, -maxVelChange, maxVelChange);
         curVelPitch += Mth.clamp(wantVelPitch - curVelPitch, -maxVelChange, maxVelChange);
@@ -630,14 +705,15 @@ public final class NeuroRotation {
         float rawStepYaw = curVelYaw * dt;
         float rawStepPitch = curVelPitch * dt;
 
-        // Не перелетаем за цель за один кадр
+        // Не перелетаем за цель за один кадр. Скорость не обнуляем, а оставляем
+        // скорость слежения — иначе на кружащейся цели каждый догон начинался с нуля.
         if (Math.abs(rawStepYaw) > Math.abs(yawErr)) {
             rawStepYaw = yawErr;
-            curVelYaw = 0.0f;
+            curVelYaw = trackYawRate;
         }
         if (Math.abs(rawStepPitch) > Math.abs(pitchErr)) {
             rawStepPitch = pitchErr;
-            curVelPitch = 0.0f;
+            curVelPitch = trackPitchRate;
         }
 
         // Квантование по сетке GCD чувствительности мыши игрока
@@ -840,6 +916,7 @@ public final class NeuroRotation {
     }
 
     private static void resetInference() {
+        resetTrackRate();
         target = null;
         wantVelYaw = 0.0f;
         wantVelPitch = 0.0f;

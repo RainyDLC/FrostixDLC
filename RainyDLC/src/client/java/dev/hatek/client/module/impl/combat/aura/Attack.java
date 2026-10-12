@@ -671,14 +671,72 @@ public final class Attack {
         return LagGuard.blocking() || LagGuard.chargeDebtPending(getMsCooldown());
     }
 
-    /** Удар вот-вот: зарядка почти добрана (или открыто окно крита). */
+    /** Удар вот-вот: зарядка почти добрана, открыто окно крита или нужен большой доворот. */
     public static boolean hitImminent() {
         Minecraft mc = mc();
         if (mc.player == null || AttackAura.target == null) {
             return false;
         }
         return critWindowOpen()
-                || mc.player.getAttackStrengthScale(0.5F) >= chargeFloor() - 0.15F;
+                || mc.player.getAttackStrengthScale(0.5F) >= chargeFloor() - 0.15F
+                || turnUrgent();
+    }
+
+    /** Бюджет скорости доворота (°/с), под который планируется «успеть к удару». */
+    private static final float TURN_BUDGET_DEG_PER_SEC = 400.0F;
+
+    /** Меньше этого угла доворот укладывается в обычное окно удара. */
+    private static final float FAR_ANGLE = 25.0F;
+
+    /**
+     * Цель далеко от текущей ротации (смотрю в сторону / кружусь), и до удара
+     * осталось меньше, чем нужно на доворот. Раньше разгон начинался только
+     * в окне удара (scale ≥ 0.88) — 120–180° не успевали, удар уезжал на 2–6 тиков.
+     */
+    public static boolean turnUrgent() {
+        Minecraft mc = mc();
+        LivingEntity t = AttackAura.target;
+        if (mc.player == null || t == null) {
+            return false;
+        }
+        float err = angleToTarget(t);
+        if (err < FAR_ANGLE) {
+            return false;
+        }
+        long turnMs = (long) (err / TURN_BUDGET_DEG_PER_SEC * 1000.0F) + 100L;
+        return msUntilCharge() <= turnMs;
+    }
+
+    /** Угол (°) между текущей ротацией игрока и центром цели. */
+    public static float angleToTarget(LivingEntity t) {
+        Minecraft mc = mc();
+        if (mc.player == null || t == null) {
+            return 0.0F;
+        }
+        Vec3 d = t.getBoundingBox().getCenter().subtract(mc.player.getEyePosition());
+        float yaw = (float) (Math.toDegrees(Math.atan2(d.z, d.x)) - 90.0);
+        float pitch = (float) -Math.toDegrees(Math.atan2(d.y, Math.hypot(d.x, d.z)));
+        float yawErr = Mth.wrapDegrees(yaw - mc.player.getYRot());
+        float pitchErr = pitch - mc.player.getXRot();
+        return (float) Math.hypot(yawErr, pitchErr);
+    }
+
+    /** Мс до того, как зарядка дойдёт до порога удара (0 — уже). */
+    public static long msUntilCharge() {
+        Minecraft mc = mc();
+        if (mc.player == null) {
+            return 0L;
+        }
+        float floor = chargeFloor();
+        float scale = mc.player.getAttackStrengthScale(0.5F);
+        if (scale >= floor) {
+            return 0L;
+        }
+        double perTick = mc.player.getAttributeValue(Attributes.ATTACK_SPEED) / 20.0;
+        if (perTick <= 0.0) {
+            return 0L;
+        }
+        return (long) ((floor - scale) / perTick * 50.0);
     }
 
     public static boolean targetInvulnerableNow(LivingEntity livingTarget) {

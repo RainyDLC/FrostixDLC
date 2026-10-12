@@ -137,8 +137,19 @@ public class RotationProcess extends Component {
      * Масштабирует шаг так, чтобы суммарная ротация в каждом скользящем окне
      * не превышала лимит (с джиттером ±10%, обновляется раз в ~5 секунд).
      */
+    /**
+     * Угловая скорость цели относительно нас (°/с), выставляется ротацией каждый тик.
+     * Слежение за этой скоростью окнами не режется: при долгом кружении бюджет
+     * 380°/2с выбирался чистым слежением, и прицел отставал от цели всё сильнее.
+     */
+    public static float trackAllowanceDegPerSec;
+    private static long lastLimitNanos;
+
     private static float[] limitWindows(float yawStep, float pitchStep) {
         long now = System.nanoTime();
+        float dtSec = lastLimitNanos == 0L ? 0.016F
+                : Mth.clamp((now - lastLimitNanos) / 1.0E9F, 0.001F, 0.05F);
+        lastLimitNanos = now;
         // Окно удара окнами не режем: при круговом стрейфе бюджет 170°/0.5с выбирался
         // слежением, шаг масштабировался в ноль, и луч не доходил до цели в момент
         // удара — пропуск 1–2 ударов. Шаг всё равно пишется в окна (recordWindow).
@@ -161,6 +172,10 @@ public class RotationProcess extends Component {
             if (allow < mag * scale) {
                 scale = Math.max(0.0F, allow / mag);
             }
+        }
+        float trackMag = trackAllowanceDegPerSec * dtSec * 1.1F;
+        if (trackMag > 0.0F && mag * scale < trackMag) {
+            scale = Math.min(1.0F, trackMag / mag);
         }
         return new float[]{yawStep * scale, pitchStep * scale};
     }
