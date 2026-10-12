@@ -48,6 +48,8 @@ public final class ClickGuiScreen extends Screen {
 
     private boolean closing;
     private float glassOffsetY;
+    private float glassStrength;
+    private net.minecraft.resources.Identifier glassTexture;
     private boolean draggingPanel;
     private float grabX;
     private float grabY;
@@ -96,6 +98,7 @@ public final class ClickGuiScreen extends Screen {
     @Override
     public void removed() {
         InterfaceHud.setScreenOpen(false);
+        LiquidBackdrop.stop();
         super.removed();
     }
 
@@ -106,9 +109,10 @@ public final class ClickGuiScreen extends Screen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor gg, int mouseX, int mouseY, float partialTick) {
-        // Blur и Liquid Glass: размываем мир за GUI (сила — из настройки "Размытие фона" в Minecraft).
-        // Liquid Glass с готовым снимком мира размытие не нужно — стекло прозрачное.
-        if (ClickGui.blur() || (ClickGui.liquidGlass() && !LiquidBackdrop.ready())) {
+        // Blur: размываем мир за GUI (сила — из настройки "Размытие фона" в Minecraft).
+        // Liquid Glass: тот же blur даёт матовое стекло (снимок FROST), а снаружи панели
+        // поверх кладётся чёткий снимок SHARP — см. LiquidBackdrop.
+        if (ClickGui.blur() || ClickGui.liquidGlass()) {
             extractBlurredBackground(gg);
         }
     }
@@ -130,6 +134,21 @@ public final class ClickGuiScreen extends Screen {
         double my = Render2D.mouseY();
         float eased = this.closing ? open : Anim.easeOut(open);
 
+        boolean liquid = ClickGui.liquidGlass();
+        if (liquid) {
+            LiquidBackdrop.request();
+        }
+        this.glassTexture = !liquid ? null
+                : LiquidBackdrop.frostReady() ? LiquidBackdrop.FROST
+                : LiquidBackdrop.sharpReady() ? LiquidBackdrop.SHARP : null;
+        this.glassStrength = eased;
+        if (this.glassTexture == LiquidBackdrop.FROST && LiquidBackdrop.sharpReady()) {
+            // Снаружи панели мир снова чёткий: ванильный blur нужен только под стеклом.
+            Render2D.begin(gg);
+            LiquidGlass.restoreSharp(gg);
+            Render2D.end(gg);
+        }
+
         // HUD за панелью: рисуем явно каждый кадр, чтобы перетаскивание
         // было видно сразу (игровой хук в это время пропускает).
         InterfaceHud.renderExplicit(gg);
@@ -138,19 +157,14 @@ public final class ClickGuiScreen extends Screen {
         Render2D.pushTranslate(gg, 0.0f, (1.0f - eased) * 6.0f);
         Render2D.pushAlpha(eased);
 
-        boolean liquid = ClickGui.liquidGlass();
         this.glassOffsetY = (1.0f - eased) * 6.0f;
-        if (liquid) {
-            LiquidBackdrop.request();
+        if (this.glassTexture != null) {
+            LiquidGlass.render(gg, this.glassTexture, panelX, panelY, Style.PANEL_W, Style.PANEL_H,
+                    Style.PANEL_R, this.glassOffsetY, glassTint(Style.PANEL_LIQUID_TINT), this.glassStrength);
+        } else {
+            Render2D.round(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H, Style.PANEL_R,
+                    liquid ? Style.PANEL_LIQUID : ClickGui.blur() ? Style.PANEL_BLUR : Style.PANEL);
         }
-        boolean refract = liquid && LiquidBackdrop.ready();
-        if (refract) {
-            LiquidGlass.render(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H, Style.PANEL_R,
-                    0.0f, this.glassOffsetY);
-        }
-        Render2D.round(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H, Style.PANEL_R,
-                refract ? Style.PANEL_LIQUID_TINT : liquid ? Style.PANEL_LIQUID
-                        : ClickGui.blur() ? Style.PANEL_BLUR : Style.PANEL);
         if (liquid) {
             renderGlass(gg);
         }
@@ -191,6 +205,11 @@ public final class ClickGuiScreen extends Screen {
 
     private static void glassLayer(GuiGraphicsExtractor gg, float x, float y, int w, int h, float r) {
         Render2D.texture(gg, TexCache.liquidGlass(w, h, r), x, y, w, h, Style.WHITE);
+    }
+
+    /** Тонировка стекла "наливается" при открытии: от чистого снимка к итоговой. */
+    private int glassTint(int tint) {
+        return Render2D.lerp(0xFFFFFFFF, 0xFF000000 | tint, this.glassStrength);
     }
 
     private void renderSidebar(GuiGraphicsExtractor gg, double mx, double my) {
@@ -272,9 +291,12 @@ public final class ClickGuiScreen extends Screen {
     private void renderNav(GuiGraphicsExtractor gg, double mx, double my) {
         float x = panelX + Style.NAV_X;
         float y = panelY + Style.NAV_Y;
-        if (ClickGui.liquidGlass()) {
-            LiquidGlass.render(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R, 0.0f, this.glassOffsetY);
-            Render2D.round(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R, Style.NAV_LIQUID);
+        if (this.glassTexture != null) {
+            LiquidGlass.render(gg, this.glassTexture, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R,
+                    this.glassOffsetY, glassTint(Style.NAV_LIQUID_TINT), this.glassStrength);
+            glassLayer(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R);
+        } else if (ClickGui.liquidGlass()) {
+            Render2D.round(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R, Style.PANEL_LIQUID);
             glassLayer(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R);
         } else {
             Render2D.round(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R, Style.PANEL_RAISED);

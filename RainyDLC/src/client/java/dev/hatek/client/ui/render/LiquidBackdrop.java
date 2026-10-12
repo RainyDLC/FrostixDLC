@@ -8,67 +8,113 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
 
 /**
- * Снимок мира для Liquid Glass. Копия main render target делается на GPU
- * в начале отрисовки GUI (LiquidBackdropMixin -> GuiRenderer.render HEAD):
- * там уже есть мир этого кадра, но ещё нет GUI — стекло не видит само себя.
+ * Снимки мира для Liquid Glass (копия main render target на GPU, без чтения на CPU).
+ *
+ * SHARP — чёткий мир: GuiRenderer.render HEAD (мир без HUD), затем перезаписывается
+ *         на GameRenderer.processBlurEffect HEAD (мир + ванильный HUD, до размытия).
+ * FROST — тот же кадр после ванильного blur: processBlurEffect TAIL.
+ *
+ * Экран рисует SHARP на весь экран (снаружи мир снова чёткий), а внутри панели — FROST
+ * с искажением линзы. Нет blur (настройка "Размытие фона" = 0) — линза по SHARP без матовости.
  */
 public final class LiquidBackdrop {
-    public static final Identifier ID = Identifier.fromNamespaceAndPath("hatek_client", "dyn/liquid_backdrop");
+    public static final Identifier SHARP = Identifier.fromNamespaceAndPath("hatek_client", "dyn/liquid_sharp");
+    public static final Identifier FROST = Identifier.fromNamespaceAndPath("hatek_client", "dyn/liquid_frost");
+    private static final long FRESH_NS = 250_000_000L;
 
-    private static DynamicTexture texture;
-    private static int width;
-    private static int height;
-    private static boolean wanted;
-    private static long lastCapture;
+    private static final Slot SHARP_SLOT = new Slot(SHARP, "hatek/liquid_sharp");
+    private static final Slot FROST_SLOT = new Slot(FROST, "hatek/liquid_frost");
+
+    /** Ставит экран каждый кадр, пока открыт ClickGUI в режиме Liquid Glass. */
+    private static volatile boolean active;
+    private static long lastRequest;
 
     private LiquidBackdrop() {
     }
 
-    /** Экран хочет снимок в этом кадре (вызывается на extract). */
     public static void request() {
-        wanted = true;
+        active = true;
+        lastRequest = System.nanoTime();
     }
 
-    /** Снимок свежий — можно рисовать преломление. Иначе экран падает на обычный blur. */
-    public static boolean ready() {
-        return texture != null && System.nanoTime() - lastCapture < 250_000_000L;
+    public static void stop() {
+        active = false;
+    }
+
+    public static boolean sharpReady() {
+        return SHARP_SLOT.fresh();
+    }
+
+    public static boolean frostReady() {
+        return FROST_SLOT.fresh();
     }
 
     public static int width() {
-        return width;
+        return SHARP_SLOT.width;
     }
 
     public static int height() {
-        return height;
+        return SHARP_SLOT.height;
     }
 
-    public static void capture() {
-        if (!wanted) {
+    // ---- хуки из миксинов
+
+    public static void onGuiRender() {
+        capture(SHARP_SLOT);
+    }
+
+    public static void onBlurStart() {
+        capture(SHARP_SLOT);
+    }
+
+    public static void onBlurEnd() {
+        capture(FROST_SLOT);
+    }
+
+    private static void capture(Slot slot) {
+        if (!active || System.nanoTime() - lastRequest > FRESH_NS) {
             return;
         }
-        wanted = false;
         RenderTarget target = Minecraft.getInstance().gameRenderer.mainRenderTarget();
         if (target == null || target.getColorTexture() == null || target.width <= 0 || target.height <= 0) {
             return;
         }
-        ensure(target.width, target.height);
+        slot.ensure(target.width, target.height);
         RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(
-                target.getColorTexture(), texture.getTexture(), 0, 0, 0, 0, 0, width, height);
-        lastCapture = System.nanoTime();
+                target.getColorTexture(), slot.texture.getTexture(), 0, 0, 0, 0, 0, slot.width, slot.height);
+        slot.captured = System.nanoTime();
     }
 
-    private static void ensure(int w, int h) {
-        if (texture != null && w == width && h == height) {
-            return;
+    private static final class Slot {
+        final Identifier id;
+        final String label;
+        DynamicTexture texture;
+        int width;
+        int height;
+        long captured;
+
+        Slot(Identifier id, String label) {
+            this.id = id;
+            this.label = label;
         }
-        Minecraft mc = Minecraft.getInstance();
-        if (texture != null) {
-            mc.getTextureManager().release(ID);
+
+        boolean fresh() {
+            return this.texture != null && System.nanoTime() - this.captured < FRESH_NS;
         }
-        texture = new DynamicTexture(() -> "hatek/liquid_backdrop",
-                new NativeImage(NativeImage.Format.RGBA, w, h, false));
-        mc.getTextureManager().register(ID, texture);
-        width = w;
-        height = h;
+
+        void ensure(int w, int h) {
+            if (this.texture != null && w == this.width && h == this.height) {
+                return;
+            }
+            Minecraft mc = Minecraft.getInstance();
+            if (this.texture != null) {
+                mc.getTextureManager().release(this.id);
+            }
+            String name = this.label;
+            this.texture = new DynamicTexture(() -> name, new NativeImage(NativeImage.Format.RGBA, w, h, false));
+            mc.getTextureManager().register(this.id, this.texture);
+            this.width = w;
+            this.height = h;
+        }
     }
 }

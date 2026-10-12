@@ -12,9 +12,9 @@ public final class Style {
     public static final int PANEL_BLUR = 0xB3141313;
     // Liquid glass: тоньше, чем Blur, — мир за панелью читается сквозь стекло.
     public static final int PANEL_LIQUID = 0x8C121212;
-    // Поверх преломлённого мира — лёгкая тонировка, чтобы текст читался.
-    public static final int PANEL_LIQUID_TINT = 0x66101010;
-    public static final int NAV_LIQUID = 0x80101010;
+    // Линза запекает тонировку в RGB снимка (множитель), чтобы текст читался.
+    public static final int PANEL_LIQUID_TINT = 0x9A9A9A;
+    public static final int NAV_LIQUID_TINT = 0x828282;
     public static final float LIQUID_ACCENT_ALPHA = 0.08f;
     public static final int DEFAULT_ACCENT = 0xFFFFAFE2;
 
