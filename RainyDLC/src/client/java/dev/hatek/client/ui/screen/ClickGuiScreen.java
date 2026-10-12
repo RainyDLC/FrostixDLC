@@ -8,6 +8,7 @@ import dev.hatek.client.module.impl.render.interf.InterfaceHud;
 import dev.hatek.client.ui.render.Anim;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.Render2D;
+import dev.hatek.client.ui.render.TexCache;
 import dev.hatek.client.feature.theme.ThemeManager;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -102,8 +103,8 @@ public final class ClickGuiScreen extends Screen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor gg, int mouseX, int mouseY, float partialTick) {
-        // Режим Blur: размываем мир за GUI (сила — из настройки "Размытие фона" в Minecraft).
-        if (ClickGui.blur()) {
+        // Blur и Liquid Glass: размываем мир за GUI (сила — из настройки "Размытие фона" в Minecraft).
+        if (ClickGui.blur() || ClickGui.liquidGlass()) {
             extractBlurredBackground(gg);
         }
     }
@@ -133,8 +134,12 @@ public final class ClickGuiScreen extends Screen {
         Render2D.pushTranslate(gg, 0.0f, (1.0f - eased) * 6.0f);
         Render2D.pushAlpha(eased);
 
-        Render2D.round(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H,
-                Style.PANEL_R, ClickGui.blur() ? Style.PANEL_BLUR : Style.PANEL);
+        boolean liquid = ClickGui.liquidGlass();
+        Render2D.round(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H, Style.PANEL_R,
+                liquid ? Style.PANEL_LIQUID : ClickGui.blur() ? Style.PANEL_BLUR : Style.PANEL);
+        if (liquid) {
+            renderGlass(gg);
+        }
         renderSidebar(gg, mx, my);
         renderSourceMenu(gg, mx, my);
         renderContent(gg, mx, my);
@@ -151,6 +156,29 @@ public final class ClickGuiScreen extends Screen {
 
     private static float sourceY() {
         return panelY + Style.PANEL_H - Style.SIDEBAR_Y - Style.CAT_H - 8.0f;
+    }
+
+    /**
+     * Стекло без анимаций: два неподвижных мягких пятна (акцент снизу справа,
+     * белый свет сверху слева) и статичный слой кромки/блика из TexCache.
+     */
+    private static void renderGlass(GuiGraphicsExtractor gg) {
+        float w = Style.PANEL_W;
+        float h = Style.PANEL_H;
+        // Пятна целиком внутри панели (отступ > PANEL_R), клип не нужен.
+        softSpot(gg, panelX + w - 230.0f, panelY + h - 230.0f, 400,
+                Render2D.withAlpha(Style.accent(), Style.LIQUID_ACCENT_ALPHA));
+        softSpot(gg, panelX + 210.0f, panelY + 210.0f, 360,
+                Render2D.withAlpha(Style.WHITE, Style.LIQUID_LIGHT_ALPHA));
+        glassLayer(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H, Style.PANEL_R);
+    }
+
+    private static void softSpot(GuiGraphicsExtractor gg, float cx, float cy, int d, int argb) {
+        Render2D.texture(gg, TexCache.glow(d), cx - d / 2.0f, cy - d / 2.0f, d, d, argb);
+    }
+
+    private static void glassLayer(GuiGraphicsExtractor gg, float x, float y, int w, int h, float r) {
+        Render2D.texture(gg, TexCache.liquidGlass(w, h, r), x, y, w, h, Style.WHITE);
     }
 
     private void renderSidebar(GuiGraphicsExtractor gg, double mx, double my) {
@@ -232,7 +260,12 @@ public final class ClickGuiScreen extends Screen {
     private void renderNav(GuiGraphicsExtractor gg, double mx, double my) {
         float x = panelX + Style.NAV_X;
         float y = panelY + Style.NAV_Y;
-        Render2D.round(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R, Style.PANEL_RAISED);
+        if (ClickGui.liquidGlass()) {
+            Render2D.round(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R, Style.NAV_LIQUID);
+            glassLayer(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R);
+        } else {
+            Render2D.round(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R, Style.PANEL_RAISED);
+        }
 
         for (Tab value : Tab.values()) {
             float center = x + Style.NAV_FIRST + value.ordinal() * Style.NAV_STEP;

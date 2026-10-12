@@ -352,6 +352,80 @@ public final class TexCache {
         });
     }
 
+    /**
+     * Liquid glass: статичный слой поверх полупрозрачной панели.
+     * Считается по SDF скруглённого прямоугольника, свет падает сверху-слева:
+     * яркая кромка со стороны света, слабый отражённый блик с противоположной,
+     * мягкое преломление вдоль края внутрь и широкий глянец в верхней части.
+     */
+    public static Identifier liquidGlass(int w, int h, float r) {
+        String key = "liquid_" + w + "_" + h + "_" + Math.round(r * 2.0f);
+        return get(key, w, h, g -> {
+            BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            float hw = w / 2.0f;
+            float hh = h / 2.0f;
+            float lx = -0.6f;
+            float ly = -0.8f;
+            float refract = Math.min(14.0f, Math.min(w, h) * 0.25f);
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    float px = x + 0.5f - hw;
+                    float py = y + 0.5f - hh;
+                    float qx = Math.abs(px) - (hw - r);
+                    float qy = Math.abs(py) - (hh - r);
+                    float ox = Math.max(qx, 0.0f);
+                    float oy = Math.max(qy, 0.0f);
+                    float d = (float) Math.sqrt(ox * ox + oy * oy) + Math.min(Math.max(qx, qy), 0.0f) - r;
+                    if (d > 0.5f) {
+                        continue;
+                    }
+                    // Нормаль края (наружу).
+                    float nx;
+                    float ny;
+                    if (qx > 0.0f && qy > 0.0f) {
+                        float len = (float) Math.sqrt(qx * qx + qy * qy);
+                        nx = qx / len;
+                        ny = qy / len;
+                    } else if (qx > qy) {
+                        nx = 1.0f;
+                        ny = 0.0f;
+                    } else {
+                        nx = 0.0f;
+                        ny = 1.0f;
+                    }
+                    nx *= Math.signum(px);
+                    ny *= Math.signum(py);
+                    float lit = nx * lx + ny * ly;
+                    float front = Math.max(0.0f, lit);
+                    float back = Math.max(0.0f, -lit);
+
+                    float a = 0.0f;
+                    float depth = -d;
+                    // Кромка 1.5px.
+                    if (depth < 1.5f) {
+                        float edge = 0.10f + 0.34f * (float) Math.pow(front, 1.5) + 0.12f * back * back;
+                        a += edge * Math.min(1.0f, 1.5f - depth);
+                    }
+                    // Преломление вдоль края внутрь.
+                    if (depth < refract) {
+                        float t = 1.0f - depth / refract;
+                        a += t * t * (0.03f + 0.05f * front + 0.02f * back);
+                    }
+                    // Глянец сверху, гаснет к центру и вправо.
+                    float sy = y / (h * 0.42f);
+                    if (sy < 1.0f) {
+                        float t = 1.0f - sy;
+                        a += t * t * 0.045f * (1.0f - 0.5f * x / (float) w);
+                    }
+                    a *= Math.max(0.0f, Math.min(1.0f, 0.5f - d));
+                    int alpha = Math.min(255, Math.round(a * 255.0f));
+                    img.setRGB(x, y, (alpha << 24) | 0x00FFFFFF);
+                }
+            }
+            g.drawImage(img, 0, 0, null);
+        });
+    }
+
     private static void mask(Graphics2D g, int w, int h, float r) {
         java.awt.geom.Area outside = new java.awt.geom.Area(new java.awt.Rectangle(0, 0, w, h));
         outside.subtract(new java.awt.geom.Area(

@@ -10,6 +10,11 @@ public final class Style {
     // Полупрозрачная основа (косметика) и основа под Blur.
     public static final int PANEL_GLASS = 0xE6141313;
     public static final int PANEL_BLUR = 0xB3141313;
+    // Liquid glass: тоньше, чем Blur, — мир за панелью читается сквозь стекло.
+    public static final int PANEL_LIQUID = 0x8C121212;
+    public static final int NAV_LIQUID = 0x14FFFFFF;
+    public static final float LIQUID_ACCENT_ALPHA = 0.08f;
+    public static final float LIQUID_LIGHT_ALPHA = 0.035f;
     public static final int DEFAULT_ACCENT = 0xFFFFAFE2;
 
     private static int accent = DEFAULT_ACCENT;
