@@ -17,6 +17,10 @@ import java.util.stream.IntStream;
  *   <li>Турбулентная структура диска: логарифмические спиральные рукава,
  *       волокна, горячие сгустки; дифференциальное (кеплеровское) вращение.</li>
  *   <li>Линзирование фона (небо + звёзды) с кольцом Эйнштейна.</li>
+ *   <li>Свечение у критической кривой (b = 3√3 M): тонкое яркое кольцо и мягкий ореол
+ *       по краю тени — тень не сливается с космосом.</li>
+ *   <li>Релятивистские джеты вдоль оси вращения (вертикально) и дымный оттёк
+ *       в плоскости диска (горизонтально): анимированный турбулентный "дым".</li>
  *   <li>Кольцевая структура диска: резонансные полосы и тёмные щели
  *       (как щель Кассини), фотонные кольца высших порядков подсвечены.</li>
  * </ul>
@@ -29,15 +33,15 @@ public final class BlackHoleGen {
     public static final double[] RIGHT;
     public static final double[] UP;
     /** tan половины углового размера билборда. */
-    public static final double TAN_HALF = 1.0;
+    public static final double TAN_HALF = 1.2;
 
-    // Камера ближе — тень ~17°, диск почти на всё небо (~±40°); почти с ребра, как Гаргантюа.
-    private static final double CAM_DIST = 17.0;
+    // Камера близко — тень ~22°, диск почти на всё небо (~±43°); почти с ребра, как Гаргантюа.
+    private static final double CAM_DIST = 13.0;
     private static final double INCLINATION = Math.toRadians(6.0);
     private static final double ROLL = Math.toRadians(-12);
     private static final double R_ISCO = 6.0;
     private static final double R_PLUNGE = 2.35;
-    private static final double R_OUT = 14.0;
+    private static final double R_OUT = 12.0;
     private static final double T_PEAK_K = 5000.0;
     private static final int MAX_HITS = 6;
     private static final int NR = 400;
@@ -46,10 +50,36 @@ public final class BlackHoleGen {
     private static final double LN_IN = Math.log(R_PLUNGE);
     private static final double LN_OUT = Math.log(R_OUT);
     /** Радиусы тёмных щелей (в M) и их полуширина. */
-    private static final double[] GAPS = {7.9, 9.8, 11.8};
+    private static final double[] GAPS = {7.7, 9.4, 10.9};
     private static final double GAP_W = 0.22;
     /** Усиление фотонных колец (3-е и далее пересечения диска). */
     private static final double PHOTON_RING_BOOST = 1.8;
+
+    /** Критический прицельный параметр (край тени), M. */
+    private static final double B_CRIT = 3.0 * Math.sqrt(3.0);
+    private static final double RING_W = 0.16;
+    private static final double RING_I = 1.6;
+    private static final double HALO_W = 1.1;
+    private static final double HALO_I = 0.32;
+    private static final double[] RING_RGB = {1.0, 0.72, 0.42};
+
+    /** Джеты: начальная ширина, раскрытие, яркость, скорость дыма (M/с), цвет. */
+    private static final double JET_W0 = 0.55;
+    private static final double JET_SPREAD = 0.11;
+    private static final double JET_I = 0.9;
+    private static final double JET_SPEED = 2.4;
+    private static final double[] JET_RGB = {0.55, 0.74, 1.0};
+    /** Горизонтальный оттёк в плоскости диска. */
+    private static final double FLOW_W0 = 0.35;
+    private static final double FLOW_SPREAD = 0.06;
+    private static final double FLOW_I = 0.42;
+    private static final double FLOW_SPEED = 1.3;
+    private static final double[] FLOW_RGB = {1.0, 0.78, 0.55};
+    /** Таблица дыма: период по оси (M) и разрешение (вдоль оси x поперёк). */
+    private static final double SMOKE_PERIOD = 16.0;
+    private static final int NS = 512;
+    private static final int NQ = 64;
+    private static final double Q_MAX = 3.0;
 
     static {
         double[] r = SkyGen.cross(DIR, new double[]{0, 1, 0});
@@ -71,6 +101,13 @@ public final class BlackHoleGen {
     private final float[] omegaLut = new float[NR];
     private final float[] fadeLut = new float[NR];
     private final float[] alphaLut = new float[NR];
+    /** Прицельный параметр луча и координаты пикселя в осях дыры (M): вдоль оси вращения / вдоль диска. */
+    private final float[] impact;
+    private final float[] axisS;
+    private final float[] axisQ;
+    private final float[] smokeA = new float[NS * NQ];
+    private final float[] smokeB = new float[NS * NQ];
+    private double maxReach;
 
     private BlackHoleGen(int size) {
         this.size = size;
@@ -78,12 +115,16 @@ public final class BlackHoleGen {
         this.bg = new float[n * 3];
         this.edge = new byte[n];
         this.start = new int[n + 1];
+        this.impact = new float[n];
+        this.axisS = new float[n];
+        this.axisQ = new float[n];
     }
 
     public static BlackHoleGen build(int size, int[] baseSky, int bw, int bh, float[] starMap) {
         BlackHoleGen g = new BlackHoleGen(size);
         g.buildLuts();
         g.buildDiskNoise();
+        g.buildSmoke();
         g.trace(baseSky, bw, bh, starMap);
         return g;
     }
@@ -152,6 +193,30 @@ public final class BlackHoleGen {
         return Noise.clamp01((v - 0.12) * 1.45);
     }
 
+    /** Периодичный по оси турбулентный дым: (s по периоду) x (q / ширина в [-Q_MAX, Q_MAX]). */
+    private void buildSmoke() {
+        double rad = SMOKE_PERIOD / (Math.PI * 2);
+        IntStream.range(0, NS).parallel().forEach(i -> {
+            double a = i / (double) NS * Math.PI * 2;
+            double cx = Math.cos(a) * rad;
+            double cz = Math.sin(a) * rad;
+            for (int j = 0; j < NQ; j++) {
+                double q = (j / (double) (NQ - 1) * 2 - 1) * Q_MAX;
+                smokeA[i * NQ + j] = (float) smoke(cx, cz, q, 0.0);
+                smokeB[i * NQ + j] = (float) smoke(cx, cz, q, 17.7);
+            }
+        });
+    }
+
+    private static double smoke(double cx, double cz, double q, double o) {
+        // Клубы + рваные волокна, поперёк чуть закручены.
+        double warp = Noise.fbm(cx * 0.35 + o, cz * 0.35, q * 0.6 + o, 3);
+        double billow = Noise.fbm(cx * 0.9 + warp * 1.6 + o, cz * 0.9, q * 1.1 + warp, 5);
+        double wisps = Noise.ridged(cx * 1.7 + o, cz * 1.7 + warp, q * 2.4, 4);
+        double v = 0.65 * billow + 0.55 * wisps * wisps;
+        return Noise.clamp01((v - 0.18) * 1.6);
+    }
+
     // ------------------------------------------------------------ tracing
 
     private void trace(int[] baseSky, int bw, int bh, float[] starMap) {
@@ -171,6 +236,15 @@ public final class BlackHoleGen {
         int[][] rowChr = new int[size][];
         int[][] rowCount = new int[size][];
 
+        // Экранные оси дыры: проекция оси вращения (мировой Y) и перпендикуляр — линия диска.
+        double sa = rt[1];
+        double sb = up[1];
+        double sl = Math.sqrt(sa * sa + sb * sb);
+        final double axX = sa / sl;
+        final double axY = sb / sl;
+        final double scale = TAN_HALF * CAM_DIST;
+        this.maxReach = scale * 0.82;
+
         IntStream.range(0, size).parallel().forEach(y -> {
             double[] p = new double[3];
             double[] v = new double[3];
@@ -186,6 +260,10 @@ public final class BlackHoleGen {
                 double px = (x + 0.5) / size * 2 - 1;
                 double py = 1 - (y + 0.5) / size * 2;
                 double rho = Math.sqrt(px * px + py * py);
+                double mx = px * scale;
+                double my = py * scale;
+                axisS[idx] = (float) (mx * axX + my * axY);
+                axisQ[idx] = (float) (-mx * axY + my * axX);
                 edge[idx] = (byte) Math.round(255 * Noise.smooth(1.0, 0.70, rho));
                 double dx = f[0] + (rt[0] * px + up[0] * py) * TAN_HALF;
                 double dy = f[1] + (rt[1] * px + up[1] * py) * TAN_HALF;
@@ -197,6 +275,10 @@ public final class BlackHoleGen {
                 v[0] = dx / dl;
                 v[1] = dy / dl;
                 v[2] = dz / dl;
+                double bx = cam[1] * v[2] - cam[2] * v[1];
+                double by = cam[2] * v[0] - cam[0] * v[2];
+                double bz = cam[0] * v[1] - cam[1] * v[0];
+                impact[idx] = (float) Math.sqrt(bx * bx + by * by + bz * bz);
                 int[] hits = {0};
                 boolean escaped = integrate(p, v, tmp, hu, hp, hi, hc, hits);
                 counts[x] = hits[0];
@@ -486,6 +568,47 @@ public final class BlackHoleGen {
         return (float) (a + (b - a) * fu);
     }
 
+    /**
+     * Двусторонний дымный поток вдоль оси s (q — поперёк), в M.
+     * Ширина растёт конусом, у основания и у края билборда — мягкое затухание.
+     */
+    private double smokeLayer(double s, double q, double w0, double spread, double speed, double time,
+                              double startA, double startB) {
+        double sa = Math.abs(s);
+        double w = w0 + sa * spread;
+        double qn = q / w;
+        if (qn > Q_MAX || qn < -Q_MAX) {
+            return 0;
+        }
+        double fall = Noise.smooth(startA, startB, sa) * (1 - Noise.smooth(this.maxReach * 0.55, this.maxReach, sa));
+        if (fall <= 0) {
+            return 0;
+        }
+        double core = Math.exp(-qn * qn * 0.9);
+        // Две скорости — клубы меняют форму, а не просто едут. Сторона (знак s) — свой сдвиг.
+        double side = s < 0 ? 5.3 : 0.0;
+        double a = smokeAt(this.smokeA, sa - time * speed + side, qn);
+        double b = smokeAt(this.smokeB, sa - time * speed * 0.62 + side * 1.7, qn);
+        double dens = a * (0.45 + 0.75 * b);
+        // Ярче у основания, тускнеет по мере расширения.
+        double thin = w0 / w;
+        return core * dens * fall * (0.35 + 0.65 * thin);
+    }
+
+    private float smokeAt(float[] tab, double s, double qn) {
+        double fs = s / SMOKE_PERIOD * NS;
+        double f0 = Math.floor(fs);
+        int i = Math.floorMod((int) f0, NS);
+        int i1 = i + 1 == NS ? 0 : i + 1;
+        double ts = fs - f0;
+        double fq = (qn / Q_MAX * 0.5 + 0.5) * (NQ - 1);
+        int j = Math.max(0, Math.min(NQ - 2, (int) fq));
+        double tq = fq - j;
+        double a = tab[i * NQ + j] + (tab[i * NQ + j + 1] - tab[i * NQ + j]) * tq;
+        double b = tab[i1 * NQ + j] + (tab[i1 * NQ + j + 1] - tab[i1 * NQ + j]) * tq;
+        return (float) (a + (b - a) * ts);
+    }
+
     /** Рендер кадра в ARGB. */
     public void frame(double time, double brightness, int[] out) {
         double t1 = time % FLOW_PERIOD;
@@ -522,6 +645,24 @@ public final class BlackHoleGen {
                 cr += trans * bg[s];
                 cg += trans * bg[s + 1];
                 cb += trans * bg[s + 2];
+
+                // Кромка тени: тонкое кольцо у b_crit + ореол снаружи.
+                double db = impact[idx] - B_CRIT;
+                double glow = RING_I * Math.exp(-(db / RING_W) * (db / RING_W))
+                        + (db > 0 ? HALO_I * Math.exp(-db / HALO_W) : 0);
+                // Дым: виден только снаружи тени и за диском.
+                double captured = bg[s] + bg[s + 1] + bg[s + 2] > 0 ? 1 : 0;
+                double jet = captured * smokeLayer(axisS[idx], axisQ[idx], JET_W0, JET_SPREAD,
+                        JET_SPEED, time, 1.4, 4.0);
+                double flow = captured * smokeLayer(axisQ[idx], axisS[idx], FLOW_W0, FLOW_SPREAD,
+                        FLOW_SPEED, time + 9.0, R_OUT * 0.6, R_OUT * 1.05);
+                double em = trans * brightness;
+                glow *= em;
+                jet *= em * JET_I;
+                flow *= em * FLOW_I;
+                cr += glow * RING_RGB[0] + jet * JET_RGB[0] + flow * FLOW_RGB[0];
+                cg += glow * RING_RGB[1] + jet * JET_RGB[1] + flow * FLOW_RGB[1];
+                cb += glow * RING_RGB[2] + jet * JET_RGB[2] + flow * FLOW_RGB[2];
                 double e = (edge[idx] & 255) / 255.0;
                 double lum = Math.max(cr, Math.max(cg, cb));
                 double alpha = Math.max(e, Math.min(1, lum * 1.5) * Math.min(1, e * 3));
