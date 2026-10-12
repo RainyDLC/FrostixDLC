@@ -13,17 +13,18 @@ import net.minecraft.world.level.dimension.DimensionType;
 public final class Ambience extends Module {
     private static Ambience instance;
 
-    private final ModeSetting sky = new ModeSetting("Sky", 3, "Plasma", "Space", "Milky Way", "Black Hole");
+    private final ModeSetting sky = new ModeSetting("Sky", 3, "Plasma", "Space", "Milky Way", "Black Hole", "Shader");
     private final SliderSetting speed = new SliderSetting("Speed", 1.0, 0.0, 3.0, 0.1);
     private final SliderSetting brightness = new SliderSetting("Brightness", 1.0, 0.3, 2.0, 0.05);
     private final BoolSetting stars = new BoolSetting("Stars", true);
     private final BoolSetting sunMoon = new BoolSetting("Sun & Moon", false);
     private final BoolSetting darkFog = new BoolSetting("Dark Fog", true);
+    private final BoolSetting clouds = new BoolSetting("Clouds", true);
 
     public Ambience() {
-        super("Ambience", "Shader-like animated skies: plasma, deep space, milky way and a realistic black hole", Category.RENDER);
+        super("Ambience", "Shader-like animated skies: plasma, deep space, milky way, a realistic black hole and a shaderpack-style atmosphere", Category.RENDER);
         instance = this;
-        with(this.sky, this.speed, this.brightness, this.stars, this.sunMoon, this.darkFog);
+        with(this.sky, this.speed, this.brightness, this.stars, this.sunMoon, this.darkFog, this.clouds);
     }
 
     @Override
@@ -50,6 +51,7 @@ public final class Ambience extends Module {
             case "Plasma" -> SkyGen.MODE_PLASMA;
             case "Space" -> SkyGen.MODE_SPACE;
             case "Milky Way" -> SkyGen.MODE_MILKY_WAY;
+            case "Shader" -> SkyGen.MODE_SHADER;
             default -> SkyGen.MODE_BLACK_HOLE;
         };
     }
@@ -68,6 +70,16 @@ public final class Ambience extends Module {
 
     public static boolean hideSunMoon() {
         return active() && !instance.sunMoon.value();
+    }
+
+    /** В режиме Shader ванильное солнце заменяется своим. */
+    public static boolean hideSun() {
+        return active() && (!instance.sunMoon.value() || mode() == SkyGen.MODE_SHADER);
+    }
+
+    public static boolean hideClouds() {
+        Ambience m = instance;
+        return m != null && m.isEnabled() && !m.clouds.value();
     }
 
     public static boolean darkFog() {

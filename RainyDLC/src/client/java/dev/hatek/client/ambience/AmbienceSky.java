@@ -49,8 +49,13 @@ public final class AmbienceSky {
             {0.06f, 0.025f, 0.09f},
             {0.018f, 0.022f, 0.045f},
             {0.022f, 0.027f, 0.05f},
-            {0.012f, 0.014f, 0.024f}
+            {0.012f, 0.014f, 0.024f},
+            {0.02f, 0.03f, 0.05f}
     };
+    private static final int ATMO_W = 512;
+    private static final int ATMO_H = 256;
+    private static final int AURORA_W = 1024;
+    private static final int AURORA_H = 512;
 
     private static final ExecutorService GEN = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "RainyDLC-Ambience");
@@ -66,6 +71,16 @@ public final class AmbienceSky {
     private static volatile int[][] pendingPlasma;
     private static volatile boolean plasmaRequested;
     private static volatile BlackHoleGen blackHole;
+    private static volatile int[] pendingAtmo;
+    private static volatile boolean atmoBusy;
+    private static volatile int[][] pendingAurora;
+    private static volatile boolean auroraRequested;
+    private static volatile float sunAngle;
+    private static volatile float moonAngle = (float) Math.PI;
+    private static volatile float starAngle;
+    private static volatile float rain;
+    private static float atmoSunAngle = Float.NaN;
+    private static float atmoRain = -1;
     private static volatile Thread bhThread;
     private static volatile long bhWantedAt;
     private static volatile double animTime;
@@ -82,6 +97,11 @@ public final class AmbienceSky {
     private static DynamicTexture spikeTex;
     private static DynamicTexture whiteTex;
     private static DynamicTexture bhTex;
+    private static DynamicTexture atmoTex;
+    private static DynamicTexture auroraA;
+    private static DynamicTexture auroraB;
+    private static DynamicTexture sunTex;
+    private static GpuBuffer sunQuad;
     private static boolean bhHasFrame;
     private static GpuBuffer sphereTexColor;
     private static GpuBuffer sphereTex;
@@ -107,8 +127,34 @@ public final class AmbienceSky {
 
     // ------------------------------------------------------------ fog
 
-    public static float[] fogColor() {
-        float[] c = FOG[Math.max(0, Math.min(3, Ambience.mode()))];
+    /** Состояние неба из ванили: углы солнца/луны/звёзд и дождь. */
+    public static void capture(float sun, float moon, float stars, float rainBrightness) {
+        sunAngle = sun;
+        moonAngle = moon;
+        starAngle = stars;
+        rain = Math.max(0.0f, Math.min(1.0f, 1.0f - rainBrightness));
+    }
+
+    private static double[] sunDir() {
+        return new double[]{-Math.sin(sunAngle), Math.cos(sunAngle), 0};
+    }
+
+    private static double[] moonDir() {
+        return new double[]{-Math.sin(moonAngle), Math.cos(moonAngle), 0};
+    }
+
+    public static float[] fogColor(float fx, float fz) {
+        int mode = Ambience.mode();
+        if (mode == SkyGen.MODE_SHADER) {
+            double[] s = sunDir();
+            double[] m = moonDir();
+            float[] c = Atmosphere.fog(fx, fz, s[0], s[1], s[2], m[0], m[1], m[2], rain);
+            float night = (float) Noise.smooth(0.05, -0.2, s[1]);
+            float b = (float) Math.min(1.5, Ambience.brightness());
+            return new float[]{Math.max(c[0], 0.012f * night) * b, Math.max(c[1], 0.016f * night) * b,
+                    Math.max(c[2], 0.03f * night) * b};
+        }
+        float[] c = FOG[Math.max(0, Math.min(FOG.length - 1, mode))];
         float b = (float) Math.min(1.5, Ambience.brightness());
         return new float[]{c[0] * b, c[1] * b, c[2] * b};
     }
@@ -128,6 +174,10 @@ public final class AmbienceSky {
         pendingBase = null;
         pendingPlasma = null;
         plasmaRequested = false;
+        pendingAurora = null;
+        auroraRequested = false;
+        pendingAtmo = null;
+        atmoSunAngle = Float.NaN;
         BH_READY.set(null);
         BH_FREE.set(null);
     }
@@ -143,6 +193,14 @@ public final class AmbienceSky {
                 int[] a = SkyGen.plasma(0, PLASMA_W, PLASMA_H);
                 int[] b = SkyGen.plasma(1, PLASMA_W, PLASMA_H);
                 pendingPlasma = new int[][]{a, b};
+            });
+        }
+        if (mode == SkyGen.MODE_SHADER && !auroraRequested) {
+            auroraRequested = true;
+            GEN.submit(() -> {
+                int[] a = Atmosphere.aurora(0, AURORA_W, AURORA_H);
+                int[] b = Atmosphere.aurora(1, AURORA_W, AURORA_H);
+                pendingAurora = new int[][]{a, b};
             });
         }
         if (baseMode == mode && (mode != SkyGen.MODE_BLACK_HOLE || blackHole != null)) {
@@ -163,6 +221,77 @@ public final class AmbienceSky {
                 blackHole = BlackHoleGen.build(BH_SIZE, base, BASE_W, BASE_H, map);
             }
         });
+    }
+
+    private static void requestAtmosphere() {
+        float sa = sunAngle;
+        float r = rain;
+        boolean stale = Float.isNaN(atmoSunAngle) || Math.abs(sa - atmoSunAngle) > 0.002f
+                || Math.abs(r - atmoRain) > 0.02f;
+        if (!stale || atmoBusy) {
+            return;
+        }
+        atmoBusy = true;
+        atmoSunAngle = sa;
+        atmoRain = r;
+        double[] s = sunDir();
+        double[] m = moonDir();
+        GEN.submit(() -> {
+            try {
+                int[] out = new int[ATMO_W * ATMO_H];
+                Atmosphere.render(ATMO_W, ATMO_H, s[0], s[1], s[2], m[0], m[1], m[2], r, out);
+                pendingAtmo = out;
+            } finally {
+                atmoBusy = false;
+            }
+        });
+    }
+
+    private static void renderShader(RenderTarget target, Matrix4f view, float bright,
+                                     GpuSampler repeat, GpuSampler clamp) {
+        requestAtmosphere();
+        double[] s = sunDir();
+        float night = (float) Noise.smooth(0.05, -0.2, s[1]);
+        float t = (float) time;
+        // Ночное небо вращается вместе с ванильными звёздами.
+        Matrix4f stars = new Matrix4f(view).rotateY((float) Math.toRadians(-90)).rotateX(starAngle);
+        float clear = 1.0f - rain;
+        if (baseTex != null && baseMode == SkyGen.MODE_SHADER) {
+            float nb = bright * night;
+            draw(target, RenderPipelines.END_SKY, stars, new Vector4f(nb, nb, nb, 1.0f),
+                    baseTex, repeat, sphereTexColor, sphereQuads);
+        }
+        if (Ambience.showStars() && starTex != null && night > 0.01f) {
+            float a = night * clear;
+            float sb = Math.min(1.0f, bright);
+            draw(target, RenderPipelines.END_SKY, stars, new Vector4f(sb, sb, sb, a * (0.85f + 0.15f * (float) Math.sin(t * 1.3))),
+                    starTex, clamp, starsA, starsAQuads);
+            draw(target, RenderPipelines.END_SKY, stars, new Vector4f(sb, sb, sb, a * (0.85f + 0.15f * (float) Math.cos(t * 1.7))),
+                    starTex, clamp, starsB, starsBQuads);
+            draw(target, RenderPipelines.END_SKY, stars, new Vector4f(sb, sb, sb, a), spikeTex, clamp,
+                    starsBright, starsBrightQuads);
+        }
+        if (auroraA != null && night > 0.01f) {
+            float a1 = night * clear * (0.6f + 0.25f * (float) Math.sin(t * 0.35));
+            float a2 = night * clear * (0.45f + 0.25f * (float) Math.sin(t * 0.27 + 1.7));
+            draw(target, RenderPipelines.CELESTIAL, new Matrix4f(view).rotateY(t * 0.012f),
+                    new Vector4f(bright, bright, bright, a1), auroraA, repeat, sphereTex, sphereQuads);
+            draw(target, RenderPipelines.CELESTIAL, new Matrix4f(view).rotateY(-t * 0.008f + 0.6f),
+                    new Vector4f(bright, bright, bright, a2), auroraB, repeat, sphereTex, sphereQuads);
+        }
+        if (atmoTex != null) {
+            draw(target, RenderPipelines.CELESTIAL, view, new Vector4f(bright, bright, bright, 1.0f),
+                    atmoTex, repeat, sphereTex, sphereQuads);
+        }
+        if (sunTex != null) {
+            double[] tr = new double[3];
+            Atmosphere.sunTransmittance(s[1], tr);
+            float k = 1.6f * clear + 0.2f;
+            Matrix4f sun = new Matrix4f(view).rotateY((float) Math.toRadians(-90)).rotateX(sunAngle);
+            draw(target, RenderPipelines.CELESTIAL, sun,
+                    new Vector4f((float) Math.min(1, tr[0] * k), (float) Math.min(1, tr[1] * k),
+                            (float) Math.min(1, tr[2] * k), 1.0f), sunTex, clamp, sunQuad, 1);
+        }
     }
 
     private static void ensureBhThread() {
@@ -223,6 +352,13 @@ public final class AmbienceSky {
 
         GpuSampler repeat = RenderSystem.getSamplerCache().getRepeat(FilterMode.LINEAR);
         GpuSampler clamp = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
+
+        if (mode == SkyGen.MODE_SHADER) {
+            renderShader(target, view, bright, repeat, clamp);
+            draw(target, RenderPipelines.END_SKY, view, new Vector4f(fogR, fogG, fogB, 1.0f), whiteTex, clamp,
+                    horizon, horizonQuads);
+            return;
+        }
 
         // 1. Опорный фон.
         if (baseTex != null && baseMode == mode) {
@@ -308,6 +444,25 @@ public final class AmbienceSky {
             plasmaA = replace(plasmaA, "ambience_plasma_a", plasma[0], PLASMA_W, PLASMA_H);
             plasmaB = replace(plasmaB, "ambience_plasma_b", plasma[1], PLASMA_W, PLASMA_H);
         }
+        int[] atmo = pendingAtmo;
+        if (atmo != null) {
+            pendingAtmo = null;
+            if (atmoTex == null) {
+                atmoTex = replace(null, "ambience_atmosphere", atmo, ATMO_W, ATMO_H);
+            } else {
+                write(atmoTex.getPixels(), atmo);
+                atmoTex.upload();
+            }
+        }
+        int[][] aurora = pendingAurora;
+        if (aurora != null) {
+            pendingAurora = null;
+            auroraA = replace(auroraA, "ambience_aurora_a", aurora[0], AURORA_W, AURORA_H);
+            auroraB = replace(auroraB, "ambience_aurora_b", aurora[1], AURORA_W, AURORA_H);
+        }
+        if (sunTex == null) {
+            sunTex = replace(null, "ambience_sun", Atmosphere.sunSprite(256), 256, 256);
+        }
         if (starTex == null) {
             starTex = replace(null, "ambience_star", SkyGen.starSprite(64, false), 64, 64);
             spikeTex = replace(null, "ambience_star_spikes", SkyGen.starSprite(128, true), 128, 128);
@@ -381,6 +536,11 @@ public final class AmbienceSky {
         starsBright = buildStars(stars, nbright, 2);
         buildHorizon();
         buildBlackHoleQuad();
+        // Солнце в локальной системе ванили: над головой (0, +Y, 0).
+        float h = 13.0f;
+        sunQuad = build("ambience sun", DefaultVertexFormat.POSITION_TEX, 1, false,
+                q -> q.quad(new float[]{-h, 80, -h}, new float[]{h, 80, -h}, new float[]{h, 80, h}, new float[]{-h, 80, h},
+                        0, 0, 1, 0, 1, 1, 0, 1, -1, -1, -1, -1));
     }
 
     private interface Emit {

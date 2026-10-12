@@ -3,7 +3,10 @@ package dev.hatek.mixin;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import dev.hatek.client.ambience.AmbienceSky;
 import dev.hatek.client.module.impl.render.Ambience;
+import net.minecraft.client.Camera;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.SkyRenderer;
+import net.minecraft.client.renderer.state.level.SkyRenderState;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -17,6 +20,12 @@ public abstract class AmbienceSkyMixin {
     @Shadow
     @Final
     private RenderTarget renderTarget;
+
+    @Inject(method = "extractRenderState", at = @At("TAIL"))
+    private void hatek$ambienceState(ClientLevel level, float partialTick, Camera camera, SkyRenderState state,
+                                     CallbackInfo ci) {
+        AmbienceSky.capture(state.sunAngle, state.moonAngle, state.starAngle, state.rainBrightness);
+    }
 
     @Inject(method = "renderSkyDisc", at = @At("HEAD"), cancellable = true)
     private void hatek$ambienceSky(int skyColor, CallbackInfo ci) {
@@ -49,7 +58,7 @@ public abstract class AmbienceSkyMixin {
 
     @Inject(method = "renderSun", at = @At("HEAD"), cancellable = true)
     private void hatek$ambienceSun(CallbackInfo ci) {
-        if (Ambience.hideSunMoon()) {
+        if (Ambience.hideSun()) {
             ci.cancel();
         }
     }

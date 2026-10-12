@@ -12,6 +12,7 @@ public final class SkyGen {
     public static final int MODE_SPACE = 1;
     public static final int MODE_MILKY_WAY = 2;
     public static final int MODE_BLACK_HOLE = 3;
+    public static final int MODE_SHADER = 4;
 
     /** Галактическая система координат: «север» и направление на центр. */
     static final double[] GAL_N = norm(-0.33, 0.62, 0.71);
@@ -104,6 +105,10 @@ public final class SkyGen {
                         deepSpace(d, c);
                         milkyWay(d, c, 0.35);
                         nebulae(d, c);
+                    }
+                    case MODE_SHADER -> {
+                        deepSpace(d, c);
+                        milkyWay(d, c, 0.8);
                     }
                     case MODE_MILKY_WAY -> {
                         deepSpace(d, c);

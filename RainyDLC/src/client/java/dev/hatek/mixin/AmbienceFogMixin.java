@@ -21,7 +21,7 @@ public class AmbienceFogMixin {
         FogType type = camera.getFluidInCamera();
         boolean air = type == FogType.NONE || type == FogType.ATMOSPHERIC;
         if (air && Ambience.darkFog()) {
-            float[] c = AmbienceSky.fogColor();
+            float[] c = AmbienceSky.fogColor(camera.forwardVector().x(), camera.forwardVector().z());
             color.set(c[0], c[1], c[2], color.w);
         }
         AmbienceSky.lastFog(color.x, color.y, color.z);
