@@ -33,16 +33,15 @@ public final class BlackHoleGen {
     public static final double[] RIGHT;
     public static final double[] UP;
     /** tan половины углового размера билборда. */
-    public static final double TAN_HALF = 1.0;
+    public static final double TAN_HALF = 0.72;
 
-    // Размер на небе как раньше (~±40°), но камера ближе, а диск компактнее —
-    // тень крупнее относительно колец (~1.4x к прежнему).
-    private static final double CAM_DIST = 12.5;
+    // Компактнее на небе (~±36°); тень крупная, диск прижат к ней.
+    private static final double CAM_DIST = 15.0;
     private static final double INCLINATION = Math.toRadians(6.0);
     private static final double ROLL = Math.toRadians(-12);
-    private static final double R_ISCO = 6.0;
-    private static final double R_PLUNGE = 2.35;
-    private static final double R_OUT = 10.0;
+    private static final double R_ISCO = 4.2;
+    private static final double R_PLUNGE = 2.6;
+    private static final double R_OUT = 9.0;
     private static final double T_PEAK_K = 5000.0;
     private static final int MAX_HITS = 6;
     private static final int NR = 400;
@@ -51,10 +50,10 @@ public final class BlackHoleGen {
     private static final double LN_IN = Math.log(R_PLUNGE);
     private static final double LN_OUT = Math.log(R_OUT);
     /** Радиусы тёмных щелей (в M) и их полуширина. */
-    private static final double[] GAPS = {7.2, 8.3, 9.3};
+    private static final double[] GAPS = {};
     private static final double GAP_W = 0.17;
     /** Усиление фотонных колец (3-е и далее пересечения диска). */
-    private static final double PHOTON_RING_BOOST = 1.8;
+    private static final double PHOTON_RING_BOOST = 1.3;
 
     /** Критический прицельный параметр (край тени), M. */
     private static final double B_CRIT = 3.0 * Math.sqrt(3.0);
@@ -73,15 +72,15 @@ public final class BlackHoleGen {
     private static final double OMEGA_MAX = 0.6;
 
     /** Джеты: начальная ширина, раскрытие, яркость, скорость дыма (M/с), цвет. */
-    private static final double JET_W0 = 0.55;
-    private static final double JET_SPREAD = 0.11;
-    private static final double JET_I = 0.9;
+    private static final double JET_W0 = 0.10;
+    private static final double JET_SPREAD = 0.018;
+    private static final double JET_I = 0.75;
     private static final double JET_SPEED = 2.4;
     private static final double[] JET_RGB = {0.55, 0.74, 1.0};
     /** Горизонтальный оттёк в плоскости диска. */
-    private static final double FLOW_W0 = 0.35;
-    private static final double FLOW_SPREAD = 0.06;
-    private static final double FLOW_I = 0.42;
+    private static final double FLOW_W0 = 0.08;
+    private static final double FLOW_SPREAD = 0.012;
+    private static final double FLOW_I = 0.3;
     private static final double FLOW_SPEED = 1.3;
     private static final double[] FLOW_RGB = {1.0, 0.78, 0.55};
     /** Таблица дыма: период по оси (M) и разрешение (вдоль оси x поперёк). */
@@ -153,9 +152,9 @@ public final class BlackHoleGen {
             double rr = Math.max(r, R_ISCO * 0.85);
             omegaLut[i] = (float) Math.min(OMEGA_MAX, Math.pow(R_ISCO / rr, 1.5) * OMEGA_SCALE);
             double outer = Noise.smooth(R_OUT, R_OUT * 0.5, r);
-            double inner = r >= R_ISCO ? Noise.smooth(R_ISCO - 0.05, R_ISCO + 0.35, r) * 0.85 + 0.15 : 0.06;
+            double inner = r >= R_ISCO ? Noise.smooth(R_ISCO - 0.05, R_ISCO + 0.35, r) * 0.75 + 0.25 : 0.22;
             fadeLut[i] = (float) (outer * inner);
-            alphaLut[i] = (float) (r >= R_ISCO ? outer : 0.07 * Noise.smooth(R_PLUNGE, R_ISCO, r));
+            alphaLut[i] = (float) (r >= R_ISCO ? outer : 0.30 * Noise.smooth(R_PLUNGE, R_ISCO, r));
         }
     }
 
@@ -197,7 +196,7 @@ public final class BlackHoleGen {
             double d = (r - g) / GAP_W;
             ringMask *= 1.0 - 0.82 * Math.exp(-d * d);
         }
-        v *= (0.55 + 0.45 * bands) * (0.85 + 0.15 * fineBands);
+        v *= (0.82 + 0.18 * bands) * (0.92 + 0.08 * fineBands);
         v *= ringMask;
         return Noise.clamp01((v - 0.12) * 1.45);
     }
@@ -376,9 +375,9 @@ public final class BlackHoleGen {
     private static double tProfile(double r) {
         if (r < R_ISCO) {
             // Плунж: быстро остывающий газ.
-            return 0.55 * Math.pow(Math.max(0, (r - R_PLUNGE) / (R_ISCO - R_PLUNGE)), 1.5);
+            return Math.pow(0.2, 0.25) * Math.pow(Math.max(0, (r - R_PLUNGE) / (R_ISCO - R_PLUNGE)), 0.8);
         }
-        return Math.pow(R_ISCO / r, 0.75) * Math.pow(Math.max(0, 1 - Math.sqrt(R_ISCO / r)), 0.25);
+        return Math.pow(R_ISCO / r, 0.75) * Math.pow(Math.max(0, 1 - 0.8 * Math.sqrt(R_ISCO / r)), 0.25);
     }
 
     private static final double T_MAX;
@@ -598,7 +597,7 @@ public final class BlackHoleGen {
         double side = s < 0 ? 5.3 : 0.0;
         double a = smokeAt(this.smokeA, sa - time * speed + side, qn);
         double b = smokeAt(this.smokeB, sa - time * speed * 0.62 + side * 1.7, qn);
-        double dens = a * (0.45 + 0.75 * b);
+        double dens = 0.45 + 0.55 * a * (0.45 + 0.75 * b);
         // Ярче у основания, тускнеет по мере расширения.
         double thin = w0 / w;
         return core * dens * fall * (0.35 + 0.65 * thin);
