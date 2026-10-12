@@ -38,7 +38,6 @@ public final class AmbienceSky {
     private static final int BASE_H = 1024;
     private static final int PLASMA_W = 1024;
     private static final int PLASMA_H = 512;
-    private static final int BH_SIZE = 512;
     private static final int STAR_COUNT = 6500;
     private static final long STAR_SEED = 1337L;
     private static final float SKY_R = 100.0f;
@@ -71,6 +70,8 @@ public final class AmbienceSky {
     private static volatile int[][] pendingPlasma;
     private static volatile boolean plasmaRequested;
     private static volatile BlackHoleGen blackHole;
+    private static volatile int[] bhRawBase;
+    private static volatile boolean bhBuilding;
     private static volatile int[] pendingAtmo;
     private static volatile int pendingBaseKey;
     private static volatile int appliedKey = Integer.MIN_VALUE;
@@ -181,6 +182,7 @@ public final class AmbienceSky {
     /** Освобождаем тяжёлые CPU-данные при выключении модуля. */
     public static void release() {
         blackHole = null;
+        bhRawBase = null;
         requestedMode = -1;
         pendingBase = null;
         pendingPlasma = null;
@@ -267,11 +269,34 @@ public final class AmbienceSky {
             pendingBaseKey = key;
             pendingBase = shown;
             pendingBaseMode = mode;
-            if (mode == SkyGen.MODE_BLACK_HOLE && blackHole == null) {
-                float[] map = SkyGen.starMap(SkyGen.stars(STAR_COUNT, STAR_SEED), BASE_W, BASE_H);
-                blackHole = BlackHoleGen.build(BH_SIZE, base, BASE_W, BASE_H, map);
+            if (mode == SkyGen.MODE_BLACK_HOLE) {
+                bhRawBase = base;
+                if (blackHole == null) {
+                    buildBlackHole(base, Ambience.blackHoleSize());
+                }
             }
         });
+    }
+
+    private static void buildBlackHole(int[] base, int size) {
+        bhBuilding = true;
+        try {
+            float[] map = SkyGen.starMap(SkyGen.stars(STAR_COUNT, STAR_SEED), BASE_W, BASE_H);
+            blackHole = BlackHoleGen.build(size, base, BASE_W, BASE_H, map);
+        } finally {
+            bhBuilding = false;
+        }
+    }
+
+    /** Смена качества чёрной дыры → пересборка в фоне (старая показывается до готовности). */
+    private static void checkBlackHoleQuality() {
+        BlackHoleGen gen = blackHole;
+        int[] raw = bhRawBase;
+        int want = Ambience.blackHoleSize();
+        if (gen != null && gen.size != want && raw != null && !bhBuilding) {
+            bhBuilding = true;
+            GEN.submit(() -> buildBlackHole(raw, want));
+        }
     }
 
     private static void requestAtmosphere() {
@@ -457,6 +482,7 @@ public final class AmbienceSky {
 
         // 4. Чёрная дыра.
         if (mode == SkyGen.MODE_BLACK_HOLE) {
+            checkBlackHoleQuality();
             ensureBhThread();
             if (bhTex != null && bhHasFrame) {
                 draw(target, RenderPipelines.END_SKY, sky, new Vector4f(1.0f, 1.0f, 1.0f, 1.0f), bhTex, clamp, bhQuad, 1);
@@ -538,7 +564,8 @@ public final class AmbienceSky {
         int[] frame = BH_READY.getAndSet(null);
         if (frame != null) {
             if (bhTex == null || bhTex.getPixels() == null || bhTex.getPixels().getWidth() * bhTex.getPixels().getHeight() != frame.length) {
-                bhTex = replace(bhTex, "ambience_black_hole", frame, BH_SIZE, BH_SIZE);
+                int side = (int) Math.round(Math.sqrt(frame.length));
+                bhTex = replace(bhTex, "ambience_black_hole", frame, side, side);
             } else {
                 write(bhTex.getPixels(), frame);
                 bhTex.upload();

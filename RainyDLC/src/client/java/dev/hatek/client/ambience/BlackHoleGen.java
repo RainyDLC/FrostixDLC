@@ -3,10 +3,22 @@ package dev.hatek.client.ambience;
 import java.util.stream.IntStream;
 
 /**
- * Чёрная дыра Шварцшильда: трассировка нуль-геодезических (RK4),
- * аккреционный диск с доплеровским усилением и гравитационным
- * красным смещением, линзирование фона. Тяжёлая часть считается
- * один раз, кадры анимации — быстро (только вращение диска).
+ * Чёрная дыра Шварцшильда.
+ * <ul>
+ *   <li>Трассировка нуль-геодезических RK4 (уравнение x'' = -3/2·h²·x/r⁵).</li>
+ *   <li>Тонкий аккреционный диск Новикова–Торна: профиль температуры
+ *       T(r) ∝ r^-3/4 (1 - √(r_isco/r))^1/4, внутренний край на ISCO (6M),
+ *       слабое свечение «плунжа» между ISCO и горизонтом.</li>
+ *   <li>Полный фактор сдвига частоты g = √(1-3M/r)-подобный: гравитационное
+ *       красное смещение × релятивистский Доплер; яркость ∝ g⁴, цвет —
+ *       спектр абсолютно чёрного тела при T·g.</li>
+ *   <li>До 6 пересечений диска на луч: первичное, вторичное (под тенью)
+ *       и тонкие фотонные кольца высших порядков.</li>
+ *   <li>Турбулентная структура диска: логарифмические спиральные рукава,
+ *       волокна, горячие сгустки; дифференциальное (кеплеровское) вращение.</li>
+ *   <li>Линзирование фона (небо + звёзды) с кольцом Эйнштейна.</li>
+ * </ul>
+ * Попадания хранятся разреженно, поэтому 1024² укладывается в ~30 МБ.
  */
 public final class BlackHoleGen {
     /** Направление на чёрную дыру в системе неба и базис билборда. */
@@ -16,15 +28,19 @@ public final class BlackHoleGen {
     /** tan половины углового размера билборда. */
     public static final double TAN_HALF = 0.62;
 
-    private static final double CAM_DIST = 28.0;
-    private static final double INCLINATION = Math.toRadians(8.5);
-    private static final double ROLL = Math.toRadians(-14);
-    private static final double R_IN = 6.0;
-    private static final double R_OUT = 19.0;
-    private static final int MAX_HITS = 3;
-    private static final int NR = 128;
-    private static final int NP = 1024;
-    private static final double FLOW_PERIOD = 24.0;
+    private static final double CAM_DIST = 34.0;
+    private static final double INCLINATION = Math.toRadians(7.5);
+    private static final double ROLL = Math.toRadians(-12);
+    private static final double R_ISCO = 6.0;
+    private static final double R_PLUNGE = 2.35;
+    private static final double R_OUT = 18.0;
+    private static final double T_PEAK_K = 5000.0;
+    private static final int MAX_HITS = 6;
+    private static final int NR = 320;
+    private static final int NP = 2048;
+    private static final double FLOW_PERIOD = 26.0;
+    private static final double LN_IN = Math.log(R_PLUNGE);
+    private static final double LN_OUT = Math.log(R_OUT);
 
     static {
         double[] r = SkyGen.cross(DIR, new double[]{0, 1, 0});
@@ -34,66 +50,86 @@ public final class BlackHoleGen {
 
     public final int size;
     private final float[] bg;
-    private final float[] hitR;
-    private final float[] hitPhi;
-    private final float[] hitG;
-    private final byte[] hitCount;
-    /** Предрасчёт на попадание: угловая скорость, затухание, цвет×яркость. */
-    private final float[] hitOmega;
-    private final float[] hitFade;
-    private final float[] hitCol;
-    private final float[] edge;
-    private final float[] diskNoiseA;
-    private final float[] diskNoiseB;
+    private final byte[] edge;
+    /** Разреженный список попаданий: [start[i], start[i+1]). */
+    private final int[] start;
+    private float[] hitU;
+    private float[] hitPhi;
+    private float[] hitInten;
+    private int[] hitChroma;
+    private final float[] noiseA = new float[NR * NP];
+    private final float[] noiseB = new float[NR * NP];
+    private final float[] omegaLut = new float[NR];
+    private final float[] fadeLut = new float[NR];
+    private final float[] alphaLut = new float[NR];
 
     private BlackHoleGen(int size) {
         this.size = size;
         int n = size * size;
         this.bg = new float[n * 3];
-        this.hitR = new float[n * MAX_HITS];
-        this.hitPhi = new float[n * MAX_HITS];
-        this.hitG = new float[n * MAX_HITS];
-        this.hitCount = new byte[n];
-        this.hitOmega = new float[n * MAX_HITS];
-        this.hitFade = new float[n * MAX_HITS];
-        this.hitCol = new float[n * MAX_HITS * 3];
-        this.edge = new float[n];
-        this.diskNoiseA = new float[NR * NP];
-        this.diskNoiseB = new float[NR * NP];
+        this.edge = new byte[n];
+        this.start = new int[n + 1];
     }
 
-    /**
-     * Полная предрасчётка. {@code baseSky} — ARGB equirect фона того же
-     * режима (w×h), {@code starMap} — линейная карта звёзд того же размера.
-     */
     public static BlackHoleGen build(int size, int[] baseSky, int bw, int bh, float[] starMap) {
         BlackHoleGen g = new BlackHoleGen(size);
+        g.buildLuts();
         g.buildDiskNoise();
         g.trace(baseSky, bw, bh, starMap);
-        g.prepareHits();
         return g;
     }
+
+    private static double rOfU(double u) {
+        return Math.exp(LN_IN + u * (LN_OUT - LN_IN));
+    }
+
+    private static double uOfR(double r) {
+        return (Math.log(r) - LN_IN) / (LN_OUT - LN_IN);
+    }
+
+    private void buildLuts() {
+        for (int i = 0; i < NR; i++) {
+            double r = rOfU(i / (double) (NR - 1));
+            // Кеплер вне ISCO; внутри — падение с почти постоянной угловой скоростью.
+            double rr = Math.max(r, R_ISCO * 0.85);
+            omegaLut[i] = (float) (Math.pow(R_ISCO / rr, 1.5) * 0.85);
+            double outer = Noise.smooth(R_OUT, R_OUT * 0.5, r);
+            double inner = r >= R_ISCO ? Noise.smooth(R_ISCO - 0.05, R_ISCO + 0.35, r) * 0.85 + 0.15 : 0.06;
+            fadeLut[i] = (float) (outer * inner);
+            alphaLut[i] = (float) (r >= R_ISCO ? outer : 0.07 * Noise.smooth(R_PLUNGE, R_ISCO, r));
+        }
+    }
+
+    // ------------------------------------------------------------ disk structure
 
     private void buildDiskNoise() {
         IntStream.range(0, NR).parallel().forEach(i -> {
             double u = i / (double) (NR - 1);
-            double lr = Math.log(R_IN) + u * (Math.log(R_OUT) - Math.log(R_IN));
+            double lr = LN_IN + u * (LN_OUT - LN_IN);
             for (int j = 0; j < NP; j++) {
                 double ph = j / (double) NP * Math.PI * 2;
-                double cx = Math.cos(ph);
-                double sx = Math.sin(ph);
-                diskNoiseA[i * NP + j] = (float) diskDensity(cx, sx, lr, 0);
-                diskNoiseB[i * NP + j] = (float) diskDensity(cx, sx, lr, 31.7);
+                noiseA[i * NP + j] = (float) density(ph, lr, 0.0);
+                noiseB[i * NP + j] = (float) density(ph, lr, 41.3);
             }
         });
     }
 
-    private static double diskDensity(double cx, double sx, double lr, double o) {
-        double n = Noise.fbm(cx * 2.2 + o, sx * 2.2, lr * 9 + o, 5);
-        double fine = Noise.fbm(cx * 6 + o, sx * 6, lr * 30, 3);
-        double rings = 0.5 + 0.5 * Math.sin(lr * 40 + n * 9 + o);
-        double v = 0.62 * n + 0.18 * rings * fine * 2 + 0.2 * fine;
-        return Noise.clamp01((v - 0.25) * 1.6);
+    private static double density(double ph, double lr, double o) {
+        // Закручивающиеся (trailing) логарифмические спирали.
+        double sp = ph + 2.6 * lr;
+        double cs = Math.cos(sp);
+        double ss = Math.sin(sp);
+        double cp = Math.cos(ph);
+        double sn = Math.sin(ph);
+        double large = Noise.fbm(cs * 1.8 + o, ss * 1.8, lr * 5 + o, 5);
+        double fil = Noise.ridged(cs * 3.0 + o, ss * 3.0, lr * 22 + o, 4);
+        double fine = Noise.fbm(cp * 9 + o, sn * 9, lr * 70 + o, 3);
+        double clumps = Math.pow(Noise.fbm(cs * 7 + o, ss * 7, lr * 16 + o, 4), 4) * 2.2;
+        double gaps = Noise.smooth(0.30, 0.55, Noise.fbm(cp * 2.2 - o, sn * 2.2, lr * 12, 4));
+        double rings = 0.5 + 0.5 * Math.sin(lr * 85 + large * 8 + o);
+        double v = 0.42 * large + 0.26 * fil * fil + 0.12 * fine + 0.04 * rings * fine + clumps;
+        v *= 0.45 + 0.55 * gaps;
+        return Noise.clamp01((v - 0.12) * 1.45);
     }
 
     // ------------------------------------------------------------ tracing
@@ -109,16 +145,28 @@ public final class BlackHoleGen {
         double[] rt = {r0[0] * cr + u0[0] * sr, r0[1] * cr + u0[1] * sr, r0[2] * cr + u0[2] * sr};
         double[] up = {u0[0] * cr - r0[0] * sr, u0[1] * cr - r0[1] * sr, u0[2] * cr - r0[2] * sr};
 
+        float[][] rowU = new float[size][];
+        float[][] rowPhi = new float[size][];
+        float[][] rowInt = new float[size][];
+        int[][] rowChr = new int[size][];
+        int[][] rowCount = new int[size][];
+
         IntStream.range(0, size).parallel().forEach(y -> {
             double[] p = new double[3];
             double[] v = new double[3];
-            double[] tmp = new double[12];
+            double[] tmp = new double[3];
+            float[] hu = new float[MAX_HITS];
+            float[] hp = new float[MAX_HITS];
+            float[] hi = new float[MAX_HITS];
+            int[] hc = new int[MAX_HITS];
+            Grow g = new Grow();
+            int[] counts = new int[size];
             for (int x = 0; x < size; x++) {
                 int idx = y * size + x;
                 double px = (x + 0.5) / size * 2 - 1;
                 double py = 1 - (y + 0.5) / size * 2;
                 double rho = Math.sqrt(px * px + py * py);
-                edge[idx] = (float) Noise.smooth(1.0, 0.70, rho);
+                edge[idx] = (byte) Math.round(255 * Noise.smooth(1.0, 0.70, rho));
                 double dx = f[0] + (rt[0] * px + up[0] * py) * TAN_HALF;
                 double dy = f[1] + (rt[1] * px + up[1] * py) * TAN_HALF;
                 double dz = f[2] + (rt[2] * px + up[2] * py) * TAN_HALF;
@@ -129,8 +177,12 @@ public final class BlackHoleGen {
                 v[0] = dx / dl;
                 v[1] = dy / dl;
                 v[2] = dz / dl;
-                boolean escaped = integrate(idx, p, v, tmp);
-                int k = idx * 3;
+                int[] hits = {0};
+                boolean escaped = integrate(p, v, tmp, hu, hp, hi, hc, hits);
+                counts[x] = hits[0];
+                for (int h = 0; h < hits[0]; h++) {
+                    g.add(hu[h], hp[h], hi[h], hc[h]);
+                }
                 if (escaped) {
                     double lx = v[0] * rt[0] + v[1] * rt[1] + v[2] * rt[2];
                     double ly = v[0] * up[0] + v[1] * up[1] + v[2] * up[2];
@@ -138,28 +190,112 @@ public final class BlackHoleGen {
                     double wx = RIGHT[0] * lx + UP[0] * ly + DIR[0] * lz;
                     double wy = RIGHT[1] * lx + UP[1] * ly + DIR[1] * lz;
                     double wz = RIGHT[2] * lx + UP[2] * ly + DIR[2] * lz;
-                    sampleSky(wx, wy, wz, baseSky, bw, bh, starMap, bg, k);
+                    sampleSky(wx, wy, wz, baseSky, bw, bh, starMap, bg, idx * 3);
                 }
             }
+            rowU[y] = g.u();
+            rowPhi[y] = g.phi();
+            rowInt[y] = g.inten();
+            rowChr[y] = g.chroma();
+            rowCount[y] = counts;
         });
+
+        int total = 0;
+        for (int y = 0; y < size; y++) {
+            for (int x = 0; x < size; x++) {
+                start[y * size + x] = total;
+                total += rowCount[y][x];
+            }
+        }
+        start[size * size] = total;
+        hitU = new float[total];
+        hitPhi = new float[total];
+        hitInten = new float[total];
+        hitChroma = new int[total];
+        for (int y = 0; y < size; y++) {
+            int s = start[y * size];
+            int len = rowU[y].length;
+            System.arraycopy(rowU[y], 0, hitU, s, len);
+            System.arraycopy(rowPhi[y], 0, hitPhi, s, len);
+            System.arraycopy(rowInt[y], 0, hitInten, s, len);
+            System.arraycopy(rowChr[y], 0, hitChroma, s, len);
+        }
+    }
+
+    /** Растущий буфер попаданий одной строки. */
+    private static final class Grow {
+        float[] u = new float[256];
+        float[] phi = new float[256];
+        float[] inten = new float[256];
+        int[] chroma = new int[256];
+        int n;
+
+        void add(float uu, float pp, float ii, int cc) {
+            if (n == u.length) {
+                int m = n * 2;
+                u = java.util.Arrays.copyOf(u, m);
+                phi = java.util.Arrays.copyOf(phi, m);
+                inten = java.util.Arrays.copyOf(inten, m);
+                chroma = java.util.Arrays.copyOf(chroma, m);
+            }
+            u[n] = uu;
+            phi[n] = pp;
+            inten[n] = ii;
+            chroma[n] = cc;
+            n++;
+        }
+
+        float[] u() {
+            return java.util.Arrays.copyOf(u, n);
+        }
+
+        float[] phi() {
+            return java.util.Arrays.copyOf(phi, n);
+        }
+
+        float[] inten() {
+            return java.util.Arrays.copyOf(inten, n);
+        }
+
+        int[] chroma() {
+            return java.util.Arrays.copyOf(chroma, n);
+        }
+    }
+
+    private static double tProfile(double r) {
+        if (r < R_ISCO) {
+            // Плунж: быстро остывающий газ.
+            return 0.55 * Math.pow(Math.max(0, (r - R_PLUNGE) / (R_ISCO - R_PLUNGE)), 1.5);
+        }
+        return Math.pow(R_ISCO / r, 0.75) * Math.pow(Math.max(0, 1 - Math.sqrt(R_ISCO / r)), 0.25);
+    }
+
+    private static final double T_MAX;
+
+    static {
+        double m = 0;
+        for (double r = R_ISCO; r < R_OUT; r += 0.01) {
+            m = Math.max(m, tProfile(r));
+        }
+        T_MAX = m;
     }
 
     /** Возвращает true, если луч ушёл на бесконечность. */
-    private boolean integrate(int idx, double[] p, double[] v, double[] t) {
+    private static boolean integrate(double[] p, double[] v, double[] t, float[] hu, float[] hp, float[] hi,
+                                     int[] hc, int[] hits) {
         double hx = p[1] * v[2] - p[2] * v[1];
         double hy = p[2] * v[0] - p[0] * v[2];
         double hz = p[0] * v[1] - p[1] * v[0];
         double h2 = hx * hx + hy * hy + hz * hz;
-        int hits = 0;
-        for (int step = 0; step < 4000; step++) {
+        for (int step = 0; step < 6000; step++) {
             double r = Math.sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
-            if (r < 2.02) {
+            if (r < 2.0005) {
                 return false;
             }
             if (r > CAM_DIST * 1.8 && p[0] * v[0] + p[1] * v[1] + p[2] * v[2] > 0) {
                 return true;
             }
-            double dt = Math.min(1.6, Math.max(0.02, 0.022 * r * r));
+            double dt = Math.min(1.4, Math.max(0.006, 0.018 * (r - 1.6) * (r - 1.6)));
             double y0 = p[1];
             double ox = p[0];
             double oz = p[2];
@@ -167,12 +303,12 @@ public final class BlackHoleGen {
             double ovy = v[1];
             double ovz = v[2];
             rk4(p, v, h2, dt, t);
-            if (hits < MAX_HITS && (y0 > 0) != (p[1] > 0)) {
+            if (hits[0] < MAX_HITS && (y0 > 0) != (p[1] > 0)) {
                 double s = y0 / (y0 - p[1]);
                 double cx = ox + (p[0] - ox) * s;
                 double cz = oz + (p[2] - oz) * s;
                 double cr = Math.sqrt(cx * cx + cz * cz);
-                if (cr >= R_IN && cr <= R_OUT) {
+                if (cr >= R_PLUNGE && cr <= R_OUT) {
                     double nx = -(ovx + (v[0] - ovx) * s);
                     double ny = -(ovy + (v[1] - ovy) * s);
                     double nz = -(ovz + (v[2] - ovz) * s);
@@ -180,38 +316,61 @@ public final class BlackHoleGen {
                     double phi = Math.atan2(cz, cx);
                     double tx = -Math.sin(phi);
                     double tz = Math.cos(phi);
-                    double beta = Math.min(0.75, Math.sqrt(1.0 / (cr - 2.0)));
+                    // Скорость газа относительно статического наблюдателя.
+                    double beta = cr >= R_ISCO ? Math.sqrt(1.0 / (cr - 2.0)) : Math.min(0.8, Math.sqrt(1.0 / (R_ISCO - 2.0)) * Math.sqrt(R_ISCO / cr));
                     double gamma = 1.0 / Math.sqrt(1 - beta * beta);
                     double cosT = (tx * nx + tz * nz) / nl;
                     double g = Math.sqrt(1 - 2.0 / cr) / (gamma * (1 - beta * cosT));
-                    int k = idx * MAX_HITS + hits;
-                    hitR[k] = (float) cr;
-                    hitPhi[k] = (float) phi;
-                    hitG[k] = (float) g;
-                    hits++;
-                    hitCount[idx] = (byte) hits;
+                    double tn = tProfile(cr) / T_MAX;
+                    double tObs = T_PEAK_K * tn * g;
+                    int chroma = blackbody(tObs);
+                    // Болометрическая яркость ∝ g⁴·T⁴, смягчённая для читаемости внешнего диска.
+                    double inten = 2.3 * Math.pow(tn, 1.9) * g * g * g * g;
+                    int k = hits[0];
+                    hu[k] = (float) uOfR(cr);
+                    hp[k] = (float) phi;
+                    hi[k] = (float) inten;
+                    hc[k] = chroma;
+                    hits[0]++;
                 }
             }
         }
         return false;
     }
 
+    /** Цвет абсолютно чёрного тела (нормирован на максимум канала), RGB-байты. */
+    static int blackbody(double kelvin) {
+        double t = Math.max(1000, Math.min(40000, kelvin)) / 100.0;
+        double r;
+        double g;
+        double b;
+        if (t <= 66) {
+            r = 255;
+            g = 99.4708025861 * Math.log(t) - 161.1195681661;
+            b = t <= 19 ? 0 : 138.5177312231 * Math.log(t - 10) - 305.0447927307;
+        } else {
+            r = 329.698727446 * Math.pow(t - 60, -0.1332047592);
+            g = 288.1221695283 * Math.pow(t - 60, -0.0755148492);
+            b = 255;
+        }
+        int ir = (int) Math.max(0, Math.min(255, r));
+        int ig = (int) Math.max(0, Math.min(255, g));
+        int ib = (int) Math.max(0, Math.min(255, b));
+        return ir << 16 | ig << 8 | ib;
+    }
+
     private static void rk4(double[] p, double[] v, double h2, double dt, double[] t) {
-        // k1
-        accel(p[0], p[1], p[2], h2, t, 0);
+        accel(p[0], p[1], p[2], h2, t);
         double k1px = v[0], k1py = v[1], k1pz = v[2];
         double k1vx = t[0], k1vy = t[1], k1vz = t[2];
-        // k2
         double hx = dt * 0.5;
-        accel(p[0] + k1px * hx, p[1] + k1py * hx, p[2] + k1pz * hx, h2, t, 0);
+        accel(p[0] + k1px * hx, p[1] + k1py * hx, p[2] + k1pz * hx, h2, t);
         double k2px = v[0] + k1vx * hx, k2py = v[1] + k1vy * hx, k2pz = v[2] + k1vz * hx;
         double k2vx = t[0], k2vy = t[1], k2vz = t[2];
-        // k3
-        accel(p[0] + k2px * hx, p[1] + k2py * hx, p[2] + k2pz * hx, h2, t, 0);
+        accel(p[0] + k2px * hx, p[1] + k2py * hx, p[2] + k2pz * hx, h2, t);
         double k3px = v[0] + k2vx * hx, k3py = v[1] + k2vy * hx, k3pz = v[2] + k2vz * hx;
         double k3vx = t[0], k3vy = t[1], k3vz = t[2];
-        // k4
-        accel(p[0] + k3px * dt, p[1] + k3py * dt, p[2] + k3pz * dt, h2, t, 0);
+        accel(p[0] + k3px * dt, p[1] + k3py * dt, p[2] + k3pz * dt, h2, t);
         double k4px = v[0] + k3vx * dt, k4py = v[1] + k3vy * dt, k4pz = v[2] + k3vz * dt;
         double k4vx = t[0], k4vy = t[1], k4vz = t[2];
         double s = dt / 6.0;
@@ -223,16 +382,15 @@ public final class BlackHoleGen {
         v[2] += s * (k1vz + 2 * k2vz + 2 * k3vz + k4vz);
     }
 
-    private static void accel(double x, double y, double z, double h2, double[] out, int o) {
+    private static void accel(double x, double y, double z, double h2, double[] out) {
         double r2 = x * x + y * y + z * z;
         double r5 = r2 * r2 * Math.sqrt(r2);
         double k = -1.5 * h2 / r5;
-        out[o] = k * x;
-        out[o + 1] = k * y;
-        out[o + 2] = k * z;
+        out[0] = k * x;
+        out[1] = k * y;
+        out[2] = k * z;
     }
 
-    /** Обратный тонмаппинг ARGB → линейная яркость. */
     static double untone(int c) {
         double v = Math.min(0.996, c / 255.0);
         return -Math.log(1 - Math.pow(v, 1 / 0.8));
@@ -273,49 +431,8 @@ public final class BlackHoleGen {
 
     // ------------------------------------------------------------ frames
 
-    private static final double[][] PALETTE = {
-            {0.0, 1.0, 0.16, 0.02},
-            {0.45, 1.0, 0.42, 0.08},
-            {0.85, 1.0, 0.72, 0.38},
-            {1.15, 1.0, 0.93, 0.82},
-            {1.6, 0.78, 0.86, 1.0}
-    };
-
-    private static final double T_MAX;
-
-    static {
-        double m = 0;
-        for (double r = R_IN; r < R_OUT; r += 0.01) {
-            m = Math.max(m, tProfile(r));
-        }
-        T_MAX = m;
-    }
-
-    private static double tProfile(double r) {
-        return Math.pow(R_IN / r, 0.75) * Math.pow(Math.max(0, 1 - Math.sqrt(R_IN / r)), 0.25);
-    }
-
-    private void prepareHits() {
-        int n = size * size;
-        for (int idx = 0; idx < n; idx++) {
-            for (int h = 0; h < hitCount[idx]; h++) {
-                int k = idx * MAX_HITS + h;
-                double r = hitR[k];
-                double g = hitG[k];
-                double tn = tProfile(r) / T_MAX;
-                double inten = 2.8 * Math.pow(tn, 1.3) * g * g * g * g;
-                double[] col = palette(tn * g);
-                hitOmega[k] = (float) (Math.pow(R_IN / r, 1.5) * 0.9);
-                hitFade[k] = (float) (Noise.smooth(R_IN, R_IN + 0.8, r) * Noise.smooth(R_OUT, 10.5, r));
-                hitCol[k * 3] = (float) (col[0] * inten);
-                hitCol[k * 3 + 1] = (float) (col[1] * inten);
-                hitCol[k * 3 + 2] = (float) (col[2] * inten);
-            }
-        }
-    }
-
     private static final int TONE_LUT = 4096;
-    private static final double TONE_MAX = 10.0;
+    private static final double TONE_MAX = 12.0;
     private static final int[] TONE = new int[TONE_LUT + 1];
 
     static {
@@ -333,24 +450,20 @@ public final class BlackHoleGen {
         return TONE[Math.min(TONE_LUT, i)];
     }
 
-    private float noiseAt(float[] tex, double r, double phi) {
-        double u = (Math.log(r) - Math.log(R_IN)) / (Math.log(R_OUT) - Math.log(R_IN)) * (NR - 1);
-        double vv = phi / (Math.PI * 2) * NP;
-        int i = Math.max(0, Math.min(NR - 2, (int) u));
-        double fu = Math.max(0, Math.min(1, u - i));
+    private float noiseAt(float[] tex, int i, double fu, double phi) {
+        double vv = phi * (NP / (Math.PI * 2));
         double fv0 = Math.floor(vv);
         int j = Math.floorMod((int) fv0, NP);
-        int j1 = (j + 1) % NP;
+        int j1 = j + 1 == NP ? 0 : j + 1;
         double fv = vv - fv0;
-        double a = tex[i * NP + j] * (1 - fv) + tex[i * NP + j1] * fv;
-        double b = tex[(i + 1) * NP + j] * (1 - fv) + tex[(i + 1) * NP + j1] * fv;
-        return (float) (a * (1 - fu) + b * fu);
+        int r0 = i * NP;
+        int r1 = r0 + NP;
+        double a = tex[r0 + j] + (tex[r0 + j1] - tex[r0 + j]) * fv;
+        double b = tex[r1 + j] + (tex[r1 + j1] - tex[r1 + j]) * fv;
+        return (float) (a + (b - a) * fu);
     }
 
-    /**
-     * Рендер кадра в ARGB. {@code time} — секунды анимации,
-     * {@code brightness} — множитель яркости диска.
-     */
+    /** Рендер кадра в ARGB. */
     public void frame(double time, double brightness, int[] out) {
         double t1 = time % FLOW_PERIOD;
         double t2 = (time + FLOW_PERIOD * 0.5) % FLOW_PERIOD;
@@ -363,49 +476,34 @@ public final class BlackHoleGen {
                 double cg = 0;
                 double cb = 0;
                 double trans = 1;
-                int hits = hitCount[idx];
-                for (int h = 0; h < hits; h++) {
-                    int k = idx * MAX_HITS + h;
-                    double r = hitR[k];
-                    double omega = hitOmega[k];
-                    double d1 = noiseAt(diskNoiseA, r, hitPhi[k] - omega * t1);
-                    double d2 = noiseAt(diskNoiseB, r, hitPhi[k] - omega * t2);
+                int end = start[idx + 1];
+                for (int k = start[idx]; k < end; k++) {
+                    double u = hitU[k] * (NR - 1);
+                    int i = Math.min(NR - 2, (int) u);
+                    double fu = u - i;
+                    double omega = omegaLut[i];
+                    double phi = hitPhi[k];
+                    double d1 = noiseAt(noiseA, i, fu, phi - omega * t1);
+                    double d2 = noiseAt(noiseB, i, fu, phi - omega * t2);
                     double dens = d1 * w1 + d2 * w2;
-                    double fade = hitFade[k];
-                    double a = Noise.clamp01((0.35 + 0.9 * dens) * fade);
-                    double m = trans * a * (0.3 + 1.2 * dens) * fade * brightness;
-                    cr += m * hitCol[k * 3];
-                    cg += m * hitCol[k * 3 + 1];
-                    cb += m * hitCol[k * 3 + 2];
+                    double fade = fadeLut[i];
+                    double a = Noise.clamp01((0.30 + 0.95 * dens) * alphaLut[i]);
+                    double m = trans * Math.max(a, 0.12 * fade) * (0.25 + 1.35 * dens) * fade * hitInten[k] * brightness;
+                    int c = hitChroma[k];
+                    cr += m * (c >> 16 & 255) * (1 / 255.0);
+                    cg += m * (c >> 8 & 255) * (1 / 255.0);
+                    cb += m * (c & 255) * (1 / 255.0);
                     trans *= 1 - a;
                 }
                 int s = idx * 3;
                 cr += trans * bg[s];
                 cg += trans * bg[s + 1];
                 cb += trans * bg[s + 2];
-                double e = edge[idx];
+                double e = (edge[idx] & 255) / 255.0;
                 double lum = Math.max(cr, Math.max(cg, cb));
                 double alpha = Math.max(e, Math.min(1, lum * 1.5) * Math.min(1, e * 3));
                 out[idx] = (int) (alpha * 255) << 24 | toneLut(cr) << 16 | toneLut(cg) << 8 | toneLut(cb);
             }
         });
-    }
-
-    private static double[] palette(double t) {
-        double[][] p = PALETTE;
-        if (t <= p[0][0]) {
-            return new double[]{p[0][1], p[0][2], p[0][3]};
-        }
-        for (int i = 1; i < p.length; i++) {
-            if (t <= p[i][0]) {
-                double f = (t - p[i - 1][0]) / (p[i][0] - p[i - 1][0]);
-                return new double[]{
-                        p[i - 1][1] + (p[i][1] - p[i - 1][1]) * f,
-                        p[i - 1][2] + (p[i][2] - p[i - 1][2]) * f,
-                        p[i - 1][3] + (p[i][3] - p[i - 1][3]) * f};
-            }
-        }
-        double[] l = p[p.length - 1];
-        return new double[]{l[1], l[2], l[3]};
     }
 }

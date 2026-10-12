@@ -16,6 +16,7 @@ public final class Ambience extends Module {
     private final ModeSetting sky = new ModeSetting("Sky", 3, "Plasma", "Space", "Milky Way", "Black Hole", "Shader");
     private final SliderSetting speed = new SliderSetting("Speed", 1.0, 0.0, 3.0, 0.1);
     private final SliderSetting brightness = new SliderSetting("Brightness", 1.0, 0.3, 2.0, 0.05);
+    private final ModeSetting bhQuality = new ModeSetting("BH Quality", 2, "Low", "Medium", "High");
     private final BoolSetting stars = new BoolSetting("Stars", true);
     private final BoolSetting sunMoon = new BoolSetting("Sun & Moon", false);
     private final BoolSetting darkFog = new BoolSetting("Dark Fog", true);
@@ -28,7 +29,7 @@ public final class Ambience extends Module {
     public Ambience() {
         super("Ambience", "Shader-like animated skies: plasma, deep space, milky way, a realistic black hole and a shaderpack-style atmosphere", Category.RENDER);
         instance = this;
-        with(this.sky, this.speed, this.brightness, this.stars, this.sunMoon, this.darkFog, this.clouds,
+        with(this.sky, this.bhQuality, this.speed, this.brightness, this.stars, this.sunMoon, this.darkFog, this.clouds,
                 this.skyShader, this.bloom, this.saturation, this.lensFlare);
     }
 
@@ -58,6 +59,18 @@ public final class Ambience extends Module {
             case "Milky Way" -> SkyGen.MODE_MILKY_WAY;
             case "Shader" -> SkyGen.MODE_SHADER;
             default -> SkyGen.MODE_BLACK_HOLE;
+        };
+    }
+
+    /** Разрешение текстуры чёрной дыры. */
+    public static int blackHoleSize() {
+        if (instance == null) {
+            return 1024;
+        }
+        return switch (instance.bhQuality.value()) {
+            case "Low" -> 512;
+            case "Medium" -> 768;
+            default -> 1024;
         };
     }
 
