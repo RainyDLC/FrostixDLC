@@ -77,6 +77,11 @@ public final class Render2D {
         alpha = Mth.clamp(alpha * factor, 0.0f, 1.0f);
     }
 
+    /** Текущий множитель прозрачности (для отрисовки в обход tint). */
+    public static float alpha() {
+        return alpha;
+    }
+
     public static void popAlpha() {
         if (alphaDepth > 0) {
             alpha = ALPHA_STACK[--alphaDepth];

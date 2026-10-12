@@ -8,6 +8,8 @@ import dev.hatek.client.module.impl.render.interf.InterfaceHud;
 import dev.hatek.client.ui.render.Anim;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.Render2D;
+import dev.hatek.client.ui.render.LiquidBackdrop;
+import dev.hatek.client.ui.render.LiquidGlass;
 import dev.hatek.client.ui.render.TexCache;
 import dev.hatek.client.feature.theme.ThemeManager;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -45,6 +47,7 @@ public final class ClickGuiScreen extends Screen {
     private final Anim[] sourceHover = {new Anim(0.0f, 18.0f), new Anim(0.0f, 18.0f), new Anim(0.0f, 18.0f)};
 
     private boolean closing;
+    private float glassOffsetY;
     private boolean draggingPanel;
     private float grabX;
     private float grabY;
@@ -104,7 +107,8 @@ public final class ClickGuiScreen extends Screen {
     @Override
     public void extractBackground(GuiGraphicsExtractor gg, int mouseX, int mouseY, float partialTick) {
         // Blur и Liquid Glass: размываем мир за GUI (сила — из настройки "Размытие фона" в Minecraft).
-        if (ClickGui.blur() || ClickGui.liquidGlass()) {
+        // Liquid Glass с готовым снимком мира размытие не нужно — стекло прозрачное.
+        if (ClickGui.blur() || (ClickGui.liquidGlass() && !LiquidBackdrop.ready())) {
             extractBlurredBackground(gg);
         }
     }
@@ -135,8 +139,18 @@ public final class ClickGuiScreen extends Screen {
         Render2D.pushAlpha(eased);
 
         boolean liquid = ClickGui.liquidGlass();
+        this.glassOffsetY = (1.0f - eased) * 6.0f;
+        if (liquid) {
+            LiquidBackdrop.request();
+        }
+        boolean refract = liquid && LiquidBackdrop.ready();
+        if (refract) {
+            LiquidGlass.render(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H, Style.PANEL_R,
+                    0.0f, this.glassOffsetY);
+        }
         Render2D.round(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H, Style.PANEL_R,
-                liquid ? Style.PANEL_LIQUID : ClickGui.blur() ? Style.PANEL_BLUR : Style.PANEL);
+                refract ? Style.PANEL_LIQUID_TINT : liquid ? Style.PANEL_LIQUID
+                        : ClickGui.blur() ? Style.PANEL_BLUR : Style.PANEL);
         if (liquid) {
             renderGlass(gg);
         }
@@ -168,8 +182,6 @@ public final class ClickGuiScreen extends Screen {
         // Пятна целиком внутри панели (отступ > PANEL_R), клип не нужен.
         softSpot(gg, panelX + w - 230.0f, panelY + h - 230.0f, 400,
                 Render2D.withAlpha(Style.accent(), Style.LIQUID_ACCENT_ALPHA));
-        softSpot(gg, panelX + 210.0f, panelY + 210.0f, 360,
-                Render2D.withAlpha(Style.WHITE, Style.LIQUID_LIGHT_ALPHA));
         glassLayer(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H, Style.PANEL_R);
     }
 
@@ -261,6 +273,7 @@ public final class ClickGuiScreen extends Screen {
         float x = panelX + Style.NAV_X;
         float y = panelY + Style.NAV_Y;
         if (ClickGui.liquidGlass()) {
+            LiquidGlass.render(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R, 0.0f, this.glassOffsetY);
             Render2D.round(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R, Style.NAV_LIQUID);
             glassLayer(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R);
         } else {

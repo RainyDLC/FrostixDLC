@@ -23,6 +23,7 @@
     "AmbienceSkyMixin",
     "AmbienceFogMixin",
     "AmbienceCloudsMixin",
+    "LiquidBackdropMixin",
     "accessor.LivingEntityAccessor",
     "accessor.LocalPlayerAccessor",
     "accessor.MinecraftAccessor",
