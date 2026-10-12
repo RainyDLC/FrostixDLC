@@ -36,8 +36,6 @@ public final class ClickGuiScreen extends Screen {
 
     private final Anim openAnim = new Anim(0.0f, 14.0f);
     private final Anim switchAnim = new Anim(1.0f, 12.0f);
-    private final Anim selectorAnim = new Anim(0.0f, 17.0f);
-    private final Anim navAnim = new Anim(0.0f, 17.0f);
     private final Anim scrollAnim = new Anim(0.0f, 17.0f);
     private final Anim scrollbarAnim = new Anim(0.0f, 9.0f);
     private final Anim sourceAnim = new Anim(0.0f, 13.0f);
@@ -84,8 +82,6 @@ public final class ClickGuiScreen extends Screen {
         ThemeManager.all();
         this.openAnim.snap(0.0f);
         this.openAnim.to(1.0f);
-        this.selectorAnim.snap(MODULES_PAGE.category().ordinal());
-        this.navAnim.snap(tab.ordinal());
         this.sourceAnim.snap(tab == Tab.CONFIGS ? 1.0f : 0.0f);
         this.scrollAnim.snap(SCROLL.getOrDefault(scrollKey(), 0.0f));
         page().onShow();
@@ -134,25 +130,17 @@ public final class ClickGuiScreen extends Screen {
         InterfaceHud.renderExplicit(gg);
 
         Render2D.begin(gg);
-        Render2D.pushScale(gg, panelX + Style.PANEL_W / 2.0f, panelY + Style.PANEL_H / 2.0f,
-                0.96f + 0.04f * eased);
-        Render2D.pushTranslate(gg, 0.0f, (1.0f - eased) * 12.0f);
+        Render2D.pushTranslate(gg, 0.0f, (1.0f - eased) * 6.0f);
         Render2D.pushAlpha(eased);
 
         Render2D.round(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H,
-                Style.PANEL_R, ClickGui.blur() ? Style.PANEL_BLUR
-                        : ClickGui.liquidGlass() ? Style.PANEL_GLASS : Style.PANEL);
-        if (ClickGui.liquidGlass()) {
-            renderLiquid(gg, mx, my);
-        }
-        glassRim(gg, panelX, panelY, Style.PANEL_W, Style.PANEL_H, Style.PANEL_R);
+                Style.PANEL_R, ClickGui.blur() ? Style.PANEL_BLUR : Style.PANEL);
         renderSidebar(gg, mx, my);
         renderSourceMenu(gg, mx, my);
         renderContent(gg, mx, my);
         renderNav(gg, mx, my);
 
         Render2D.popAlpha();
-        Render2D.popTransform(gg);
         Render2D.popTransform(gg);
         Render2D.end(gg);
     }
@@ -165,92 +153,17 @@ public final class ClickGuiScreen extends Screen {
         return panelY + Style.PANEL_H - Style.SIDEBAR_Y - Style.CAT_H - 8.0f;
     }
 
-    private float liquidX = Float.NaN;
-    private float liquidY = Float.NaN;
-
-    private static void glassRim(GuiGraphicsExtractor gg, float x, float y, float w, float h, float r) {
-        Render2D.texture(gg, dev.hatek.client.ui.render.TexCache.glassRim(Math.round(w), Math.round(h), r),
-                x, y, w, h, Style.WHITE);
-    }
-
-    private static void blob(GuiGraphicsExtractor gg, float cx, float cy, float d, int argb) {
-        int size = Math.round(d);
-        Render2D.texture(gg, dev.hatek.client.ui.render.TexCache.glow(size),
-                cx - size / 2.0f, cy - size / 2.0f, size, size, argb);
-    }
-
-    /** Переливающаяся "жидкость" под стеклом: медленно плавающие капли цвета акцента. */
-    private void renderLiquid(GuiGraphicsExtractor gg, double mx, double my) {
-        float t = (System.nanoTime() / 1_000_000L) / 1000.0f * Style.GLASS_SPEED;
-        float w = Style.PANEL_W;
-        float h = Style.PANEL_H;
-        int accent = Style.accent();
-        float[] hsb = java.awt.Color.RGBtoHSB((accent >> 16) & 0xFF, (accent >> 8) & 0xFF,
-                accent & 0xFF, null);
-        int second = java.awt.Color.HSBtoRGB((hsb[0] + 0.12f) % 1.0f, hsb[1], hsb[2]) | 0xFF000000;
-        int third = java.awt.Color.HSBtoRGB((hsb[0] + 0.88f) % 1.0f, hsb[1], hsb[2]) | 0xFF000000;
-
-        // Капля у курсора догоняет мышь с инерцией — стекло "реагирует" на движение.
-        float targetX = (float) Mth.clamp(mx - panelX, 0.0, w);
-        float targetY = (float) Mth.clamp(my - panelY, 0.0, h);
-        if (Float.isNaN(this.liquidX)) {
-            this.liquidX = targetX;
-            this.liquidY = targetY;
-        }
-        this.liquidX += (targetX - this.liquidX) * 0.06f;
-        this.liquidY += (targetY - this.liquidY) * 0.06f;
-
-        float r = Style.PANEL_R;
-        // Три полосы без углов, чтобы свечение не вылезало за скругления панели.
-        float[][] bands = {
-                {panelX + r, panelY, w - 2.0f * r, r},
-                {panelX, panelY + r, w, h - 2.0f * r},
-                {panelX + r, panelY + h - r, w - 2.0f * r, r}
-        };
-        for (float[] band : bands) {
-            Render2D.pushClip(gg, band[0], band[1], band[2], band[3]);
-            blob(gg, panelX + w * (0.22f + 0.16f * (float) Math.sin(t * 1.3f)),
-                    panelY + h * (0.30f + 0.18f * (float) Math.cos(t * 1.1f)), 520.0f,
-                    Render2D.withAlpha(accent, Style.GLASS_BLOB_ALPHA));
-            blob(gg, panelX + w * (0.70f + 0.18f * (float) Math.cos(t * 0.9f + 1.7f)),
-                    panelY + h * (0.65f + 0.20f * (float) Math.sin(t * 1.4f + 0.6f)), 600.0f,
-                    Render2D.withAlpha(second, Style.GLASS_BLOB_ALPHA * 0.85f));
-            blob(gg, panelX + w * (0.48f + 0.25f * (float) Math.sin(t * 0.7f + 3.1f)),
-                    panelY + h * (0.15f + 0.12f * (float) Math.sin(t * 1.6f + 2.2f)), 420.0f,
-                    Render2D.withAlpha(third, Style.GLASS_BLOB_ALPHA * 0.7f));
-            blob(gg, panelX + w * (0.35f + 0.30f * (float) Math.cos(t * 0.5f)),
-                    panelY + h * (0.85f + 0.08f * (float) Math.sin(t * 1.9f)), 360.0f,
-                    Render2D.withAlpha(Style.WHITE, Style.GLASS_LIGHT_ALPHA));
-            blob(gg, panelX + this.liquidX, panelY + this.liquidY, 300.0f,
-                    Render2D.withAlpha(Style.WHITE, Style.GLASS_CURSOR_ALPHA));
-            Render2D.popClip(gg);
-        }
-    }
-
     private void renderSidebar(GuiGraphicsExtractor gg, double mx, double my) {
         float x = panelX + Style.SIDEBAR_X;
         float y = panelY + Style.SIDEBAR_Y;
-        float h = Style.PANEL_H - Style.SIDEBAR_Y * 2.0f;
-        Render2D.round(gg, x, y, Style.SIDEBAR_W, h, Style.SIDEBAR_R, Style.WHITE_02);
-        glassRim(gg, x, y, Style.SIDEBAR_W, h, Style.SIDEBAR_R);
+        Render2D.rect(gg, panelX + Style.DIVIDER_X, y, 1.0f,
+                Style.PANEL_H - Style.SIDEBAR_Y * 2.0f, Style.WHITE_04);
 
-        // Название клиента — однотонное.
         Fonts.title().draw(gg, Style.CLIENT_NAME + Style.CLIENT_SUFFIX, x + Style.SIDEBAR_PAD,
                 y + Style.NAME_BASELINE, Style.WHITE);
-        Render2D.rect(gg, x + Style.SIDEBAR_PAD, y + Style.NAME_SEP_Y,
-                Style.SIDEBAR_W - Style.SIDEBAR_PAD * 2.0f, 1.0f, Style.WHITE_04);
 
         Category current = MODULES_PAGE.category();
         boolean modules = tab == Tab.MODULES;
-
-        // Индикатор слева от активной категории, растягивается при переходе.
-        this.selectorAnim.to(current.ordinal());
-        float slot = this.selectorAnim.get();
-        float travel = Math.abs(slot - current.ordinal());
-        float stretch = Style.SELECTOR_H * (1.0f + Math.min(travel, 1.0f) * 1.6f);
-        Render2D.round(gg, x + Style.SELECTOR_X, catY(slot) + Style.CAT_H / 2.0f - stretch / 2.0f,
-                Style.SELECTOR_W, stretch, 1.0f,
-                Render2D.withAlpha(Style.accent(), modules ? 1.0f : 0.45f));
 
         Category[] categories = Category.values();
         float rowX = x + Style.CAT_INSET;
@@ -259,19 +172,12 @@ public final class ClickGuiScreen extends Screen {
             Category value = categories[i];
             float rowY = catY(i);
             boolean active = value == current && modules;
-            boolean hover = Render2D.hovered(mx, my, rowX, rowY, rowW, Style.CAT_H);
             Anim anim = this.tabHover.get(value);
-            anim.to(hover || active);
-            float k = anim.get();
-            if (k > 0.01f) {
-                Render2D.round(gg, rowX, rowY + 2.0f, rowW, Style.CAT_H - 4.0f, Style.CAT_R,
-                        Render2D.withAlpha(Style.WHITE_02, k));
-            }
-            int tint = active ? Style.accent() : Render2D.lerp(Style.WHITE_25, Style.WHITE_45, k);
-            int text = active ? Style.WHITE : Render2D.lerp(Style.WHITE_25, Style.WHITE_45, k);
+            anim.to(active || Render2D.hovered(mx, my, rowX, rowY, rowW, Style.CAT_H));
+            int text = active ? Style.WHITE : Render2D.lerp(Style.WHITE_25, Style.WHITE_45, anim.get());
             float ix = rowX + 10.0f;
             Render2D.icon(gg, value.icon(), ix, rowY + (Style.CAT_H - value.iconHeight()) / 2.0f,
-                    value.iconWidth(), value.iconHeight(), tint);
+                    value.iconWidth(), value.iconHeight(), active ? Style.accent() : text);
             Fonts.body().draw(gg, value.displayName(), ix + 14.0f + Style.CAT_ICON_GAP,
                     Fonts.body().centeredBaseline(rowY, Style.CAT_H), text);
         }
@@ -326,32 +232,19 @@ public final class ClickGuiScreen extends Screen {
     private void renderNav(GuiGraphicsExtractor gg, double mx, double my) {
         float x = panelX + Style.NAV_X;
         float y = panelY + Style.NAV_Y;
-        Render2D.round(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R,
-                Render2D.withAlpha(Style.PANEL_RAISED, 0.85f));
-        glassRim(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R);
-
-        this.navAnim.to(tab.ordinal());
-        float slot = this.navAnim.get();
-        float indicatorX = x + Style.NAV_FIRST + slot * Style.NAV_STEP
-                - Style.NAV_INDICATOR_W / 2.0f;
-        float spread = Math.abs(slot - tab.ordinal());
-        float width = Style.NAV_INDICATOR_W * (1.0f + Math.min(spread, 1.0f) * 1.4f);
-        Render2D.round(gg, indicatorX - (width - Style.NAV_INDICATOR_W) / 2.0f,
-                y + Style.NAV_INDICATOR_Y, width, Style.NAV_INDICATOR_H, 1.0f,
-                Style.accent());
+        Render2D.round(gg, x, y, Style.NAV_W, Style.NAV_H, Style.NAV_R, Style.PANEL_RAISED);
 
         for (Tab value : Tab.values()) {
             float center = x + Style.NAV_FIRST + value.ordinal() * Style.NAV_STEP;
             boolean hover = Render2D.hovered(mx, my, center - Style.NAV_STEP / 2.0f, y,
                     Style.NAV_STEP, Style.NAV_H);
             Anim anim = this.navHover.get(value);
-            anim.to(hover || value == tab);
-            float k = anim.get();
+            anim.to(hover);
             Render2D.icon(gg, value.icon(), center - value.iconWidth() / 2.0f,
                     y + Style.NAV_H / 2.0f - value.iconHeight() / 2.0f,
                     value.iconWidth(), value.iconHeight(),
                     value == tab ? Style.accent()
-                            : Render2D.lerp(Style.WHITE_25, Style.WHITE_45, k));
+                            : Render2D.lerp(Style.WHITE_25, Style.WHITE_45, anim.get()));
         }
     }
 

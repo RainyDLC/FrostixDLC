@@ -7,13 +7,9 @@ public final class Style {
     public static final int PANEL = 0xFF181717;
     public static final int PANEL_RAISED = 0xFF1D1C1C;
 
-    // Liquid glass: полупрозрачная основа панели и "жидкость" под стеклом.
+    // Полупрозрачная основа (косметика) и основа под Blur.
     public static final int PANEL_GLASS = 0xE6141313;
     public static final int PANEL_BLUR = 0xB3141313;
-    public static final float GLASS_SPEED = 0.18f;
-    public static final float GLASS_BLOB_ALPHA = 0.16f;
-    public static final float GLASS_LIGHT_ALPHA = 0.06f;
-    public static final float GLASS_CURSOR_ALPHA = 0.07f;
     public static final int DEFAULT_ACCENT = 0xFFFFAFE2;
 
     private static int accent = DEFAULT_ACCENT;
@@ -50,22 +46,19 @@ public final class Style {
     public static final int DESIGN_SCREEN_H = 1080;
 
 
-    // Левая колонка: переливающееся название RainyDLC и категории в столбик.
+    // Левая колонка: название и категории в столбик, справа — тонкий разделитель.
     public static final int SIDEBAR_X = 15;
     public static final int SIDEBAR_Y = 15;
     public static final int SIDEBAR_W = 140;
     public static final int SIDEBAR_R = 15;
     public static final int SIDEBAR_PAD = 16;
     public static final int NAME_BASELINE = 32;
-    public static final int NAME_SEP_Y = 52;
     public static final int CAT_TOP = 64;
     public static final int CAT_H = 32;
     public static final int CAT_R = 9;
     public static final int CAT_INSET = 8;
     public static final int CAT_ICON_GAP = 9;
-    public static final int SELECTOR_W = 2;
-    public static final int SELECTOR_H = 7;
-    public static final int SELECTOR_X = 4;
+    public static final int DIVIDER_X = SIDEBAR_X + SIDEBAR_W + 5;
     public static final String CLIENT_NAME = "Rainy";
     public static final String CLIENT_SUFFIX = "DLC";
 
@@ -84,23 +77,16 @@ public final class Style {
     public static final int SCROLLBAR_H = 235;
     public static final int SCROLLBAR_MIN_THUMB = 30;
 
-    public static final int HEADER_H = 74;
-    public static final int COLLAPSED_H = 70;
+    // Карточка модуля: одна строка — название, бинд, тумблер. Без иконки и описания.
+    public static final int HEADER_H = 40;
+    public static final int COLLAPSED_H = 40;
 
-    public static final int ICON_X = 13;
-    public static final int ICON_Y = 17;
     public static final int ICON_SIZE = 11;
 
-    public static final int TITLE_X = 33;
-    public static final int TITLE_BASELINE = 27;
-
-    public static final int DESC_X = 13;
-    public static final int DESC_BASELINE = 43;
-    public static final int DESC_LINE = 13;
-    public static final int DESC_MAX_W = 216;
+    public static final int TITLE_X = 14;
 
     public static final int BADGE_X = 190;
-    public static final int BADGE_Y = 13;
+    public static final int BADGE_Y = 11;
     public static final int BADGE_W = 33;
     public static final int BADGE_H = 18;
     public static final int BADGE_R = 7;
@@ -112,7 +98,7 @@ public final class Style {
     public static final int BADGE_ICON_H = 6;
 
     public static final int TOGGLE_X = 234;
-    public static final int TOGGLE_Y = 12;
+    public static final int TOGGLE_Y = 10;
     public static final int TOGGLE_W = 27;
     public static final int TOGGLE_H = 19;
     public static final float TOGGLE_R = 9.5f;
@@ -189,9 +175,6 @@ public final class Style {
     public static final int NAV_ICON = 14;
     public static final int NAV_FIRST = 29;
     public static final int NAV_STEP = 40;
-    public static final int NAV_INDICATOR_W = 7;
-    public static final int NAV_INDICATOR_H = 2;
-    public static final int NAV_INDICATOR_Y = 47;
 
     public static final float SOURCE_STEP = 40.0f;
 
@@ -202,9 +185,9 @@ public final class Style {
 
     public static final int HUD_HEADER_H = 38;
     public static final int HUD_ICON = ICON_SIZE;
-    public static final int HUD_ICON_X = ICON_X;
+    public static final int HUD_ICON_X = 13;
     public static final int HUD_ICON_Y = 13;
-    public static final int HUD_TITLE_X = TITLE_X;
+    public static final int HUD_TITLE_X = 33;
     public static final int HUD_TITLE_BASELINE = 26;
 
     public static final int HUD_ROW_H = 20;
@@ -213,7 +196,7 @@ public final class Style {
     public static final int HUD_BADGE_H = 16;
     public static final int HUD_BADGE_R = CHIP_R;
     public static final int HUD_BADGE_PAD = 7;
-    public static final int HUD_STUB_W = SELECTOR_W;
+    public static final int HUD_STUB_W = 2;
     public static final int HUD_STUB_H = 10;
 
     public static final int WM_H = 34;

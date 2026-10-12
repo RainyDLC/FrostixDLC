@@ -5,9 +5,7 @@ import dev.hatek.client.ui.Style;
 import dev.hatek.client.module.setting.Setting;
 import dev.hatek.client.ui.render.Anim;
 import dev.hatek.client.ui.render.Fonts;
-import dev.hatek.client.ui.render.HFont;
 import dev.hatek.client.ui.render.Render2D;
-import dev.hatek.client.ui.render.TexCache;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.util.Mth;
 import org.lwjgl.glfw.GLFW;
@@ -31,7 +29,7 @@ public class Module {
     private final Anim expandAnim = new Anim(0.0f, 13.0f);
     private final Anim hoverAnim = new Anim(0.0f, 16.0f);
     private final Anim badgeAnim = new Anim(0.0f, 18.0f);
-    private final Anim iconAnim = new Anim(0.0f, 14.0f);
+    private final Anim titleAnim = new Anim(0.0f, 14.0f);
 
     public Module(String name, String description, Category category) {
         this.name = name;
@@ -160,28 +158,11 @@ public class Module {
     }
 
     private void renderHeader(GuiGraphicsExtractor gg, float x, float y, double mx, double my) {
-        String icon = this.category.icon();
-        int pad = TexCache.shadowPad(Style.SHADOW_BLUR);
-        Render2D.texture(gg,
-                TexCache.iconShadow(icon, Style.ICON_SIZE, Style.ICON_SIZE, Style.SHADOW_BLUR),
-                x + Style.ICON_X - pad, y + Style.ICON_Y - pad + Style.SHADOW_DY,
-                Style.ICON_SIZE + pad * 2, Style.ICON_SIZE + pad * 2, Style.SHADOW);
-
-        this.iconAnim.to(this.enabled);
-        Render2D.icon(gg, icon, x + Style.ICON_X, y + Style.ICON_Y,
-                Style.ICON_SIZE, Style.ICON_SIZE,
-                Render2D.lerp(Render2D.withAlpha(Style.accent(), 0.7f), Style.accent(),
-                        this.iconAnim.get()));
-
-        Fonts.title().draw(gg, this.name, x + Style.TITLE_X, y + Style.TITLE_BASELINE,
-                Style.WHITE);
-
-        HFont body = Fonts.body();
-        List<String> lines = body.wrap(this.description, Style.DESC_MAX_W);
-        for (int i = 0; i < Math.min(2, lines.size()); i++) {
-            body.draw(gg, lines.get(i), x + Style.DESC_X,
-                    y + Style.DESC_BASELINE + i * Style.DESC_LINE, Style.WHITE_25);
-        }
+        // Только название + бинд + тумблер. Выключенный модуль — приглушённый текст.
+        this.titleAnim.to(this.enabled);
+        Fonts.title().draw(gg, this.name, x + Style.TITLE_X,
+                Fonts.title().centeredBaseline(y, Style.COLLAPSED_H),
+                Render2D.lerp(Style.WHITE_45, Style.WHITE, this.titleAnim.get()));
 
         renderBadge(gg, x, y, mx, my);
         renderToggle(gg, x, y, mx, my);
