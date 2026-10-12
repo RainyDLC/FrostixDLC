@@ -47,7 +47,7 @@ public final class LiquidBackdrop {
             return;
         }
         wanted = false;
-        RenderTarget target = Minecraft.getInstance().getMainRenderTarget();
+        RenderTarget target = Minecraft.getInstance().gameRenderer.mainRenderTarget();
         if (target == null || target.getColorTexture() == null || target.width <= 0 || target.height <= 0) {
             return;
         }
