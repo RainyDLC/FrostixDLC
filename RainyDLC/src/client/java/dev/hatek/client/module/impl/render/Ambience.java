@@ -20,11 +20,16 @@ public final class Ambience extends Module {
     private final BoolSetting sunMoon = new BoolSetting("Sun & Moon", false);
     private final BoolSetting darkFog = new BoolSetting("Dark Fog", true);
     private final BoolSetting clouds = new BoolSetting("Clouds", true);
+    private final BoolSetting skyShader = new BoolSetting("Sky Shader", true);
+    private final SliderSetting bloom = new SliderSetting("Bloom", 1.0, 0.0, 2.0, 0.05);
+    private final SliderSetting saturation = new SliderSetting("Saturation", 1.15, 0.5, 1.8, 0.05);
+    private final BoolSetting lensFlare = new BoolSetting("Lens Flare", true);
 
     public Ambience() {
         super("Ambience", "Shader-like animated skies: plasma, deep space, milky way, a realistic black hole and a shaderpack-style atmosphere", Category.RENDER);
         instance = this;
-        with(this.sky, this.speed, this.brightness, this.stars, this.sunMoon, this.darkFog, this.clouds);
+        with(this.sky, this.speed, this.brightness, this.stars, this.sunMoon, this.darkFog, this.clouds,
+                this.skyShader, this.bloom, this.saturation, this.lensFlare);
     }
 
     @Override
@@ -75,6 +80,31 @@ public final class Ambience extends Module {
     /** В режиме Shader ванильное солнце заменяется своим. */
     public static boolean hideSun() {
         return active() && (!instance.sunMoon.value() || mode() == SkyGen.MODE_SHADER);
+    }
+
+    /** Пост-обработка неба (bloom + цветокоррекция + дизеринг). */
+    public static boolean skyShader() {
+        return instance != null && instance.skyShader.value();
+    }
+
+    public static double bloom() {
+        return skyShader() ? instance.bloom.value() : 0.0;
+    }
+
+    public static double saturation() {
+        return skyShader() ? instance.saturation.value() : 1.0;
+    }
+
+    public static boolean lensFlare() {
+        return skyShader() && instance.lensFlare.value() && instance.bloom.value() > 0.01;
+    }
+
+    /** Ключ параметров пост-обработки: при смене текстуры пересчитываются. */
+    public static int postKey() {
+        if (!skyShader()) {
+            return -1;
+        }
+        return (int) Math.round(instance.bloom.value() * 100) * 1000 + (int) Math.round(instance.saturation.value() * 100);
     }
 
     public static boolean hideClouds() {

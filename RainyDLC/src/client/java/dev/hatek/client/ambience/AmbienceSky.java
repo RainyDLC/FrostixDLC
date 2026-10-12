@@ -72,6 +72,14 @@ public final class AmbienceSky {
     private static volatile boolean plasmaRequested;
     private static volatile BlackHoleGen blackHole;
     private static volatile int[] pendingAtmo;
+    private static volatile int pendingBaseKey;
+    private static volatile int appliedKey = Integer.MIN_VALUE;
+    private static volatile boolean postOn;
+    private static volatile double postBloom;
+    private static volatile double postSat = 1.0;
+    private static int seenKey = Integer.MIN_VALUE;
+    private static long seenKeyAt;
+    private static int baseKey = Integer.MIN_VALUE;
     private static volatile boolean atmoBusy;
     private static volatile int[][] pendingAurora;
     private static volatile boolean auroraRequested;
@@ -102,6 +110,9 @@ public final class AmbienceSky {
     private static DynamicTexture auroraB;
     private static DynamicTexture sunTex;
     private static GpuBuffer sunQuad;
+    private static DynamicTexture streakTex;
+    private static GpuBuffer bhStreak;
+    private static GpuBuffer sunStreak;
     private static boolean bhHasFrame;
     private static GpuBuffer sphereTexColor;
     private static GpuBuffer sphereTex;
@@ -182,6 +193,35 @@ public final class AmbienceSky {
         BH_FREE.set(null);
     }
 
+    private static void post(int[] px, int w, int h, boolean wrap, boolean opaque) {
+        if (postOn) {
+            SkyPost.apply(px, w, h, wrap, opaque, postBloom, postSat);
+        }
+    }
+
+    /** Смена параметров Sky Shader → пересчёт текстур (с дебаунсом 0.5 с). */
+    private static void updatePostKey() {
+        int key = Ambience.postKey();
+        long now = System.currentTimeMillis();
+        if (key != seenKey) {
+            seenKey = key;
+            seenKeyAt = now;
+        }
+        if (key != appliedKey && (appliedKey == Integer.MIN_VALUE || now - seenKeyAt > 500)) {
+            boolean first = appliedKey == Integer.MIN_VALUE;
+            appliedKey = key;
+            postOn = key != -1;
+            postBloom = Ambience.bloom();
+            postSat = Ambience.saturation();
+            if (!first) {
+                requestedMode = -1;
+                plasmaRequested = false;
+                auroraRequested = false;
+                atmoSunAngle = Float.NaN;
+            }
+        }
+    }
+
     private static void request(int mode) {
         if (requestedMode == mode) {
             return;
@@ -192,6 +232,8 @@ public final class AmbienceSky {
             GEN.submit(() -> {
                 int[] a = SkyGen.plasma(0, PLASMA_W, PLASMA_H);
                 int[] b = SkyGen.plasma(1, PLASMA_W, PLASMA_H);
+                post(a, PLASMA_W, PLASMA_H, true, false);
+                post(b, PLASMA_W, PLASMA_H, true, false);
                 pendingPlasma = new int[][]{a, b};
             });
         }
@@ -200,21 +242,30 @@ public final class AmbienceSky {
             GEN.submit(() -> {
                 int[] a = Atmosphere.aurora(0, AURORA_W, AURORA_H);
                 int[] b = Atmosphere.aurora(1, AURORA_W, AURORA_H);
+                post(a, AURORA_W, AURORA_H, true, false);
+                post(b, AURORA_W, AURORA_H, true, false);
                 pendingAurora = new int[][]{a, b};
             });
         }
-        if (baseMode == mode && (mode != SkyGen.MODE_BLACK_HOLE || blackHole != null)) {
+        if (baseMode == mode && baseKey == appliedKey && (mode != SkyGen.MODE_BLACK_HOLE || blackHole != null)) {
             return;
         }
         GEN.submit(() -> {
             if (requestedMode != mode) {
                 return;
             }
+            int key = appliedKey;
             int[] base = SkyGen.base(mode, BASE_W, BASE_H);
             if (requestedMode != mode) {
                 return;
             }
-            pendingBase = base;
+            int[] shown = base;
+            if (postOn) {
+                shown = base.clone();
+                post(shown, BASE_W, BASE_H, true, true);
+            }
+            pendingBaseKey = key;
+            pendingBase = shown;
             pendingBaseMode = mode;
             if (mode == SkyGen.MODE_BLACK_HOLE && blackHole == null) {
                 float[] map = SkyGen.starMap(SkyGen.stars(STAR_COUNT, STAR_SEED), BASE_W, BASE_H);
@@ -240,6 +291,7 @@ public final class AmbienceSky {
             try {
                 int[] out = new int[ATMO_W * ATMO_H];
                 Atmosphere.render(ATMO_W, ATMO_H, s[0], s[1], s[2], m[0], m[1], m[2], r, out);
+                post(out, ATMO_W, ATMO_H, true, true);
                 pendingAtmo = out;
             } finally {
                 atmoBusy = false;
@@ -291,6 +343,12 @@ public final class AmbienceSky {
             draw(target, RenderPipelines.CELESTIAL, sun,
                     new Vector4f((float) Math.min(1, tr[0] * k), (float) Math.min(1, tr[1] * k),
                             (float) Math.min(1, tr[2] * k), 1.0f), sunTex, clamp, sunQuad, 1);
+            if (Ambience.lensFlare() && s[1] > -0.05) {
+                float fa = (float) Math.min(1.0, 0.55 * Ambience.bloom()) * clear;
+                draw(target, RenderPipelines.CELESTIAL, sun,
+                        new Vector4f((float) Math.min(1, tr[0] * k), (float) Math.min(1, tr[1] * k),
+                                (float) Math.min(1, tr[2] * k), fa), streakTex, clamp, sunStreak, 1);
+            }
         }
     }
 
@@ -316,6 +374,7 @@ public final class AmbienceSky {
                         buf = new int[gen.size * gen.size];
                     }
                     gen.frame(animTime, animBrightness, buf);
+                    post(buf, gen.size, gen.size, false, false);
                     int[] old = BH_READY.getAndSet(buf);
                     if (old != null) {
                         BH_FREE.set(old);
@@ -334,6 +393,7 @@ public final class AmbienceSky {
 
     public static void render(RenderTarget target) {
         int mode = Ambience.mode();
+        updatePostKey();
         request(mode);
 
         long now = System.nanoTime();
@@ -400,6 +460,11 @@ public final class AmbienceSky {
             ensureBhThread();
             if (bhTex != null && bhHasFrame) {
                 draw(target, RenderPipelines.END_SKY, sky, new Vector4f(1.0f, 1.0f, 1.0f, 1.0f), bhTex, clamp, bhQuad, 1);
+                if (Ambience.lensFlare()) {
+                    float fa = (float) Math.min(1.0, 0.45 * Ambience.bloom());
+                    draw(target, RenderPipelines.CELESTIAL, sky, new Vector4f(0.62f, 0.78f, 1.0f, fa),
+                            streakTex, clamp, bhStreak, 1);
+                }
             }
         }
 
@@ -437,6 +502,7 @@ public final class AmbienceSky {
             pendingBase = null;
             baseTex = replace(baseTex, "ambience_base", base, BASE_W, BASE_H);
             baseMode = mode;
+            baseKey = pendingBaseKey;
         }
         int[][] plasma = pendingPlasma;
         if (plasma != null) {
@@ -462,6 +528,7 @@ public final class AmbienceSky {
         }
         if (sunTex == null) {
             sunTex = replace(null, "ambience_sun", Atmosphere.sunSprite(256), 256, 256);
+            streakTex = replace(null, "ambience_streak", SkyPost.streakSprite(512, 64), 512, 64);
         }
         if (starTex == null) {
             starTex = replace(null, "ambience_star", SkyGen.starSprite(64, false), 64, 64);
@@ -541,6 +608,31 @@ public final class AmbienceSky {
         sunQuad = build("ambience sun", DefaultVertexFormat.POSITION_TEX, 1, false,
                 q -> q.quad(new float[]{-h, 80, -h}, new float[]{h, 80, -h}, new float[]{h, 80, h}, new float[]{-h, 80, h},
                         0, 0, 1, 0, 1, 1, 0, 1, -1, -1, -1, -1));
+        // Анаморфные блики: у солнца — вдоль горизонта, у чёрной дыры — по базису билборда.
+        float sw = 42.0f;
+        float sh = 2.6f;
+        sunStreak = build("ambience sun streak", DefaultVertexFormat.POSITION_TEX, 1, false,
+                q -> q.quad(new float[]{-sw, 79, -sh}, new float[]{sw, 79, -sh}, new float[]{sw, 79, sh}, new float[]{-sw, 79, sh},
+                        0, 0, 1, 0, 1, 1, 0, 1, -1, -1, -1, -1));
+        double[] d = BlackHoleGen.DIR;
+        double[] r = BlackHoleGen.RIGHT;
+        double[] u = BlackHoleGen.UP;
+        double bw = BH_R * BlackHoleGen.TAN_HALF * 1.5;
+        double bh = BH_R * BlackHoleGen.TAN_HALF * 0.09;
+        float dist = BH_R - 2.0f;
+        float[] a0 = streakCorner(d, r, u, dist, -bw, bh);
+        float[] a1 = streakCorner(d, r, u, dist, bw, bh);
+        float[] a2 = streakCorner(d, r, u, dist, bw, -bh);
+        float[] a3 = streakCorner(d, r, u, dist, -bw, -bh);
+        bhStreak = build("ambience bh streak", DefaultVertexFormat.POSITION_TEX, 1, false,
+                q -> q.quad(a0, a1, a2, a3, 0, 0, 1, 0, 1, 1, 0, 1, -1, -1, -1, -1));
+    }
+
+    private static float[] streakCorner(double[] d, double[] r, double[] u, float dist, double x, double y) {
+        return new float[]{
+                (float) (d[0] * dist + r[0] * x + u[0] * y),
+                (float) (d[1] * dist + r[1] * x + u[1] * y),
+                (float) (d[2] * dist + r[2] * x + u[2] * y)};
     }
 
     private interface Emit {
