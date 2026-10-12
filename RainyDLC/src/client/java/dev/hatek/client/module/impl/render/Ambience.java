@@ -16,7 +16,7 @@ public final class Ambience extends Module {
     private final ModeSetting sky = new ModeSetting("Sky", 3, "Plasma", "Space", "Milky Way", "Black Hole", "Shader");
     private final SliderSetting speed = new SliderSetting("Speed", 1.0, 0.0, 3.0, 0.1);
     private final SliderSetting brightness = new SliderSetting("Brightness", 1.0, 0.3, 2.0, 0.05);
-    private final ModeSetting bhQuality = new ModeSetting("BH Quality", 2, "Low", "Medium", "High");
+    private final ModeSetting bhQuality = new ModeSetting("BH Quality", 2, "Low", "Medium", "High", "Ultra");
     private final BoolSetting stars = new BoolSetting("Stars", true);
     private final BoolSetting sunMoon = new BoolSetting("Sun & Moon", false);
     private final BoolSetting darkFog = new BoolSetting("Dark Fog", true);
@@ -70,6 +70,7 @@ public final class Ambience extends Module {
         return switch (instance.bhQuality.value()) {
             case "Low" -> 512;
             case "Medium" -> 768;
+            case "Ultra" -> 1536;
             default -> 1024;
         };
     }

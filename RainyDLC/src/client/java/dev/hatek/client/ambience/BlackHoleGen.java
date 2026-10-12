@@ -17,30 +17,39 @@ import java.util.stream.IntStream;
  *   <li>Турбулентная структура диска: логарифмические спиральные рукава,
  *       волокна, горячие сгустки; дифференциальное (кеплеровское) вращение.</li>
  *   <li>Линзирование фона (небо + звёзды) с кольцом Эйнштейна.</li>
+ *   <li>Кольцевая структура диска: резонансные полосы и тёмные щели
+ *       (как щель Кассини), фотонные кольца высших порядков подсвечены.</li>
  * </ul>
  * Попадания хранятся разреженно, поэтому 1024² укладывается в ~30 МБ.
  */
 public final class BlackHoleGen {
     /** Направление на чёрную дыру в системе неба и базис билборда. */
-    public static final double[] DIR = SkyGen.norm(0.42, 0.40, -0.81);
+    // Выше над горизонтом (~34°), чтобы огромный диск не уходил в землю.
+    public static final double[] DIR = SkyGen.norm(0.40, 0.56, -0.72);
     public static final double[] RIGHT;
     public static final double[] UP;
     /** tan половины углового размера билборда. */
-    public static final double TAN_HALF = 0.62;
+    public static final double TAN_HALF = 1.0;
 
-    private static final double CAM_DIST = 34.0;
-    private static final double INCLINATION = Math.toRadians(7.5);
+    // Камера ближе — тень ~17°, диск почти на всё небо (~±40°); почти с ребра, как Гаргантюа.
+    private static final double CAM_DIST = 17.0;
+    private static final double INCLINATION = Math.toRadians(6.0);
     private static final double ROLL = Math.toRadians(-12);
     private static final double R_ISCO = 6.0;
     private static final double R_PLUNGE = 2.35;
-    private static final double R_OUT = 18.0;
+    private static final double R_OUT = 14.0;
     private static final double T_PEAK_K = 5000.0;
     private static final int MAX_HITS = 6;
-    private static final int NR = 320;
+    private static final int NR = 400;
     private static final int NP = 2048;
     private static final double FLOW_PERIOD = 26.0;
     private static final double LN_IN = Math.log(R_PLUNGE);
     private static final double LN_OUT = Math.log(R_OUT);
+    /** Радиусы тёмных щелей (в M) и их полуширина. */
+    private static final double[] GAPS = {7.9, 9.8, 11.8};
+    private static final double GAP_W = 0.22;
+    /** Усиление фотонных колец (3-е и далее пересечения диска). */
+    private static final double PHOTON_RING_BOOST = 1.8;
 
     static {
         double[] r = SkyGen.cross(DIR, new double[]{0, 1, 0});
@@ -129,6 +138,17 @@ public final class BlackHoleGen {
         double rings = 0.5 + 0.5 * Math.sin(lr * 85 + large * 8 + o);
         double v = 0.42 * large + 0.26 * fil * fil + 0.12 * fine + 0.04 * rings * fine + clumps;
         v *= 0.45 + 0.55 * gaps;
+        // Кольца: резонансные полосы (слегка гуляют с крупным шумом) + тёмные щели.
+        double r = Math.exp(lr);
+        double bands = Noise.smooth(0.25, 0.75, 0.5 + 0.5 * Math.sin(lr * 46 + large * 2.2 + o * 0.3));
+        double fineBands = 0.5 + 0.5 * Math.sin(lr * 160 + fil * 3.0);
+        double ringMask = 1.0;
+        for (double g : GAPS) {
+            double d = (r - g) / GAP_W;
+            ringMask *= 1.0 - 0.82 * Math.exp(-d * d);
+        }
+        v *= (0.55 + 0.45 * bands) * (0.85 + 0.15 * fineBands);
+        v *= ringMask;
         return Noise.clamp01((v - 0.12) * 1.45);
     }
 
@@ -327,6 +347,9 @@ public final class BlackHoleGen {
                     // Болометрическая яркость ∝ g⁴·T⁴, смягчённая для читаемости внешнего диска.
                     double inten = 2.3 * Math.pow(tn, 1.9) * g * g * g * g;
                     int k = hits[0];
+                    if (k >= 2) {
+                        inten *= PHOTON_RING_BOOST;
+                    }
                     hu[k] = (float) uOfR(cr);
                     hp[k] = (float) phi;
                     hi[k] = (float) inten;

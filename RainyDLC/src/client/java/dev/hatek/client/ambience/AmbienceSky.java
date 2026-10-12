@@ -644,8 +644,8 @@ public final class AmbienceSky {
         double[] d = BlackHoleGen.DIR;
         double[] r = BlackHoleGen.RIGHT;
         double[] u = BlackHoleGen.UP;
-        double bw = BH_R * BlackHoleGen.TAN_HALF * 1.5;
-        double bh = BH_R * BlackHoleGen.TAN_HALF * 0.09;
+        double bw = BH_R * BlackHoleGen.TAN_HALF * 1.05;
+        double bh = BH_R * BlackHoleGen.TAN_HALF * 0.05;
         float dist = BH_R - 2.0f;
         float[] a0 = streakCorner(d, r, u, dist, -bw, bh);
         float[] a1 = streakCorner(d, r, u, dist, bw, bh);
