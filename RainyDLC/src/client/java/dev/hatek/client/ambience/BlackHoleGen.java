@@ -33,15 +33,16 @@ public final class BlackHoleGen {
     public static final double[] RIGHT;
     public static final double[] UP;
     /** tan половины углового размера билборда. */
-    public static final double TAN_HALF = 1.2;
+    public static final double TAN_HALF = 1.0;
 
-    // Камера близко — тень ~22°, диск почти на всё небо (~±43°); почти с ребра, как Гаргантюа.
-    private static final double CAM_DIST = 13.0;
+    // Размер на небе как раньше (~±40°), но камера ближе, а диск компактнее —
+    // тень крупнее относительно колец (~1.4x к прежнему).
+    private static final double CAM_DIST = 12.5;
     private static final double INCLINATION = Math.toRadians(6.0);
     private static final double ROLL = Math.toRadians(-12);
     private static final double R_ISCO = 6.0;
     private static final double R_PLUNGE = 2.35;
-    private static final double R_OUT = 12.0;
+    private static final double R_OUT = 10.0;
     private static final double T_PEAK_K = 5000.0;
     private static final int MAX_HITS = 6;
     private static final int NR = 400;
@@ -50,8 +51,8 @@ public final class BlackHoleGen {
     private static final double LN_IN = Math.log(R_PLUNGE);
     private static final double LN_OUT = Math.log(R_OUT);
     /** Радиусы тёмных щелей (в M) и их полуширина. */
-    private static final double[] GAPS = {7.7, 9.4, 10.9};
-    private static final double GAP_W = 0.22;
+    private static final double[] GAPS = {7.2, 8.3, 9.3};
+    private static final double GAP_W = 0.17;
     /** Усиление фотонных колец (3-е и далее пересечения диска). */
     private static final double PHOTON_RING_BOOST = 1.8;
 
@@ -62,6 +63,14 @@ public final class BlackHoleGen {
     private static final double HALO_W = 1.1;
     private static final double HALO_I = 0.32;
     private static final double[] RING_RGB = {1.0, 0.72, 0.42};
+    /** Тень не абсолютно чёрная: тёмно-янтарная заливка + свечение изнутри к краю. */
+    private static final double SHADOW_FILL = 0.035;
+    private static final double INNER_W = 1.3;
+    private static final double INNER_I = 0.22;
+    private static final double[] SHADOW_RGB = {0.85, 0.42, 0.20};
+    /** Множитель и потолок угловой скорости диска (рад/с) — плавное движение без рывков. */
+    private static final double OMEGA_SCALE = 0.45;
+    private static final double OMEGA_MAX = 0.6;
 
     /** Джеты: начальная ширина, раскрытие, яркость, скорость дыма (M/с), цвет. */
     private static final double JET_W0 = 0.55;
@@ -142,7 +151,7 @@ public final class BlackHoleGen {
             double r = rOfU(i / (double) (NR - 1));
             // Кеплер вне ISCO; внутри — падение с почти постоянной угловой скоростью.
             double rr = Math.max(r, R_ISCO * 0.85);
-            omegaLut[i] = (float) (Math.pow(R_ISCO / rr, 1.5) * 0.85);
+            omegaLut[i] = (float) Math.min(OMEGA_MAX, Math.pow(R_ISCO / rr, 1.5) * OMEGA_SCALE);
             double outer = Noise.smooth(R_OUT, R_OUT * 0.5, r);
             double inner = r >= R_ISCO ? Noise.smooth(R_ISCO - 0.05, R_ISCO + 0.35, r) * 0.85 + 0.15 : 0.06;
             fadeLut[i] = (float) (outer * inner);
@@ -650,6 +659,12 @@ public final class BlackHoleGen {
                 double db = impact[idx] - B_CRIT;
                 double glow = RING_I * Math.exp(-(db / RING_W) * (db / RING_W))
                         + (db > 0 ? HALO_I * Math.exp(-db / HALO_W) : 0);
+                // Внутри тени: тёмная заливка, светлее к краю — тень читается на фоне космоса.
+                double in = 1 - Noise.smooth(-0.25, 0.05, db);
+                double shade = in * (SHADOW_FILL + INNER_I * Math.exp(Math.min(0, db) / INNER_W)) * trans * brightness;
+                cr += shade * SHADOW_RGB[0];
+                cg += shade * SHADOW_RGB[1];
+                cb += shade * SHADOW_RGB[2];
                 // Дым: виден только снаружи тени и за диском.
                 double captured = bg[s] + bg[s + 1] + bg[s + 2] > 0 ? 1 : 0;
                 double jet = captured * smokeLayer(axisS[idx], axisQ[idx], JET_W0, JET_SPREAD,

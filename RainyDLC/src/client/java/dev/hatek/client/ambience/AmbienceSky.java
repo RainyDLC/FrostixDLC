@@ -400,6 +400,7 @@ public final class AmbienceSky {
                     }
                     gen.frame(animTime, animBrightness, buf);
                     post(buf, gen.size, gen.size, false, false);
+                    toAbgr(buf);
                     int[] old = BH_READY.getAndSet(buf);
                     if (old != null) {
                         BH_FREE.set(old);
@@ -565,9 +566,9 @@ public final class AmbienceSky {
         if (frame != null) {
             if (bhTex == null || bhTex.getPixels() == null || bhTex.getPixels().getWidth() * bhTex.getPixels().getHeight() != frame.length) {
                 int side = (int) Math.round(Math.sqrt(frame.length));
-                bhTex = replace(bhTex, "ambience_black_hole", frame, side, side);
+                bhTex = replaceRaw(bhTex, "ambience_black_hole", frame, side, side);
             } else {
-                write(bhTex.getPixels(), frame);
+                writeRaw(bhTex.getPixels(), frame);
                 bhTex.upload();
             }
             bhHasFrame = true;
@@ -584,6 +585,34 @@ public final class AmbienceSky {
         DynamicTexture tex = new DynamicTexture(() -> "hatek/" + name, image);
         tex.upload();
         return tex;
+    }
+
+    /** ARGB → ABGR на месте (в потоке генерации, чтобы не грузить render thread). */
+    private static void toAbgr(int[] argb) {
+        java.util.stream.IntStream.range(0, (argb.length >> 12) + 1).parallel().forEach(b -> {
+            int end = Math.min(argb.length, (b + 1) << 12);
+            for (int i = b << 12; i < end; i++) {
+                int c = argb[i];
+                argb[i] = (c & 0xFF00FF00) | (c >> 16 & 0xFF) | (c & 0xFF) << 16;
+            }
+        });
+    }
+
+    private static DynamicTexture replaceRaw(DynamicTexture old, String name, int[] abgr, int w, int h) {
+        if (old != null) {
+            old.close();
+        }
+        NativeImage image = new NativeImage(NativeImage.Format.RGBA, w, h, false);
+        writeRaw(image, abgr);
+        DynamicTexture tex = new DynamicTexture(() -> "hatek/" + name, image);
+        tex.upload();
+        return tex;
+    }
+
+    /** Готовые ABGR-пиксели — одним memcpy. */
+    private static void writeRaw(NativeImage image, int[] abgr) {
+        int n = Math.min(abgr.length, image.getWidth() * image.getHeight());
+        MemoryUtil.memIntBuffer(image.getPointer(), n).put(abgr, 0, n);
     }
 
     /** ARGB → RGBA-память NativeImage (little-endian ABGR int). */
