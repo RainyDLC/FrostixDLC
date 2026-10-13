@@ -25,11 +25,14 @@ public final class ChamsRenderType {
     }
 
     private static com.mojang.blaze3d.pipeline.RenderPipeline createPipeline(boolean throughWalls) {
+        // The String overload uses the default minecraft namespace, NOT Identifier.parse.
+        // Namespaced custom shaders must use the Identifier overload for both stages.
+        Identifier shaderId = Identifier.parse(ChamsShaderSources.SHADER_ID);
         return RenderPipelines.register(com.mojang.blaze3d.pipeline.RenderPipeline.builder(RenderPipelines.ENTITY_SNIPPET)
                 .withLocation(Identifier.fromNamespaceAndPath("hatek",
                         throughWalls ? "chams_through_walls" : "chams_visible"))
-                .withVertexShader(ChamsShaderSources.SHADER_ID)
-                .withFragmentShader(ChamsShaderSources.SHADER_ID)
+                .withVertexShader(shaderId)
+                .withFragmentShader(shaderId)
                 .withBindGroupLayout(BindGroupLayouts.SAMPLER1)
                 .withCull(true)
                 .withColorTargetState(RenderPipelines.ENTITY_TRANSLUCENT.getColorTargetState())

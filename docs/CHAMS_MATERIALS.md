@@ -48,6 +48,12 @@ The CPU packing class is `ChamsUniforms`. Do not add `APPLY_TEXTURE_MATRIX` or a
 
 ## Checks
 
+### Pipeline initialization regression
+
+From `RainyDLC`, run `./gradlew chamsPipelineRegression` (`gradlew.bat chamsPipelineRegression` on Windows). This runs 11 checks against the **real Minecraft API**, including creation of both Chams render types, their vertex/fragment IDs, caching and depth behavior. It does not create an OpenGL context or validate an in-game draw.
+
+Minecraft 26.2's `RenderPipeline.Builder.withVertexShader(String)` and `withFragmentShader(String)` treat the argument as a path in the default `minecraft` namespace. Passing `hatek:core/chams_material` to those overloads produces the invalid ID `minecraft:hatek:core/chams_material` and crashes during static initialization. `ChamsRenderType` therefore parses the full ID explicitly and uses the **Identifier overload** for both stages. The regression also reproduces and rejects the erroneous String usage, so a Java-only compile or GLSL-only preview cannot hide this failure again.
+
 Standalone parameter test (JOML 1.10.8 is already a Minecraft/Gradle dependency):
 
 ```sh

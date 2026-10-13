@@ -100,3 +100,20 @@ publishing {
         // retrieving dependencies.
     }
 }
+
+// Headless regression against Minecraft's real pipeline API (no OpenGL context needed).
+// Run with: ./gradlew chamsPipelineRegression
+def chamsPipelineTestClasses = layout.buildDirectory.dir('classes/chamsPipelineRegression')
+tasks.register('compileChamsPipelineRegression', JavaCompile) {
+    dependsOn tasks.named('compileClientJava')
+    source file('../tests/ChamsPipelineRegression.java')
+    classpath = sourceSets.client.runtimeClasspath
+    destinationDirectory = chamsPipelineTestClasses
+    javaCompiler = tasks.named('compileClientJava', JavaCompile).flatMap { it.javaCompiler }
+    options.encoding = 'UTF-8'
+}
+tasks.register('chamsPipelineRegression', JavaExec) {
+    dependsOn tasks.named('compileChamsPipelineRegression')
+    classpath = files(chamsPipelineTestClasses) + sourceSets.client.runtimeClasspath
+    mainClass = 'dev.hatek.client.render.ChamsPipelineRegression'
+}
