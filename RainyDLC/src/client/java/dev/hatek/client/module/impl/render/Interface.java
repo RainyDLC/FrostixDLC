@@ -10,7 +10,7 @@ import dev.hatek.client.module.setting.TextSetting;
 
 /**
  * Модуль "Interface": HUD клиента.
- * Компактный HUD: хоткеи, статистика, активные модули, цель и уведомления.
+ * Ватермарка, кейбинды, активные эффекты и кастомный хотбар.
  * Элементы двигаются ЛКМ и масштабируются колесом прямо в игре,
  * когда открыт чат или другой экран (курсор свободен).
  */
@@ -21,9 +21,6 @@ public final class Interface extends Module {
     private final ModeSetting watermarkPos = new ModeSetting("Watermark Position", 0,
             "Left", "Center", "Right");
     private final BoolSetting keybinds = new BoolSetting("Keybinds", true);
-    private final BoolSetting stats = new BoolSetting("HUD Stats", true);
-    private final BoolSetting arrayList = new BoolSetting("Active Modules", true);
-    private final BoolSetting notifications = new BoolSetting("HUD Notifications", true);
     private final BoolSetting effects = new BoolSetting("Effects", true);
     private final BoolSetting hotbar = new BoolSetting("Custom Hotbar", true);
     private final BoolSetting hideVanilla = new BoolSetting("Hide Vanilla Hotbar", true);
@@ -41,15 +38,12 @@ public final class Interface extends Module {
     private final SliderSetting media3dHeight = new SliderSetting("Media 3D Height", 2.5, 0.5, 6.0, 0.25);
 
     public Interface() {
-        super("Interface", "Frostix HUD: хоткеи, статистика, цель, эффекты и уведомления",
+        super("Interface", "Ватермарка клиента, кейбинды, активные эффекты и кастомный хотбар",
                 Category.RENDER);
         instance = this;
         with(this.watermark,
                 this.watermarkPos,
                 this.keybinds,
-                this.stats,
-                this.arrayList,
-                this.notifications,
                 this.effects,
                 this.hotbar,
                 this.hideVanilla,
@@ -85,18 +79,6 @@ public final class Interface extends Module {
     public static boolean showKeybinds() {
         Interface module = instance;
         return module != null && module.isEnabled() && module.keybinds.value();
-    }
-
-    public static boolean showStats() {
-        return instance != null && instance.isEnabled() && instance.stats.value();
-    }
-
-    public static boolean showArrayList() {
-        return instance != null && instance.isEnabled() && instance.arrayList.value();
-    }
-
-    public static boolean showNotifications() {
-        return instance != null && instance.isEnabled() && instance.notifications.value();
     }
 
     public static boolean showEffects() {

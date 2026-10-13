@@ -25,14 +25,11 @@ public final class HudLayout {
 
     public enum Element {
         WATERMARK("Watermark"),
-        KEYBINDS("Hotkeys"),
+        KEYBINDS("Keybinds"),
+        EFFECTS("Effects"),
         HOTBAR("Hotbar"),
         ARMOR("Armor"),
-        STATS("Stats"),
-        ARRAYLIST("Active Modules"),
-        TARGET("Target"),
-        NOTIFICATIONS("Notifications"),
-        EFFECTS("Effects");
+        TARGET("Target");
 
         private final String label;
 
