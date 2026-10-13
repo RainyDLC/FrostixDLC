@@ -69,6 +69,13 @@ public final class Attack {
     private static final float MAX_CHARGE_FLOOR = 0.995F;
 
     private static float chargeTarget = CHARGE;
+    /**
+     * Быстрый удар (Shard/ML): 25% хитов идут без ожидания крит-окна на
+     * пониженном заряде. Человек-спамер иногда кликает раньше — это быстрее,
+     * а не медленнее, и ломает метроном + 100% криты. Промахнуться нельзя:
+     * луч всё равно в хитбоксе.
+     */
+    private static boolean skipCritOnce;
 
     private static final float AURA_GAP_MIN = 205.0F;
     private static final float AURA_GAP_SPREAD = 60.0F;
@@ -280,6 +287,10 @@ public final class Attack {
         if (!fallCheck || mc.player == null) {
             return true;
         }
+        // Быстрый удар: не ждём крит-окно, бьём сразу.
+        if (skipCritOnce) {
+            return true;
+        }
         if (critStateReady()) {
             return true;
         }
@@ -413,7 +424,20 @@ public final class Attack {
     }
 
     private static void rollNextHit() {
-        chargeTarget = CHARGE;
+        // Shard/ML (только SpaceTime): вариативность заряда. 25% — «быстрый»
+        // удар без ожидания крита (0.87–0.92): бьёт раньше, ломает метроном
+        // и 100% криты. Остальные — 0.95–1.0. В среднем быстрее, чем всегда 1.0.
+        // Нейро — без изменений (всегда 1.0).
+        if (!AttackAura.spaceTime()) {
+            chargeTarget = CHARGE;
+            skipCritOnce = false;
+        } else if (AuraRandom.range(0.0F, 1.0F) < 0.25F) {
+            chargeTarget = 0.87F + AuraRandom.human(0.0F, 0.05F);
+            skipCritOnce = true;
+        } else {
+            chargeTarget = 0.95F + AuraRandom.human(0.0F, 0.05F);
+            skipCritOnce = false;
+        }
 
         if (PlayerStats.clickReady()) {
             float sampled = PlayerStats.click(AuraRandom.range(0.0F, 1.0F));
@@ -452,6 +476,10 @@ public final class Attack {
     }
 
     private static float chargeFloor() {
+        // Быстрый удар: пониженный порог, без ожидания полного заряда.
+        if (skipCritOnce) {
+            return 0.87F;
+        }
         float safe = serverSafeCharge();
         float full = Math.max(safe, chargeTarget - CHARGE_SLACK);
         return critWindowOpen() ? safe : full;
