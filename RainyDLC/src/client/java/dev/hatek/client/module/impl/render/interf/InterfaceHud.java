@@ -1,8 +1,7 @@
 package dev.hatek.client.module.impl.render.interf;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import dev.hatek.clien// FrostixDLC Icy HUD Implementation
-    t.media.MediaClip;
+import dev.hatek.client.media.MediaClip;
 import dev.hatek.client.media.MediaManager;
 import dev.hatek.client.module.Module;
 import dev.hatek.client.module.ModuleManager;
