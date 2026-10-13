@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #0e0718;
+  color: #eeede7;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: rgba(149, 101, 255, 0.45);
+  color: #fff;
+}
+
+/* ── тонкий кастомный скроллбар ─────────────────────────── */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0e0718;
+}
+::-webkit-scrollbar-thumb {
+  background: #2c1a4d;
+  border-radius: 8px;
+  border: 2px solid #0e0718;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3d2568;
+}
+
+/* ── фоновая сетка ──────────────────────────────────────── */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(180, 142, 218, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(180, 142, 218, 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 30%, black 30%, transparent 75%);
+}
+
+.glow-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(110px);
+  pointer-events: none;
+}
+
+/* ── интро-катсцена ─────────────────────────────────────── */
+@keyframes intro-logo-in {
+  0% { opacity: 0; transform: scale(0.72); filter: blur(14px) brightness(2.2); }
+  55% { opacity: 1; transform: scale(1.04); filter: blur(0) brightness(1.15); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0) brightness(1); }
+}
+@keyframes intro-word-in {
+  0% { opacity: 0; transform: translateY(26px); letter-spacing: 0.6em; filter: blur(8px); }
+  100% { opacity: 1; transform: translateY(0); letter-spacing: 0.28em; filter: blur(0); }
+}
+@keyframes intro-tag-in {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes intro-bar {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+@keyframes intro-out {
+  to { opacity: 0; visibility: hidden; transform: scale(1.06); }
+}
+@keyframes intro-ring {
+  0% { transform: scale(0.6); opacity: 0.7; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+.intro-logo { animation: intro-logo-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.intro-word { animation: intro-word-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both; }
+.intro-tag { animation: intro-tag-in 0.7s ease 0.8s both; }
+.intro-bar-fill { animation: intro-bar 1.5s cubic-bezier(0.3, 0.6, 0.3, 1) 0.3s both; transform-origin: left; }
+.intro-ring { animation: intro-ring 1.4s ease-out 0.25s both; }
+.intro-leaving { animation: intro-out 0.45s ease-in both; }
+
+/* ── появление блоков при скролле ───────────────────────── */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise {
+  opacity: 0;
+}
+.rise.visible {
+  animation: rise-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── бегущая строка ─────────────────────────────────────── */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee 28s linear infinite;
+}
+
+/* ── парение и пульс ────────────────────────────────────── */
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+.floaty { animation: floaty 7s ease-in-out infinite; }
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.pulse-glow { animation: pulse-glow 3.2s ease-in-out infinite; }
+
+/* ── карточки ───────────────────────────────────────────── */
+.card {
+  background: linear-gradient(160deg, rgba(149, 101, 255, 0.07), rgba(149, 101, 255, 0.02));
+  border: 1px solid rgba(180, 142, 218, 0.16);
+  backdrop-filter: blur(14px);
+  transition: border-color 0.3s ease, transform 0.3s ease;
+}
+.card:hover {
+  border-color: rgba(149, 101, 255, 0.45);
+}
+
+/* ── зерно плёнки ───────────────────────────────────────── */
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
