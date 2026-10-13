@@ -69,6 +69,8 @@ public final class ComponentManager extends HashMap<Class<? extends Component>, 
         }
         if (AttackAura.neuroActive()) {
             NeuroRotation.onFrame();
+        } else if (!AttackAura.neuroMode()) {
+            SpaceTime.onFrame();
         }
     }
 
