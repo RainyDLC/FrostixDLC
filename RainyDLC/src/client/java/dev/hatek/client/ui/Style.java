@@ -186,15 +186,15 @@ public final class Style {
 
     public static final int HUD_PANEL = 0xDB181717;
     public static final int HUD_MARGIN = 10;
-    // HUD в терминальном стиле: плоские панели, острые углы, тонкие линии.
-    // Никакого стекла, свечений и скруглений.
-    public static final int HUD_PANEL2 = 0xE8171717;
-    public static final int HUD_LINE = white(0.12f);
-    public static final int HUD_DIV = white(0.06f);
+    // HUD «Editorial»: плоские панели, акцентная линейка сверху,
+    // волосные разделители, крупная типографика. Без скруглений и свечений.
+    public static final int HUD_INK = 0xE5141414;
+    public static final int HUD_HAIR = white(0.14f);
+    public static final int HUD_FAINT = white(0.06f);
     public static final int HUD_PAD = 10;
-    public static final int HUD_HEADER_H = 26;
-    public static final int HUD_BOTTOM_PAD = 8;
+    public static final int HUD_HEAD_H = 30;
     public static final int HUD_MIN_W = 150;
+    public static final int HUD_BOTTOM = 8;
 
     public static final float FONT_HUD = 12.0f;
 
