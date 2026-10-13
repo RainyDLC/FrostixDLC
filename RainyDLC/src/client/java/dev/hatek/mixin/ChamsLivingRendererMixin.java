@@ -22,15 +22,9 @@ public abstract class ChamsLivingRendererMixin {
     private void hatek$chamsRenderType(LivingEntityRenderState state, boolean bodyVisible,
                                        boolean translucent, boolean showOutline,
                                        CallbackInfoReturnable<RenderType> cir) {
-        if (state instanceof AvatarRenderState avatar && Chams.activeFor(avatar)) {
+        if (state instanceof AvatarRenderState avatar && Chams.activeFor(avatar)
+                && (bodyVisible || translucent)) {
             cir.setReturnValue(ChamsRenderType.forSkin(getTextureLocation(state), Chams.throughWalls()));
-        }
-    }
-
-    @Inject(method = "getModelTint", at = @At("HEAD"), cancellable = true)
-    private void hatek$chamsTint(LivingEntityRenderState state, CallbackInfoReturnable<Integer> cir) {
-        if (state instanceof AvatarRenderState avatar && Chams.activeFor(avatar)) {
-            cir.setReturnValue(Chams.tint());
         }
     }
 }
