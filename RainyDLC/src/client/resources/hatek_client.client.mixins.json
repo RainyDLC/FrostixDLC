@@ -35,7 +35,8 @@
     "accessor.GuiAccessor",
     "accessor.BossHealthOverlayAccessor",
     "KillEffectWorldMixin",
-    "KillEffectLivingMixin"
+    "KillEffectLivingMixin",
+    "KillEffectPacketMixin"
   ],
   "injectors": {
     "defaultRequire": 1

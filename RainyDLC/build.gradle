@@ -122,7 +122,7 @@ tasks.register('chamsPipelineRegression', JavaExec) {
 def vfxTestClasses = layout.buildDirectory.dir('classes/vfxRegression')
 tasks.register('compileVfxRegression', JavaCompile) {
     dependsOn tasks.named('compileClientJava')
-    source files('../tests/VfxRegression.java', '../tests/VfxGeometryRegression.java')
+    source files('../tests/VfxRegression.java', '../tests/VfxGeometryRegression.java', '../tests/BlackHoleBufferRegression.java')
     classpath = sourceSets.client.runtimeClasspath
     destinationDirectory = vfxTestClasses
     javaCompiler = tasks.named('compileClientJava', JavaCompile).flatMap { it.javaCompiler }
@@ -139,4 +139,10 @@ tasks.register('vfxGeometryRegression', JavaExec) {
     classpath = files(vfxTestClasses) + sourceSets.client.runtimeClasspath
     mainClass = 'dev.hatek.client.render.killeffect.VfxGeometryRegression'
     systemProperty 'vfx.preview', layout.buildDirectory.dir('vfx-preview').get().asFile.absolutePath
+}
+
+tasks.register('blackHoleBufferRegression', JavaExec) {
+    dependsOn tasks.named('compileVfxRegression')
+    classpath = files(vfxTestClasses) + sourceSets.client.runtimeClasspath
+    mainClass = 'dev.hatek.client.ambience.blackhole.BlackHoleBufferRegression'
 }

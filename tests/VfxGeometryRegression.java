@@ -34,17 +34,21 @@ public final class VfxGeometryRegression {
         Constructor<?> ctor=effect.getDeclaredConstructors()[0];ctor.setAccessible(true);
         Method body=KillEffectRenderer.class.getDeclaredMethod("body",PoseStack.Pose.class,VertexConsumer.class,effect,KillEffectTimeline.Pose.class,double.class);body.setAccessible(true);
         int total=0;
-        for(boolean vortex:new boolean[]{false,true}) for(double t:vortex?new double[]{.55,1.45,2.4}:new double[]{.70,1.6,2.3}) {
-            Object sample=ctor.newInstance(new UUID(0,123),Vec3.ZERO,0f,new PlayerSkin(null,null,null,PlayerModelType.WIDE,false),0L,1d,1d,vortex,0d);
+        for(boolean vortex:new boolean[]{false,true}) for(double t:vortex?new double[]{.55,1.45,2.4}:new double[]{.70,1.8,3.15}) {
+            float gripYaw=(float)Math.atan2(-6,-4);
+            float actorYaw=(float)(180-Math.toDegrees(gripYaw));
+            Object sample=ctor.newInstance(new UUID(0,123),Vec3.ZERO,actorYaw,gripYaw,new PlayerSkin(null,null,null,PlayerModelType.WIDE,false),0L,1d,1d,vortex,0d);
             var frame=vortex?KillEffectTimeline.vortex(t):KillEffectTimeline.demon(t);
             String prefix=(vortex?"vortex":"demon")+"-"+t;
             for(String material:new String[]{"skin","fx"}) {
                 Sink sink=new Sink();
                 VertexConsumer consumer=(VertexConsumer)Proxy.newProxyInstance(VertexConsumer.class.getClassLoader(),new Class[]{VertexConsumer.class},sink);
-                if(material.equals("skin"))body.invoke(null,new PoseStack().last(),consumer,sample,frame,t);
+                PoseStack poses=new PoseStack();
+                if(!vortex)poses.mulPose(new org.joml.Quaternionf().rotationY(gripYaw));
+                if(material.equals("skin"))body.invoke(null,poses.last(),consumer,sample,frame,t);
                 else {
                     Method fx=KillEffectRenderer.class.getDeclaredMethod(vortex?"vortex":"demon",PoseStack.Pose.class,VertexConsumer.class,effect,KillEffectTimeline.Pose.class,double.class);
-                    fx.setAccessible(true);fx.invoke(null,new PoseStack().last(),consumer,sample,frame,t);
+                    fx.setAccessible(true);fx.invoke(null,poses.last(),consumer,sample,frame,t);
                 }
                 sink.flush();
                 if(sink.rows.size()%4!=0)throw new AssertionError("Incomplete quad");

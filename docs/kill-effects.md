@@ -1,66 +1,101 @@
 # Ambience and KillEffect
 
-## Black hole port fix
+## Black hole runtime fixes
 
-Minecraft 26.2 builds its rendering projection with **reversed Z** and the device's
-clip-depth convention. The port unprojected z=1 and z=-1 and subtracted them as
-though this were an ordinary OpenGL projection. On the OpenGL clip range, both the ray marcher and CPU visibility test
-consequently pointed behind the camera. On [0,1] backends, z=-1 was outside the
-valid clip range.
+The imported renderer had two separate problems:
 
-All three GPU reconstruction sites (march, history resolve, composite) and the CPU
-visibility test now unproject a finite z=0.5 point from the rotation-only view
-projection. This gives the same forward ray for normal/reversed Z and [-1,1]/[0,1]
-clip ranges. The unused depth sampler is removed: this is a sky pass before world
-geometry, not a post-world overlay. Shader compilation validity is checked and
-shader resources are shipped for pipeline/resource reloads.
+1. Minecraft 26.2 uses reversed Z. Unprojecting z=1 minus z=-1 produced backward
+   rays on the OpenGL clip range. CPU visibility and all three GPU reconstruction
+   sites now unproject a finite z=0.5 point from the rotation-only view projection.
+2. Both frequently updated uniform buffers were created with `USAGE_UNIFORM` only.
+   Minecraft's actual `CommandEncoder.writeToBuffer` rejects these buffers with
+   **Buffer needs USAGE_COPY_DST to be a destination for a copy**. The renderer
+   caught that exception, permanently disabled itself until a module reset, and
+   Ambience still cancelled the vanilla sky draw. Both the 224-byte sky buffer and
+   16-byte bloom buffer now include `USAGE_COPY_DST`. Vanilla sky cancellation now
+   happens only after the replacement renderer reports success.
 
-## KillEffect
+The noise texture also now uses ARGB channel order with `NativeImage.setPixel`,
+keeping the red/green shifted noise correlation intact. Shader resources remain
+available for pipeline/resource reloads; shader compilation validity is checked.
+
+## Real deaths, not just Preview
 
 Enable **Render → KillEffect**, choose **Демоническая сила** or **Вихрь**.
 **Animation Speed** changes duration; **Effect Size** changes VFX size, not player
-size. **Preview → Play effect** plays the selected cinematic three blocks in front
-of the local player. The module must be enabled for preview.
+size. **Preview → Play effect** plays the selected effect three blocks in front of
+the local player. Preview requires the module to be enabled.
 
-- **Демоническая сила:** skin snapshot lifts with outstretched arms; a glowing,
-  engraved aperture opens; the body plunges, one arm reaches the rim, pauses,
-  slides inward and down, and the aperture closes. Geometry is clipped to the
-  ground plane rather than modifying blocks.
-- **Вихрь:** three textured helical dust clouds and orbiting particles descend over the skin
-  snapshot. The body fades only after the dust reaches it; the funnel then expands
-  and disperses.
+Remote players do **not** necessarily get health=0 on the observing client:
+vanilla `LivingEntity.handleEntityEvent(3)` explicitly skips setting player health.
+The old health polling therefore missed real kills even though preview worked.
+KillEffect now observes the server's **entity status 3** at the client-thread packet
+handler, after its thread guard and before vanilla handles the entity. A complete
+skin/position snapshot is captured immediately, before a following removal packet.
 
-Nearby player deaths trigger the effects (not just kills credited to the local
-player). Detection requires the client to observe a dead player: removal without a
-death state does not manufacture a kill. The local player's real death is excluded.
-The corpse's skin and slim/wide model are captured, including skin outer layers;
-armor, equipment and capes are not part of this cosmetic snapshot. The original
-corpse is suppressed only for captured deaths; no entity is removed or teleported,
-and no packets or combat logic are changed.
+The death latch survives stale remote health and rejects duplicate tick/status
+notifications. Removal/unload clears only corpse suppression, not the independent
+animation; respawning entities may trigger the effect again, even with reused IDs.
+Health/death-time polling remains a fallback. Nearby confirmed player deaths trigger
+these local cosmetics regardless of which player was credited with the kill. The
+local player's real death is excluded. If a custom server sends neither a death
+status nor a dead state, ordinary removal is not falsely classified as a kill.
 
-Effects are local, depth-tested, deterministic and independent of FPS. They are
-limited to eight simultaneous snapshots and 48 blocks. World changes, disconnects,
-respawns and disabling the module clear death latches. Animation data does not hold
-entity references after their removal.
+## Cinematics
+
+- **Демоническая сила:** skin snapshot lifts with outstretched arms, then plunges
+  into an asymmetric crimson/charcoal stain with burgundy and violet molten veins.
+  There is no circular red rim, black disk or copied reference shape. The hand is
+  placed on the observer-facing edge, with an articulated elbow, forearm, broad
+  palm, thumb and four curled finger sections. The visible grab is held until
+  2.85 seconds, then slips down; the stain contracts after 3.65 seconds. Total
+  duration is 4.6 seconds at speed 1. Ground-plane clipping hides the body without
+  changing blocks.
+- **Вихрь:** three overlapping helical dust clouds, moving light/dark bands and
+  orbiting particles descend over the skin snapshot. The body fades only after
+  the dust covers it, then the cloud expands, breaks up and disperses. No opaque
+  cone mesh or hard-edged shell.
+
+Skin and slim/wide model are captured, including outer skin layers; armor, held
+items and capes are not included. No entity is removed/teleported by this module,
+no packets are rewritten/cancelled/sent, and combat logic is unchanged.
+
+Effects are world-depth tested, deterministic, independent of FPS, limited to eight
+simultaneous snapshots and 48 blocks. Disconnects/world changes/disable clear state;
+snapshots do not retain entity references.
 
 ## Assets and checks
 
-`atlas.png.b64` is a lossless original 512×512 RGBA PNG, text-encoded for binary-safe
-GitHub MCP commits. It contains four 256×256 tiles: molten aperture/engraved sigil,
-fractal dust, ember and soft glow. It is decoded once into a GPU texture. This is a
-shipped texture asset, not a runtime procedural substitute. Missing/corrupt assets
-are logged and vanilla corpses remain visible. Regenerate with:
+`atlas.png.b64` is an original 512×512 RGBA PNG stored losslessly as text for
+binary-safe GitHub MCP commits. Four tiles: irregular demonic stain, fractal dust,
+ember, soft glow. It is decoded once into a GPU texture. Missing/corrupt assets are
+logged and vanilla corpses remain visible. Regenerate with:
 
 ```sh
 python scripts/generate_killeffect_atlas.py  # Python + Pillow + NumPy
 cd RainyDLC
-./gradlew compileClientJava vfxRegression vfxGeometryRegression
+./gradlew compileClientJava vfxRegression vfxGeometryRegression blackHoleBufferRegression
 ```
 
-The regression covers forward CPU rays for both clip ranges and both Z conventions,
-reproduces the old reversed-Z failure, checks GPU ray sites, and samples all timeline
-phases for bounded/finite output. It does not replace in-game visual verification.
+- `vfxRegression`: both clip ranges/Z conventions, GPU ray sites, complete animation
+  timelines and packet-confirmed death latch/reused-ID behavior.
+- `vfxGeometryRegression`: actual deferred callbacks, finite vertices, complete
+  quads, corpse clipping and six offline geometry samples.
+- `blackHoleBufferRegression`: reproduces the old exception on the **real Minecraft
+  CommandEncoder**, then verifies both fixed buffer sizes reach the backend.
+
+Optional actual OpenGL shader rendering on headless Linux:
+
+```sh
+python -m pip install moderngl numpy pillow
+python scripts/check_blackhole_gl.py
+```
+
+This compiles and draws all four shipped GLSL stages with an EGL driver and checks
+that an accretion image is produced. CPU tests, offline previews and a real-driver
+shader render do not replace a Minecraft/server play-test.
 
 For the final distributable, follow `AGENTS.md` and run `./build-client.ps1` on
 Windows with JDK 25, Visual Studio 2026 and its CMake tools. A Gradle compile-only
-check is not a `LegitBuilder.jar` release build.
+check is not a `LegitBuilder.jar` release build. Source changes require rebuilding
+the client; restarting with an old JAR will not load these fixes.

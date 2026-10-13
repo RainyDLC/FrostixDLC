@@ -336,14 +336,13 @@ public final class AmbienceSky {
 
     // ------------------------------------------------------------ render
 
-    public static void render(RenderTarget target) {
+    public static boolean render(RenderTarget target) {
         int mode = Ambience.mode();
         updatePostKey();
         request(mode);
 
         if (mode == SkyGen.MODE_BLACK_HOLE) {
-            BlackHoleRenderer.render(target);
-            return;
+            return BlackHoleRenderer.render(target);
         }
 
         long now = System.nanoTime();
@@ -365,7 +364,7 @@ public final class AmbienceSky {
             renderShader(target, view, bright, repeat, clamp);
             draw(target, RenderPipelines.END_SKY, view, new Vector4f(fogR, fogG, fogB, 1.0f), whiteTex, clamp,
                     horizon, horizonQuads);
-            return;
+            return true;
         }
 
         // 1. Опорный фон.
@@ -405,6 +404,7 @@ public final class AmbienceSky {
 
         // 5. Дымка у горизонта под цвет тумана — мягкий стык с ландшафтом.
         draw(target, RenderPipelines.END_SKY, view, new Vector4f(fogR, fogG, fogB, 1.0f), whiteTex, clamp, horizon, horizonQuads);
+        return true;
     }
 
     private static void draw(RenderTarget target, RenderPipeline pipeline, Matrix4f modelView, Vector4f color,

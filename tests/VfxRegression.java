@@ -34,17 +34,29 @@ public final class VfxRegression {
         check(KillEffectTimeline.demon(.85).bodyY()>.69,"ascension");
         check(KillEffectTimeline.demon(1.28).bodyY()<-1.9,"plunge");
         check(KillEffectTimeline.demon(1.5).grip()==1,"rim grip");
-        check(KillEffectTimeline.demon(2.25).slip()>0,"hand slip");
-        check(KillEffectTimeline.demon(3.4).pitScale()==0,"pit closes");
+        check(KillEffectTimeline.demon(3.15).slip()>0,"hand slip");
+        check(KillEffectTimeline.demon(4.6).pitScale()==0,"pit closes");
         check(KillEffectTimeline.vortex(.8).bodyAlpha()==1,"body visible on approach");
         check(KillEffectTimeline.vortex(1.15).dustY()==0,"dust covers first");
         check(KillEffectTimeline.vortex(1.6).bodyAlpha()==0,"body disappears inside dust");
         check(KillEffectTimeline.vortex(3).dustAlpha()==0,"dust dissipates");
-        for(int i=0;i<800;i++) for(var p:new KillEffectTimeline.Pose[]{KillEffectTimeline.demon(i*.005),KillEffectTimeline.vortex(i*.005)}) {
+        for(int i=0;i<1200;i++) for(var p:new KillEffectTimeline.Pose[]{KillEffectTimeline.demon(i*.005),KillEffectTimeline.vortex(i*.005)}) {
             check(Double.isFinite(p.bodyY())&&Double.isFinite(p.dustY()),"finite positions");
             check(p.bodyAlpha()>=0&&p.bodyAlpha()<=1&&p.dustAlpha()>=0&&p.dustAlpha()<=1,"bounded opacity");
             check(p.pitScale()>=0&&p.pitScale()<=1,"bounded pit size");
         }
+        KillEffectDeathLatch deaths=new KillEffectDeathLatch();
+        java.util.UUID uuid=new java.util.UUID(0,17);
+        check(deaths.mark(45,uuid),"packet death with stale health=20 is captured");
+        deaths.retain(java.util.Set.of(45));
+        check(deaths.contains(45),"live-list polling must retain packet-confirmed corpse");
+        check(!deaths.mark(45,uuid),"tick/status duplicate is not played twice");
+        deaths.remove(45);
+        check(!deaths.contains(45),"removal restores entity ID for respawn");
+        check(deaths.mark(45,uuid),"same UUID and ID can die again after respawn");
+        deaths.retain(java.util.Set.of());
+        check(!deaths.contains(45),"unload clears stale latch");
+        deaths.clear();
         System.out.println("VFX: "+checks+" checks passed; reversed-Z failure reproduced and corrected");
     }
     private static void check(boolean ok,String name) { checks++;if(!ok)throw new AssertionError(name); }

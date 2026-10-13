@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Original RainyDLC VFX atlas, CC0. Reproducible RGBA PNG; no third-party art.
-Four 256px tiles: aperture/sigil, turbulent dust, ember, soft rim glow.
+Four 256px tiles: irregular demonic stain, turbulent dust, ember, soft rim glow.
 PNG is stored as base64 so the text-only GitHub MCP can commit it losslessly.
 """
 from pathlib import Path
@@ -19,20 +19,27 @@ for size,weight in [(4,.45),(8,.25),(16,.16),(32,.09),(64,.05)]:
 
 def rgba(red,green,blue,alpha):
     return Image.fromarray(np.stack([np.broadcast_to(red,(N,N)),np.broadcast_to(green,(N,N)),np.broadcast_to(blue,(N,N)),alpha],-1).clip(0,255).astype('uint8'))
-# An opaque void with a molten, fissured stone rim. The surrounding runes are geometrical,
-# not generated pseudo-text. Transparent outside the halo.
-inner=1/(1+np.exp((r-.665)*110));rim=np.exp(-((r-.72)/.045)**2)
-cracks=(np.sin(angle*17+r*39+noise*12)*.5+.5)**9
-heat=rim*(.4+.6*cracks)
-sigil=rgba(6+heat*246,2+heat*42,5+heat*13,np.maximum(inner*.99,rim*.94)*255)
-d=ImageDraw.Draw(sigil)
-# Double engraved rings and evenly spaced spear sigils.
-for radius,width,color in [(104,1,(191,36,22,175)),(111,1,(126,20,21,140))]:
-    d.ellipse((128-radius,128-radius,128+radius,128+radius),outline=color,width=width)
-for i in range(12):
-    a=i*np.pi/6
-    def point(rad,offset=0):return (128+rad*np.cos(a+offset),128+rad*np.sin(a+offset))
-    d.line([point(95),point(108),point(100,.045),point(108),point(100,-.045)],fill=(247,72,32,220),width=2)
+# Asymmetric, ragged scorched stain — not a round portal, ring, or copied reference.
+# Block-scale variation fits Minecraft, while fine veins suggest molten depth.
+warpx=x+.10*np.sin(y*8)+.08*(noise-.5)
+warpy=y+.06*np.sin(x*11)-.10*(noise-.5)
+rr=np.sqrt(((warpx+.06)/.83)**2+((warpy+.025)/.76)**2)
+ang=np.arctan2(warpy,warpx)
+boundary=.84+.15*np.sin(ang*3+.6)+.085*np.sin(ang*7+1.9)+.07*np.sin(ang*11)+.30*(noise-.5)
+mask=np.clip((boundary-rr)/.075,0,1)
+# A few separated splash tongues and scorched islands, distributed unevenly.
+for px,py,sx,sy in [(-.70,.38,.13,.16),(.66,-.34,.17,.10),(.39,.69,.11,.12),(-.44,-.64,.15,.11)]:
+    island=np.exp(-(((x-px)/sx)**2+((y-py)/sy)**2))
+    mask=np.maximum(mask,np.clip((island-.32)/.30,0,1))
+veins=(1-np.abs(np.sin(x*16+y*10+noise*23)))**8
+lava=np.clip((noise-.28)*1.8,0,1)
+purple=np.clip((np.sin(x*6-y*9+noise*11)+.1)*.5,0,1)
+red=12+lava*86+veins*121+purple*19
+green=3+lava*9+veins*21+purple*3
+blue=10+lava*16+veins*22+purple*57
+stain=rgba(red,green,blue,mask*255)
+# Preserve ragged pixel-scale edges without turning the patch into a geometrical decal.
+stain=stain.resize((128,128),Image.Resampling.BOX).resize((N,N),Image.Resampling.NEAREST)
 # Feathered fractal dust clouds; alpha removes rectangular billboard boundaries.
 curl=np.sin(angle*4+r*18+noise*12)*.5+.5
 edge=np.clip(1-r*r,0,1)**1.25
@@ -45,7 +52,7 @@ ember=rgba(255,80+core*168,18+core*196,np.maximum(core,halo*.55)*255)
 # White glow carries vertex-tinted ember rings without introducing opaque edges.
 glow=np.exp(-r*r*9);glow[r>.96]=0
 glow=rgba(255,255,255,glow*255)
-atlas=Image.new('RGBA',(512,512));atlas.paste(sigil,(0,0));atlas.paste(dust,(256,0));atlas.paste(ember,(0,256));atlas.paste(glow,(256,256))
+atlas=Image.new('RGBA',(512,512));atlas.paste(stain,(0,0));atlas.paste(dust,(256,0));atlas.paste(ember,(0,256));atlas.paste(glow,(256,256))
 data=io.BytesIO();atlas.save(data,format='PNG',optimize=True)
 path=ROOT/'RainyDLC/src/client/resources/assets/hatek_client/textures/killeffect/atlas.png.b64'
 path.parent.mkdir(parents=True,exist_ok=True);path.write_text(base64.encodebytes(data.getvalue()).decode('ascii'))

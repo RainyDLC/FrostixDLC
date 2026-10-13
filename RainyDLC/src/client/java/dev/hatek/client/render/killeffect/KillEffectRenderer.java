@@ -27,10 +27,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -42,13 +40,12 @@ public final class KillEffectRenderer {
     private static final Identifier ATLAS = Identifier.fromNamespaceAndPath("hatek_client", "killeffect/atlas");
     private static final List<Effect> EFFECTS = new ArrayList<>();
     // A death latch survives animation expiry, but not respawn/removal/world changes.
-    private static final Map<UUID, Integer> DEATHS = new HashMap<>();
-    private static final Set<Integer> HIDDEN = new HashSet<>();
+    private static final KillEffectDeathLatch DEATHS = new KillEffectDeathLatch();
     private static ClientLevel lastLevel;
     private static boolean atlasReady;
     private static boolean atlasFailed;
 
-    private record Effect(UUID uuid, Vec3 position, float yaw, PlayerSkin skin, long born,
+    private record Effect(UUID uuid, Vec3 position, float yaw, float gripYaw, PlayerSkin skin, long born,
                           double speed, double size, boolean vortex, double initialHeight) {
         double age(long now) { return Math.max(0, (now - born) / 1e9 * speed); }
         double duration() { return vortex ? KillEffectTimeline.VORTEX_SECONDS : KillEffectTimeline.DEMON_SECONDS; }
@@ -62,9 +59,9 @@ public final class KillEffectRenderer {
     private KillEffectRenderer() { }
 
     public static void clear() {
-        EFFECTS.clear(); DEATHS.clear(); HIDDEN.clear(); lastLevel = null;
+        EFFECTS.clear(); DEATHS.clear(); lastLevel = null;
     }
-    public static boolean hides(int id) { return !atlasFailed && HIDDEN.contains(id); }
+    public static boolean hides(int id) { return !atlasFailed && DEATHS.contains(id); }
 
     public static void tick(boolean vortex, double speed, double size) {
         Minecraft mc = Minecraft.getInstance();
@@ -72,23 +69,29 @@ public final class KillEffectRenderer {
         if (lastLevel != mc.level) { clear(); lastLevel = mc.level; }
         long now = System.nanoTime();
         EFFECTS.removeIf(e -> e.age(now) >= e.duration());
-        Set<UUID> deadHere = new HashSet<>();
-        HIDDEN.clear();
+        Set<Integer> loaded = new HashSet<>();
         for (AbstractClientPlayer player : mc.level.players()) {
-            if (player == mc.player || !player.isDeadOrDying()) continue;
-            UUID uuid = player.getUUID();
-            deadHere.add(uuid);
-            // IDs can change on respawn even when the account UUID does not.
-            Integer old = DEATHS.get(uuid);
-            if (old == null || old != player.getId()) {
-                if (player.distanceToSqr(mc.player) > RANGE_SQUARED) continue;
-                add(capture(player, vortex, speed, size, now));
-                DEATHS.put(uuid, player.getId());
+            loaded.add(player.getId());
+            // Health polling is only a fallback. Status 3 is the authoritative remote death event.
+            if (player != mc.player && (player.isDeadOrDying() || player.deathTime > 0)) {
+                onDeath(player, vortex, speed, size);
             }
-            HIDDEN.add(player.getId());
         }
-        DEATHS.keySet().retainAll(deadHere);
+        DEATHS.retain(loaded);
     }
+
+    public static void onDeath(AbstractClientPlayer player, boolean vortex, double speed, double size) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null || player == mc.player || player.level() != mc.level
+                || player.distanceToSqr(mc.player) > RANGE_SQUARED) return;
+        if (lastLevel != mc.level) { clear(); lastLevel = mc.level; }
+        if (DEATHS.mark(player.getId(), player.getUUID())) {
+            add(capture(player, vortex, speed, size, System.nanoTime()));
+        }
+    }
+
+    /** Removal/respawn clears suppression, never the independent cinematic snapshot. */
+    public static void removed(int entityId) { DEATHS.remove(entityId); }
 
     private static Effect capture(AbstractClientPlayer player, boolean vortex, double speed,
                                   double size, long now) {
@@ -96,8 +99,13 @@ public final class KillEffectRenderer {
         HitResult ground = player.level().clip(new ClipContext(feet.add(0, 0.25, 0), feet.add(0, -8, 0),
                 ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
         Vec3 origin = ground.getType() == HitResult.Type.MISS ? feet : ground.getLocation();
-        return new Effect(player.getUUID(), origin, player.getYRot(), player.getSkin(), now,
+        return new Effect(player.getUUID(), origin, player.getYRot(), gripFacing(origin), player.getSkin(), now,
                 speed, size, vortex, Math.max(0, feet.y - origin.y));
+    }
+    private static float gripFacing(Vec3 origin) {
+        // The grabbing hand is on the observer-facing edge, frozen at capture time.
+        Vec3 observer = Minecraft.getInstance().gameRenderer.mainCamera().position();
+        return (float) Math.atan2(observer.z-origin.z, -(observer.x-origin.x));
     }
     private static void add(Effect effect) {
         if (EFFECTS.size() >= MAX_EFFECTS) EFFECTS.removeFirst();
@@ -113,7 +121,7 @@ public final class KillEffectRenderer {
         HitResult ground = mc.level.clip(new ClipContext(point.add(0, 2, 0), point.add(0, -8, 0),
                 ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, mc.player));
         if (ground.getType() != HitResult.Type.MISS) point = ground.getLocation();
-        add(new Effect(src.uuid, point, src.yaw, src.skin, src.born, speed, size, vortex, 0));
+        add(new Effect(src.uuid, point, src.yaw, gripFacing(point), src.skin, src.born, speed, size, vortex, 0));
     }
 
     private static boolean ensureAtlas() {
@@ -151,7 +159,8 @@ public final class KillEffectRenderer {
             KillEffectTimeline.Pose frame = effect.vortex ? KillEffectTimeline.vortex(t) : KillEffectTimeline.demon(t);
             stack.pushPose();
             stack.translate(effect.position.x-camera.x, effect.position.y-camera.y, effect.position.z-camera.z);
-            stack.mulPose(new org.joml.Quaternionf().rotationY((float) Math.toRadians(180-effect.yaw)));
+            stack.mulPose(new org.joml.Quaternionf().rotationY(effect.vortex
+                    ? (float) Math.toRadians(180-effect.yaw) : effect.gripYaw));
             // Callbacks capture immutable samples; no game/entity access from deferred rendering.
             ordered.submitCustomGeometry(stack, RenderTypes.entityTranslucentEmissive(effect.skin.body().texturePath()),
                     (pose, out) -> body(pose, out, effect, frame, t));
@@ -169,7 +178,9 @@ public final class KillEffectRenderer {
         if (alpha <= 0.005f) return;
         float fall = (float) KillEffectTimeline.smooth(0.94, 1.28, t);
         float bodyY = (float) (f.bodyY() + e.initialHeight * (e.vortex ? 1 : 1-fall));
-        Matrix4f root = new Matrix4f().translate(0, bodyY, 0);
+        float relativeYaw = (float) Math.atan2(Math.sin(Math.toRadians(180-e.yaw)-e.gripYaw),
+                Math.cos(Math.toRadians(180-e.yaw)-e.gripYaw));
+        Matrix4f root = new Matrix4f().rotateY(e.vortex ? 0 : relativeYaw*(1-fall)).translate(0, bodyY, 0);
         float minY = e.vortex || t < 0.94 ? -100 : 0.035f;
         int color = ((int)(alpha*255) << 24) | 0xFFFFFF;
         boolean slim = e.skin.model() == PlayerModelType.SLIM;
@@ -183,28 +194,53 @@ public final class KillEffectRenderer {
         for (int side : new int[]{-1,1}) {
             float spread = (float) f.armSpread();
             float grip = (float) f.grip();
-            Matrix4f arm;
-            if (!e.vortex && side == -1 && grip > 0) {
-                // Shoulder -> rim reach. At the hang phase only the wrist is above the clip plane;
-                // then it visibly slides inward/down before the portal contracts.
-                float handX = (float) (-e.size * (.86-.42*f.slip()));
-                float handY = (float) (.17-.65*f.slip());
-                float shoulderX = -.28f, shoulderY = bodyY+1.45f;
-                float dx = handX-shoulderX, dy = handY-shoulderY;
-                float angle = (float)Math.atan2(dx,-dy);
-                float length = (float)Math.sqrt(dx*dx+dy*dy);
-                arm = new Matrix4f().translate(shoulderX,shoulderY,0).rotateZ(angle).scale(1,length/.75f,1);
+            if (!e.vortex && side == -1 && grip > .98f) {
+                grippingArm(pose, out, e, f, bodyY, aw, slim, minY, color);
             } else {
-                arm = new Matrix4f(root).translate(side*(.25f+aw/2),1.45f,0)
+                Matrix4f arm = new Matrix4f(root).translate(side*(.25f+aw/2),1.45f,0)
                         .rotateZ(side*spread*2.12f).rotateX(e.vortex ? .06f : -.18f*spread);
+                int u = side == -1 ? 40 : 32, v = side == -1 ? 16 : 48;
+                part(pose,out,arm,-aw/2,-.75f,-.125f,aw,.75f,.25f,u,v,slim?3:4,12,4,0,minY,color);
+                part(pose,out,arm,-aw/2,-.75f,-.125f,aw,.75f,.25f,side==-1?40:48,side==-1?32:48,slim?3:4,12,4,.006f,minY,color);
             }
-            int u = side == -1 ? 40 : 32, v = side == -1 ? 16 : 48;
-            part(pose,out,arm,-aw/2,-.75f,-.125f,aw,.75f,.25f,u,v,slim?3:4,12,4,0,minY,color);
-            part(pose,out,arm,-aw/2,-.75f,-.125f,aw,.75f,.25f,side==-1?40:48,side==-1?32:48,slim?3:4,12,4,.006f,minY,color);
             Matrix4f leg = new Matrix4f(root).translate(side*.125f,.75f,0).rotateZ(side*spread*.10f);
             part(pose,out,leg,-.125f,-.75f,-.125f,.25f,.75f,.25f,side==-1?0:16,side==-1?16:48,4,12,4,0,minY,color);
             part(pose,out,leg,-.125f,-.75f,-.125f,.25f,.75f,.25f,0,side==-1?32:48,4,12,4,.006f,minY,color);
         }
+    }
+
+    private static void grippingArm(PoseStack.Pose pose, VertexConsumer out, Effect e,
+                                    KillEffectTimeline.Pose f, float bodyY, float aw,
+                                    boolean slim, float minY, int color) {
+        float slip=(float)f.slip(),x=(float)(-e.size*.82 + slip*e.size*.42);
+        float wristY=.37f-slip*.90f;
+        Vector3f shoulder=new Vector3f(-.28f,bodyY+1.45f,0);
+        Vector3f elbow=new Vector3f(x+.23f,.055f-slip*.55f,.035f);
+        Vector3f wrist=new Vector3f(x,wristY,0);
+        limb(pose,out,shoulder,elbow,aw,40,16,slim,minY,color);
+        limb(pose,out,elbow,wrist,aw*1.06f,40,22,slim,minY,color);
+        // A broad palm rests across the uneven edge. Four finger sections curl over it.
+        Matrix4f palm=new Matrix4f().translate(x,wristY-.09f,0).rotateZ(-.20f-slip*.65f);
+        part(pose,out,palm,-.15f,-.08f,-.15f,.30f,.13f,.30f,40,25,4,3,4,0,minY,color);
+        for(int finger=0;finger<4;finger++) {
+            float z=-.115f+finger*.077f;
+            Matrix4f curl=new Matrix4f(palm).translate(.10f,-.025f,z).rotateZ(-.43f-slip*.8f);
+            part(pose,out,curl,0,-.055f,-.030f,.15f,.065f,.058f,44,25,2,3,1,0,minY,color);
+            Matrix4f tip=new Matrix4f(curl).translate(.12f,-.012f,0).rotateZ(-.72f);
+            part(pose,out,tip,0,-.04f,-.03f,.078f,.05f,.058f,44,26,2,2,1,0,minY,color);
+        }
+        Matrix4f thumb=new Matrix4f(palm).translate(-.02f,-.02f,-.14f).rotateY(.65f);
+        part(pose,out,thumb,-.02f,-.06f,-.075f,.08f,.08f,.15f,44,25,2,3,1,0,minY,color);
+    }
+    private static void limb(PoseStack.Pose pose,VertexConsumer out,Vector3f start,Vector3f end,
+                             float width,int u,int v,boolean slim,float minY,int color) {
+        Vector3f delta=new Vector3f(end).sub(start);float length=delta.length();
+        if(length<.001f)return;
+        Matrix4f matrix=new Matrix4f().translate(start)
+                .rotate(new org.joml.Quaternionf().rotationTo(new Vector3f(0,-1,0),delta.div(length)))
+                .scale(1,length/.375f,1);
+        part(pose,out,matrix,-width/2,-.375f,-.125f,width,.375f,.25f,u,v,slim?3:4,6,4,0,minY,color);
+        part(pose,out,matrix,-width/2,-.375f,-.125f,width,.375f,.25f,u,v+16,slim?3:4,6,4,.006f,minY,color);
     }
 
     private static void part(PoseStack.Pose pose, VertexConsumer out, Matrix4f m,
@@ -241,32 +277,26 @@ public final class KillEffectRenderer {
     private static void demon(PoseStack.Pose pose, VertexConsumer out, Effect e, KillEffectTimeline.Pose f, double t) {
         double radius=1.24*e.size*f.pitScale();
         if(radius<.005) return;
-        // The black aperture and engraved rim are an authored RGBA sigil texture.
-        ground(pose,out,0,0,.025f,(float)radius,0,0xFFFFFFFF,(float)(t*.18));
-        double glow=f.pitScale()*(.72+.18*Math.sin(t*12));
-        for(int i=0;i<56;i++) {
-            double a=i*Math.PI*2/56+t*.4, b=(i+1)*Math.PI*2/56+t*.4;
-            float r=(float)radius*.72f,r2=r*1.045f;
-            atlasQuad(pose,out,3,
-                    new float[]{(float)Math.cos(a)*r,.041f,(float)Math.sin(a)*r,
-                            (float)Math.cos(b)*r,.041f,(float)Math.sin(b)*r,
-                            (float)Math.cos(b)*r2,.041f,(float)Math.sin(b)*r2,
-                            (float)Math.cos(a)*r2,.041f,(float)Math.sin(a)*r2},argb(glow,.98,.14,.05));
-        }
+        // Organic crimson/charcoal stain: no circular aperture or glowing annulus.
+        // Keep its silhouette still so the hand remains planted on the same edge.
+        ground(pose,out,0,0,.025f,(float)radius,0,0xFFFFFFFF,0);
+        ground(pose,out,(float)(.018*Math.sin(t*1.9)),(float)(.018*Math.cos(t*1.4)),.027f,
+                (float)(radius*.985),0,argb(.12+.07*Math.sin(t*3),.75,.10,.55),0);
         // Seeded curved ember paths: no per-frame RNG or frame-rate-dependent integration.
         int seed=e.uuid.hashCode();
         for(int i=0;i<42;i++) {
             double phase=fract(t*.65+i*.618+seed*.000001),a=i*2.399+t*1.9;
-            double r=radius*(.75+.28*noise(i,seed));
+            double r=radius*(.30+.73*noise(i,seed));
             float x=(float)(Math.cos(a)*r),z=(float)(Math.sin(a)*r),y=(float)(.08+phase*1.6);
             float sz=(float)(.028+.025*noise(i+87,seed));
             cross(pose,out,x,y,z,sz,2,argb(Math.sin(phase*Math.PI)*f.pitScale(),1,.28,.08));
         }
-        // A low smoky perimeter masks the aperture edge without hiding the hand's final slip.
+        // Irregular wisps emerge from the stain, never forming a circular border.
         for(int i=0;i<12;i++) {
-            double a=i*Math.PI*2/12+t*.75;
-            cross(pose,out,(float)(Math.cos(a)*radius),(float)(.10+.05*Math.sin(a*3+t)),
-                    (float)(Math.sin(a)*radius),.22f,3,argb(.3*f.pitScale(),.38,.08,.06));
+            double a=i*2.399+t*.25;
+            double rim=radius*(.45+.42*noise(i+397,seed));
+            cross(pose,out,(float)(Math.cos(a)*rim),(float)(.10+.05*Math.sin(a*3+t)),
+                    (float)(Math.sin(a)*rim),.22f,3,argb(.3*f.pitScale(),.38,.08,.06));
         }
     }
 
@@ -292,7 +322,8 @@ public final class KillEffectRenderer {
                 double grain=.68+.32*noise(n+107,seed);
                 double top=1-KillEffectTimeline.smooth(.82,1,h);
                 double alpha=fade*grain*.64*top*(1-dissolve*.4);
-                cross(pose,out,px,py,pz,puff,1,argb(alpha,.92-.12*h,.80-.12*h,.63-.10*h));
+                double shade=.72+.28*Math.sin(a*2-height*2.4+t*7);
+                cross(pose,out,px,py,pz,puff,1,argb(alpha,(.92-.12*h)*shade,(.80-.12*h)*shade,(.63-.10*h)*shade));
             }
         }
         for(int i=0;i<70;i++) {

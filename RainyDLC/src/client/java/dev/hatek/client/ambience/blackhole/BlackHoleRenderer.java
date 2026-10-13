@@ -38,6 +38,7 @@ import java.util.OptionalDouble;
 import java.util.Random;
 
 public final class BlackHoleRenderer {
+    static final int WRITABLE_UNIFORM_USAGE = GpuBuffer.USAGE_UNIFORM | GpuBuffer.USAGE_COPY_DST;
     private static final int UNIFORM_SIZE = 224;
     private static final int BLOOM_LEVELS = 6;
     private static final int BLOOM_UNIFORM_SIZE = 16;
@@ -107,12 +108,12 @@ public final class BlackHoleRenderer {
     private BlackHoleRenderer() {
     }
 
-    public static void render(RenderTarget renderTarget) {
+    public static boolean render(RenderTarget renderTarget) {
         if (disabledAfterError || renderTarget == null
                 || renderTarget.getColorTexture() == null
                 || renderTarget.getColorTextureView() == null
                 || renderTarget.width <= 0 || renderTarget.height <= 0) {
-            return;
+            return false;
         }
 
         ClientLevel level = Minecraft.getInstance().level;
@@ -128,7 +129,7 @@ public final class BlackHoleRenderer {
                 || noiseTextureView == null
                 || !ensureTargets(renderTarget.width, renderTarget.height)
                 || marchHalfTextureView == null) {
-            return;
+            return false;
         }
 
         int write = frameIndex & 1;
@@ -250,12 +251,14 @@ public final class BlackHoleRenderer {
             }
             frameIndex = (frameIndex + 1) & 0x3FFFFFFF;
             taaSequence = (taaSequence + 0.618034f) % 1.0f;
+            return true;
         } catch (Throwable t) {
             org.slf4j.LoggerFactory.getLogger("RainyDLC-BlackHole").error("BlackHoleRenderer.render failed", t);
             disabledAfterError = true;
             closeTargets();
             closeUniform();
             closeBloomUniform();
+            return false;
         }
     }
 
@@ -392,13 +395,13 @@ public final class BlackHoleRenderer {
             if (bloomUniformBuffer == null || bloomUniformBuffer.isClosed() || bloomUniformBuffer.size() < BLOOM_UNIFORM_SIZE) {
                 closeBloomUniform();
                 bloomUniformBuffer = device.createBuffer(() -> "RainyDLC blackhole bloom uniform",
-                        GpuBuffer.USAGE_UNIFORM, (long) BLOOM_UNIFORM_SIZE);
+                        WRITABLE_UNIFORM_USAGE, (long) BLOOM_UNIFORM_SIZE);
             }
 
             if (uniformBuffer == null || uniformBuffer.isClosed() || uniformBuffer.size() < UNIFORM_SIZE) {
                 closeUniform();
                 uniformBuffer = device.createBuffer(() -> "RainyDLC blackhole uniform",
-                        GpuBuffer.USAGE_UNIFORM, (long) UNIFORM_SIZE);
+                        WRITABLE_UNIFORM_USAGE, (long) UNIFORM_SIZE);
             }
 
             ensureNoiseTexture();
@@ -491,7 +494,7 @@ public final class BlackHoleRenderer {
                 int r = red[y * NOISE_SIZE + x];
                 int g = red[sy * NOISE_SIZE + sx];
                 int b = blue[y * NOISE_SIZE + x];
-                image.setPixel(x, y, 0xFF000000 | (b << 16) | (g << 8) | r);
+                image.setPixel(x, y, 0xFF000000 | (r << 16) | (g << 8) | b);
             }
         }
         noiseTexture = device.createTexture(() -> "RainyDLC blackhole noise",

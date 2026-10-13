@@ -2,7 +2,7 @@ package dev.hatek.client.render.killeffect;
 
 /** Immutable, wall-clock animation samples; independent of FPS and Minecraft entity lifetime. */
 public final class KillEffectTimeline {
-    public static final double DEMON_SECONDS = 3.4;
+    public static final double DEMON_SECONDS = 4.6;
     public static final double VORTEX_SECONDS = 3.0;
     private KillEffectTimeline() { }
 
@@ -18,9 +18,9 @@ public final class KillEffectTimeline {
         double lift = smooth(0.0, 0.85, seconds);
         double fall = smooth(0.94, 1.28, seconds);
         double grip = smooth(1.12, 1.30, seconds);
-        double slip = smooth(2.05, 2.48, seconds);
+        double slip = smooth(2.85, 3.55, seconds);
         double y = 0.7 * lift - 2.65 * fall - 0.8 * slip;
-        double pit = smooth(0.1, 0.72, seconds) * (1.0 - smooth(2.55, DEMON_SECONDS, seconds));
+        double pit = smooth(0.1, 0.72, seconds) * (1.0 - smooth(3.65, DEMON_SECONDS, seconds));
         return new Pose(y, lift * (1.0 - grip), pit, grip, slip, 0, 0, 1);
     }
 

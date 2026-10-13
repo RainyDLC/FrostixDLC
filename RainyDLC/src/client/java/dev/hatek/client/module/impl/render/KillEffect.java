@@ -6,6 +6,7 @@ import dev.hatek.client.module.setting.ButtonSetting;
 import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.render.killeffect.KillEffectRenderer;
+import net.minecraft.client.player.AbstractClientPlayer;
 
 /** Local, cosmetic death cinematics. No attack, movement or network modifications. */
 public final class KillEffect extends Module {
@@ -19,6 +20,11 @@ public final class KillEffect extends Module {
         with(mode, speed, radius, new ButtonSetting("Preview", "Play effect", this::preview));
     }
     public static boolean active() { return instance != null && instance.isEnabled(); }
+    public static void death(AbstractClientPlayer player) {
+        if (!active()) return;
+        KillEffect m = instance;
+        KillEffectRenderer.onDeath(player, m.mode.value().equals("Вихрь"), m.speed.value(), m.radius.value());
+    }
     public static boolean hides(int id) { return active() && KillEffectRenderer.hides(id); }
     @Override public void onClientTick() {
         KillEffectRenderer.tick(mode.value().equals("Вихрь"), speed.value(), radius.value());

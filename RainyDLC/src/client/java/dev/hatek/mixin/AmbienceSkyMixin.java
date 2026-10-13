@@ -29,8 +29,7 @@ public abstract class AmbienceSkyMixin {
 
     @Inject(method = "renderSkyDisc", at = @At("HEAD"), cancellable = true)
     private void hatek$ambienceSky(int skyColor, CallbackInfo ci) {
-        if (Ambience.active()) {
-            AmbienceSky.render(this.renderTarget);
+        if (Ambience.active() && AmbienceSky.render(this.renderTarget)) {
             ci.cancel();
         }
     }
