@@ -27,7 +27,7 @@ import java.util.Set;
  */
 public final class AttackPlanner {
     /** Причины отказа, которые являются таймингами (а не геометрией). */
-    private static final Set<String> TIMING_REASONS = Set.of("lag", "iframes", "cooldown", "pace", "charge", "moment");
+    private static final Set<String> TIMING_REASONS = Set.of("cooldown", "pace", "charge", "moment");
 
     /** Сколько тиков подряд геометрия может рваться, прежде чем план сгорит. */
     private static final int GRACE_TICKS = 3;
@@ -46,6 +46,11 @@ public final class AttackPlanner {
     private static boolean planCrit;
     /** Сколько тиков уже дополнительно ждём крит сверх плана. */
     private static int critExtra;
+    /**
+     * План только на задержку человеческой реакции (все гейты уже были зелёные).
+     * Если ситуация изменилась (появился тайминговый гейт) — пересчитываем.
+     */
+    private static boolean planReaction;
 
     private AttackPlanner() {
         throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
@@ -58,6 +63,7 @@ public final class AttackPlanner {
         graceLeft = GRACE_TICKS;
         planCrit = false;
         critExtra = 0;
+        planReaction = false;
     }
 
     public static boolean hasPlan() {
@@ -81,8 +87,20 @@ public final class AttackPlanner {
         // «Возможность»: геометрия сошлась, мешают только тайминги.
         String reason = Attack.shouldAttackReason(target, true, true, true, 0L, ranges);
         if (reason == null) {
-            // Все гейты зелёные — обычный путь ударит сам, план не нужен.
-            cancel();
+            // Все гейты зелёные — удар ждёт только человеческой реакции.
+            // Без этого ML-модель античита видит удар ровно в тик готовности
+            // кулдауна каждый раз — классическая подпись бота.
+            if (planTarget == null) {
+                planTarget = target;
+                ticksLeft = reactionDelayTicks();
+                planCrit = false;
+                critExtra = 0;
+                planReaction = true;
+                graceLeft = GRACE_TICKS;
+                matured = ticksLeft <= 0;
+            } else if (!matured && --ticksLeft <= 0) {
+                matured = true;
+            }
             return;
         }
         if (!TIMING_REASONS.contains(reason)) {
@@ -93,34 +111,32 @@ public final class AttackPlanner {
         }
         graceLeft = GRACE_TICKS;
 
-        if (planTarget == null) {
+        if (planTarget == null || planReaction) {
+            // Реакционный план устарел — ситуация изменилась, считаем заново.
             planTarget = target;
             ticksLeft = computeDelayTicks();
+            planReaction = false;
             matured = ticksLeft <= 0;
-        } else {
-            if (AttackAura.extra(AttackAura.SMART_CRITS) && !mc.player.onGround() && !Attack.critImpossibleNow()) {
-                if (Attack.critStateReadyNow()) {
-                    planCrit = true;
-                    ticksLeft = 0;
-                    matured = true;
-                    return;
-                }
-                int crit = ticksUntilCrit();
-                if (crit > 0) {
-                    planCrit = true;
-                    critExtra = 0;
-                    ticksLeft = Math.max(ticksLeft, crit);
-                }
-            }
-            if (ticksLeft > 0) {
-                ticksLeft--;
-                if (ticksLeft <= 0) {
-                    matured = true;
-                }
-            } else {
+        } else if (ticksLeft > 0) {
+            ticksLeft--;
+            if (ticksLeft <= 0) {
                 matured = true;
             }
+        } else {
+            matured = true;
         }
+    }
+
+    /**
+     * Человеческая задержка реакции на готовый удар: экспоненциальное
+     * распределение, среднее ~1.8 тика (90 мс), максимум 6. Человек, кликающий
+     * в ритме кулдауна, не попадает ровно в тик готовности каждый раз —
+     * у него есть моторный разброс с тяжёлым хвостом.
+     */
+    private static int reactionDelayTicks() {
+        double u = java.util.concurrent.ThreadLocalRandom.current().nextDouble();
+        int d = (int) (-Math.log(1.0 - u) * 1.8);
+        return Math.min(d, 6);
     }
 
     /**
@@ -133,35 +149,22 @@ public final class AttackPlanner {
             return false;
         }
         Minecraft mc = Minecraft.getInstance();
-
-        // Строжайший запрет: в воздухе при смарт-критах бить ТОЛЬКО при critStateReadyNow!
-        // Никаких ударов на подъёме (vy >= 0) — это гарантированно не крит и сжигает кулдаун.
-        if (AttackAura.extra(AttackAura.SMART_CRITS) && mc.player != null && !mc.player.onGround()
-                && !Attack.critImpossibleNow() && !Attack.critStateReadyNow()) {
-            ticksLeft = 1;
-            matured = false;
-            return false;
-        }
-
-        // Ждали крит, но симуляция ошиблась на тик:
-        if (planCrit && critExtra < 8 && mc.player != null && !mc.player.onGround()
+        // Ждали крит, а симуляция ошиблась на тик-другой — подождём чуть-чуть,
+        // но не вечно (иначе удар зависнет в воздухе).
+        if (planCrit && critExtra < 10 && mc.player != null && !mc.player.onGround()
                 && !Attack.critStateReadyNow() && !Attack.critImpossibleNow()) {
-            critExtra++;
-            ticksLeft = 1;
+            critExtra += 2;
+            ticksLeft = 2;
             matured = false;
             return false;
         }
-
         // Строгая геометрия: форсированный удар обязан реально попадать лучом,
         // иначе получим замах с частицами, но без урона (ghost hit).
         if (!AuraUtil.validDistance(target, ranges[0], true)
-                || Attack.targetInvulnerableNow(target)
-                || Attack.lagBlockedNow()
                 || !Attack.chargeReached()
                 || !Attack.anyEntityOnRayStrict(target, ranges[0])
                 || Attack.holdingMaceSmash()) {
-            int push = (mc.player != null && !mc.player.onGround()) ? 1 : 1 + AuraRandom.range(0, 2);
-            ticksLeft = push;
+            ticksLeft = 1 + AuraRandom.range(0, 2);
             matured = false;
             return false;
         }
@@ -178,16 +181,20 @@ public final class AttackPlanner {
         if (crit >= 0 && crit > charge + 12) {
             crit = -1;
         }
-        planCrit = crit >= 0;
+        planCrit = crit > 0;
         critExtra = 0;
-        int delay = Math.max(charge, Math.max(cooldown, pace));
-        if (planCrit && crit > delay) {
-            delay = crit;
-        } else if (!planCrit) {
-            // Человеческая неровность: только когда НЕ целимся в крит!
-            // Добавление рандомных тиков к таймингу крита роняет игрока на землю и сбивает крит.
-            delay += AuraRandom.range(0, 2);
+        int delay = charge;
+        if (cooldown > delay) {
+            delay = cooldown;
         }
+        if (pace > delay) {
+            delay = pace;
+        }
+        if (crit > delay) {
+            delay = crit;
+        }
+        // Человеческая задержка реакции вместо равномерного джиттера.
+        delay += reactionDelayTicks();
         return Math.min(delay, MAX_PLAN_TICKS);
     }
 
@@ -219,7 +226,6 @@ public final class AttackPlanner {
     /**
      * Симуляция падения: через сколько тиков наступит крит-состояние.
      * Возвращает -1, если крит не нужен/невозможен/не случится.
-     * Возвращает 0, если крит-состояние уже готово сейчас.
      */
     private static int ticksUntilCrit() {
         Minecraft mc = Minecraft.getInstance();
@@ -229,10 +235,7 @@ public final class AttackPlanner {
         if (!AttackAura.extra(AttackAura.SMART_CRITS)) {
             return -1;
         }
-        if (Attack.critStateReadyNow()) {
-            return 0;
-        }
-        if (Attack.critImpossibleNow()) {
+        if (Attack.critStateReadyNow() || Attack.critImpossibleNow()) {
             return -1;
         }
         boolean airborne = !mc.player.onGround();
@@ -242,19 +245,7 @@ public final class AttackPlanner {
         }
         double y = mc.player.getY();
         double vy = airborne ? mc.player.getDeltaMovement().y : 0.42;
-        double groundY = mc.player.getY();
-        if (airborne) {
-            net.minecraft.world.phys.Vec3 pos = mc.player.position();
-            net.minecraft.world.phys.HitResult hit = mc.level.clip(new net.minecraft.world.level.ClipContext(
-                    pos, pos.add(0.0, -5.0, 0.0),
-                    net.minecraft.world.level.ClipContext.Block.COLLIDER,
-                    net.minecraft.world.level.ClipContext.Fluid.NONE, mc.player));
-            if (hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
-                groundY = hit.getLocation().y;
-            } else {
-                groundY = pos.y - 1.5;
-            }
-        }
+        double groundY = y;
         float fall = airborne ? (float) mc.player.fallDistance : 0.0F;
         float need = Attack.critFallHeightValue();
         for (int t = 1; t <= FALL_SIM_TICKS; t++) {
