@@ -9,6 +9,7 @@ import dev.hatek.client.module.impl.combat.aura.rotation.ComponentManager;
 import dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil;
 import dev.hatek.client.module.impl.combat.aura.rotation.RotationProcess;
 import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
+import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
 import dev.hatek.client.module.impl.combat.aura.util.AttackDebug;
 import dev.hatek.client.module.impl.combat.aura.util.AttackPlanner;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
@@ -52,6 +53,9 @@ public final class AttackAura extends Module {
 
     public static final String MOVE_FREE = "Free";
 
+    public static final String SPACE_TIME = "SpaceTime";
+
+    public static final String ROT_SPACETIME = "SpaceTime";
     public static final String ROT_NEURO = "Нейро";
 
     public static final String SPRINT_RESET_PACKET = "Пакетный";
@@ -94,6 +98,8 @@ public final class AttackAura extends Module {
 
     private final BoolSetting chargeSpread = new BoolSetting("Charge Spread", true);
 
+    private final ModeSetting rotations =
+            new ModeSetting("Ротации", 0, ROT_SPACETIME, ROT_NEURO);
     private final DynamicButtonSetting neuroTrain =
             new DynamicButtonSetting("Нейро-обучение", "Обучить ротации",
                     this::onNeuroTrainButton);
@@ -124,7 +130,7 @@ public final class AttackAura extends Module {
         instance = this;
         keybind(GLFW.GLFW_KEY_R);
         with(this.attackRange, this.aimRange, this.preRange, this.movementType, this.targets,
-                this.misc, this.extras, this.sprintReset, this.chargeSpread,
+                this.misc, this.extras, this.sprintReset, this.chargeSpread, this.rotations,
                 this.neuroTrain);
 
         ComponentManager.getInstance().init();
@@ -153,7 +159,6 @@ public final class AttackAura extends Module {
         return instance == null ? 5.0F : (float) instance.aimRange.value();
     }
 
-
     public static float preRange() {
         return instance == null ? 1.0F : (float) instance.preRange.value();
     }
@@ -174,9 +179,9 @@ public final class AttackAura extends Module {
         return instance == null || instance.chargeSpread.value();
     }
 
-    /** Нейро — единственный режим ротаций (SpaceTime удалён). */
+    /** Выбран ли режим нейро-ротаций. */
     public static boolean neuroMode() {
-        return true;
+        return instance != null && instance.rotations.is(ROT_NEURO);
     }
 
     /** Активна ли прямо сейчас нейро-ротация (режим + обученная сеть + не идёт запись). */
@@ -392,6 +397,10 @@ public final class AttackAura extends Module {
                 && !this.sprintReset.is(SPRINT_RESET_LEGIT);
     }
 
+    public static boolean spaceTime() {
+        return instance != null;
+    }
+
     public static float targetAngularHalf() {
         Minecraft mc = mc();
         if (mc.player == null || instance == null || instance.target == null) {
@@ -479,11 +488,17 @@ public final class AttackAura extends Module {
             // Во время обучения игрок наводится сам — ротации не трогаем
             return;
         }
-        if (NeuroRotation.hasBrain()) {
+        if (neuroMode() && NeuroRotation.hasBrain()) {
             NeuroRotation.setTarget(target);
             NeuroRotation.onTickRotation(target);
+            return;
         }
-        // Без обученной сети ротаций нет — игрок наводится сам.
+
+        float[] base = getRanges();
+        float[] ranges = new float[]{base[0], base[1], base[0] + base[1]};
+
+        boolean canAttack = Attack.shouldAttack(target, false, true, 0L, ranges);
+        SpaceTime.onRotation(target, canAttack);
     }
 
     private void updateTarget() {
@@ -581,6 +596,8 @@ public final class AttackAura extends Module {
     protected void onEnable() {
         AuraProfile.roll();
 
+        SpaceTime.reshuffleAll();
+
         Attack.getCooldownTimer().reset();
 
         AttackPlanner.cancel();
@@ -609,6 +626,8 @@ public final class AttackAura extends Module {
 
         AttackPlanner.cancel();
         EngageDelay.reset();
+
+        SpaceTime.forget();
 
         releaseSprint();
 
