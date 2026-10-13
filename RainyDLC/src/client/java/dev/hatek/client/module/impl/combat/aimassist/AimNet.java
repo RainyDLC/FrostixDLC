@@ -94,9 +94,24 @@ public final class AimNet {
         public double pauseP90Ticks = 8.0;
         /** Сколько пауз приходится на 100 тиков слежения. */
         public double pausePer100 = 7.0;
+        /**
+         * Куда игрок бьёт по хитбоксу: среднее и стд.откл. относительных
+         * координат [rx, ry, rz] (rx/rz в [-1,1], ry в [0,1]).
+         * hitPointCount &lt; 20 — данных мало, используются дефолты.
+         */
+        public double[] hitPointMean = new double[]{0.0, 0.55, 0.0};
+        public double[] hitPointStd = new double[]{0.35, 0.12, 0.35};
+        public int hitPointCount = 0;
     }
 
     private volatile Calib calib = new Calib();
+
+    /** Точки попаданий игрока для калибровки (задать до train()). */
+    private List<float[]> hitPoints = new ArrayList<>();
+
+    public void setHitPoints(List<float[]> hitPoints) {
+        this.hitPoints = hitPoints == null ? new ArrayList<>() : new ArrayList<>(hitPoints);
+    }
 
     /** Калибровка моторики игрока (дефолты, если веса старые/без калибровки). */
     public Calib calib() {
@@ -488,8 +503,9 @@ public final class AimNet {
      * слежении — его микро-паузы. Инференс сэмплирует из этих распределений,
      * поэтому поведение совпадает со статистикой руки игрока.
      */
-    private static Calib computeCalib(List<AimSample> samples) {
+    private Calib computeCalib(List<AimSample> samples) {
         Calib c = new Calib();
+        computeHitPointCalib(c);
         List<Double> resYaw = new ArrayList<>();
         List<Double> resPitch = new ArrayList<>();
         List<Integer> pauseRuns = new ArrayList<>();
@@ -538,6 +554,51 @@ public final class AimNet {
         }
         c.pausePer100 = runs * 100.0 / settled;
         return c;
+    }
+
+    /**
+     * Куда бьёт игрок: среднее и разброс относительных координат точки
+     * попадания по хитбоксу. Меньше 20 точек — оставляем дефолты.
+     */
+    private void computeHitPointCalib(Calib c) {
+        List<float[]> hps = this.hitPoints;
+        if (hps == null || hps.size() < 20) {
+            return;
+        }
+        double[] mean = new double[3];
+        double[] m2 = new double[3];
+        int n = 0;
+        for (float[] hp : hps) {
+            if (hp == null || hp.length < 3) {
+                continue;
+            }
+            n++;
+            for (int i = 0; i < 3; i++) {
+                double d = hp[i] - mean[i];
+                mean[i] += d / n;
+                m2[i] += d * (hp[i] - mean[i]);
+            }
+        }
+        if (n < 20) {
+            return;
+        }
+        c.hitPointCount = n;
+        for (int i = 0; i < 3; i++) {
+            c.hitPointMean[i] = mean[i];
+            c.hitPointStd[i] = Math.sqrt(Math.max(1e-6, m2[i] / n));
+        }
+        // Разумные рамки: не даём распределению выродиться в точку или
+        // расползтись за хитбокс.
+        c.hitPointMean[0] = clamp(c.hitPointMean[0], -0.8, 0.8);
+        c.hitPointMean[1] = clamp(c.hitPointMean[1], 0.15, 0.9);
+        c.hitPointMean[2] = clamp(c.hitPointMean[2], -0.8, 0.8);
+        c.hitPointStd[0] = clamp(c.hitPointStd[0], 0.08, 0.6);
+        c.hitPointStd[1] = clamp(c.hitPointStd[1], 0.05, 0.35);
+        c.hitPointStd[2] = clamp(c.hitPointStd[2], 0.08, 0.6);
+    }
+
+    private static double clamp(double v, double lo, double hi) {
+        return v < lo ? lo : Math.min(v, hi);
     }
 
     private static double percentile(List<Double> values, double p) {
@@ -608,6 +669,9 @@ public final class AimNet {
         calib.addProperty("pause_p50_ticks", c.pauseP50Ticks);
         calib.addProperty("pause_p90_ticks", c.pauseP90Ticks);
         calib.addProperty("pause_per_100", c.pausePer100);
+        calib.add("hit_point_mean", doubles(c.hitPointMean));
+        calib.add("hit_point_std", doubles(c.hitPointStd));
+        calib.addProperty("hit_point_count", c.hitPointCount);
         root.add("calib", calib);
         Files.createDirectories(file.getParent());
         Files.writeString(file, gson.toJson(root), StandardCharsets.UTF_8);
@@ -657,6 +721,13 @@ public final class AimNet {
             c.pauseP50Ticks = getDouble(calib, "pause_p50_ticks", c.pauseP50Ticks);
             c.pauseP90Ticks = getDouble(calib, "pause_p90_ticks", c.pauseP90Ticks);
             c.pausePer100 = getDouble(calib, "pause_per_100", c.pausePer100);
+            fill(c.hitPointMean, calib, "hit_point_mean");
+            fill(c.hitPointStd, calib, "hit_point_std");
+            try {
+                c.hitPointCount = calib.has("hit_point_count")
+                        ? calib.get("hit_point_count").getAsInt() : 0;
+            } catch (Exception ignored) {
+            }
             net.calib = c;
         }
         net.trained = true;
@@ -682,6 +753,15 @@ public final class AimNet {
     private static void fill(double[] dst, JsonArray arr) {
         for (int i = 0; i < dst.length && i < arr.size(); i++) {
             dst[i] = arr.get(i).getAsDouble();
+        }
+    }
+
+    private static void fill(double[] dst, JsonObject obj, String key) {
+        try {
+            if (obj.has(key) && obj.get(key).isJsonArray()) {
+                fill(dst, obj.getAsJsonArray(key));
+            }
+        } catch (Exception ignored) {
         }
     }
 }

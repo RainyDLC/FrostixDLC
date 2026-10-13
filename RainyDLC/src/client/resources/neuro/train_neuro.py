@@ -41,7 +41,13 @@ def load_dataset(path):
     # отсев мусора: нечисла и безумные довороты
     mask = np.isfinite(X).all(axis=1) & np.isfinite(Y).all(axis=1)
     mask &= (np.abs(Y) <= 45.0).all(axis=1)
-    return X[mask], Y[mask]
+    HP = np.array(root.get("hit_points", []), dtype=np.float64).reshape(-1, 3) \
+        if root.get("hit_points") else np.zeros((0, 3))
+    if len(HP):
+        ok = np.isfinite(HP).all(axis=1) & (np.abs(HP[:, 0]) <= 1.0) \
+            & (np.abs(HP[:, 2]) <= 1.0) & (HP[:, 1] >= 0.0) & (HP[:, 1] <= 1.0)
+        HP = HP[ok]
+    return X[mask], Y[mask], HP
 
 
 def init_params(rng):
@@ -65,7 +71,7 @@ def forward(p, X):
     return out, (X, a1, a2)
 
 
-def compute_calib(X, Y):
+def compute_calib(X, Y, HP):
     """Калибровка моторики игрока (та же, что AimNet.computeCalib в Java).
 
     Остаточная ошибка: насколько игрок оставляет прицел мимо точки после
@@ -77,6 +83,9 @@ def compute_calib(X, Y):
         "resid_pitch_p50": 0.4, "resid_pitch_p90": 1.1,
         "pause_p50_ticks": 3.0, "pause_p90_ticks": 8.0,
         "pause_per_100": 7.0,
+        "hit_point_mean": [0.0, 0.55, 0.0],
+        "hit_point_std": [0.35, 0.12, 0.35],
+        "hit_point_count": 0,
     }
     yaw_err, pitch_err = X[:, 0], X[:, 1]
     d_yaw, d_pitch = Y[:, 0], Y[:, 1]
@@ -105,12 +114,24 @@ def compute_calib(X, Y):
         calib["pause_p50_ticks"] = float(np.percentile(runs, 50))
         calib["pause_p90_ticks"] = float(np.percentile(runs, 90))
     calib["pause_per_100"] = float(len(runs) * 100.0 / n_settled)
+    # Куда бьёт игрок: среднее и разброс относительных координат точки
+    # попадания по хитбоксу (нужно минимум 20 точек)
+    if len(HP) >= 20:
+        mean = HP.mean(axis=0)
+        std = HP.std(axis=0)
+        calib["hit_point_mean"] = [float(np.clip(mean[0], -0.8, 0.8)),
+                                   float(np.clip(mean[1], 0.15, 0.9)),
+                                   float(np.clip(mean[2], -0.8, 0.8))]
+        calib["hit_point_std"] = [float(np.clip(std[0], 0.08, 0.6)),
+                                  float(np.clip(std[1], 0.05, 0.35)),
+                                  float(np.clip(std[2], 0.08, 0.6))]
+        calib["hit_point_count"] = int(len(HP))
     return calib
 
 
-def train(X, Y, epochs=250, lr=0.003, batch=64, seed=7):
+def train(X, Y, HP, epochs=250, lr=0.003, batch=64, seed=7):
     # Калибровка под игрока — до аугментации, во временном порядке
-    calib = compute_calib(X, Y)
+    calib = compute_calib(X, Y, HP)
     # Горизонтальная симметрия
     X_sym = X.copy()
     X_sym[:, 0] = -X_sym[:, 0]  # -yawErr
@@ -236,7 +257,7 @@ def main():
     if not os.path.isfile(ds_path):
         sys.exit(f"Датасет не найден: {ds_path}")
 
-    X, Y = load_dataset(ds_path)
+    X, Y, HP = load_dataset(ds_path)
     print(f"сэмплов: {len(X)}")
     if len(X) < 120:
         sys.exit("Мало данных: нужно минимум 120 сэмплов")
@@ -245,7 +266,7 @@ def main():
         X, Y = X[sel], Y[sel]
         print("урезано до 12000 сэмплов")
 
-    p, norms, meta, calib = train(X, Y, epochs=args.epochs, lr=args.lr)
+    p, norms, meta, calib = train(X, Y, HP, epochs=args.epochs, lr=args.lr)
     out_path = ds_path[: -5] + ".weights.json"
     save_weights(out_path, p, norms, meta, calib)
     print(f"веса записаны: {out_path}")
