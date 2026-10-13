@@ -31,7 +31,6 @@ public final class SpaceTime {
     private static float velYawSm;
     private static float velPitchSm;
     private static boolean initialized;
-    private static int pauseTicks;
     private static float activity = 1.0F;
     private static float yawJitterSm;
     private static float pitchJitterSm;
@@ -48,6 +47,12 @@ public final class SpaceTime {
 
     private static Vec3 wanderOffset = Vec3.ZERO;
     private static Vec3 wanderVel = Vec3.ZERO;
+    /** Режим точки прицела (Shard/ML): 0 — дрейф, 1 — край хитбокса, 2 — центр. */
+    private static int aimMode;
+    private static int aimModeFrames;
+    private static float aimCenterHeightF = 0.55F;
+    /** Фаза дрейфа прицела (Shard/ML). */
+    private static double driftPhase;
 
     private static boolean lastCanAttack;
 
@@ -98,7 +103,6 @@ public final class SpaceTime {
         velPitchSm = 0.0F;
         prevAppliedYawVel = 0.0F;
         prevAppliedPitchVel = 0.0F;
-        pauseTicks = 0;
         activity = 1.0F;
         yawJitterSm = 0.0F;
         pitchJitterSm = 0.0F;
@@ -201,16 +205,63 @@ public final class SpaceTime {
     }
 
     /**
-     * В окне удара прижимает точку прицела к центру бокса (±0.08 по горизонтали):
-     * мультипоинт гуляет до края хитбокса, и ход цели за тик выводил луч наружу.
+     * Дрейф прицела (Shard/ML) — самое важное: прицел постоянно «плавает»
+     * вокруг цели, а не висит в точке. Сумма синусов с несоизмеримыми частотами
+     * даёт органичное непереодическое блуждание, как живая рука. Точка всегда
+     * остаётся внутри хитбокса, поэтому луч гарантированно попадает.
      */
-    private static Vec3 hitCore(Vec3 point, AABB box) {
+    private static Vec3 applyDrift(Vec3 point, AABB box) {
+        driftPhase += 1.0 / 60.0;
+        double t = driftPhase;
+        double dx = 0.16 * Math.sin(t * 1.9) + 0.08 * Math.sin(t * 3.1 + 1.7);
+        double dy = 0.10 * Math.sin(t * 2.3 + 0.6) + 0.05 * Math.sin(t * 4.1 + 2.9);
+        double dz = 0.16 * Math.sin(t * 1.4 + 2.2) + 0.08 * Math.sin(t * 2.7 + 0.9);
+        return new Vec3(
+                Mth.clamp(point.x + dx, box.minX + 0.02, box.maxX - 0.02),
+                Mth.clamp(point.y + dy, box.minY + 0.02, box.maxY - 0.02),
+                Mth.clamp(point.z + dz, box.minZ + 0.02, box.maxZ - 0.02));
+    }
+
+    /**
+     * Выбор точки прицела (Shard/ML): прицел не висит в одной точке хитбокса.
+     * Режимы переключаются каждые ~0.5–1.2 сек:
+     * 0 — дрейф (блуждание по боксу), 1 — край (бьёт, как только довёл до хитбокса),
+     * 2 — центр. ML-модель видит разнообразные hit_point_rel_*, как у живого игрока.
+     */
+    private static Vec3 selectAimPoint(AABB leadBox, ThreadLocalRandom rnd) {
+        if (aimModeFrames <= 0) {
+            float r = rnd.nextFloat();
+            aimMode = r < 0.5F ? 0 : (r < 0.75F ? 1 : 2);
+            aimModeFrames = 25 + rnd.nextInt(46);
+            aimCenterHeightF = 0.45F + rnd.nextFloat() * 0.2F;
+        }
+        aimModeFrames--;
+        if (aimMode == 1) {
+            return edgePoint(leadBox);
+        }
+        if (aimMode == 2) {
+            return new Vec3((leadBox.minX + leadBox.maxX) / 2.0,
+                    leadBox.minY + leadBox.getYsize() * aimCenterHeightF,
+                    (leadBox.minZ + leadBox.maxZ) / 2.0);
+        }
+        return getMultipoint(leadBox, 128.0);
+    }
+
+    /**
+     * Ближайшая к глазу точка поверхности хитбокса — «бьёт, как только довёл».
+     * Небольшой отступ внутрь — запас на ход цели за тик.
+     */
+    private static Vec3 edgePoint(AABB box) {
+        Vec3 eye = mc().player.getEyePosition();
         double cx = (box.minX + box.maxX) / 2.0;
         double cz = (box.minZ + box.maxZ) / 2.0;
+        double x = Mth.clamp(eye.x, box.minX, box.maxX) + Math.signum(cx - eye.x) * 0.03;
+        double y = Mth.clamp(eye.y, box.minY, box.maxY);
+        double z = Mth.clamp(eye.z, box.minZ, box.maxZ) + Math.signum(cz - eye.z) * 0.03;
         return new Vec3(
-                Mth.clamp(point.x, cx - 0.08, cx + 0.08),
-                Mth.clamp(point.y, box.minY + box.getYsize() * 0.3, box.minY + box.getYsize() * 0.8),
-                Mth.clamp(point.z, cz - 0.08, cz + 0.08));
+                Mth.clamp(x, box.minX, box.maxX),
+                Mth.clamp(y, box.minY, box.maxY),
+                Mth.clamp(z, box.minZ, box.maxZ));
     }
 
     /**
@@ -256,7 +307,6 @@ public final class SpaceTime {
             velYawSm = 0.0F;
             velPitchSm = 0.0F;
             initialized = true;
-            pauseTicks = 0;
             activity = 1.0F;
             syncedOnce = true;
         }
@@ -276,7 +326,6 @@ public final class SpaceTime {
             velYawSm = 0.0F;
             velPitchSm = 0.0F;
             initialized = true;
-            pauseTicks = 0;
             activity = 1.0F;
             overshootCountdown = -1;
             pendingOvershootYaw = 0.0F;
@@ -284,6 +333,7 @@ public final class SpaceTime {
             haveAim = false;
             prevBreathYaw = 0.0F;
             prevBreathPitch = 0.0F;
+            aimModeFrames = 0;
         }
 
         tickCounter++;
@@ -295,17 +345,11 @@ public final class SpaceTime {
         // и с увеличенным шагом, иначе 120°+ не успевали к моменту удара.
         boolean ready = (mc.player.getAttackStrengthScale(1.0F) > 0.9F && lastCanAttack)
                 || Attack.turnUrgent();
-        if (ready) {
-            pauseTicks = 0;
-        }
-        boolean windowClosed = System.currentTimeMillis() % 500L >= 370L;
-        float gate = (windowClosed && !ready) ? 0.0F : 1.0F;
 
+        // Shard/ML: слежение без остановок — никаких пауз и «закрытых окон».
+        // Прицел постоянно в движении, как живая рука.
         AABB leadBox = leadedBox(entity);
-        Vec3 point = getMultipoint(leadBox, 128.0);
-        if (ready) {
-            point = hitCore(point, leadBox);
-        }
+        Vec3 point = applyDrift(selectAimPoint(leadBox, rnd), leadBox);
         float[] rot = getRotations(point);
         float aimYaw = rot[0];
         float aimPitch = rot[1];
@@ -355,27 +399,21 @@ public final class SpaceTime {
 
         float dYaw = Mth.wrapDegrees(aimYaw - internalYaw);
         float dPitch = aimPitch - internalPitch;
-        if (pauseTicks > 0) {
-            pauseTicks--;
-        } else if (rnd.nextFloat() < 0.03F && tickCounter > 4 && !ready && yawDist < 10.0F) {
-            pauseTicks = rnd.nextInt(3) + 2;
-        }
-
-        if (pauseTicks > 0) {
-            activity += (0.0F - activity) * 0.35F;
-        } else {
-            activity += (1.0F - activity) * 0.35F;
-        }
+        activity = 1.0F;
 
         float randScale = 0.9F + rnd.nextFloat() * 0.2F;
         float speedMul = getSpeedMultiplier();
-        float maxYawStep = (gliding ? 86.4F : (ready ? 38.4F : 28.8F)) * randScale * speedMul;
-        float maxPitchStep = (gliding ? 14.4F : (ready ? 5.4F : 3.36F)) * randScale * speedMul;
+        // Замедление при сближении (Shard/ML): вплотную живая рука ведёт
+        // медленнее и точнее — цель и так занимает пол-экрана.
+        double distToTarget = mc.player.getEyePosition().distanceTo(leadBox.getCenter());
+        float approach = Mth.clamp((float) (distToTarget / 4.5), 0.45F, 1.0F);
+        float maxYawStep = (gliding ? 86.4F : (ready ? 38.4F : 28.8F)) * randScale * speedMul * approach;
+        float maxPitchStep = (gliding ? 14.4F : (ready ? 5.4F : 3.36F)) * randScale * speedMul * approach;
         dYaw = smoothClamp(dYaw, maxYawStep, rnd);
         dPitch = smoothClamp(dPitch, maxPitchStep, rnd);
 
-        float moveYaw = stepCap * (0.94F + noiseSm * 0.92F) * gate;
-        float movePitch = Math.min(stepCap * 0.836F, moveYaw * 0.96F) * gate;
+        float moveYaw = stepCap * (0.94F + noiseSm * 0.92F);
+        float movePitch = Math.min(stepCap * 0.836F, moveYaw * 0.96F);
 
         float leadYaw = 0.0F;
         float leadPitch = 0.0F;
@@ -409,16 +447,14 @@ public final class SpaceTime {
         velPitchSm += (wantVelPitch - velPitchSm) * kPitch + pitchJitterSm;
         velPitchSm = smoothClamp(velPitchSm, 4.8F, rnd);
 
-        if (!windowClosed) {
-            if (overshootCountdown == 0) {
-                velYawSm += pendingOvershootYaw;
-                velPitchSm += pendingOvershootPitch;
-                pendingOvershootYaw = 0.0F;
-                pendingOvershootPitch = 0.0F;
-                overshootCountdown = -1;
-            } else if (overshootCountdown > 0) {
-                overshootCountdown--;
-            }
+        if (overshootCountdown == 0) {
+            velYawSm += pendingOvershootYaw;
+            velPitchSm += pendingOvershootPitch;
+            pendingOvershootYaw = 0.0F;
+            pendingOvershootPitch = 0.0F;
+            overshootCountdown = -1;
+        } else if (overshootCountdown > 0) {
+            overshootCountdown--;
         }
 
         float appliedYawVel = (velYawSm + prevAppliedYawVel) * 0.5F;
@@ -431,8 +467,8 @@ public final class SpaceTime {
         float mult = MULTIPLIER.getMultiplier(entity);
         float breathYaw = breath(1.1F * mult, false, 18.0F);
         float breathPitch = breath(0.05F * mult, false, nextPeriod());
-        internalYaw += (breathYaw - prevBreathYaw) * gate;
-        internalPitch += (breathPitch - prevBreathPitch) * gate;
+        internalYaw += breathYaw - prevBreathYaw;
+        internalPitch += breathPitch - prevBreathPitch;
         prevBreathYaw = breathYaw;
         prevBreathPitch = breathPitch;
 

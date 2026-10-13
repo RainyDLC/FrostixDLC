@@ -46,11 +46,6 @@ public final class AttackPlanner {
     private static boolean planCrit;
     /** Сколько тиков уже дополнительно ждём крит сверх плана. */
     private static int critExtra;
-    /**
-     * План только на задержку человеческой реакции (все гейты уже были зелёные).
-     * Если ситуация изменилась (появился тайминговый гейт) — пересчитываем.
-     */
-    private static boolean planReaction;
 
     private AttackPlanner() {
         throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
@@ -63,7 +58,6 @@ public final class AttackPlanner {
         graceLeft = GRACE_TICKS;
         planCrit = false;
         critExtra = 0;
-        planReaction = false;
     }
 
     public static boolean hasPlan() {
@@ -87,20 +81,8 @@ public final class AttackPlanner {
         // «Возможность»: геометрия сошлась, мешают только тайминги.
         String reason = Attack.shouldAttackReason(target, true, true, true, 0L, ranges);
         if (reason == null) {
-            // Все гейты зелёные — удар ждёт только человеческой реакции.
-            // Без этого ML-модель античита видит удар ровно в тик готовности
-            // кулдауна каждый раз — классическая подпись бота.
-            if (planTarget == null) {
-                planTarget = target;
-                ticksLeft = reactionDelayTicks();
-                planCrit = false;
-                critExtra = 0;
-                planReaction = true;
-                graceLeft = GRACE_TICKS;
-                matured = ticksLeft <= 0;
-            } else if (!matured && --ticksLeft <= 0) {
-                matured = true;
-            }
+            // Все гейты зелёные — обычный путь ударит сам, план не нужен.
+            cancel();
             return;
         }
         if (!TIMING_REASONS.contains(reason)) {
@@ -111,11 +93,9 @@ public final class AttackPlanner {
         }
         graceLeft = GRACE_TICKS;
 
-        if (planTarget == null || planReaction) {
-            // Реакционный план устарел — ситуация изменилась, считаем заново.
+        if (planTarget == null) {
             planTarget = target;
             ticksLeft = computeDelayTicks();
-            planReaction = false;
             matured = ticksLeft <= 0;
         } else {
             if (AttackAura.extra(AttackAura.SMART_CRITS) && !mc.player.onGround() && !Attack.critImpossibleNow()) {
@@ -141,22 +121,6 @@ public final class AttackPlanner {
                 matured = true;
             }
         }
-    }
-
-    /**
-     * Человеческая задержка реакции на готовый удар: экспоненциальное
-     * распределение со средним из настройки «Hit Delay». 0 мс — бьёт
-     * мгновенно, как раньше (максимальная скорость для PvP с читами).
-     */
-    private static int reactionDelayTicks() {
-        float ms = AttackAura.hitDelayMs();
-        if (ms <= 0.0F) {
-            return 0;
-        }
-        double meanTicks = ms / 50.0;
-        double u = java.util.concurrent.ThreadLocalRandom.current().nextDouble();
-        int d = (int) (-Math.log(1.0 - u) * meanTicks);
-        return Math.min(d, Math.max(6, (int) (meanTicks * 3)));
     }
 
     /**
@@ -220,9 +184,9 @@ public final class AttackPlanner {
         if (planCrit && crit > delay) {
             delay = crit;
         } else if (!planCrit) {
-            // Человеческая задержка реакции: только когда НЕ целимся в крит!
+            // Человеческая неровность: только когда НЕ целимся в крит!
             // Добавление рандомных тиков к таймингу крита роняет игрока на землю и сбивает крит.
-            delay += reactionDelayTicks();
+            delay += AuraRandom.range(0, 2);
         }
         return Math.min(delay, MAX_PLAN_TICKS);
     }

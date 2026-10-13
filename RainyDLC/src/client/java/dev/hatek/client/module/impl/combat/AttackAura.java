@@ -80,7 +80,6 @@ public final class AttackAura extends Module {
     private final SliderSetting attackRange = new SliderSetting("Attack Range", 3.0, 3.0, 6.0, 0.1);
     private final SliderSetting aimRange = new SliderSetting("Aim Range", 5.0, 3.0, 9.0, 0.1);
     private final SliderSetting preRange = new SliderSetting("Detect Range", 1.0, 0.0, 5.0, 0.1);
-    private final SliderSetting hitDelay = new SliderSetting("Hit Delay", 0.0, 0.0, 200.0, 5.0);
 
     private final ModeSetting movementType =
             new ModeSetting("Movement", 0, MOVE_DEFAULT, MOVE_FREE);
@@ -130,9 +129,9 @@ public final class AttackAura extends Module {
                 Category.COMBAT);
         instance = this;
         keybind(GLFW.GLFW_KEY_R);
-        with(this.attackRange, this.aimRange, this.preRange, this.hitDelay, this.movementType,
-                this.targets, this.misc, this.extras, this.sprintReset, this.chargeSpread,
-                this.rotations, this.neuroTrain);
+        with(this.attackRange, this.aimRange, this.preRange, this.movementType, this.targets,
+                this.misc, this.extras, this.sprintReset, this.chargeSpread, this.rotations,
+                this.neuroTrain);
 
         ComponentManager.getInstance().init();
 
@@ -159,10 +158,7 @@ public final class AttackAura extends Module {
     public static float aimRange() {
         return instance == null ? 5.0F : (float) instance.aimRange.value();
     }
-    /** Задержка удара для анти-детекта, мс. 0 — бьёт мгновенно, как раньше. */
-    public static float hitDelayMs() {
-        return instance == null ? 0.0F : (float) instance.hitDelay.value();
-    }
+
 
     public static float preRange() {
         return instance == null ? 1.0F : (float) instance.preRange.value();
