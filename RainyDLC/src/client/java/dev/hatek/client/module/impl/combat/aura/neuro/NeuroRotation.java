@@ -155,7 +155,6 @@ public final class NeuroRotation {
         learnLog = "";
         resetInference();
         // Полностью глушим авто-ротации и отдаём управление руками игроку:
-        dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.forget();
         RotationProcess.halt();
         dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil.active = false;
         dev.hatek.client.module.impl.combat.aura.util.MoveUtil.restoreMovementKeys();
@@ -643,10 +642,10 @@ public final class NeuroRotation {
         boolean readyToHit = attackScale >= 0.88f || inCritPhase
                 || (dev.hatek.client.module.impl.combat.aura.util.AttackPlanner.hasPlan() && attackScale >= 0.75f);
 
-        var leadBox = dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.leadedBox(t);
+        var leadBox = dev.hatek.client.module.impl.combat.aura.rotation.AimLead.leadedBox(t);
         // В окне удара целимся из глаз «после нашего хода» — удар уходит в TAIL тика.
         Vec3 aimEye = readyToHit
-                ? dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.predictedEye()
+                ? dev.hatek.client.module.impl.combat.aura.rotation.AimLead.predictedEye()
                 : eye;
         Vec3 aimPoint = wanderAimPoint(leadBox, readyToHit);
         float[] targetRot = rotTo(aimEye, aimPoint);
