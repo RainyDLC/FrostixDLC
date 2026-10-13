@@ -25,6 +25,6 @@ Write-Host "Fabric JAR: $($jar.FullName)"
 
 $buildArgs = @{ Jar = $jar.FullName }
 if ($Jdk) { $buildArgs.Jdk = $Jdk }
-& (Join-Path $root 'build.ps1') @args
+& (Join-Path $root 'build.ps1') @buildArgs
 if ($LASTEXITCODE -ne 0) { throw 'LegitBuilder build failed' }
 Write-Host "Done: $(Join-Path $root 'build\release\LegitBuilder.jar')"

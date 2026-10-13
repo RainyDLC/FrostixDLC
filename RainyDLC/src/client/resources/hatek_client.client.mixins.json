@@ -20,6 +20,8 @@
     "HudDragMixin",
     "MediaBillboardMixin",
     "CosmeticItemModelMixin",
+    "ChamsLivingRendererMixin",
+    "ChamsAvatarRendererMixin",
     "AmbienceSkyMixin",
     "AmbienceFogMixin",
     "AmbienceCloudsMixin",
