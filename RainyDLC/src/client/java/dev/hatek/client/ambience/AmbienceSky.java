@@ -15,6 +15,7 @@ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import dev.hatek.client.ambience.blackhole.BlackHoleRenderer;
 import dev.hatek.client.module.impl.render.Ambience;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -26,12 +27,9 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Рендер неба Ambience в sky-pass. Текстуры генерируются процедурно
- * в фоне (см. {@link SkyGen}, {@link BlackHoleGen}), здесь — только
- * загрузка на GPU и отрисовка ванильными пайплайнами неба.
+ * Рендер неба Ambience в sky-pass.
  */
 public final class AmbienceSky {
     private static final int BASE_W = 2048;
@@ -42,7 +40,6 @@ public final class AmbienceSky {
     private static final long STAR_SEED = 1337L;
     private static final float SKY_R = 100.0f;
     private static final float STAR_R = 90.0f;
-    private static final float BH_R = 80.0f;
 
     private static final float[][] FOG = {
             {0.06f, 0.025f, 0.09f},
@@ -69,9 +66,6 @@ public final class AmbienceSky {
     private static volatile int pendingBaseMode = -1;
     private static volatile int[][] pendingPlasma;
     private static volatile boolean plasmaRequested;
-    private static volatile BlackHoleGen blackHole;
-    private static volatile int[] bhRawBase;
-    private static volatile boolean bhBuilding;
     private static volatile int[] pendingAtmo;
     private static volatile int pendingBaseKey;
     private static volatile int appliedKey = Integer.MIN_VALUE;
@@ -90,12 +84,6 @@ public final class AmbienceSky {
     private static volatile float rain;
     private static float atmoSunAngle = Float.NaN;
     private static float atmoRain = -1;
-    private static volatile Thread bhThread;
-    private static volatile long bhWantedAt;
-    private static volatile double animTime;
-    private static volatile double animBrightness = 1.0;
-    private static final AtomicReference<int[]> BH_READY = new AtomicReference<>();
-    private static final AtomicReference<int[]> BH_FREE = new AtomicReference<>();
 
     // ---- GPU-ресурсы (только render thread)
     private static DynamicTexture baseTex;
@@ -105,16 +93,13 @@ public final class AmbienceSky {
     private static DynamicTexture starTex;
     private static DynamicTexture spikeTex;
     private static DynamicTexture whiteTex;
-    private static DynamicTexture bhTex;
     private static DynamicTexture atmoTex;
     private static DynamicTexture auroraA;
     private static DynamicTexture auroraB;
     private static DynamicTexture sunTex;
     private static GpuBuffer sunQuad;
     private static DynamicTexture streakTex;
-    private static GpuBuffer bhStreak;
     private static GpuBuffer sunStreak;
-    private static boolean bhHasFrame;
     private static GpuBuffer sphereTexColor;
     private static GpuBuffer sphereTex;
     private static int sphereQuads;
@@ -126,7 +111,6 @@ public final class AmbienceSky {
     private static int starsBrightQuads;
     private static GpuBuffer horizon;
     private static int horizonQuads;
-    private static GpuBuffer bhQuad;
 
     private static long lastNanos;
     private static double time;
@@ -179,10 +163,8 @@ public final class AmbienceSky {
 
     // ------------------------------------------------------------ lifecycle
 
-    /** Освобождаем тяжёлые CPU-данные при выключении модуля. */
+    /** Освобождаем тяжёлые данные при выключении модуля. */
     public static void release() {
-        blackHole = null;
-        bhRawBase = null;
         requestedMode = -1;
         pendingBase = null;
         pendingPlasma = null;
@@ -191,8 +173,7 @@ public final class AmbienceSky {
         auroraRequested = false;
         pendingAtmo = null;
         atmoSunAngle = Float.NaN;
-        BH_READY.set(null);
-        BH_FREE.set(null);
+        BlackHoleRenderer.release();
     }
 
     private static void post(int[] px, int w, int h, boolean wrap, boolean opaque) {
@@ -225,6 +206,9 @@ public final class AmbienceSky {
     }
 
     private static void request(int mode) {
+        if (mode == SkyGen.MODE_BLACK_HOLE) {
+            return;
+        }
         if (requestedMode == mode) {
             return;
         }
@@ -249,7 +233,7 @@ public final class AmbienceSky {
                 pendingAurora = new int[][]{a, b};
             });
         }
-        if (baseMode == mode && baseKey == appliedKey && (mode != SkyGen.MODE_BLACK_HOLE || blackHole != null)) {
+        if (baseMode == mode && baseKey == appliedKey) {
             return;
         }
         GEN.submit(() -> {
@@ -269,34 +253,7 @@ public final class AmbienceSky {
             pendingBaseKey = key;
             pendingBase = shown;
             pendingBaseMode = mode;
-            if (mode == SkyGen.MODE_BLACK_HOLE) {
-                bhRawBase = base;
-                if (blackHole == null) {
-                    buildBlackHole(base, Ambience.blackHoleSize());
-                }
-            }
         });
-    }
-
-    private static void buildBlackHole(int[] base, int size) {
-        bhBuilding = true;
-        try {
-            float[] map = SkyGen.starMap(SkyGen.stars(STAR_COUNT, STAR_SEED), BASE_W, BASE_H);
-            blackHole = BlackHoleGen.build(size, base, BASE_W, BASE_H, map);
-        } finally {
-            bhBuilding = false;
-        }
-    }
-
-    /** Смена качества чёрной дыры → пересборка в фоне (старая показывается до готовности). */
-    private static void checkBlackHoleQuality() {
-        BlackHoleGen gen = blackHole;
-        int[] raw = bhRawBase;
-        int want = Ambience.blackHoleSize();
-        if (gen != null && gen.size != want && raw != null && !bhBuilding) {
-            bhBuilding = true;
-            GEN.submit(() -> buildBlackHole(raw, want));
-        }
     }
 
     private static void requestAtmosphere() {
@@ -377,44 +334,6 @@ public final class AmbienceSky {
         }
     }
 
-    private static void ensureBhThread() {
-        bhWantedAt = System.currentTimeMillis();
-        if (bhThread != null) {
-            return;
-        }
-        Thread t = new Thread(AmbienceSky::bhLoop, "RainyDLC-BlackHole");
-        t.setDaemon(true);
-        bhThread = t;
-        t.start();
-    }
-
-    private static void bhLoop() {
-        try {
-            while (System.currentTimeMillis() - bhWantedAt < 3000) {
-                long start = System.nanoTime();
-                BlackHoleGen gen = blackHole;
-                if (gen != null) {
-                    int[] buf = BH_FREE.getAndSet(null);
-                    if (buf == null || buf.length != gen.size * gen.size) {
-                        buf = new int[gen.size * gen.size];
-                    }
-                    gen.frame(animTime, animBrightness, buf);
-                    post(buf, gen.size, gen.size, false, false);
-                    toAbgr(buf);
-                    int[] old = BH_READY.getAndSet(buf);
-                    if (old != null) {
-                        BH_FREE.set(old);
-                    }
-                }
-                long spent = (System.nanoTime() - start) / 1_000_000L;
-                Thread.sleep(Math.max(4, 33 - spent));
-            }
-        } catch (InterruptedException ignored) {
-        } finally {
-            bhThread = null;
-        }
-    }
-
     // ------------------------------------------------------------ render
 
     public static void render(RenderTarget target) {
@@ -422,13 +341,16 @@ public final class AmbienceSky {
         updatePostKey();
         request(mode);
 
+        if (mode == SkyGen.MODE_BLACK_HOLE) {
+            BlackHoleRenderer.render(target);
+            return;
+        }
+
         long now = System.nanoTime();
         double dt = lastNanos == 0 ? 0 : Math.min(0.1, (now - lastNanos) / 1e9);
         lastNanos = now;
         time += dt * Ambience.speed();
-        animTime = time;
         float bright = (float) Ambience.brightness();
-        animBrightness = bright;
 
         uploadPending(mode);
         ensureGeometry();
@@ -479,20 +401,6 @@ public final class AmbienceSky {
             draw(target, RenderPipelines.END_SKY, sky, new Vector4f(sb, sb, sb, a2), starTex, clamp, starsB, starsBQuads);
             draw(target, RenderPipelines.END_SKY, sky, new Vector4f(sb, sb, sb, 1.0f), spikeTex, clamp,
                     starsBright, starsBrightQuads);
-        }
-
-        // 4. Чёрная дыра.
-        if (mode == SkyGen.MODE_BLACK_HOLE) {
-            checkBlackHoleQuality();
-            ensureBhThread();
-            if (bhTex != null && bhHasFrame) {
-                draw(target, RenderPipelines.END_SKY, sky, new Vector4f(1.0f, 1.0f, 1.0f, 1.0f), bhTex, clamp, bhQuad, 1);
-                if (Ambience.lensFlare()) {
-                    float fa = (float) Math.min(1.0, 0.45 * Ambience.bloom());
-                    draw(target, RenderPipelines.CELESTIAL, sky, new Vector4f(0.62f, 0.78f, 1.0f, fa),
-                            streakTex, clamp, bhStreak, 1);
-                }
-            }
         }
 
         // 5. Дымка у горизонта под цвет тумана — мягкий стык с ландшафтом.
@@ -562,18 +470,6 @@ public final class AmbienceSky {
             spikeTex = replace(null, "ambience_star_spikes", SkyGen.starSprite(128, true), 128, 128);
             whiteTex = replace(null, "ambience_white", new int[]{-1, -1, -1, -1}, 2, 2);
         }
-        int[] frame = BH_READY.getAndSet(null);
-        if (frame != null) {
-            if (bhTex == null || bhTex.getPixels() == null || bhTex.getPixels().getWidth() * bhTex.getPixels().getHeight() != frame.length) {
-                int side = (int) Math.round(Math.sqrt(frame.length));
-                bhTex = replaceRaw(bhTex, "ambience_black_hole", frame, side, side);
-            } else {
-                writeRaw(bhTex.getPixels(), frame);
-                bhTex.upload();
-            }
-            bhHasFrame = true;
-            BH_FREE.set(frame);
-        }
     }
 
     private static DynamicTexture replace(DynamicTexture old, String name, int[] argb, int w, int h) {
@@ -587,33 +483,6 @@ public final class AmbienceSky {
         return tex;
     }
 
-    /** ARGB → ABGR на месте (в потоке генерации, чтобы не грузить render thread). */
-    private static void toAbgr(int[] argb) {
-        java.util.stream.IntStream.range(0, (argb.length >> 12) + 1).parallel().forEach(b -> {
-            int end = Math.min(argb.length, (b + 1) << 12);
-            for (int i = b << 12; i < end; i++) {
-                int c = argb[i];
-                argb[i] = (c & 0xFF00FF00) | (c >> 16 & 0xFF) | (c & 0xFF) << 16;
-            }
-        });
-    }
-
-    private static DynamicTexture replaceRaw(DynamicTexture old, String name, int[] abgr, int w, int h) {
-        if (old != null) {
-            old.close();
-        }
-        NativeImage image = new NativeImage(NativeImage.Format.RGBA, w, h, false);
-        writeRaw(image, abgr);
-        DynamicTexture tex = new DynamicTexture(() -> "hatek/" + name, image);
-        tex.upload();
-        return tex;
-    }
-
-    /** Готовые ABGR-пиксели — одним memcpy. */
-    private static void writeRaw(NativeImage image, int[] abgr) {
-        int n = Math.min(abgr.length, image.getWidth() * image.getHeight());
-        MemoryUtil.memIntBuffer(image.getPointer(), n).put(abgr, 0, n);
-    }
 
     /** ARGB → RGBA-память NativeImage (little-endian ABGR int). */
     private static void write(NativeImage image, int[] argb) {
@@ -658,30 +527,17 @@ public final class AmbienceSky {
         starsB = buildStars(stars, nb, 1);
         starsBright = buildStars(stars, nbright, 2);
         buildHorizon();
-        buildBlackHoleQuad();
         // Солнце в локальной системе ванили: над головой (0, +Y, 0).
         float h = 13.0f;
         sunQuad = build("ambience sun", DefaultVertexFormat.POSITION_TEX, 1, false,
                 q -> q.quad(new float[]{-h, 80, -h}, new float[]{h, 80, -h}, new float[]{h, 80, h}, new float[]{-h, 80, h},
                         0, 0, 1, 0, 1, 1, 0, 1, -1, -1, -1, -1));
-        // Анаморфные блики: у солнца — вдоль горизонта, у чёрной дыры — по базису билборда.
+        // Анаморфные блики: у солнца — вдоль горизонта.
         float sw = 42.0f;
         float sh = 2.6f;
         sunStreak = build("ambience sun streak", DefaultVertexFormat.POSITION_TEX, 1, false,
                 q -> q.quad(new float[]{-sw, 79, -sh}, new float[]{sw, 79, -sh}, new float[]{sw, 79, sh}, new float[]{-sw, 79, sh},
                         0, 0, 1, 0, 1, 1, 0, 1, -1, -1, -1, -1));
-        double[] d = BlackHoleGen.DIR;
-        double[] r = BlackHoleGen.RIGHT;
-        double[] u = BlackHoleGen.UP;
-        double bw = BH_R * BlackHoleGen.TAN_HALF * 1.05;
-        double bh = BH_R * BlackHoleGen.TAN_HALF * 0.05;
-        float dist = BH_R - 2.0f;
-        float[] a0 = streakCorner(d, r, u, dist, -bw, bh);
-        float[] a1 = streakCorner(d, r, u, dist, bw, bh);
-        float[] a2 = streakCorner(d, r, u, dist, bw, -bh);
-        float[] a3 = streakCorner(d, r, u, dist, -bw, -bh);
-        bhStreak = build("ambience bh streak", DefaultVertexFormat.POSITION_TEX, 1, false,
-                q -> q.quad(a0, a1, a2, a3, 0, 0, 1, 0, 1, 1, 0, 1, -1, -1, -1, -1));
     }
 
     private static float[] streakCorner(double[] d, double[] r, double[] u, float dist, double x, double y) {
@@ -820,25 +676,5 @@ public final class AmbienceSky {
                 }
             }
         });
-    }
-
-    private static void buildBlackHoleQuad() {
-        double[] d = BlackHoleGen.DIR;
-        double[] r = BlackHoleGen.RIGHT;
-        double[] u = BlackHoleGen.UP;
-        double s = BH_R * BlackHoleGen.TAN_HALF;
-        float[] tl = corner(d, r, u, -s, s);
-        float[] tr = corner(d, r, u, s, s);
-        float[] br = corner(d, r, u, s, -s);
-        float[] bl = corner(d, r, u, -s, -s);
-        bhQuad = build("ambience black hole", DefaultVertexFormat.POSITION_TEX_COLOR, 1, true,
-                q -> q.quad(tl, tr, br, bl, 0, 0, 1, 0, 1, 1, 0, 1, -1, -1, -1, -1));
-    }
-
-    private static float[] corner(double[] d, double[] r, double[] u, double x, double y) {
-        return new float[]{
-                (float) (d[0] * BH_R + r[0] * x + u[0] * y),
-                (float) (d[1] * BH_R + r[1] * x + u[1] * y),
-                (float) (d[2] * BH_R + r[2] * x + u[2] * y)};
     }
 }

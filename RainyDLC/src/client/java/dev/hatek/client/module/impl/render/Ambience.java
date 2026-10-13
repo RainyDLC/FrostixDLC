@@ -16,7 +16,12 @@ public final class Ambience extends Module {
     private final ModeSetting sky = new ModeSetting("Sky", 3, "Plasma", "Space", "Milky Way", "Black Hole", "Shader");
     private final SliderSetting speed = new SliderSetting("Speed", 1.0, 0.0, 3.0, 0.1);
     private final SliderSetting brightness = new SliderSetting("Brightness", 1.0, 0.3, 2.0, 0.05);
-    private final ModeSetting bhQuality = new ModeSetting("BH Quality", 2, "Low", "Medium", "High", "Ultra");
+    private final ModeSetting bhPalette = new ModeSetting("Palette", 2, "Theme", "Real", "Mixed");
+    private final SliderSetting bhTemperature = new SliderSetting("Temperature", 50.0, 0.0, 100.0, 1.0);
+    private final SliderSetting bhSpin = new SliderSetting("Spin", 100.0, 0.0, 200.0, 1.0);
+    private final SliderSetting bhActivity = new SliderSetting("Activity", 100.0, 0.0, 200.0, 1.0);
+    private final SliderSetting bhLensing = new SliderSetting("Lensing", 100.0, 0.0, 200.0, 1.0);
+    private final SliderSetting bhJets = new SliderSetting("Jets", 70.0, 0.0, 200.0, 1.0);
     private final BoolSetting stars = new BoolSetting("Stars", true);
     private final BoolSetting sunMoon = new BoolSetting("Sun & Moon", false);
     private final BoolSetting darkFog = new BoolSetting("Dark Fog", true);
@@ -29,7 +34,8 @@ public final class Ambience extends Module {
     public Ambience() {
         super("Ambience", "Shader-like animated skies: plasma, deep space, milky way, a realistic black hole and a shaderpack-style atmosphere", Category.RENDER);
         instance = this;
-        with(this.sky, this.bhQuality, this.speed, this.brightness, this.stars, this.sunMoon, this.darkFog, this.clouds,
+        with(this.sky, this.bhPalette, this.bhTemperature, this.bhSpin, this.bhActivity, this.bhLensing, this.bhJets,
+                this.speed, this.brightness, this.stars, this.sunMoon, this.darkFog, this.clouds,
                 this.skyShader, this.bloom, this.saturation, this.lensFlare);
     }
 
@@ -62,17 +68,35 @@ public final class Ambience extends Module {
         };
     }
 
-    /** Разрешение текстуры чёрной дыры. */
-    public static int blackHoleSize() {
+    public static int bhPalette() {
         if (instance == null) {
-            return 1024;
+            return 2;
         }
-        return switch (instance.bhQuality.value()) {
-            case "Low" -> 512;
-            case "Medium" -> 768;
-            case "Ultra" -> 1536;
-            default -> 1024;
+        return switch (instance.bhPalette.value()) {
+            case "Theme" -> 0;
+            case "Real" -> 1;
+            default -> 2;
         };
+    }
+
+    public static double bhTemperature() {
+        return instance == null ? 50.0 : instance.bhTemperature.value();
+    }
+
+    public static double bhSpin() {
+        return instance == null ? 100.0 : instance.bhSpin.value();
+    }
+
+    public static double bhActivity() {
+        return instance == null ? 100.0 : instance.bhActivity.value();
+    }
+
+    public static double bhLensing() {
+        return instance == null ? 100.0 : instance.bhLensing.value();
+    }
+
+    public static double bhJets() {
+        return instance == null ? 70.0 : instance.bhJets.value();
     }
 
     public static double speed() {
