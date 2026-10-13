@@ -14,6 +14,7 @@ import dev.hatek.client.module.impl.combat.aura.util.AttackDebug;
 import dev.hatek.client.module.impl.combat.aura.util.AttackPlanner;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
 import dev.hatek.client.module.impl.combat.aura.util.EngageDelay;
+import dev.hatek.client.module.impl.combat.aura.util.LagGuard;
 import dev.hatek.client.module.impl.combat.aura.util.AuraRandom;
 import dev.hatek.client.module.impl.combat.aura.util.AuraUtil;
 import dev.hatek.client.module.impl.combat.aura.util.MoveUtil;
@@ -79,6 +80,7 @@ public final class AttackAura extends Module {
     private final SliderSetting attackRange = new SliderSetting("Attack Range", 3.0, 3.0, 6.0, 0.1);
     private final SliderSetting aimRange = new SliderSetting("Aim Range", 5.0, 3.0, 9.0, 0.1);
     private final SliderSetting preRange = new SliderSetting("Detect Range", 1.0, 0.0, 5.0, 0.1);
+    private final SliderSetting hitDelay = new SliderSetting("Hit Delay", 0.0, 0.0, 200.0, 5.0);
 
     private final ModeSetting movementType =
             new ModeSetting("Movement", 0, MOVE_DEFAULT, MOVE_FREE);
@@ -114,7 +116,12 @@ public final class AttackAura extends Module {
 
     private static LivingEntity preferred;
 
-    private static boolean serverSprinting;
+    /**
+     * Удар, подготовленный в HEAD тика и выполняемый в TAIL (после sendPosition).
+     * В HEAD сервер ещё не знает ротацию/позицию этого тика — удар оттуда уходит
+     * с прошлой ротацией и античит режет урон (замах есть, урона нет).
+     */
+    private static boolean attackQueued;
 
     private static boolean sprintHeld;
 
@@ -123,9 +130,9 @@ public final class AttackAura extends Module {
                 Category.COMBAT);
         instance = this;
         keybind(GLFW.GLFW_KEY_R);
-        with(this.attackRange, this.aimRange, this.preRange, this.movementType, this.targets,
-                this.misc, this.extras, this.sprintReset, this.chargeSpread, this.rotations,
-                this.neuroTrain);
+        with(this.attackRange, this.aimRange, this.preRange, this.hitDelay, this.movementType,
+                this.targets, this.misc, this.extras, this.sprintReset, this.chargeSpread,
+                this.rotations, this.neuroTrain);
 
         ComponentManager.getInstance().init();
 
@@ -151,6 +158,10 @@ public final class AttackAura extends Module {
     /** Дальность наведения (может превышать дальность удара — как aimDistance у obrti). */
     public static float aimRange() {
         return instance == null ? 5.0F : (float) instance.aimRange.value();
+    }
+    /** Задержка удара для анти-детекта, мс. 0 — бьёт мгновенно, как раньше. */
+    public static float hitDelayMs() {
+        return instance == null ? 0.0F : (float) instance.hitDelay.value();
     }
 
     public static float preRange() {
@@ -201,6 +212,8 @@ public final class AttackAura extends Module {
         if (!isEnabled() || mc.player == null || mc.level == null) {
             return;
         }
+
+        attackQueued = false;
 
         Attack.clampCooldownDebt();
 
@@ -254,8 +267,6 @@ public final class AttackAura extends Module {
             setEnabled(false);
             return;
         }
-
-        serverSprinting = mc.player.isSprinting();
 
         if (preferred != null && (!preferred.isAlive() || preferred.isRemoved())) {
             preferred = null;
@@ -312,20 +323,39 @@ public final class AttackAura extends Module {
             }
         }
 
-        if (NeuroRotation.isTraining()) {
+        if (NeuroRotation.isTraining() || checkToAttack()) {
             AttackPlanner.cancel();
-        } else if (!checkToAttack()) {
-            attackEntity();
         } else {
-            AttackPlanner.cancel();
+            attackQueued = true;
         }
+    }
+
+    /** LocalPlayer.tick TAIL: движение и ротация этого тика уже отправлены. */
+    public void onPostTick() {
+        if (!attackQueued) {
+            return;
+        }
+        attackQueued = false;
+        Minecraft mc = mc();
+        if (!isEnabled() || mc.player == null || mc.level == null || mc.gui.screen() != null
+                || !mc.player.isAlive() || NeuroRotation.isTraining()) {
+            return;
+        }
+        if (target == null || !target.isAlive() || target.isRemoved()) {
+            AttackPlanner.cancel();
+            return;
+        }
+        if (checkToAttack()) {
+            AttackPlanner.cancel();
+            return;
+        }
+        attackEntity();
     }
 
     private static final double STANDOFF = 1.0;
 
     private static int circleSide = 1;
     private static long nextFlip;
-
     private float bearingToTarget() {
         Minecraft mc = mc();
         if (mc.player == null || target == null) {
@@ -333,31 +363,7 @@ public final class AttackAura extends Module {
         }
         double dx = target.getX() - mc.player.getX();
         double dz = target.getZ() - mc.player.getZ();
-        float direct = (float) Math.toDegrees(Math.atan2(-dx, dz));
-
-        double flat = Math.hypot(dx, dz);
-        double outer = STANDOFF * 1.7;
-        if (flat >= outer) {
-            return direct;
-        }
-
-        long now = System.currentTimeMillis();
-        if (mc.options.keyLeft.isDown()) {
-            circleSide = -1;
-        } else if (mc.options.keyRight.isDown()) {
-            circleSide = 1;
-        } else if (now >= nextFlip) {
-            circleSide = AuraRandom.chance(0.5F) ? 1 : -1;
-            nextFlip = now + (long) AuraRandom.range(2600.0F, 7000.0F);
-        }
-
-        float bend;
-        if (flat >= STANDOFF) {
-            bend = 90.0F * (float) ((outer - flat) / (outer - STANDOFF));
-        } else {
-            bend = 90.0F + 28.0F * (float) Mth.clamp(1.0 - flat / STANDOFF, 0.0, 1.0);
-        }
-        return Mth.wrapDegrees(direct + bend * circleSide);
+        return (float) Math.toDegrees(Math.atan2(-dx, dz));
     }
 
     private void holdSprint() {
@@ -431,20 +437,18 @@ public final class AttackAura extends Module {
         Attack.antiMissesHittingUpdate(target, true, isRayCastRuleToAttack(), false);
 
         boolean plannedHit = AttackPlanner.consumePlannedHit(target, ranges);
-        boolean canAttack;
-        // Все удары идут через планировщик (там же живёт человеческая задержка
-        // реакции). Обычный путь — только страховка, когда плана нет.
-        if (misc(ATTACK_DEBUG)) {
-            String reason = Attack.shouldAttackReason(target, isRayCastRuleToAttack(), true,
-                    true, 0L, ranges);
-            canAttack = plannedHit || (reason == null && !AttackPlanner.hasPlan());
-            if (!canAttack) {
-                AttackDebug.noteReject(reason == null ? "wait" : reason);
+        boolean canAttack = plannedHit;
+        if (!canAttack && !AttackPlanner.hasPlan()) {
+            if (misc(ATTACK_DEBUG)) {
+                String reason = Attack.shouldAttackReason(target, isRayCastRuleToAttack(), true,
+                        true, 0L, ranges);
+                canAttack = reason == null;
+                if (!canAttack) {
+                    AttackDebug.noteReject(reason);
+                }
+            } else {
+                canAttack = Attack.shouldAttack(target, isRayCastRuleToAttack(), true, true, 0L, ranges);
             }
-        } else {
-            canAttack = plannedHit
-                    || (Attack.shouldAttack(target, isRayCastRuleToAttack(), true, true, 0L, ranges)
-                        && !AttackPlanner.hasPlan());
         }
 
         if (!canAttack) {
@@ -455,7 +459,7 @@ public final class AttackAura extends Module {
         Runnable[] shieldBreak = Attack.hitShieldBreakTaskForUse(target, misc(BREAK_SHIELD));
         Runnable[] shieldPressBypass = Attack.resetShieldSilentTaskForUse(true);
         Runnable[] skipSilentSprint = Attack.skipSilentSprintingTaskForUse(
-                canPacket, serverSprinting, Attack.critPending());
+                canPacket, Attack.critPending());
 
         Runnable preHit = () -> {
             skipSilentSprint[0].run();
@@ -603,6 +607,7 @@ public final class AttackAura extends Module {
 
         AttackPlanner.cancel();
         AttackDebug.reset();
+        LagGuard.reset();
 
         reset();
 
@@ -622,6 +627,7 @@ public final class AttackAura extends Module {
         Minecraft mc = mc();
         target = null;
         preferred = null;
+        attackQueued = false;
 
         AttackPlanner.cancel();
         EngageDelay.reset();

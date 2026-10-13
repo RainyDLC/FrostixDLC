@@ -27,7 +27,7 @@ import java.util.Set;
  */
 public final class AttackPlanner {
     /** Причины отказа, которые являются таймингами (а не геометрией). */
-    private static final Set<String> TIMING_REASONS = Set.of("cooldown", "pace", "charge", "moment");
+    private static final Set<String> TIMING_REASONS = Set.of("lag", "iframes", "cooldown", "pace", "charge", "moment");
 
     /** Сколько тиков подряд геометрия может рваться, прежде чем план сгорит. */
     private static final int GRACE_TICKS = 3;
@@ -117,26 +117,46 @@ public final class AttackPlanner {
             ticksLeft = computeDelayTicks();
             planReaction = false;
             matured = ticksLeft <= 0;
-        } else if (ticksLeft > 0) {
-            ticksLeft--;
-            if (ticksLeft <= 0) {
+        } else {
+            if (AttackAura.extra(AttackAura.SMART_CRITS) && !mc.player.onGround() && !Attack.critImpossibleNow()) {
+                if (Attack.critStateReadyNow()) {
+                    planCrit = true;
+                    ticksLeft = 0;
+                    matured = true;
+                    return;
+                }
+                int crit = ticksUntilCrit();
+                if (crit > 0) {
+                    planCrit = true;
+                    critExtra = 0;
+                    ticksLeft = Math.max(ticksLeft, crit);
+                }
+            }
+            if (ticksLeft > 0) {
+                ticksLeft--;
+                if (ticksLeft <= 0) {
+                    matured = true;
+                }
+            } else {
                 matured = true;
             }
-        } else {
-            matured = true;
         }
     }
 
     /**
      * Человеческая задержка реакции на готовый удар: экспоненциальное
-     * распределение, среднее ~1.8 тика (90 мс), максимум 6. Человек, кликающий
-     * в ритме кулдауна, не попадает ровно в тик готовности каждый раз —
-     * у него есть моторный разброс с тяжёлым хвостом.
+     * распределение со средним из настройки «Hit Delay». 0 мс — бьёт
+     * мгновенно, как раньше (максимальная скорость для PvP с читами).
      */
     private static int reactionDelayTicks() {
+        float ms = AttackAura.hitDelayMs();
+        if (ms <= 0.0F) {
+            return 0;
+        }
+        double meanTicks = ms / 50.0;
         double u = java.util.concurrent.ThreadLocalRandom.current().nextDouble();
-        int d = (int) (-Math.log(1.0 - u) * 1.8);
-        return Math.min(d, 6);
+        int d = (int) (-Math.log(1.0 - u) * meanTicks);
+        return Math.min(d, Math.max(6, (int) (meanTicks * 3)));
     }
 
     /**
@@ -149,22 +169,35 @@ public final class AttackPlanner {
             return false;
         }
         Minecraft mc = Minecraft.getInstance();
-        // Ждали крит, а симуляция ошиблась на тик-другой — подождём чуть-чуть,
-        // но не вечно (иначе удар зависнет в воздухе).
-        if (planCrit && critExtra < 10 && mc.player != null && !mc.player.onGround()
-                && !Attack.critStateReadyNow() && !Attack.critImpossibleNow()) {
-            critExtra += 2;
-            ticksLeft = 2;
+
+        // Строжайший запрет: в воздухе при смарт-критах бить ТОЛЬКО при critStateReadyNow!
+        // Никаких ударов на подъёме (vy >= 0) — это гарантированно не крит и сжигает кулдаун.
+        if (AttackAura.extra(AttackAura.SMART_CRITS) && mc.player != null && !mc.player.onGround()
+                && !Attack.critImpossibleNow() && !Attack.critStateReadyNow()) {
+            ticksLeft = 1;
             matured = false;
             return false;
         }
+
+        // Ждали крит, но симуляция ошиблась на тик:
+        if (planCrit && critExtra < 8 && mc.player != null && !mc.player.onGround()
+                && !Attack.critStateReadyNow() && !Attack.critImpossibleNow()) {
+            critExtra++;
+            ticksLeft = 1;
+            matured = false;
+            return false;
+        }
+
         // Строгая геометрия: форсированный удар обязан реально попадать лучом,
         // иначе получим замах с частицами, но без урона (ghost hit).
         if (!AuraUtil.validDistance(target, ranges[0], true)
+                || Attack.targetInvulnerableNow(target)
+                || Attack.lagBlockedNow()
                 || !Attack.chargeReached()
                 || !Attack.anyEntityOnRayStrict(target, ranges[0])
                 || Attack.holdingMaceSmash()) {
-            ticksLeft = 1 + AuraRandom.range(0, 2);
+            int push = (mc.player != null && !mc.player.onGround()) ? 1 : 1 + AuraRandom.range(0, 2);
+            ticksLeft = push;
             matured = false;
             return false;
         }
@@ -181,20 +214,16 @@ public final class AttackPlanner {
         if (crit >= 0 && crit > charge + 12) {
             crit = -1;
         }
-        planCrit = crit > 0;
+        planCrit = crit >= 0;
         critExtra = 0;
-        int delay = charge;
-        if (cooldown > delay) {
-            delay = cooldown;
-        }
-        if (pace > delay) {
-            delay = pace;
-        }
-        if (crit > delay) {
+        int delay = Math.max(charge, Math.max(cooldown, pace));
+        if (planCrit && crit > delay) {
             delay = crit;
+        } else if (!planCrit) {
+            // Человеческая задержка реакции: только когда НЕ целимся в крит!
+            // Добавление рандомных тиков к таймингу крита роняет игрока на землю и сбивает крит.
+            delay += reactionDelayTicks();
         }
-        // Человеческая задержка реакции вместо равномерного джиттера.
-        delay += reactionDelayTicks();
         return Math.min(delay, MAX_PLAN_TICKS);
     }
 
@@ -226,6 +255,7 @@ public final class AttackPlanner {
     /**
      * Симуляция падения: через сколько тиков наступит крит-состояние.
      * Возвращает -1, если крит не нужен/невозможен/не случится.
+     * Возвращает 0, если крит-состояние уже готово сейчас.
      */
     private static int ticksUntilCrit() {
         Minecraft mc = Minecraft.getInstance();
@@ -235,7 +265,10 @@ public final class AttackPlanner {
         if (!AttackAura.extra(AttackAura.SMART_CRITS)) {
             return -1;
         }
-        if (Attack.critStateReadyNow() || Attack.critImpossibleNow()) {
+        if (Attack.critStateReadyNow()) {
+            return 0;
+        }
+        if (Attack.critImpossibleNow()) {
             return -1;
         }
         boolean airborne = !mc.player.onGround();
@@ -245,7 +278,19 @@ public final class AttackPlanner {
         }
         double y = mc.player.getY();
         double vy = airborne ? mc.player.getDeltaMovement().y : 0.42;
-        double groundY = y;
+        double groundY = mc.player.getY();
+        if (airborne) {
+            net.minecraft.world.phys.Vec3 pos = mc.player.position();
+            net.minecraft.world.phys.HitResult hit = mc.level.clip(new net.minecraft.world.level.ClipContext(
+                    pos, pos.add(0.0, -5.0, 0.0),
+                    net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                    net.minecraft.world.level.ClipContext.Fluid.NONE, mc.player));
+            if (hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+                groundY = hit.getLocation().y;
+            } else {
+                groundY = pos.y - 1.5;
+            }
+        }
         float fall = airborne ? (float) mc.player.fallDistance : 0.0F;
         float need = Attack.critFallHeightValue();
         for (int t = 1; t <= FALL_SIM_TICKS; t++) {
