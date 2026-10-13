@@ -297,9 +297,9 @@ public final class BlackHoleShaders implements ShaderSource {
 
             vec3 rayDir(vec2 uv) {
                 vec2 ndc = uv * 2.0 - 1.0;
-                vec4 pFar = invViewProj * vec4(ndc, 1.0, 1.0);
-                vec4 pNear = invViewProj * vec4(ndc, -1.0, 1.0);
-                return normalize(pFar.xyz / pFar.w - pNear.xyz / pNear.w);
+                // Camera uses reversed Z in 26.2; a finite interior point works on both backends.
+                vec4 point = invViewProj * vec4(ndc, 0.5, 1.0);
+                return normalize(point.xyz / point.w);
             }
 
             vec3 toLocal(vec3 dir, vec3 eX, vec3 eY, vec3 eZ) {
@@ -512,9 +512,9 @@ public final class BlackHoleShaders implements ShaderSource {
                 vec4 hist = vec4(0.0);
                 if (taa.z > 0.5) {
                     vec2 ndc = texCoord * 2.0 - 1.0;
-                    vec4 pFar = invViewProj * vec4(ndc, 1.0, 1.0);
-                    vec4 pNear = invViewProj * vec4(ndc, -1.0, 1.0);
-                    vec3 rd = normalize(pFar.xyz / pFar.w - pNear.xyz / pNear.w);
+                    // Camera uses reversed Z in 26.2; a finite interior point works on both backends.
+                vec4 point = invViewProj * vec4(ndc, 0.5, 1.0);
+                vec3 rd = normalize(point.xyz / point.w);
                     vec4 pc = prevViewProj * vec4(rd, 0.0);
                     if (pc.w > 1e-5) {
                         vec2 prevUV = pc.xy / pc.w * 0.5 + 0.5;
@@ -594,7 +594,6 @@ public final class BlackHoleShaders implements ShaderSource {
     public static final String COMPOSITE = """
             #version 150
 
-            uniform sampler2D DepthTex;
             uniform sampler2D Sky;
             uniform sampler2D Bloom0;
             uniform sampler2D Bloom1;
@@ -753,9 +752,9 @@ public final class BlackHoleShaders implements ShaderSource {
 
             vec3 blackHole() {
                 vec2 ndc = texCoord * 2.0 - 1.0;
-                vec4 pFar = invViewProj * vec4(ndc, 1.0, 1.0);
-                vec4 pNear = invViewProj * vec4(ndc, -1.0, 1.0);
-                vec3 rd = normalize(pFar.xyz / pFar.w - pNear.xyz / pNear.w);
+                // Camera uses reversed Z in 26.2; a finite interior point works on both backends.
+                vec4 point = invViewProj * vec4(ndc, 0.5, 1.0);
+                vec3 rd = normalize(point.xyz / point.w);
 
                 vec3 bhDir = holeCenter(normalize(vec3(0.34, 0.62, 0.71)));
                 float cosT = clamp(dot(rd, bhDir), -1.0, 1.0);

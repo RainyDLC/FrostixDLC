@@ -60,7 +60,6 @@ public final class BlackHoleRenderer {
     private static final float HOLE_SKIP_EPS = 0.01f;
 
     private static final Vector4f TMP_CLIP_A = new Vector4f();
-    private static final Vector4f TMP_CLIP_B = new Vector4f();
     private static final Vector3f TMP_VIEW_DIR = new Vector3f();
     private static final Vector3f TMP_RAY_DIR = new Vector3f();
 
@@ -112,7 +111,6 @@ public final class BlackHoleRenderer {
         if (disabledAfterError || renderTarget == null
                 || renderTarget.getColorTexture() == null
                 || renderTarget.getColorTextureView() == null
-                || renderTarget.getDepthTextureView() == null
                 || renderTarget.width <= 0 || renderTarget.height <= 0) {
             return;
         }
@@ -205,7 +203,6 @@ public final class BlackHoleRenderer {
             GpuTextureView skyView;
             GpuSampler linearSampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR);
             GpuSampler repeatSampler = RenderSystem.getSamplerCache().getRepeat(FilterMode.LINEAR);
-            GpuSampler nearestSampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
 
             if (holeOnScreen) {
                 try (RenderPass pass = encoder.createRenderPass(() -> "RainyDLC blackhole march",
@@ -238,7 +235,6 @@ public final class BlackHoleRenderer {
                 pass.setPipeline(compositePipeline);
                 pass.setVertexBuffer(0, dummyVertexBuffer.slice());
                 pass.setUniform("SkyParams", uniformBuffer);
-                pass.bindTexture("DepthTex", renderTarget.getDepthTextureView(), nearestSampler);
                 pass.bindTexture("Sky", skyView, linearSampler);
                 for (int levelIdx = 0; levelIdx < BLOOM_LEVELS; ++levelIdx) {
                     pass.bindTexture("Bloom" + levelIdx, holeOnScreen ? bloomTextureViews[levelIdx] : blackTextureView,
@@ -322,7 +318,9 @@ public final class BlackHoleRenderer {
                                 .withSampler("NoiseTex")
                                 .build());
                 marchPipeline = builder.build();
-                device.precompilePipeline(marchPipeline, BlackHoleShaders.INSTANCE);
+                if (!device.precompilePipeline(marchPipeline, BlackHoleShaders.INSTANCE).isValid()) {
+                    throw new IllegalStateException("Black hole march shader did not compile");
+                }
             }
 
             if (resolvePipeline == null) {
@@ -341,7 +339,9 @@ public final class BlackHoleRenderer {
                                 .withSampler("History")
                                 .build());
                 resolvePipeline = builder.build();
-                device.precompilePipeline(resolvePipeline, BlackHoleShaders.INSTANCE);
+                if (!device.precompilePipeline(resolvePipeline, BlackHoleShaders.INSTANCE).isValid()) {
+                    throw new IllegalStateException("Black hole resolve shader did not compile");
+                }
             }
 
             if (bloomPipeline == null) {
@@ -359,13 +359,14 @@ public final class BlackHoleRenderer {
                                 .withSampler("Source")
                                 .build());
                 bloomPipeline = builder.build();
-                device.precompilePipeline(bloomPipeline, BlackHoleShaders.INSTANCE);
+                if (!device.precompilePipeline(bloomPipeline, BlackHoleShaders.INSTANCE).isValid()) {
+                    throw new IllegalStateException("Black hole bloom shader did not compile");
+                }
             }
 
             if (compositePipeline == null) {
                 var bgBuilder = com.mojang.blaze3d.pipeline.BindGroupLayout.builder()
                         .withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
-                        .withSampler("DepthTex")
                         .withSampler("Sky");
                 for (int i = 0; i < BLOOM_LEVELS; ++i) {
                     bgBuilder.withSampler("Bloom" + i);
@@ -383,7 +384,9 @@ public final class BlackHoleRenderer {
                         .withCull(false)
                         .withBindGroupLayout(bgBuilder.build());
                 compositePipeline = builder.build();
-                device.precompilePipeline(compositePipeline, BlackHoleShaders.INSTANCE);
+                if (!device.precompilePipeline(compositePipeline, BlackHoleShaders.INSTANCE).isValid()) {
+                    throw new IllegalStateException("Black hole composite shader did not compile");
+                }
             }
 
             if (bloomUniformBuffer == null || bloomUniformBuffer.isClosed() || bloomUniformBuffer.size() < BLOOM_UNIFORM_SIZE) {
@@ -433,13 +436,11 @@ public final class BlackHoleRenderer {
     }
 
     private static void rayDirNdc(float ndcX, float ndcY, Vector3f dest) {
-        TMP_CLIP_A.set(ndcX, ndcY, 1.0f, 1.0f);
+        // Rotation-only VP: the camera is at the origin. Do not subtract clip endpoints:
+        // 26.2 uses reversed Z, and some backends also use the [0, 1] clip range.
+        TMP_CLIP_A.set(ndcX, ndcY, 0.5f, 1.0f);
         INV_VIEW_PROJ.transform(TMP_CLIP_A);
-        TMP_CLIP_A.div(TMP_CLIP_A.w);
-        TMP_CLIP_B.set(ndcX, ndcY, -1.0f, 1.0f);
-        INV_VIEW_PROJ.transform(TMP_CLIP_B);
-        TMP_CLIP_B.div(TMP_CLIP_B.w);
-        dest.set(TMP_CLIP_A.x - TMP_CLIP_B.x, TMP_CLIP_A.y - TMP_CLIP_B.y, TMP_CLIP_A.z - TMP_CLIP_B.z).normalize();
+        dest.set(TMP_CLIP_A.x, TMP_CLIP_A.y, TMP_CLIP_A.z).div(TMP_CLIP_A.w).normalize();
     }
 
     private static void ensureBlackTexture() {

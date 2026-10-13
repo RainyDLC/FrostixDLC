@@ -117,3 +117,26 @@ tasks.register('chamsPipelineRegression', JavaExec) {
     classpath = files(chamsPipelineTestClasses) + sourceSets.client.runtimeClasspath
     mainClass = 'dev.hatek.client.render.ChamsPipelineRegression'
 }
+
+// CPU/GPU ray convention and cinematic timeline regression; no GL context required.
+def vfxTestClasses = layout.buildDirectory.dir('classes/vfxRegression')
+tasks.register('compileVfxRegression', JavaCompile) {
+    dependsOn tasks.named('compileClientJava')
+    source files('../tests/VfxRegression.java', '../tests/VfxGeometryRegression.java')
+    classpath = sourceSets.client.runtimeClasspath
+    destinationDirectory = vfxTestClasses
+    javaCompiler = tasks.named('compileClientJava', JavaCompile).flatMap { it.javaCompiler }
+    options.encoding = 'UTF-8'
+}
+tasks.register('vfxRegression', JavaExec) {
+    dependsOn tasks.named('compileVfxRegression')
+    classpath = files(vfxTestClasses) + sourceSets.client.runtimeClasspath
+    mainClass = 'dev.hatek.client.render.killeffect.VfxRegression'
+}
+
+tasks.register('vfxGeometryRegression', JavaExec) {
+    dependsOn tasks.named('compileVfxRegression')
+    classpath = files(vfxTestClasses) + sourceSets.client.runtimeClasspath
+    mainClass = 'dev.hatek.client.render.killeffect.VfxGeometryRegression'
+    systemProperty 'vfx.preview', layout.buildDirectory.dir('vfx-preview').get().asFile.absolutePath
+}

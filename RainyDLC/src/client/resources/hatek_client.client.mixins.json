@@ -33,7 +33,9 @@
     "accessor.MinecraftAccessor",
     "accessor.ScreenInvoker",
     "accessor.GuiAccessor",
-    "accessor.BossHealthOverlayAccessor"
+    "accessor.BossHealthOverlayAccessor",
+    "KillEffectWorldMixin",
+    "KillEffectLivingMixin"
   ],
   "injectors": {
     "defaultRequire": 1

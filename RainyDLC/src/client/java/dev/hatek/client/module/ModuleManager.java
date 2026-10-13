@@ -10,6 +10,7 @@ import dev.hatek.client.module.impl.player.NoJumpDelay;
 import dev.hatek.client.module.impl.render.ClickGui;
 import dev.hatek.client.module.impl.render.Ambience;
 import dev.hatek.client.module.impl.render.Chams;
+import dev.hatek.client.module.impl.render.KillEffect;
 import dev.hatek.client.module.impl.render.Cosmetics;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.client.module.impl.render.NoRender;
@@ -90,6 +91,8 @@ public final class ModuleManager {
         MODULES.add(new Ambience().expanded(true));
 
         MODULES.add(new Chams().expanded(true));
+
+        MODULES.add(new KillEffect().expanded(true));
 
         MODULES.add(new Interface().expanded(true));
 
