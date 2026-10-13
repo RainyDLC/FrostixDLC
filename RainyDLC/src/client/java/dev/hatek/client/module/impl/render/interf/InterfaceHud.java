@@ -156,8 +156,8 @@ public final class InterfaceHud {
         int sh = Render2D.screenHeight();
         putBound(out, HudLayout.Element.WATERMARK, Interface.showWatermark(), sw, sh,
                 InterfaceHud::measureWatermark);
-        putBound(out, HudLayout.Element.KEYBINDS, Interface.showKeybinds(), sw, sh,
-                InterfaceHud::measureKeybinds);
+        putBound(out, HudLayout.Element.HOTKEYS, Interface.showHOTKEYS(), sw, sh,
+                InterfaceHud::measureHOTKEYS);
         putBound(out, HudLayout.Element.EFFECTS, Interface.showEffects(), sw, sh,
                 InterfaceHud::measureEffects);
         putBound(out, HudLayout.Element.HOTBAR, Interface.showHotbar(), sw, sh,
@@ -326,8 +326,8 @@ public final class InterfaceHud {
         Render2D.begin(gg);
         place(gg, HudLayout.Element.WATERMARK, Interface.showWatermark(), sw, sh,
                 InterfaceHud::measureWatermark, InterfaceHud::drawWatermark);
-        place(gg, HudLayout.Element.KEYBINDS, Interface.showKeybinds(), sw, sh,
-                InterfaceHud::measureKeybinds, InterfaceHud::drawKeybinds);
+        place(gg, HudLayout.Element.HOTKEYS, Interface.showHOTKEYS(), sw, sh,
+                InterfaceHud::measureHOTKEYS, InterfaceHud::drawHOTKEYS);
         place(gg, HudLayout.Element.EFFECTS, Interface.showEffects(), sw, sh,
                 InterfaceHud::measureEffects, InterfaceHud::drawEffects);
         place(gg, HudLayout.Element.HOTBAR, Interface.showHotbar(), sw, sh,
@@ -445,10 +445,10 @@ public final class InterfaceHud {
                 }
                 return new float[]{x, y};
             }
-            case KEYBINDS:
+            case HOTKEYS:
                 return new float[]{sw - w - m, m};
             case EFFECTS: {
-                float[] kb = BOUNDS.get(HudLayout.Element.KEYBINDS);
+                float[] kb = BOUNDS.get(HudLayout.Element.HOTKEYS);
                 float top = (kb != null) ? kb[1] + kb[3] + 8.0f : m;
                 return new float[]{sw - w - m, top};
             }
@@ -647,7 +647,7 @@ public final class InterfaceHud {
         }
     }
 
-    private static KbData measureKeybinds(float s) {
+    private static KbData measureHOTKEYS(float s) {
         List<Module> bound = new ArrayList<>();
         for (Module module : ModuleManager.all()) {
             if (module.keyCode() != GLFW.GLFW_KEY_UNKNOWN) {
@@ -663,7 +663,7 @@ public final class InterfaceHud {
         HFont label = sLabel(s * 0.85f);
         float pad = Style.HUD_PAD * s;
 
-        float headerW = pad + label.width("KEYBINDS") + 8.0f * s
+        float headerW = pad + label.width("HotKeys") + 8.0f * s
                 + label.width("[00]") + pad;
         float numW = label.width("00");
         float rowsW = 0.0f;
@@ -679,14 +679,14 @@ public final class InterfaceHud {
     }
 
     /** Рисует панель кейбиндов в origin (0,0) с ручным масштабом. */
-    private static void drawKeybinds(GuiGraphicsExtractor gg, float s, KbData d) {
+    private static void drawHOTKEYS(GuiGraphicsExtractor gg, float s, KbData d) {
         float w = d.w;
         HFont body = sBody(s);
         HFont label = sLabel(s * 0.85f);
         float pad = Style.HUD_PAD * s;
 
         sheet(gg, w, d.h, s);
-        float ry = sectionHead(gg, "Keybinds", d.bound.size(), s, w);
+        float ry = sectionHead(gg, "HotKeys", d.bound.size(), s, w);
 
         float rowH = 20.0f * s;
         float numW = label.width("00");
