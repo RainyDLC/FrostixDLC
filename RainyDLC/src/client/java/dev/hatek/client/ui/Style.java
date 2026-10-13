@@ -186,33 +186,15 @@ public final class Style {
 
     public static final int HUD_PANEL = 0xDB181717;
     public static final int HUD_MARGIN = 10;
-    public static final int HUD_CARD_R = CARD_R;
-    public static final int HUD_PAD = 13;
-
-    public static final int HUD_HEADER_H = 38;
-    // Чип с иконкой в шапке карточки (как иконки категорий в сайдбаре GUI).
-    public static final int HUD_CHIP = 22;
-    public static final int HUD_CHIP_R = 7;
-    public static final int HUD_CHIP_ICON = 12;
-    // Пилюля-счётчик справа в шапке.
-    public static final int HUD_PILL_H = 16;
-    public static final int HUD_PILL_R = 8;
-    public static final int HUD_PILL_PAD = 7;
-
-    public static final int HUD_BOTTOM_PAD = 12;
+    // HUD в терминальном стиле: плоские панели, острые углы, тонкие линии.
+    // Никакого стекла, свечений и скруглений.
+    public static final int HUD_PANEL2 = 0xE8171717;
+    public static final int HUD_LINE = white(0.12f);
+    public static final int HUD_DIV = white(0.06f);
+    public static final int HUD_PAD = 10;
+    public static final int HUD_HEADER_H = 26;
+    public static final int HUD_BOTTOM_PAD = 8;
     public static final int HUD_MIN_W = 150;
-
-    // Ватермарка: пилюля в стиле нав-панели GUI.
-    public static final int WM_H = 36;
-    public static final int WM_R = 18;
-    public static final int WM_PAD = 14;
-    public static final int WM_DOT = 6;
-    public static final int WM_NAME_GAP = 8;
-    public static final int WM_SEP_GAP = 10;
-    public static final int WM_SEP_W = 1;
-    public static final int WM_SEP_H = 14;
-    public static final int WM_UNIT_ICON = 11;
-    public static final int WM_UNIT_GAP = 4;
 
     public static final float FONT_HUD = 12.0f;
 

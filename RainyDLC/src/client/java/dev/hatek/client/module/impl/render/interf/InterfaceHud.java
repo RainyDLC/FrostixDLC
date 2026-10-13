@@ -13,7 +13,6 @@ import dev.hatek.client.ui.Style;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
 import dev.hatek.client.ui.render.Render2D;
-import dev.hatek.client.ui.render.TexCache;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -49,12 +48,11 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * Отрисовка HUD модуля Interface в стилистике ClickGUI:
- * тёмные карточки (HUD_PANEL, радиус как у карточек GUI), стеклянная кромка
- * сверху (TexCache.glassRim), чипы с иконками в акценте в шапках,
- * пилюли-счётчики, бары в стиле слайдеров GUI.
+ * Отрисовка HUD модуля Interface в терминальном стиле:
+ * плоские панели, острые углы, тонкие линии, моноширинные подписи.
+ * Никакого стекла, свечений и скруглений.
  *
- * Элементы: ватермарка-пилюля, кейбинды функций, активные эффекты,
+ * Элементы: ватермарка-строка, кейбинды функций, активные эффекты,
  * кастомный хотбар, своя броня, цель (таргет ауры / прицел) и 2D-медиа.
  *
  * Масштаб применяется НЕ трансформацией позы (так текст из атласа
@@ -464,84 +462,64 @@ public final class InterfaceHud {
         }
     }
 
-    // ---------------- общий визуальный язык (как в ClickGUI) ----------------
+    // ---------------- визуальный язык: терминал, без «нейрослопа» ----------------
+    // Плоские панели, острые углы, тонкие линии, моноширинные подписи.
+    // Никакого стекла, свечений и пилюль.
 
-    /**
-     * Карточка: тёмная панель + стеклянная кромка (блик сверху, глянец),
-     * как у панелей ClickGUI.
-     */
-    private static void card(GuiGraphicsExtractor gg, float w, float h, float s) {
-        float r = Style.HUD_CARD_R * s;
-        Render2D.round(gg, 0, 0, w, h, r, Style.HUD_PANEL);
-        Render2D.texture(gg,
-                TexCache.glassRim(Math.max(1, Math.round(w)),
-                        Math.max(1, Math.round(h)), r),
-                0, 0, w, h, Style.WHITE);
+    /** Плоская панель: заливка + рамка 1px. Острые углы. */
+    private static void panel(GuiGraphicsExtractor gg, float w, float h) {
+        Render2D.rect(gg, 0, 0, w, 1, Style.HUD_LINE);
+        Render2D.rect(gg, 0, h - 1, w, 1, Style.HUD_LINE);
+        Render2D.rect(gg, 0, 1, 1, h - 2, Style.HUD_LINE);
+        Render2D.rect(gg, w - 1, 1, 1, h - 2, Style.HUD_LINE);
+        Render2D.rect(gg, 1, 1, w - 2, h - 2, Style.HUD_PANEL2);
     }
 
-    /** Чип с векторной иконкой в шапке карточки (иконка — в акценте). */
-    private static void headerChip(GuiGraphicsExtractor gg, float s, String icon) {
-        float chip = Style.HUD_CHIP * s;
-        float y = (Style.HUD_HEADER_H * s - chip) / 2.0f;
-        Render2D.round(gg, Style.HUD_PAD * s, y, chip, chip,
-                Style.HUD_CHIP_R * s, Style.WHITE_04);
-        float is = Style.HUD_CHIP_ICON * s;
-        Render2D.icon(gg, icon, Style.HUD_PAD * s + (chip - is) / 2.0f,
-                y + (chip - is) / 2.0f, is, is, Style.accent());
-    }
-
-    /** Чип с растровой текстурой в шапке (флакон эффектов). */
-    private static void headerChipTex(GuiGraphicsExtractor gg, float s, Identifier tex) {
-        float chip = Style.HUD_CHIP * s;
-        float y = (Style.HUD_HEADER_H * s - chip) / 2.0f;
-        Render2D.round(gg, Style.HUD_PAD * s, y, chip, chip,
-                Style.HUD_CHIP_R * s, Style.WHITE_04);
-        float is = Style.HUD_CHIP_ICON * s;
-        Render2D.texture(gg, tex, Style.HUD_PAD * s + (chip - is) / 2.0f,
-                y + (chip - is) / 2.0f, is, is, Style.accent());
-    }
-
-    /** Пилюля-счётчик справа в шапке карточки. */
-    private static void headerPill(GuiGraphicsExtractor gg, float s, float w, String text) {
+    /** Шапка панели: «// ЗАГОЛОВОК» + счётчик [n] справа, линия снизу. */
+    private static void header(GuiGraphicsExtractor gg, String title, int count,
+                               float s, float w) {
         HFont label = sLabel(s);
-        float pillW = label.width(text) + Style.HUD_PILL_PAD * 2.0f * s;
-        float pillH = Style.HUD_PILL_H * s;
-        float x = w - Style.HUD_PAD * s - pillW;
-        float y = (Style.HUD_HEADER_H * s - pillH) / 2.0f;
-        Render2D.round(gg, x, y, pillW, pillH, Style.HUD_PILL_R * s,
-                Render2D.withAlpha(Style.accent(), 0.22f));
-        label.drawCentered(gg, text, x + pillW / 2.0f,
-                label.centeredBaseline(y, pillH), Style.WHITE);
+        float h = Style.HUD_HEADER_H * s;
+        float pad = Style.HUD_PAD * s;
+        float baseline = label.centeredBaseline(0, h - 1.0f);
+        float x = pad;
+        x = label.draw(gg, "//", x, baseline, Style.accent());
+        x += 5.0f * s;
+        label.draw(gg, title.toUpperCase(java.util.Locale.ROOT), x, baseline,
+                Style.WHITE);
+        label.drawRight(gg, "[" + count + "]", w - pad, baseline, Style.WHITE_45);
+        Render2D.rect(gg, 0, h - 1.0f, w, 1.0f, Style.HUD_DIV);
     }
 
-    /** Шапка карточки: чип + заголовок + счётчик. */
-    private static void drawCardHeader(GuiGraphicsExtractor gg, String icon,
-                                       String titleText, int count, float s, float w) {
-        headerChip(gg, s, icon);
-        HFont title = sTitle(s);
-        title.draw(gg, titleText,
-                Style.HUD_PAD * s + Style.HUD_CHIP * s + 8.0f * s,
-                title.centeredBaseline(0, Style.HUD_HEADER_H * s), Style.WHITE);
-        headerPill(gg, s, w, String.valueOf(count));
-    }
-
-    /** Тонкий бар в стиле слайдеров GUI: трек + заливка. */
-    private static void bar(GuiGraphicsExtractor gg, float x, float y, float w,
-                            float h, float s, float frac, int fill) {
-        Render2D.round(gg, x, y, w, h, h / 2.0f, Style.WHITE_08);
-        float fw = w * Math.max(0.0f, Math.min(1.0f, frac));
-        if (fw > 0.5f) {
-            Render2D.round(gg, x, y, fw, h, h / 2.0f, fill);
+    /** Квадратный слот под предмет: заливка + рамка 1px (акцент — выбран). */
+    private static void drawSlot(GuiGraphicsExtractor gg, Minecraft mc, ItemStack stack,
+                                 float x, float y, float slot, float s, boolean selected) {
+        int line = selected ? Style.accent() : Style.HUD_LINE;
+        Render2D.rect(gg, x, y, slot, 1, line);
+        Render2D.rect(gg, x, y + slot - 1, slot, 1, line);
+        Render2D.rect(gg, x, y + 1, 1, slot - 2, line);
+        Render2D.rect(gg, x + slot - 1, y + 1, 1, slot - 2, line);
+        Render2D.rect(gg, x + 1, y + 1, slot - 2, slot - 2, Style.HUD_PANEL2);
+        if (stack.isEmpty()) {
+            return;
         }
+        float is = slot - 6.0f * s;
+        Render2D.pushTranslate(gg, x + 3.0f * s, y + 3.0f * s);
+        Render2D.pushScale(gg, 0.0f, 0.0f, is / 16.0f);
+        gg.item(mc.player, stack, 0, 0, 0);
+        gg.itemDecorations(mc.font, stack, 0, 0);
+        Render2D.popTransform(gg);
+        Render2D.popTransform(gg);
     }
 
-    /** Светящаяся акцентная точка (ватермарка, активные кейбинды). */
-    private static void glowDot(GuiGraphicsExtractor gg, float cx, float cy,
-                                float d, float alpha) {
-        int gd = Math.max(1, Math.round(d * 3.2f));
-        Render2D.texture(gg, TexCache.glow(gd), cx - gd / 2.0f, cy - gd / 2.0f,
-                gd, gd, Render2D.withAlpha(Style.accent(), alpha));
-        Render2D.circle(gg, cx - d / 2.0f, cy - d / 2.0f, d, Style.accent());
+    /** Тонкая 1px линия прогресса. */
+    private static void thinBar(GuiGraphicsExtractor gg, float x, float y, float w,
+                                float frac, int color) {
+        Render2D.rect(gg, x, y, w, 1, Style.HUD_DIV);
+        float fw = w * Math.max(0.0f, Math.min(1.0f, frac));
+        if (fw >= 1.0f) {
+            Render2D.rect(gg, x, y, fw, 1, color);
+        }
     }
 
     // ---------------- ватермарка ----------------
@@ -582,79 +560,51 @@ public final class InterfaceHud {
         Minecraft mc = Minecraft.getInstance();
         HFont title = sTitle(s);
         HFont label = sLabel(s);
-        float h = Style.WM_H * s;
+        float h = 22.0f * s;
 
-        float nameW = title.width("Rainy") + title.width("DLC");
-        float w = (Style.WM_PAD + Style.WM_DOT + Style.WM_NAME_GAP) * s + nameW;
+        float nameW = title.width("RAINY") + title.width("DLC");
+        float w = 2.0f * s + 8.0f * s + nameW;
 
         String fps = mc.getFps() + " FPS";
-        float unitIcon = Style.WM_UNIT_ICON * s;
-        w += sepW(s) + unitIcon + Style.WM_UNIT_GAP * s + label.width(fps);
+        w += 10.0f * s + label.width("//") + 6.0f * s + label.width(fps);
 
         int ping = ping();
-        String pingS = ping >= 0 ? ping + " ms" : null;
+        String pingS = ping >= 0 ? ping + " MS" : null;
         if (pingS != null) {
-            w += sepW(s) + unitIcon + Style.WM_UNIT_GAP * s + label.width(pingS);
+            w += 10.0f * s + label.width("//") + 6.0f * s + label.width(pingS);
         }
-        w += Style.WM_PAD * s;
+        w += 8.0f * s;
         return new WmData(w, h, fps, pingS);
     }
 
-    /** Ширина разделителя вместе с отступами по бокам. */
-    private static float sepW(float s) {
-        return (Style.WM_SEP_GAP * 2.0f + Style.WM_SEP_W) * s;
-    }
-
-    /** Рисует ватермарку-пилюлю в origin (0,0) с ручным масштабом. */
+    /** Рисует ватермарку-строку в origin (0,0) с ручным масштабом. */
     private static void drawWatermark(GuiGraphicsExtractor gg, float s, WmData d) {
         float w = d.w();
         float h = d.h();
-        float r = Style.WM_R * s;
-        Render2D.round(gg, 0, 0, w, h, r, Style.HUD_PANEL);
-        Render2D.texture(gg,
-                TexCache.glassRim(Math.max(1, Math.round(w)),
-                        Math.max(1, Math.round(h)), r),
-                0, 0, w, h, Style.WHITE);
+        Render2D.rect(gg, 0, 0, w, h, Style.HUD_PANEL2);
+        Render2D.rect(gg, 0, 0, 2.0f * s, h, Style.accent());
 
         HFont title = sTitle(s);
         HFont label = sLabel(s);
-
-        // Пульсирующая акцентная точка вместо логотипа.
-        float dot = Style.WM_DOT * s;
-        float dotCx = Style.WM_PAD * s + dot / 2.0f;
-        long t = System.currentTimeMillis() % 1600L;
-        float pulse = 0.65f + 0.35f
-                * (float) Math.sin(t / 1600.0f * Math.PI * 2.0f);
-        glowDot(gg, dotCx, h / 2.0f, dot, 0.30f * pulse);
-
-        float nameX = (Style.WM_PAD + Style.WM_DOT + Style.WM_NAME_GAP) * s;
+        float x = 2.0f * s + 8.0f * s;
         float baseline = title.centeredBaseline(0, h);
-        float cx = title.draw(gg, "Rainy", nameX, baseline, Style.WHITE);
-        cx = title.draw(gg, "DLC", cx, baseline, Style.accent());
+        x = title.draw(gg, "RAINY", x, baseline, Style.WHITE);
+        x = title.draw(gg, "DLC", x, baseline, Style.accent());
 
-        float unitBaseline = label.centeredBaseline(0, h);
-        cx = separator(gg, cx, h, s);
-        cx = unit(gg, "fps", d.fps(), cx, h, unitBaseline, s);
-
+        float lb = label.centeredBaseline(0, h);
+        x = wmUnit(gg, d.fps(), x, lb, s);
         if (d.pingS() != null) {
-            cx = separator(gg, cx, h, s);
-            unit(gg, "ping", d.pingS(), cx, h, unitBaseline, s);
+            wmUnit(gg, d.pingS(), x, lb, s);
         }
     }
 
-    private static float separator(GuiGraphicsExtractor gg, float cx, float h, float s) {
-        cx += Style.WM_SEP_GAP * s;
-        Render2D.rect(gg, cx, (h - Style.WM_SEP_H * s) / 2.0f,
-                Style.WM_SEP_W * s, Style.WM_SEP_H * s, Style.WHITE_08);
-        return cx + Style.WM_SEP_W * s + Style.WM_SEP_GAP * s;
-    }
-
-    private static float unit(GuiGraphicsExtractor gg, String icon, String text,
-                              float cx, float h, float baseline, float s) {
-        float iconS = Style.WM_UNIT_ICON * s;
-        Render2D.icon(gg, icon, cx, (h - iconS) / 2.0f, iconS, iconS, Style.WHITE_45);
-        cx += iconS + Style.WM_UNIT_GAP * s;
-        return sLabel(s).draw(gg, text, cx, baseline, Style.WHITE);
+    private static float wmUnit(GuiGraphicsExtractor gg, String text,
+                                float x, float baseline, float s) {
+        HFont label = sLabel(s);
+        x += 10.0f * s;
+        x = label.draw(gg, "//", x, baseline, Style.WHITE_25);
+        x += 6.0f * s;
+        return label.draw(gg, text, x, baseline, Style.WHITE);
     }
 
     private static int cachedPing = -2;
@@ -720,62 +670,51 @@ public final class InterfaceHud {
         }
         bound.sort(Comparator.comparing(Module::name));
 
-        HFont title = sTitle(s);
         HFont body = sBody(s);
         HFont label = sLabel(s);
+        float pad = Style.HUD_PAD * s;
 
-        float headerW = Style.HUD_PAD * s + Style.HUD_CHIP * s + 8.0f * s
-                + title.width("Keybinds") + Style.HUD_PAD * s;
+        float headerW = pad + label.width("//") + 5.0f * s
+                + label.width("KEYBINDS") + 8.0f * s + label.width("[00]") + pad;
+        float numW = label.width("00");
         float rowsW = 0.0f;
         for (Module module : bound) {
-            float badgeW = label.width(module.keyLabel())
-                    + Style.HUD_PILL_PAD * 2.0f * s;
-            float rowW = 24.0f * s + body.width(module.name()) + 8.0f * s
-                    + badgeW + Style.HUD_PAD * s;
+            float rowW = pad + numW + 6.0f * s + body.width(module.name())
+                    + 8.0f * s + label.width("[" + module.keyLabel() + "]") + pad;
             rowsW = Math.max(rowsW, rowW);
         }
         float w = Math.max(Style.HUD_MIN_W * s, Math.max(headerW, rowsW));
-        float rowH = 22.0f * s;
+        float rowH = 18.0f * s;
         float h = Style.HUD_HEADER_H * s + bound.size() * rowH
                 + Style.HUD_BOTTOM_PAD * s;
         return new KbData(w, h, bound);
     }
 
-    /** Рисует карточку кейбиндов в origin (0,0) с ручным масштабом. */
+    /** Рисует панель кейбиндов в origin (0,0) с ручным масштабом. */
     private static void drawKeybinds(GuiGraphicsExtractor gg, float s, KbData d) {
         float w = d.w;
         HFont body = sBody(s);
         HFont label = sLabel(s);
+        float pad = Style.HUD_PAD * s;
 
-        card(gg, w, d.h, s);
-        drawCardHeader(gg, "keyboard", "Keybinds", d.bound.size(), s, w);
+        panel(gg, w, d.h);
+        header(gg, "Keybinds", d.bound.size(), s, w);
 
-        float rowH = 22.0f * s;
+        float rowH = 18.0f * s;
         float ry = Style.HUD_HEADER_H * s;
-        for (Module module : d.bound) {
+        float numW = label.width("00");
+        for (int i = 0; i < d.bound.size(); i++) {
+            Module module = d.bound.get(i);
             boolean enabled = module.isEnabled();
-            float dotCx = Style.HUD_PAD * s + 2.5f * s;
-            float dotCy = ry + rowH / 2.0f;
-            if (enabled) {
-                glowDot(gg, dotCx, dotCy, 5.0f * s, 0.45f);
-            } else {
-                Render2D.circle(gg, dotCx - 2.5f * s, dotCy - 2.5f * s,
-                        5.0f * s, Style.WHITE_25);
-            }
-            body.draw(gg, module.name(), 24.0f * s,
-                    body.centeredBaseline(ry, rowH),
+            String num = i < 9 ? "0" + (i + 1) : String.valueOf(i + 1);
+            float baseline = body.centeredBaseline(ry, rowH);
+            label.draw(gg, num, pad,
+                    label.centeredBaseline(ry, rowH), Style.WHITE_25);
+            body.draw(gg, module.name(), pad + numW + 6.0f * s, baseline,
                     enabled ? Style.WHITE : Style.WHITE_45);
-
-            String key = module.keyLabel();
-            float badgeW = label.width(key) + Style.HUD_PILL_PAD * 2.0f * s;
-            float bx = w - Style.HUD_PAD * s - badgeW;
-            float by = ry + (rowH - Style.HUD_PILL_H * s) / 2.0f;
-            Render2D.round(gg, bx, by, badgeW, Style.HUD_PILL_H * s,
-                    Style.HUD_PILL_R * s,
-                    enabled ? Render2D.withAlpha(Style.accent(), 0.22f) : Style.WHITE_04);
-            label.drawCentered(gg, key, bx + badgeW / 2.0f,
-                    label.centeredBaseline(by, Style.HUD_PILL_H * s),
-                    enabled ? Style.WHITE : Style.WHITE_45);
+            label.drawRight(gg, "[" + module.keyLabel() + "]", w - pad,
+                    label.centeredBaseline(ry, rowH),
+                    enabled ? Style.WHITE : Style.WHITE_25);
             ry += rowH;
         }
     }
@@ -820,33 +759,35 @@ public final class InterfaceHud {
             return null;
         }
 
-        HFont title = sTitle(s);
         HFont body = sBody(s);
         HFont label = sLabel(s);
+        float pad = Style.HUD_PAD * s;
 
-        float rowH = 26.0f * s;
-        float headerW = Style.HUD_PAD * s + Style.HUD_CHIP * s + 8.0f * s
-                + title.width("Effects") + Style.HUD_PAD * s;
+        float rowH = 20.0f * s;
+        float headerW = pad + label.width("//") + 5.0f * s
+                + label.width("EFFECTS") + 8.0f * s + label.width("[00]") + pad;
         float rowsW = 0.0f;
         int count = Math.min(8, effects.size());
         List<Float> fracs = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             MobEffectInstance instance = effects.get(i);
-            String name = effectBaseName(instance);
             String roman = ampRoman(instance.getAmplifier());
-            float nameW = body.width(name);
-            float ampW = roman == null ? 0.0f
-                    : label.width(roman) + 9.0f * s + 5.0f * s;
+            float nameW = body.width(fxName(instance)
+                    + (roman == null ? "" : " " + roman));
             String dur = formatDuration(instance.getDuration());
-            float rowW = Style.HUD_PAD * s + 18.0f * s + 7.0f * s
-                    + nameW + ampW + 10.0f * s + label.width(dur)
-                    + Style.HUD_PAD * s;
+            float rowW = pad + 12.0f * s + 6.0f * s + nameW + 10.0f * s
+                    + label.width(dur) + pad;
             rowsW = Math.max(rowsW, rowW);
             fracs.add(effectFrac(instance));
         }
         float w = Math.max(Style.HUD_MIN_W * s, Math.max(headerW, rowsW));
-        float h = Style.HUD_HEADER_H * s + count * rowH + 10.0f * s;
+        float h = Style.HUD_HEADER_H * s + count * rowH + Style.HUD_BOTTOM_PAD * s;
         return new FxData(w, h, effects.subList(0, count), fracs);
+    }
+
+    /** Имя эффекта капсом для терминального вида. */
+    private static String fxName(MobEffectInstance instance) {
+        return effectBaseName(instance).toUpperCase(java.util.Locale.ROOT);
     }
 
     /** Доля оставшейся длительности: запоминаем максимум, бар убывает от него. */
@@ -869,20 +810,16 @@ public final class InterfaceHud {
                 : Math.max(0.0f, Math.min(1.0f, dur / (float) max));
     }
 
-    /** Рисует карточку эффектов в origin (0,0) с ручным масштабом. */
+    /** Рисует панель эффектов в origin (0,0) с ручным масштабом. */
     private static void drawEffects(GuiGraphicsExtractor gg, float s, FxData d) {
         HFont body = sBody(s);
         HFont label = sLabel(s);
+        float pad = Style.HUD_PAD * s;
 
-        float rowH = 26.0f * s;
-        float iconS = 14.0f * s;
-        card(gg, d.w, d.h, s);
-        headerChipTex(gg, s, TexCache.flask(Math.max(1, Math.round(Style.HUD_CHIP_ICON * s))));
-        HFont title = sTitle(s);
-        title.draw(gg, "Effects",
-                Style.HUD_PAD * s + Style.HUD_CHIP * s + 8.0f * s,
-                title.centeredBaseline(0, Style.HUD_HEADER_H * s), Style.WHITE);
-        headerPill(gg, s, d.w, String.valueOf(d.shown.size()));
+        float rowH = 20.0f * s;
+        float iconS = 12.0f * s;
+        panel(gg, d.w, d.h);
+        header(gg, "Effects", d.shown.size(), s, d.w);
 
         RenderPipeline pipeline = RenderPipelines.GUI_TEXTURED;
         float ry = Style.HUD_HEADER_H * s;
@@ -890,41 +827,24 @@ public final class InterfaceHud {
             MobEffectInstance instance = d.shown.get(i);
             Holder<MobEffect> holder = instance.getEffect();
 
-            // Иконка эффекта в чипе.
-            float slot = 18.0f * s;
-            float slotX = Style.HUD_PAD * s;
-            float slotY = ry + (rowH - slot) / 2.0f;
-            Render2D.round(gg, slotX, slotY, slot, slot, 5.0f * s, Style.WHITE_04);
+            float spriteY = ry + (rowH - iconS) / 2.0f;
             gg.blitSprite(pipeline, Hud.getMobEffectSprite(holder),
-                    (int) (slotX + (slot - iconS) / 2.0f),
-                    (int) (slotY + (slot - iconS) / 2.0f),
-                    (int) iconS, (int) iconS);
+                    (int) pad, (int) spriteY, (int) iconS, (int) iconS);
 
-            float nameX = slotX + slot + 7.0f * s;
-            float baseline = body.centeredBaseline(ry, 21.0f * s);
-            String name = effectBaseName(instance);
-            float nx = body.draw(gg, name, nameX, baseline, Style.WHITE);
-
-            // Бейдж уровня эффекта.
+            float nameX = pad + iconS + 6.0f * s;
+            float baseline = body.centeredBaseline(ry, rowH);
             String roman = ampRoman(instance.getAmplifier());
+            float nx = body.draw(gg, fxName(instance), nameX, baseline, Style.WHITE);
             if (roman != null) {
-                float bw = label.width(roman) + 9.0f * s;
-                float bh = 13.0f * s;
-                float bx = nx + 5.0f * s;
-                float by = ry + (21.0f * s - bh) / 2.0f;
-                Render2D.round(gg, bx, by, bw, bh, bh / 2.0f,
-                        Render2D.withAlpha(Style.accent(), 0.16f));
-                label.drawCentered(gg, roman, bx + bw / 2.0f,
-                        label.centeredBaseline(by, bh), Style.accent());
+                body.draw(gg, roman, nx + body.width(" "), baseline, Style.accent());
             }
 
             label.drawRight(gg, formatDuration(instance.getDuration()),
-                    d.w - Style.HUD_PAD * s,
-                    label.centeredBaseline(ry, 21.0f * s), Style.WHITE_45);
+                    d.w - pad, label.centeredBaseline(ry, rowH), Style.WHITE_45);
 
-            // Бар оставшейся длительности, как трек слайдера в GUI.
-            bar(gg, nameX, ry + rowH - 5.0f * s, d.w - Style.HUD_PAD * s - nameX,
-                    2.5f * s, s, d.fracs.get(i), Style.accent());
+            // Тонкая линия оставшейся длительности.
+            thinBar(gg, nameX, ry + rowH - 3.0f, d.w - pad - nameX,
+                    d.fracs.get(i), Style.accent());
             ry += rowH;
         }
     }
@@ -1017,40 +937,14 @@ public final class InterfaceHud {
 
         for (int i = 0; i < 9; i++) {
             float sx = i * (slot + gap);
-            drawHotSlot(gg, mc, inv.getItem(i), sx, 0, slot, s,
+            drawSlot(gg, mc, inv.getItem(i), sx, 0, slot, s,
                     i == inv.getSelectedSlot());
         }
 
         ItemStack offhand = mc.player.getOffhandItem();
         if (!offhand.isEmpty()) {
-            drawHotSlot(gg, mc, offhand, -slot - 6.0f * s, 0, slot, s, false);
+            drawSlot(gg, mc, offhand, -slot - 6.0f * s, 0, slot, s, false);
         }
-    }
-
-    private static void drawHotSlot(GuiGraphicsExtractor gg, Minecraft mc, ItemStack stack,
-                                    float x, float y, float slot, float s, boolean selected) {
-        if (selected) {
-            // Мягкое акцентное свечение + кольцо, как активные элементы в GUI.
-            int gd = Math.max(1, Math.round(slot + 18.0f * s));
-            Render2D.texture(gg, TexCache.glow(gd),
-                    x + slot / 2.0f - gd / 2.0f, y + slot / 2.0f - gd / 2.0f,
-                    gd, gd, Render2D.withAlpha(Style.accent(), 0.35f));
-            float ring = 2.5f * s;
-            Render2D.round(gg, x - ring, y - ring, slot + ring * 2.0f,
-                    slot + ring * 2.0f, 9.0f * s,
-                    Render2D.withAlpha(Style.accent(), 0.85f));
-        }
-        Render2D.round(gg, x, y, slot, slot, 6.0f * s, Style.HUD_PANEL);
-        if (stack.isEmpty()) {
-            return;
-        }
-        // Предмет рендерится движком в 16px: масштабируем позой (векторно, чётко).
-        Render2D.pushTranslate(gg, x + 3.0f * s, y + 3.0f * s);
-        Render2D.pushScale(gg, 0.0f, 0.0f, s);
-        gg.item(mc.player, stack, 0, 0, 0);
-        gg.itemDecorations(mc.font, stack, 0, 0);
-        Render2D.popTransform(gg);
-        Render2D.popTransform(gg);
     }
 
     // ---------------- броня (своя) ----------------
@@ -1095,60 +989,43 @@ public final class InterfaceHud {
         if (count == 0) {
             return null;
         }
-        float pad = 6.0f * s;
+        float pad = Style.HUD_PAD * s;
         float slot = 20.0f * s;
         float gap = 4.0f * s;
         float w = 4.0f * slot + 3.0f * gap + pad * 2.0f;
-        float h = Style.HUD_HEADER_H * s + 2.0f * s + slot
-                + 3.0f * s + 2.5f * s + 3.0f * s + 9.0f * s + pad;
+        // шапка + отступ + слот + линия прочности 2px + подпись + низ
+        float h = Style.HUD_HEADER_H * s + 6.0f * s + slot
+                + 3.0f * s + 2.0f * s + 3.0f * s + 9.0f * s + pad;
         return new ArmorData(w, h, armor, count);
     }
 
     private static void drawArmor(GuiGraphicsExtractor gg, float s, ArmorData d) {
-        float pad = 6.0f * s;
+        float pad = Style.HUD_PAD * s;
         float slot = 20.0f * s;
         float gap = 4.0f * s;
-        card(gg, d.w, d.h, s);
-        // Компактная шапка: чип + "Armor" + счётчик надетых частей.
-        headerChip(gg, s, "player");
-        HFont title = sTitle(s);
-        title.draw(gg, "Armor", Style.HUD_PAD * s + Style.HUD_CHIP * s + 8.0f * s,
-                title.centeredBaseline(0, Style.HUD_HEADER_H * s), Style.WHITE);
-        headerPill(gg, s, d.w, String.valueOf(d.count));
+        panel(gg, d.w, d.h);
+        header(gg, "Armor", d.count, s, d.w);
 
         Minecraft mc = Minecraft.getInstance();
         HFont pct = sLabel(s * 0.7f);
-        float top = Style.HUD_HEADER_H * s + 2.0f * s;
+        float top = Style.HUD_HEADER_H * s + 6.0f * s;
         for (int i = 0; i < 4; i++) {
             float x = pad + i * (slot + gap);
-            drawItemSlot(gg, mc, d.armor.get(i), x, top, slot, s);
-            // Бар прочности под слотом, как трек слайдера в GUI.
-            bar(gg, x, top + slot + 3.0f * s, slot, 2.5f * s, s,
-                    durabilityFrac(d.armor.get(i)), durabilityColor(d.armor.get(i)));
+            drawSlot(gg, mc, d.armor.get(i), x, top, slot, s, false);
+            // Линия прочности 2px под слотом.
+            float barY = top + slot + 3.0f * s;
+            Render2D.rect(gg, x, barY, slot, 2, Style.HUD_DIV);
+            float fw = slot * durabilityFrac(d.armor.get(i));
+            if (fw >= 1.0f) {
+                Render2D.rect(gg, x, barY, fw, 2, durabilityColor(d.armor.get(i)));
+            }
             String p = durabilityPct(d.armor.get(i));
             if (p != null) {
                 float tw = pct.width(p);
-                pct.draw(gg, p, x + (slot - tw) / 2.0f,
-                        top + slot + 3.0f * s + 2.5f * s + 3.0f * s,
+                pct.draw(gg, p, x + (slot - tw) / 2.0f, barY + 2.0f + 3.0f * s,
                         durabilityColor(d.armor.get(i)));
             }
         }
-    }
-
-    /** Слот под предмет: светлый чип, как слоты в карточках GUI. */
-    private static void drawItemSlot(GuiGraphicsExtractor gg, Minecraft mc, ItemStack stack,
-                                     float x, float y, float slot, float s) {
-        Render2D.round(gg, x, y, slot, slot, 6.0f * s, Style.WHITE_04);
-        if (stack.isEmpty()) {
-            return;
-        }
-        float is = slot - 6.0f * s; // предмет с отступом
-        Render2D.pushTranslate(gg, x + 3.0f * s, y + 3.0f * s);
-        Render2D.pushScale(gg, 0.0f, 0.0f, is / 16.0f);
-        gg.item(mc.player, stack, 0, 0, 0);
-        gg.itemDecorations(mc.font, stack, 0, 0);
-        Render2D.popTransform(gg);
-        Render2D.popTransform(gg);
     }
 
     /** Кусочки брони шлем..ботинки. */
@@ -1243,41 +1120,37 @@ public final class InterfaceHud {
         String hpText = String.valueOf((int) Math.ceil(t.getHealth() + t.getAbsorptionAmount()));
 
         HFont title = sTitle(s);
-        String name = title.trim(t.getName().getString(), 140.0f * s);
+        String name = title.trim(t.getName().getString(), 140.0f * s)
+                .toUpperCase(java.util.Locale.ROOT);
         boolean aura = t == AttackAura.target;
         float dist = mc.player.distanceTo(t);
 
-        float pad = 8.0f * s;
-        float head = 36.0f * s;
+        float pad = 6.0f * s;
+        float head = 34.0f * s;
         float nameX = pad + head + 8.0f * s;
-        float row2Y = pad + 28.0f * s;
-        float icon = 18.0f * s;
+        float icon = 16.0f * s;
         float gap = 3.0f * s;
-        float armorW = 4.0f * icon + 3.0f * gap;
-        float handsX = nameX + armorW + 10.0f * s;
-        float handsW = 2.0f * icon + gap;
-        float leftW = Math.max(handsX + handsW, nameX + title.width(name) + 8.0f * s);
-        float circleD = 40.0f * s;
-        float circleGap = 12.0f * s;
-        float w = leftW + circleGap + circleD + pad;
-        float row2Bottom = row2Y + icon + 3.0f * s + 2.0f * s;
-        float h = Math.max(pad + head, row2Bottom) + pad;
-
+        float itemY = pad + head + 6.0f * s;
+        float itemRowW = 4.0f * icon + 3.0f * gap + 10.0f * s + 2.0f * icon + gap;
+        float hpNumW = title.width(hpText) + 10.0f * s;
+        float row1W = nameX + Math.max(title.width(name), 120.0f * s) + hpNumW;
+        float w = Math.max(row1W, nameX + itemRowW) + pad;
+        float h = itemY + icon + 3.0f * s + pad;
         return new TargetData(w, h, t, name, aura, dist, hpFrac, abFrac, hpText,
                 armorPieces(t), t.getMainHandItem(), t.getOffhandItem());
     }
 
     private static void drawTarget(GuiGraphicsExtractor gg, float s, TargetData d) {
-        card(gg, d.w, d.h, s);
+        panel(gg, d.w, d.h);
         Minecraft mc = Minecraft.getInstance();
 
-        float pad = 8.0f * s;
-        float head = 36.0f * s;
+        float pad = 6.0f * s;
+        float head = 34.0f * s;
 
         // Голова цели: предмет PLAYER_HEAD с её профилем (настоящий скин).
         ItemStack headStack = headStack(d.target, mc);
         if (!headStack.isEmpty()) {
-            drawItemSlot(gg, mc, headStack, pad, pad, head, s);
+            drawSlot(gg, mc, headStack, pad, pad, head, s, false);
         } else {
             drawAvatar(gg, d.name, pad, pad, head, s);
         }
@@ -1286,59 +1159,49 @@ public final class InterfaceHud {
         HFont title = sTitle(s);
         HFont label = sLabel(s);
         float nameX = pad + head + 8.0f * s;
-        title.draw(gg, d.name, nameX, pad + 3.0f * s, Style.WHITE);
-        String dist = Math.round(d.dist * 10.0f) / 10.0f + "m";
-        label.draw(gg, dist + (d.aura ? " · Aura" : " · Looking"),
-                nameX, pad + 18.0f * s, Style.WHITE_45);
+        float nameBase = pad + 11.0f * s;
+        title.draw(gg, d.name, nameX, nameBase, Style.WHITE);
+        String dist = Math.round(d.dist * 10.0f) / 10.0f + "M";
+        label.draw(gg, dist + " · " + (d.aura ? "AURA" : "LOOK"),
+                nameX, pad + 23.0f * s, Style.WHITE_45);
 
-        // Броня с барами прочности + руки.
-        float row2Y = pad + 28.0f * s;
-        float icon = 18.0f * s;
-        float gap = 3.0f * s;
+        // HP справа от ника.
+        float hpNumW = title.width(d.hpText) + 10.0f * s;
+        title.drawRight(gg, d.hpText, d.w - pad,
+                title.centeredBaseline(pad, 20.0f * s), Style.WHITE);
+
+        // Сегментный HP-бар под ником: 12 сегментов, золото — абсорбция.
+        float barX = nameX;
+        float barW = d.w - pad - hpNumW - barX;
+        float barY = pad + head - 6.0f * s;
+        float barH = 5.0f * s;
+        int segs = 12;
+        float gap = 2.0f * s;
+        float segW = (barW - (segs - 1) * gap) / segs;
+        int hpSegs = Math.round(d.hpFrac * segs);
+        int abSegs = Math.round(d.abFrac * segs);
+        int hpCol = hpColor(d.hpFrac);
+        for (int i = 0; i < segs; i++) {
+            float sx = barX + i * (segW + gap);
+            int col = i < hpSegs ? hpCol
+                    : i < hpSegs + abSegs ? 0xFFFFC94D : Style.HUD_DIV;
+            Render2D.rect(gg, sx, barY, segW, barH, col);
+        }
+
+        // Броня + руки вторым рядом, прочность — линией 1px.
+        float itemY = pad + head + 6.0f * s;
+        float icon = 16.0f * s;
+        float igap = 3.0f * s;
         for (int i = 0; i < 4; i++) {
-            float x = nameX + i * (icon + gap);
+            float x = nameX + i * (icon + igap);
             ItemStack stack = d.armor.get(i);
-            drawItemSlot(gg, mc, stack, x, row2Y, icon, s);
-            bar(gg, x, row2Y + icon + 3.0f * s, icon, 2.0f * s, s,
+            drawSlot(gg, mc, stack, x, itemY, icon, s, false);
+            thinBar(gg, x, itemY + icon + 2.0f * s, icon,
                     durabilityFrac(stack), durabilityColor(stack));
         }
-        float handsX = nameX + 4.0f * icon + 3.0f * gap + 10.0f * s;
-        drawItemSlot(gg, mc, d.mainHand, handsX, row2Y, icon, s);
-        drawItemSlot(gg, mc, d.offHand, handsX + icon + gap, row2Y, icon, s);
-
-        // Круг ХП справа: свечение + гладкие дуги (фон, золото абсорбции, хп).
-        float circleD = 40.0f * s;
-        float circleX = d.w - pad - circleD;
-        float circleY = (d.h - circleD) / 2.0f;
-        float circleCx = circleX + circleD / 2.0f;
-        int hpCol = hpColor(d.hpFrac);
-        int gd = Math.max(1, Math.round(circleD + 18.0f * s));
-        Render2D.texture(gg, TexCache.glow(gd),
-                circleCx - gd / 2.0f, circleY + circleD / 2.0f - gd / 2.0f,
-                gd, gd, Render2D.withAlpha(hpCol, 0.30f));
-        hpArc(gg, circleX, circleY, circleD, 1.0f, false, 0xFF2A2929);
-        float total = Math.min(1.0f, d.hpFrac + d.abFrac);
-        hpArc(gg, circleX, circleY, circleD, total, true, 0xFFFFC94D);
-        hpArc(gg, circleX, circleY, circleD, d.hpFrac, true, hpCol);
-        HFont hpFont = sTitle(s * 1.05f);
-        hpFont.drawCentered(gg, d.hpText, circleCx,
-                hpFont.centeredBaseline(circleY, circleD), Style.WHITE);
-    }
-
-    /**
-     * Гладкая дуга ХП: сглаженная текстура из TexCache, тинтится в цвет.
-     * x/y/d — квадрат, в который вписана дуга.
-     */
-    private static void hpArc(GuiGraphicsExtractor gg, float x, float y, float d,
-                              float frac, boolean round, int argb) {
-        if (frac <= 0.0f) {
-            return;
-        }
-        Identifier id = TexCache.arc(128, 16.0f, frac, round);
-        if (id == null) {
-            return;
-        }
-        Render2D.texture(gg, id, x, y, d, d, argb);
+        float handsX = nameX + 4.0f * icon + 3.0f * igap + 10.0f * s;
+        drawSlot(gg, mc, d.mainHand, handsX, itemY, icon, s, false);
+        drawSlot(gg, mc, d.offHand, handsX + icon + igap, itemY, icon, s, false);
     }
 
     private static int hpColor(float frac) {
@@ -1359,10 +1222,10 @@ public final class InterfaceHud {
         return head;
     }
 
-    /** Аватарка-заглушка: первая буква ника в чипе, как в карточках GUI. */
+    /** Аватарка-заглушка: первая буква ника в квадратном слоте. */
     private static void drawAvatar(GuiGraphicsExtractor gg, String name,
                                    float x, float y, float size, float s) {
-        Render2D.round(gg, x, y, size, size, 8.0f * s, Style.WHITE_04);
+        Render2D.rect(gg, x, y, size, size, Style.WHITE_04);
         String letter = name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase();
         HFont f = sTitle(s * 1.2f);
         f.drawCentered(gg, letter, x + size / 2.0f,

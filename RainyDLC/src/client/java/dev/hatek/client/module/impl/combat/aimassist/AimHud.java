@@ -5,7 +5,6 @@ import dev.hatek.client.ui.Style;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
 import dev.hatek.client.ui.render.Render2D;
-import dev.hatek.client.ui.render.TexCache;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -65,8 +64,6 @@ public final class AimHud {
 
         Render2D.begin(gg);
         Render2D.round(gg, x, y, w, h, 10.0f, Style.HUD_PANEL);
-        Render2D.texture(gg, TexCache.glassRim(Math.max(1, Math.round(w)),
-                Math.max(1, Math.round(h)), 10.0f), x, y, w, h, Style.WHITE);
         body.drawCentered(gg, title, x + w / 2.0f, y + 20.0f, Style.WHITE);
         label.drawCentered(gg, sub, x + w / 2.0f, y + 36.0f, Style.WHITE_45);
         if (bar >= 0.0f) {
