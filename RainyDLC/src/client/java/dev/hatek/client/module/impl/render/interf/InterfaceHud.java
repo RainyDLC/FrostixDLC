@@ -468,7 +468,7 @@ public final class InterfaceHud {
 
     /** Панель: плоская заливка + акцентная линейка 2px сверху. */
     private static void sheet(GuiGraphicsExtractor gg, float w, float h, float s) {
-        Render2D.rect(gg, 0, 0, w, h, Style.HUD_INK);
+        Render2D.round(gg, -2.0f * s, -2.0f * s, w + 4.0f * s, h + 4.0f * s, 8.5f * s, 0x18000000); Render2D.round(gg, -1.0f * s, -1.0f * s, w + 2.0f * s, h + 2.0f * s, 7.5f * s, 0x2E000000); Render2D.round(gg, 0, 0, w, h, 6.5f * s, 0xE81C2024); Render2D.round(gg, 0.7f * s, 0.7f * s, w - 1.4f * s, h - 1.4f * s, 5.8f * s, 0xE8121518);
         Render2D.rect(gg, 0, 0, w, 2.0f * s, Style.accent());
     }
 
