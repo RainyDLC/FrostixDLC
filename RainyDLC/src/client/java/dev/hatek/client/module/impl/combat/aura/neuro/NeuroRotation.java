@@ -17,13 +17,11 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Нейро-ротации AttackAura: боевой модуль ауры, где скорость и углы
@@ -88,7 +86,7 @@ public final class NeuroRotation {
     private static int lastFreezeRollTick = Integer.MIN_VALUE;
     private static float residYaw;
     private static float residPitch;
-    private static boolean prevAttackDown;
+    private static int residHoldUntilTick = Integer.MIN_VALUE;
 
     private NeuroRotation() {
     }
@@ -149,12 +147,12 @@ public final class NeuroRotation {
         prevFeat = null;
         prevTargetId = -1;
         ticksSinceAttack = 999;
-        prevAttackDown = false;
         stabilizationSamples = 0;
         learnStatus = "";
         learnLog = "";
         resetInference();
         // Полностью глушим авто-ротации и отдаём управление руками игроку:
+        dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.forget();
         RotationProcess.halt();
         dev.hatek.client.module.impl.combat.aura.rotation.FreeLookUtil.active = false;
         dev.hatek.client.module.impl.combat.aura.util.MoveUtil.restoreMovementKeys();
@@ -225,12 +223,6 @@ public final class NeuroRotation {
         float viewYaw = mc.player.getYRot();
         float viewPitch = mc.player.getXRot();
         LivingEntity aimTarget = findAimTarget(mc, viewYaw, viewPitch);
-
-        // Клик по цели: записываем, куда реально бьёт прицел игрока по хитбоксу.
-        if (attackDown && !prevAttackDown && aimTarget != null) {
-            recordHitPoint(mc, aimTarget, viewYaw, viewPitch);
-        }
-        prevAttackDown = attackDown;
 
         recordTick(mc, aimTarget, viewYaw, viewPitch, attackDown);
 
@@ -335,39 +327,6 @@ public final class NeuroRotation {
         }
     }
 
-    /**
-     * Точка попадания игрока: куда его луч реально бьёт по хитбоксу цели
-     * в момент клика. Относительные координаты: rx/rz в [-1,1] (доля полуширины),
-     * ry в [0,1] (доля высоты). По этим точкам аура потом учится, куда целится
-     * именно этот игрок, а не в абстрактный центр бокса.
-     */
-    private static void recordHitPoint(Minecraft mc, LivingEntity aimTarget,
-                                       float viewYaw, float viewPitch) {
-        if (dataset == null) {
-            return;
-        }
-        Vec3 eye = mc.player.getEyePosition(1.0f);
-        Vec3 look = RayTraceUtil.getVectorForRotation(viewPitch, viewYaw);
-        Vec3 end = eye.add(look.scale(12.0));
-        AABB box = aimTarget.getBoundingBox();
-        Optional<Vec3> hit = box.clip(eye, end);
-        if (hit.isEmpty()) {
-            return;
-        }
-        Vec3 hitPos = hit.get();
-        double halfX = box.getXsize() / 2.0;
-        double halfZ = box.getZsize() / 2.0;
-        if (halfX <= 0.0 || halfZ <= 0.0 || box.getYsize() <= 0.0) {
-            return;
-        }
-        float rx = (float) ((hitPos.x - (box.minX + box.maxX) / 2.0) / halfX);
-        float ry = (float) ((hitPos.y - box.minY) / box.getYsize());
-        float rz = (float) ((hitPos.z - (box.minZ + box.maxZ) / 2.0) / halfZ);
-        if (Math.abs(rx) <= 1.0f && ry >= 0.0f && ry <= 1.0f && Math.abs(rz) <= 1.0f) {
-            dataset.addHitPoint(rx, ry, rz);
-        }
-    }
-
     // ---------------- обучение ----------------
 
     /** Обучить нейронку прямо в Java (Adam, 250 эпох) — быстро и без зависимостей. */
@@ -400,7 +359,6 @@ public final class NeuroRotation {
         new Thread(() -> {
             try {
                 AimNet next = new AimNet();
-                next.setHitPoints(ds.hitPoints());
                 boolean ok = next.train(aimSamples, 250, (ep, total, trainLoss, valLoss) -> {
                     learnProgress = (double) ep / total;
                     learnStatus = "Эпоха " + ep + "/" + total
@@ -526,11 +484,13 @@ public final class NeuroRotation {
             neuroWander = Vec3.ZERO;
             neuroWanderVel = Vec3.ZERO;
             freezeUntilTick = Integer.MIN_VALUE;
+            residHoldUntilTick = Integer.MIN_VALUE;
         } else if (t.getId() != infPrevTargetId) {
             // Новая цель — сбрасываем блуждание, чтобы не тянуть старое смещение.
             neuroWander = Vec3.ZERO;
             neuroWanderVel = Vec3.ZERO;
             freezeUntilTick = Integer.MIN_VALUE;
+            residHoldUntilTick = Integer.MIN_VALUE;
         }
     }
 
@@ -642,10 +602,10 @@ public final class NeuroRotation {
         boolean readyToHit = attackScale >= 0.88f || inCritPhase
                 || (dev.hatek.client.module.impl.combat.aura.util.AttackPlanner.hasPlan() && attackScale >= 0.75f);
 
-        var leadBox = dev.hatek.client.module.impl.combat.aura.rotation.AimLead.leadedBox(t);
+        var leadBox = dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.leadedBox(t);
         // В окне удара целимся из глаз «после нашего хода» — удар уходит в TAIL тика.
         Vec3 aimEye = readyToHit
-                ? dev.hatek.client.module.impl.combat.aura.rotation.AimLead.predictedEye()
+                ? dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime.predictedEye()
                 : eye;
         Vec3 aimPoint = wanderAimPoint(leadBox, readyToHit);
         float[] targetRot = rotTo(aimEye, aimPoint);
@@ -786,29 +746,38 @@ public final class NeuroRotation {
 
     /**
      * Остаточная ошибка наведения из калибровки игрока.
-     * Процесс Орнштейна–Уленбека: ошибка непрерывно блуждает вокруг нуля
-     * с разбросом из калибровки руки игрока (автокорреляция ~10 тиков —
-     * устойчивый «почерк», а не покадровый шум и не ступени).
-     * Ступенчатая ошибка (константа 12–30 тиков) видна ML-модели античита
-     * как неестественная: у живой руки ошибка меняется непрерывно.
+     * Смещение держится 12–30 тиков — как устойчивый «почерк» руки,
+     * а не покадровый шум.
      */
     private static void updateResidual() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
+            return;
+        }
+        int tick = mc.player.tickCount;
+        if (tick < residHoldUntilTick) {
+            return;
+        }
+        java.util.concurrent.ThreadLocalRandom rnd =
+                java.util.concurrent.ThreadLocalRandom.current();
+        residHoldUntilTick = tick + 12 + rnd.nextInt(19);
         if (!hasBrain()) {
             residYaw = 0.0f;
             residPitch = 0.0f;
             return;
         }
         AimNet.Calib c = net.calib();
-        java.util.concurrent.ThreadLocalRandom rnd =
-                java.util.concurrent.ThreadLocalRandom.current();
-        float sigmaYaw = (float) ((c.residYawP50 + c.residYawP90) * 0.22);
-        float sigmaPitch = (float) ((c.residPitchP50 + c.residPitchP90) * 0.22);
-        residYaw += -residYaw * 0.10f + (float) (rnd.nextGaussian() * sigmaYaw);
-        residPitch += -residPitch * 0.10f + (float) (rnd.nextGaussian() * sigmaPitch);
-        float capYaw = (float) (c.residYawP90 * 1.6);
-        float capPitch = (float) (c.residPitchP90 * 1.6);
-        residYaw = Mth.clamp(residYaw, -capYaw, capYaw);
-        residPitch = Mth.clamp(residPitch, -capPitch, capPitch);
+        residYaw = sampleCalibMag(c.residYawP50, c.residYawP90, rnd)
+                * (rnd.nextBoolean() ? 1.0f : -1.0f);
+        residPitch = sampleCalibMag(c.residPitchP50, c.residPitchP90, rnd)
+                * (rnd.nextBoolean() ? 1.0f : -1.0f);
+    }
+
+    /** Треугольное распределение между p50 и p90 — типичный разброс руки. */
+    private static float sampleCalibMag(double p50, double p90,
+                                        java.util.concurrent.ThreadLocalRandom rnd) {
+        double u = (rnd.nextDouble() + rnd.nextDouble()) * 0.5;
+        return (float) (p50 + Math.max(0.0, p90 - p50) * u);
     }
 
     /**
@@ -854,50 +823,18 @@ public final class NeuroRotation {
      * Блуждание точки прицела внутри бокса цели.
      * Случайное блуждание с отражением от границ — безопасно внутри хитбокса.
      */
-    /**
-     * Блуждание точки прицела внутри бокса цели.
-     * Случайное блуждание с отражением от границ — безопасно внутри хитбокса.
-     *
-     * <p>Якорь и разброс — из калибровки игрока: он целится туда, куда бьёт
-     * сам (распределение точек его попаданий), а не в абстрактный центр бокса.
-     * Без калибровки — центр и дефолтный разброс, как раньше.</p>
-     */
     private static Vec3 wanderAimPoint(net.minecraft.world.phys.AABB box, boolean readyToHit) {
-        // Калибровка игрока: относительные координаты его точек попаданий.
-        double anchorRx = 0.0, anchorRy = 0.55, anchorRz = 0.0;
-        double spreadX = 0.67, spreadZ = 0.67; // в долях полуширины
-        double yLoF = 0.35, yHiF = 0.75;       // в долях высоты
-        if (hasBrain()) {
-            AimNet.Calib c = net.calib();
-            if (c.hitPointCount >= 20) {
-                anchorRx = c.hitPointMean[0];
-                anchorRy = c.hitPointMean[1];
-                anchorRz = c.hitPointMean[2];
-                spreadX = Math.max(0.25, Math.min(1.0, c.hitPointStd[0] * 2.5));
-                spreadZ = Math.max(0.25, Math.min(1.0, c.hitPointStd[2] * 2.5));
-                yLoF = Math.max(0.05, anchorRy - c.hitPointStd[1] * 2.5);
-                yHiF = Math.min(0.95, anchorRy + c.hitPointStd[1] * 2.5);
-            }
-        }
-        double halfX = box.getXsize() / 2.0;
-        double halfZ = box.getZsize() / 2.0;
-        double ax = (box.minX + box.maxX) / 2.0 + anchorRx * halfX;
-        double az = (box.minZ + box.maxZ) / 2.0 + anchorRz * halfZ;
-        double ay = box.minY + anchorRy * box.getYsize();
-        double xLim = Math.max(0.04, spreadX * halfX);
-        double zLim = Math.max(0.04, spreadZ * halfZ);
-        double yMin = box.minY + box.getYsize() * yLoF;
-        double yMax = box.minY + box.getYsize() * yHiF;
-
         if (readyToHit) {
-            // В момент удара точку НЕ стягиваем к якорю: иначе ML-модель видит,
-            // что все попадания ложатся в одну точку хитбокса. Оставляем точку
-            // там, куда доблуждала рука.
-            double wy = Mth.clamp(ay + neuroWander.y, yMin, yMax);
+            // В окне удара блуждание прижимаем к центру: ±0.2 от центра плюс ход цели
+            // за тик выводили луч за край хитбокса 0.6.
+            neuroWander = new Vec3(
+                    Mth.clamp(neuroWander.x * 0.6, -0.05, 0.05),
+                    Mth.clamp(neuroWander.y * 0.6, -0.15, 0.15),
+                    Mth.clamp(neuroWander.z * 0.6, -0.05, 0.05));
             return new Vec3(
-                    ax + Mth.clamp(neuroWander.x, -xLim, xLim),
-                    wy,
-                    az + Mth.clamp(neuroWander.z, -zLim, zLim));
+                    (box.minX + box.maxX) / 2.0 + neuroWander.x,
+                    box.minY + box.getYsize() * 0.55 + neuroWander.y,
+                    (box.minZ + box.maxZ) / 2.0 + neuroWander.z);
         }
 
         java.util.concurrent.ThreadLocalRandom rnd = java.util.concurrent.ThreadLocalRandom.current();
@@ -907,6 +844,10 @@ public final class NeuroRotation {
                     (rnd.nextDouble() - 0.5) * 0.015,
                     (rnd.nextDouble() - 0.5) * 0.02);
         }
+        double xLim = Math.max(0.04, (box.getXsize() - 0.20) / 2.0);
+        double zLim = Math.max(0.04, (box.getZsize() - 0.20) / 2.0);
+        double yMin = box.minY + box.getYsize() * 0.35;
+        double yMax = box.minY + box.getYsize() * 0.75;
 
         neuroWanderVel = neuroWanderVel.scale(0.92).add(
                 (rnd.nextDouble() - 0.5) * 0.003,
@@ -916,8 +857,8 @@ public final class NeuroRotation {
         neuroWander = neuroWander.add(neuroWanderVel);
         double wx = Mth.clamp(neuroWander.x, -xLim, xLim);
         double wz = Mth.clamp(neuroWander.z, -zLim, zLim);
-        double wy = Mth.clamp(ay + neuroWander.y, yMin, yMax);
-        neuroWander = new Vec3(wx, wy - ay, wz);
+        double wy = Mth.clamp(box.minY + box.getYsize() * 0.55 + neuroWander.y, yMin, yMax);
+        neuroWander = new Vec3(wx, wy - (box.minY + box.getYsize() * 0.55), wz);
 
         if (Math.abs(neuroWander.x) >= xLim * 0.9) {
             neuroWanderVel = new Vec3(-Math.signum(neuroWander.x) * (0.006 + rnd.nextDouble() * 0.012),
@@ -933,7 +874,9 @@ public final class NeuroRotation {
                     neuroWanderVel.z);
         }
 
-        return new Vec3(ax + neuroWander.x, wy, az + neuroWander.z);
+        double cx = (box.minX + box.maxX) / 2.0;
+        double cz = (box.minZ + box.maxZ) / 2.0;
+        return new Vec3(cx + neuroWander.x, wy, cz + neuroWander.z);
     }
 
     /** Наведена ли нейронка на цель (гейт для ударов ауры). */
@@ -988,6 +931,7 @@ public final class NeuroRotation {
         lastFreezeRollTick = Integer.MIN_VALUE;
         residYaw = 0.0f;
         residPitch = 0.0f;
+        residHoldUntilTick = Integer.MIN_VALUE;
         RotationProcess.requestReset();
     }
 
