@@ -2,6 +2,7 @@ package dev.hatek.client.module.impl.combat.aura;
 
 import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.combat.aura.rotation.ServerView;
+import dev.hatek.client.module.impl.combat.aura.rotation.SpaceTime;
 import dev.hatek.client.module.impl.combat.aura.util.AttackPace;
 import dev.hatek.client.module.impl.combat.aura.util.AuraProfile;
 import dev.hatek.client.module.impl.combat.aura.util.AuraRandom;
@@ -379,6 +380,10 @@ public final class Attack {
             }
             attackedLastTick = true;
             LagGuard.onAttack();
+            // Shard/ML: пост-ударное расслабление прицела (только SpaceTime).
+            if (AttackAura.spaceTime()) {
+                SpaceTime.onHitLanded();
+            }
 
             PACE.markAura(mc.player.tickCount);
 

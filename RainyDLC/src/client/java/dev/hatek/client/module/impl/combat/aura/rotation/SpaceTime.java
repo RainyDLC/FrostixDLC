@@ -53,6 +53,13 @@ public final class SpaceTime {
     private static float aimCenterHeightF = 0.55F;
     /** Фаза дрейфа прицела (Shard/ML). */
     private static double driftPhase;
+    /**
+     * Тик, до которого действует пост-ударное расслабление прицела (Shard/ML).
+     * Человек после клика на 2-4 тика перестаёт микрокорректировать — aim_error
+     * растёт, потом снова доводит. Без этого провала ML видит «идеальное»
+     * наведение и до, и после удара (метка Post).
+     */
+    private static int postHitUntilTick = Integer.MIN_VALUE;
 
     private static boolean lastCanAttack;
 
@@ -147,11 +154,29 @@ public final class SpaceTime {
         haveAim = false;
         prevBreathYaw = 0.0F;
         prevBreathPitch = 0.0F;
+        postHitUntilTick = Integer.MIN_VALUE;
     }
 
     public static void onRotation(LivingEntity target, boolean canAttack) {
         lastCanAttack = canAttack;
         pendingTarget = target;
+    }
+
+    /**
+     * Удар прошёл (Shard/ML): на 4–6 тиков усиливаем дрейф прицела и выходим
+     * из режима «центр». Точка остаётся внутри хитбокса (кламп в applyDrift),
+     * следующий удар идёт без задержки и без промаха, но aim_error в пост-окне
+     * растёт, как у живого игрока после клика.
+     */
+    public static void onHitLanded() {
+        Minecraft mc = mc();
+        if (mc.player == null) {
+            return;
+        }
+        postHitUntilTick = mc.player.tickCount + 4 + ThreadLocalRandom.current().nextInt(3);
+        if (aimMode == 2) {
+            aimModeFrames = 0;
+        }
     }
 
     public static void onFrame() {
@@ -213,9 +238,15 @@ public final class SpaceTime {
     private static Vec3 applyDrift(Vec3 point, AABB box) {
         driftPhase += 1.0 / 60.0;
         double t = driftPhase;
-        double dx = 0.16 * Math.sin(t * 1.9) + 0.08 * Math.sin(t * 3.1 + 1.7);
-        double dy = 0.10 * Math.sin(t * 2.3 + 0.6) + 0.05 * Math.sin(t * 4.1 + 2.9);
-        double dz = 0.16 * Math.sin(t * 1.4 + 2.2) + 0.08 * Math.sin(t * 2.7 + 0.9);
+        // Пост-ударное расслабление: 4–6 тиков после попадания дрейф сильнее —
+        // aim_error растёт, как у человека после клика. Кламп держит точку
+        // внутри хитбокса, промаха нет.
+        Minecraft mc = mc();
+        boolean postHit = mc.player != null && mc.player.tickCount < postHitUntilTick;
+        double boost = postHit ? 1.7 : 1.0;
+        double dx = boost * (0.16 * Math.sin(t * 1.9) + 0.08 * Math.sin(t * 3.1 + 1.7));
+        double dy = boost * (0.10 * Math.sin(t * 2.3 + 0.6) + 0.05 * Math.sin(t * 4.1 + 2.9));
+        double dz = boost * (0.16 * Math.sin(t * 1.4 + 2.2) + 0.08 * Math.sin(t * 2.7 + 0.9));
         return new Vec3(
                 Mth.clamp(point.x + dx, box.minX + 0.02, box.maxX - 0.02),
                 Mth.clamp(point.y + dy, box.minY + 0.02, box.maxY - 0.02),
