@@ -186,18 +186,15 @@ public final class Style {
 
     public static final int HUD_PANEL = 0xDB181717;
     public static final int HUD_MARGIN = 10;
-    // HUD «Quick»: компактные скруглённые панели, мягкое акцентное свечение,
-    // шапка с акцентной иконкой, строки «белое слева / серое справа».
-    public static final int HUD_BG = 0xD8141414;
-    public static final float HUD_R = 4.5f;
-    public static final int HUD_PAD = 6;
-    public static final int HUD_HEAD_H = 16;
-    public static final int HUD_ROW_H = 11;
-    public static final int HUD_MIN_W = 60;
-    public static final int HUD_BOTTOM = 3;
-    public static final int HUD_GRAY = 0xFF96969E;
-    public static final int HUD_LEVEL = 0xFFEB3C46;
-    public static final int HUD_GOLD = 0xFFFFC94D;
+    // HUD «Editorial»: плоские панели, акцентная линейка сверху,
+    // волосные разделители, крупная типографика. Без скруглений и свечений.
+    public static final int HUD_INK = 0xE5141414;
+    public static final int HUD_HAIR = white(0.14f);
+    public static final int HUD_FAINT = white(0.06f);
+    public static final int HUD_PAD = 10;
+    public static final int HUD_HEAD_H = 30;
+    public static final int HUD_MIN_W = 150;
+    public static final int HUD_BOTTOM = 8;
 
     public static final float FONT_HUD = 12.0f;
 
