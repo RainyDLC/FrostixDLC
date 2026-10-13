@@ -34,7 +34,7 @@ public final class VfxGeometryRegression {
         Constructor<?> ctor=effect.getDeclaredConstructors()[0];ctor.setAccessible(true);
         Method body=KillEffectRenderer.class.getDeclaredMethod("body",PoseStack.Pose.class,VertexConsumer.class,effect,KillEffectTimeline.Pose.class,double.class);body.setAccessible(true);
         int total=0;
-        for(boolean vortex:new boolean[]{false,true}) for(double t:vortex?new double[]{.55,1.45,2.4}:new double[]{.70,1.8,3.15}) {
+        for(boolean vortex:new boolean[]{false,true}) for(double t:vortex?new double[]{.55,1.45,2.4}:new double[]{.70,1.18,1.8,2.90,3.15}) {
             float gripYaw=(float)Math.atan2(-6,-4);
             float actorYaw=(float)(180-Math.toDegrees(gripYaw));
             Object sample=ctor.newInstance(new UUID(0,123),Vec3.ZERO,actorYaw,gripYaw,new PlayerSkin(null,null,null,PlayerModelType.WIDE,false),0L,1d,1d,vortex,0d);
@@ -59,6 +59,6 @@ public final class VfxGeometryRegression {
                 total+=sink.rows.size();Files.write(output.resolve(prefix+"-"+material+".tsv"),sink.rows);
             }
         }
-        System.out.println("VFX geometry: "+total+" finite vertices, complete quads, clipped corpses; six offline snapshots written");
+        System.out.println("VFX geometry: "+total+" finite vertices, complete quads, clipped corpses; eight offline snapshots written");
     }
 }

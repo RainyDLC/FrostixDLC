@@ -46,9 +46,11 @@ status nor a dead state, ordinary removal is not falsely classified as a kill.
 - **Демоническая сила:** skin snapshot lifts with outstretched arms, then plunges
   into an asymmetric crimson/charcoal stain with burgundy and violet molten veins.
   There is no circular red rim, black disk or copied reference shape. The hand is
-  placed on the observer-facing edge, with an articulated elbow, forearm, broad
-  palm, thumb and four curled finger sections. The visible grab is held until
-  2.85 seconds, then slips down; the stain contracts after 3.65 seconds. Total
+  placed on the observer-facing edge, with a rectangular Minecraft-style upper arm and
+  forearm. There are no extra fingers, thumb or separate palm. The arm reaches from
+  its actual falling pose, plants its end on the lip and holds until 2.85 seconds.
+  It then breaks free and drops in 140 ms without smoothstep/ease-out; the stain
+  contracts after 3.65 seconds. Total
   duration is 4.6 seconds at speed 1. Ground-plane clipping hides the body without
   changing blocks.
 - **Вихрь:** three overlapping helical dust clouds, moving light/dark bands and
@@ -80,7 +82,7 @@ cd RainyDLC
 - `vfxRegression`: both clip ranges/Z conventions, GPU ray sites, complete animation
   timelines and packet-confirmed death latch/reused-ID behavior.
 - `vfxGeometryRegression`: actual deferred callbacks, finite vertices, complete
-  quads, corpse clipping and six offline geometry samples.
+  quads, corpse clipping and reach/hold/sharp-release geometry samples.
 - `blackHoleBufferRegression`: reproduces the old exception on the **real Minecraft
   CommandEncoder**, then verifies both fixed buffer sizes reach the backend.
 

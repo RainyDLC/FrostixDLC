@@ -194,8 +194,8 @@ public final class KillEffectRenderer {
         for (int side : new int[]{-1,1}) {
             float spread = (float) f.armSpread();
             float grip = (float) f.grip();
-            if (!e.vortex && side == -1 && grip > .98f) {
-                grippingArm(pose, out, e, f, bodyY, aw, slim, minY, color);
+            if (!e.vortex && side == -1 && grip > 0) {
+                grippingArm(pose, out, e, f, root, aw, slim, minY, color);
             } else {
                 Matrix4f arm = new Matrix4f(root).translate(side*(.25f+aw/2),1.45f,0)
                         .rotateZ(side*spread*2.12f).rotateX(e.vortex ? .06f : -.18f*spread);
@@ -210,27 +210,23 @@ public final class KillEffectRenderer {
     }
 
     private static void grippingArm(PoseStack.Pose pose, VertexConsumer out, Effect e,
-                                    KillEffectTimeline.Pose f, float bodyY, float aw,
+                                    KillEffectTimeline.Pose f, Matrix4f root, float aw,
                                     boolean slim, float minY, int color) {
-        float slip=(float)f.slip(),x=(float)(-e.size*.82 + slip*e.size*.42);
-        float wristY=.37f-slip*.90f;
-        Vector3f shoulder=new Vector3f(-.28f,bodyY+1.45f,0);
-        Vector3f elbow=new Vector3f(x+.23f,.055f-slip*.55f,.035f);
-        Vector3f wrist=new Vector3f(x,wristY,0);
+        float release=(float)f.slip(),reach=(float)f.grip();
+        float x=(float)(-e.size*.82 + release*e.size*.42);
+        Matrix4f raised=new Matrix4f(root).translate(-.25f-aw/2,1.45f,0)
+                .rotateZ((float)(-f.armSpread()*2.12)).rotateX((float)(-.18*f.armSpread()));
+        Vector3f shoulder=raised.transformPosition(new Vector3f());
+        Vector3f elbow=raised.transformPosition(new Vector3f(0,-.375f,0))
+                .lerp(new Vector3f(x+.28f,.22f-release*.85f,.035f),reach);
+        Vector3f wrist=raised.transformPosition(new Vector3f(0,-.75f,0))
+                .lerp(new Vector3f(x,.105f-release*1.15f,0),reach);
+        // Minecraft-style rectangular arm: the skinned forearm end is the hand.
+        // No extra palm, thumb, fingers, curling phalanges or sliding finger animation.
+        // Reach blends from the actual falling pose; the end is planted on the lip,
+        // then the entire arm breaks free and drops in 140 ms.
         limb(pose,out,shoulder,elbow,aw,40,16,slim,minY,color);
-        limb(pose,out,elbow,wrist,aw*1.06f,40,22,slim,minY,color);
-        // A broad palm rests across the uneven edge. Four finger sections curl over it.
-        Matrix4f palm=new Matrix4f().translate(x,wristY-.09f,0).rotateZ(-.20f-slip*.65f);
-        part(pose,out,palm,-.15f,-.08f,-.15f,.30f,.13f,.30f,40,25,4,3,4,0,minY,color);
-        for(int finger=0;finger<4;finger++) {
-            float z=-.115f+finger*.077f;
-            Matrix4f curl=new Matrix4f(palm).translate(.10f,-.025f,z).rotateZ(-.43f-slip*.8f);
-            part(pose,out,curl,0,-.055f,-.030f,.15f,.065f,.058f,44,25,2,3,1,0,minY,color);
-            Matrix4f tip=new Matrix4f(curl).translate(.12f,-.012f,0).rotateZ(-.72f);
-            part(pose,out,tip,0,-.04f,-.03f,.078f,.05f,.058f,44,26,2,2,1,0,minY,color);
-        }
-        Matrix4f thumb=new Matrix4f(palm).translate(-.02f,-.02f,-.14f).rotateY(.65f);
-        part(pose,out,thumb,-.02f,-.06f,-.075f,.08f,.08f,.15f,44,25,2,3,1,0,minY,color);
+        limb(pose,out,elbow,wrist,aw,40,22,slim,minY,color);
     }
     private static void limb(PoseStack.Pose pose,VertexConsumer out,Vector3f start,Vector3f end,
                              float width,int u,int v,boolean slim,float minY,int color) {

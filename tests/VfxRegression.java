@@ -34,7 +34,10 @@ public final class VfxRegression {
         check(KillEffectTimeline.demon(.85).bodyY()>.69,"ascension");
         check(KillEffectTimeline.demon(1.28).bodyY()<-1.9,"plunge");
         check(KillEffectTimeline.demon(1.5).grip()==1,"rim grip");
-        check(KillEffectTimeline.demon(3.15).slip()>0,"hand slip");
+        check(KillEffectTimeline.demon(2.85).slip()==0,"hand remains planted before release");
+        check(KillEffectTimeline.demon(2.90).slip()>.30,"release accelerates immediately, no slow easing");
+        check(KillEffectTimeline.demon(2.99).slip()==1,"entire arm drops in 140 ms");
+        check(KillEffectTimeline.demon(3.00).bodyY()<-2.7,"body follows the sharp release");
         check(KillEffectTimeline.demon(4.6).pitScale()==0,"pit closes");
         check(KillEffectTimeline.vortex(.8).bodyAlpha()==1,"body visible on approach");
         check(KillEffectTimeline.vortex(1.15).dustY()==0,"dust covers first");

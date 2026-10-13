@@ -18,7 +18,8 @@ public final class KillEffectTimeline {
         double lift = smooth(0.0, 0.85, seconds);
         double fall = smooth(0.94, 1.28, seconds);
         double grip = smooth(1.12, 1.30, seconds);
-        double slip = smooth(2.85, 3.55, seconds);
+        // A short, constant-speed release: no slow smoothstep/ease-out on the fall.
+        double slip = Math.clamp((seconds - 2.85) / 0.14, 0.0, 1.0);
         double y = 0.7 * lift - 2.65 * fall - 0.8 * slip;
         double pit = smooth(0.1, 0.72, seconds) * (1.0 - smooth(3.65, DEMON_SECONDS, seconds));
         return new Pose(y, lift * (1.0 - grip), pit, grip, slip, 0, 0, 1);
