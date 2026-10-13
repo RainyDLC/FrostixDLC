@@ -9,7 +9,6 @@ import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.mixin.accessor.BossHealthOverlayAccessor;
 import dev.hatek.mixin.accessor.GuiAccessor;
-import dev.hatek.client.ui.Style;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
 import dev.hatek.client.ui.render.Render2D;
@@ -35,10 +34,12 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.ResolvableProfile;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import java.util.Optional;
+import java.util.Locale;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -49,9 +50,9 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * Отрисовка HUD модуля Interface в стилистике ClickGUI
- * (константы Style.HUD_* / Style.WM_*): ватермарка, кейбинды
- * функций, активные эффекты, кастомный хотбар и 2D-медиа.
+ * Компактный Frostix HUD: графитовые карточки с холодным акцентом.
+ * Ватермарка, хоткеи, статистика, активные модули, цель, уведомления,
+ * эффекты, кастомный хотбар, броня и 2D-медиа.
  *
  * Масштаб применяется НЕ трансформацией позы (так текст из атласа
  * становился бы пиксельным), а честно: геометрия умножается на scale,
@@ -157,14 +158,20 @@ public final class InterfaceHud {
                 InterfaceHud::measureWatermark);
         putBound(out, HudLayout.Element.KEYBINDS, Interface.showKeybinds(), sw, sh,
                 InterfaceHud::measureKeybinds);
-        putBound(out, HudLayout.Element.EFFECTS, Interface.showEffects(), sw, sh,
-                InterfaceHud::measureEffects);
         putBound(out, HudLayout.Element.HOTBAR, Interface.showHotbar(), sw, sh,
                 InterfaceHud::measureHotbar);
         putBound(out, HudLayout.Element.ARMOR, Interface.showArmor(), sw, sh,
                 InterfaceHud::measureArmor);
+        putBound(out, HudLayout.Element.STATS, Interface.showStats(), sw, sh,
+                InterfaceHud::measureStats);
+        putBound(out, HudLayout.Element.ARRAYLIST, Interface.showArrayList(), sw, sh,
+                scale -> measureArrayList(scale, out));
         putBound(out, HudLayout.Element.TARGET, Interface.showTarget(), sw, sh,
                 InterfaceHud::measureTarget);
+        putBound(out, HudLayout.Element.NOTIFICATIONS, Interface.showNotifications(), sw, sh,
+                InterfaceHud::measureNotices);
+        putBound(out, HudLayout.Element.EFFECTS, Interface.showEffects(), sw, sh,
+                InterfaceHud::measureEffects);
         return out;
     }
 
@@ -180,7 +187,7 @@ public final class InterfaceHud {
         if (data == null || data.w() <= 0 || data.h() <= 0) {
             return;
         }
-        float[] p = resolvePos(el, e, data.w(), data.h(), sw, sh);
+        float[] p = resolvePos(el, e, data.w(), data.h(), sw, sh, out);
         out.put(el, new float[]{p[0], p[1], data.w(), data.h()});
     }
 
@@ -223,21 +230,15 @@ public final class InterfaceHud {
     }
 
     private static HFont sTitle(float s) {
-        float q = qs(s);
-        return q == 1.0f ? Fonts.title()
-                : Fonts.of(Fonts.ROBOTO_MEDIUM, Style.FONT_TITLE * q);
+        return Fonts.of(Fonts.INTER_MEDIUM, qs(11.0f * s));
     }
 
     private static HFont sBody(float s) {
-        float q = qs(s);
-        return q == 1.0f ? Fonts.body()
-                : Fonts.of(Fonts.ROBOTO_REGULAR, Style.FONT_BODY * q);
+        return Fonts.of(Fonts.ROBOTO_REGULAR, qs(10.0f * s));
     }
 
     private static HFont sLabel(float s) {
-        float q = qs(s);
-        return q == 1.0f ? Fonts.label()
-                : Fonts.of(Fonts.INTER_MEDIUM, Style.FONT_LABEL * q);
+        return Fonts.of(Fonts.INTER_MEDIUM, qs(9.5f * s));
     }
 
     // ---------------- точка входа ----------------
@@ -317,6 +318,7 @@ public final class InterfaceHud {
 
     /** Отрисовка всех элементов (и в игре, и за ClickGUI). */
     private static void renderAll(GuiGraphicsExtractor gg) {
+        tickNotices();
         tickDrag();
         BOUNDS.clear();
         int sw = Render2D.screenWidth();
@@ -327,14 +329,20 @@ public final class InterfaceHud {
                 InterfaceHud::measureWatermark, InterfaceHud::drawWatermark);
         place(gg, HudLayout.Element.KEYBINDS, Interface.showKeybinds(), sw, sh,
                 InterfaceHud::measureKeybinds, InterfaceHud::drawKeybinds);
-        place(gg, HudLayout.Element.EFFECTS, Interface.showEffects(), sw, sh,
-                InterfaceHud::measureEffects, InterfaceHud::drawEffects);
         place(gg, HudLayout.Element.HOTBAR, Interface.showHotbar(), sw, sh,
                 InterfaceHud::measureHotbar, InterfaceHud::drawHotbar);
         place(gg, HudLayout.Element.ARMOR, Interface.showArmor(), sw, sh,
                 InterfaceHud::measureArmor, InterfaceHud::drawArmor);
+        place(gg, HudLayout.Element.STATS, Interface.showStats(), sw, sh,
+                InterfaceHud::measureStats, InterfaceHud::drawStats);
+        place(gg, HudLayout.Element.ARRAYLIST, Interface.showArrayList(), sw, sh,
+                scale -> measureArrayList(scale, BOUNDS), InterfaceHud::drawArrayList);
         place(gg, HudLayout.Element.TARGET, Interface.showTarget(), sw, sh,
                 InterfaceHud::measureTarget, InterfaceHud::drawTarget);
+        place(gg, HudLayout.Element.NOTIFICATIONS, Interface.showNotifications(), sw, sh,
+                InterfaceHud::measureNotices, InterfaceHud::drawNotices);
+        place(gg, HudLayout.Element.EFFECTS, Interface.showEffects(), sw, sh,
+                InterfaceHud::measureEffects, InterfaceHud::drawEffects);
         placeMedia2D(gg);
         Render2D.end(gg);
     }
@@ -365,7 +373,7 @@ public final class InterfaceHud {
         if (data == null || data.w() <= 0 || data.h() <= 0) {
             return;
         }
-        float[] p = resolvePos(el, e, data.w(), data.h(), sw, sh);
+        float[] p = resolvePos(el, e, data.w(), data.h(), sw, sh, BOUNDS);
         float x = p[0];
         float y = p[1];
 
@@ -378,8 +386,9 @@ public final class InterfaceHud {
 
     /** Позиция элемента: из HudLayout или якорь по умолчанию. */
     private static float[] resolvePos(HudLayout.Element el, HudLayout.Entry e,
-                                      float w, float h, int sw, int sh) {
-        float[] a = anchor(el, w, h, sw, sh);
+                                      float w, float h, int sw, int sh,
+                                      Map<HudLayout.Element, float[]> placed) {
+        float[] a = anchor(el, w, h, sw, sh, placed);
         return new float[]{e.positioned() ? e.x : a[0], e.positioned() ? e.y : a[1]};
     }
 
@@ -409,16 +418,17 @@ public final class InterfaceHud {
         return 0;
     }
 
-    private static float[] anchor(HudLayout.Element el, float w, float h, int sw, int sh) {
-        float m = Style.HUD_MARGIN;
+    private static float[] anchor(HudLayout.Element el, float w, float h, int sw, int sh,
+                                  Map<HudLayout.Element, float[]> placed) {
+        float m = FrostHudStyle.HUD_MARGIN;
         switch (el) {
             case WATERMARK: {
                 // Настройка позиции: при смене сбрасываем ручное перетаскивание,
                 // чтобы якорь применился сразу. Перетаскивание после — вручную.
                 String pos = Interface.watermarkPos();
                 if (!pos.equals(lastWatermarkPos)) {
+                    if (lastWatermarkPos != null) HudLayout.clearPos(HudLayout.Element.WATERMARK);
                     lastWatermarkPos = pos;
-                    HudLayout.clearPos(HudLayout.Element.WATERMARK);
                     watermarkBossY = -1.0f;
                 }
                 float x = m;
@@ -445,129 +455,90 @@ public final class InterfaceHud {
                 return new float[]{x, y};
             }
             case KEYBINDS:
-                return new float[]{sw - w - m, m};
-            case EFFECTS: {
-                float[] kb = BOUNDS.get(HudLayout.Element.KEYBINDS);
-                float top = (kb != null) ? kb[1] + kb[3] + 8.0f : m;
-                return new float[]{sw - w - m, top};
+                return new float[]{m, below(placed, HudLayout.Element.WATERMARK, m)};
+            case STATS:
+                return new float[]{m, below(placed, HudLayout.Element.KEYBINDS,
+                        below(placed, HudLayout.Element.WATERMARK, m))};
+            case ARRAYLIST:
+                return new float[]{m, below(placed, HudLayout.Element.STATS,
+                        below(placed, HudLayout.Element.KEYBINDS,
+                                below(placed, HudLayout.Element.WATERMARK, m)))};
+            case EFFECTS:
+                return new float[]{sw - w - m, below(placed, HudLayout.Element.NOTIFICATIONS,
+                        below(placed, HudLayout.Element.TARGET,
+                                below(placed, HudLayout.Element.WATERMARK, m)))};
+            case NOTIFICATIONS: {
+                float[] target = placed.get(HudLayout.Element.TARGET);
+                return new float[]{target == null ? (sw - w) / 2.0f : target[0],
+                        below(placed, HudLayout.Element.TARGET,
+                                below(placed, HudLayout.Element.WATERMARK, m))};
             }
             case ARMOR:
                 return new float[]{m, sh - h - 8.0f};
-            case TARGET:
-                return new float[]{(sw - w) / 2.0f, m};
+            case TARGET: {
+                float[] kb = placed.get(HudLayout.Element.KEYBINDS);
+                float tx = kb == null ? (sw - w) / 2.0f : kb[0] + kb[2] + 8.0f * Render2D.guiScale();
+                if (tx + w + m > sw && kb != null) {
+                    return new float[]{Math.max(m, (sw - w) / 2.0f),
+                            below(placed, HudLayout.Element.ARRAYLIST,
+                                    below(placed, HudLayout.Element.STATS,
+                                            below(placed, HudLayout.Element.KEYBINDS, m)))};
+                }
+                return new float[]{Math.max(m, Math.min(sw - w - m, tx)),
+                        below(placed, HudLayout.Element.WATERMARK, m)};
+            }
             case HOTBAR:
             default:
                 return new float[]{(sw - w) / 2.0f, sh - h - 8.0f};
         }
     }
 
+    private static float below(Map<HudLayout.Element, float[]> placed, HudLayout.Element el, float fallback) {
+        float[] b = placed.get(el);
+        return b == null ? fallback : b[1] + b[3] + 6.0f * Render2D.guiScale();
+    }
+
     // ---------------- ватермарка ----------------
 
-    private static final class WmData implements Sized {
-        final float w;
-        final float h;
-        final String fps;
-        final String pingS;
+    private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
 
-        WmData(float w, float h, String fps, String pingS) {
-            this.w = w;
-            this.h = h;
-            this.fps = fps;
-            this.pingS = pingS;
-        }
-
-        @Override
-        public float w() {
-            return this.w;
-        }
-
-        @Override
-        public float h() {
-            return this.h;
-        }
-
-        public String fps() {
-            return this.fps;
-        }
-
-        public String pingS() {
-            return this.pingS;
-        }
-    }
+    private record WmData(float w, float h, String user, String fps, String time) implements Sized {}
 
     private static WmData measureWatermark(float s) {
         Minecraft mc = Minecraft.getInstance();
-        HFont title = sTitle(s);
-        HFont label = sLabel(s);
-        float h = Style.WM_H * s;
-
-        float nameW = title.width("Rainy") + title.width("DLC");
-
+        String user = sLabel(s).trim(mc.player == null ? "Player" : mc.player.getName().getString(), 95.0f * s);
         String fps = mc.getFps() + " FPS";
-        float fpsW = label.width(fps);
-
-        int ping = ping();
-        String pingS = ping >= 0 ? ping + " ms" : null;
-        float pingW = pingS == null ? 0.0f : label.width(pingS);
-
-        float logoS = 16.0f * s;
-        float iconS = 11.0f * s;
-        float w = Style.WM_PAD * s + logoS + 8.0f * s + nameW
-                + Style.WM_SEP_GAP * s + Style.WM_SEP_W * s + Style.WM_SEP_GAP * s
-                + iconS + Style.WM_UNIT_GAP * s + fpsW;
-        if (pingS != null) {
-            w += Style.WM_SEP_GAP * s + Style.WM_SEP_W * s + Style.WM_SEP_GAP * s
-                    + iconS + Style.WM_UNIT_GAP * s + pingW;
-        }
-        w += Style.WM_PAD * s;
-        return new WmData(w, h, fps, pingS);
+        String time = LocalTime.now().format(CLOCK);
+        float w = 2 * FrostHudStyle.WM_PAD * s + 16.0f * s + 7.0f * s
+                + sTitle(s).width("Frostix") + sLabel(s).width(user)
+                + sLabel(s).width(fps) + sLabel(s).width(time)
+                + 3 * (2 * FrostHudStyle.WM_SEP_GAP + FrostHudStyle.WM_SEP_W) * s;
+        return new WmData(w, FrostHudStyle.WM_H * s, user, fps, time);
     }
 
-    /** Рисует ватермарку в origin (0,0) с ручным масштабом. */
     private static void drawWatermark(GuiGraphicsExtractor gg, float s, WmData d) {
-        float w = d.w();
-        float h = d.h();
-        HFont title = sTitle(s);
-        HFont label = sLabel(s);
-
-        Render2D.round(gg, 0, 0, w, h, Style.WM_R * s, Style.HUD_PANEL);
-
-        float logoS = 16.0f * s;
-        float iconS = 11.0f * s;
-        float cx = Style.WM_PAD * s;
-        Render2D.icon(gg, "logo", cx, (h - logoS) / 2.0f, logoS, logoS, Style.WHITE);
-        cx += logoS + 8.0f * s;
-
-        float baseline = Style.WM_BASELINE * s;
-        cx = title.draw(gg, "Rainy", cx, baseline, Style.WHITE);
-        cx = title.draw(gg, "DLC", cx, baseline, Style.accent());
-
-        float unitBaseline = label.centeredBaseline(0, h);
-        cx = separator(gg, cx, h, s);
-        cx = unit(gg, "fps", d.fps(), cx, h, unitBaseline, s);
-
-        if (d.pingS() != null) {
-            cx = separator(gg, cx, h, s);
-            unit(gg, "ping", d.pingS(), cx, h, unitBaseline, s);
-        }
+        FrostHudStyle.panel(gg, d.w(), d.h(), s);
+        float x = FrostHudStyle.WM_PAD * s;
+        Render2D.round(gg, x, 5 * s, 16 * s, 16 * s, 4 * s,
+                Render2D.withAlpha(FrostHudStyle.accent(), 0.18f));
+        sTitle(s).drawCentered(gg, "F", x + 8 * s,
+                sTitle(s).centeredBaseline(5 * s, 16 * s), FrostHudStyle.accent());
+        x += 23 * s;
+        x = sTitle(s).draw(gg, "Frostix", x, sTitle(s).centeredBaseline(0, d.h()), FrostHudStyle.TEXT);
+        float baseline = sLabel(s).centeredBaseline(0, d.h());
+        x = separator(gg, x, d.h(), s);
+        x = sLabel(s).draw(gg, d.user(), x, baseline, FrostHudStyle.MUTED);
+        x = separator(gg, x, d.h(), s);
+        x = sLabel(s).draw(gg, d.fps(), x, baseline, FrostHudStyle.TEXT);
+        x = separator(gg, x, d.h(), s);
+        sLabel(s).draw(gg, d.time(), x, baseline, FrostHudStyle.MUTED);
     }
 
     private static float separator(GuiGraphicsExtractor gg, float cx, float h, float s) {
-        cx += Style.WM_SEP_GAP * s;
-        Render2D.rect(gg, cx, (h - Style.WM_SEP_H * s) / 2.0f,
-                Style.WM_SEP_W * s, Style.WM_SEP_H * s, Style.WHITE_08);
-        return cx + Style.WM_SEP_W * s + Style.WM_SEP_GAP * s;
-    }
-
-    private static float unit(GuiGraphicsExtractor gg, String icon, String text,
-                              float cx, float h, float baseline, float s) {
-        float iconS = 11.0f * s;
-        HFont label = sLabel(s);
-        Render2D.icon(gg, icon, cx, (h - iconS) / 2.0f, iconS, iconS, Style.WHITE_45);
-        cx += iconS + Style.WM_UNIT_GAP * s;
-        float textW = label.width(text);
-        label.draw(gg, text, cx, baseline, Style.WHITE);
-        return cx + textW;
+        cx += FrostHudStyle.WM_SEP_GAP * s;
+        Render2D.rect(gg, cx, (h - FrostHudStyle.WM_SEP_H * s) / 2.0f,
+                FrostHudStyle.WM_SEP_W * s, FrostHudStyle.WM_SEP_H * s, 0x203F5E71);
+        return cx + FrostHudStyle.WM_SEP_W * s + FrostHudStyle.WM_SEP_GAP * s;
     }
 
     private static int cachedPing = -2;
@@ -637,17 +608,17 @@ public final class InterfaceHud {
         HFont body = sBody(s);
         HFont label = sLabel(s);
 
-        float headerW = Style.HUD_TITLE_X * s + title.width("Keybinds") + Style.HUD_PAD * s;
+        float headerW = FrostHudStyle.HUD_TITLE_X * s + title.width("Hotkeys") + FrostHudStyle.HUD_PAD * s;
         float rowsW = 0.0f;
         for (Module module : bound) {
-            float badgeW = label.width(module.keyLabel()) + Style.HUD_BADGE_PAD * 2.0f * s;
-            float rowW = 23.0f * s + body.width(module.name()) + 8.0f * s + badgeW
-                    + Style.HUD_PAD * s;
+            float badgeW = label.width("[" + module.keyLabel() + "]") + FrostHudStyle.HUD_BADGE_PAD * 2.0f * s;
+            float rowW = 19.0f * s + body.width(module.name()) + 8.0f * s + badgeW
+                    + FrostHudStyle.HUD_PAD * s;
             rowsW = Math.max(rowsW, rowW);
         }
-        float w = Math.max(Style.HUD_MIN_W * s, Math.max(headerW, rowsW));
-        float rowH = Style.HUD_ROW_H * s;
-        float h = Style.HUD_HEADER_H * s + bound.size() * rowH + Style.HUD_BOTTOM_PAD * s;
+        float w = Math.max(FrostHudStyle.HUD_MIN_W * s, Math.max(headerW, rowsW));
+        float rowH = FrostHudStyle.HUD_ROW_H * s;
+        float h = FrostHudStyle.HUD_HEADER_H * s + bound.size() * rowH + FrostHudStyle.HUD_BOTTOM_PAD * s;
         return new KbData(w, h, bound);
     }
 
@@ -657,44 +628,44 @@ public final class InterfaceHud {
         HFont body = sBody(s);
         HFont label = sLabel(s);
 
-        Render2D.round(gg, 0, 0, w, d.h, Style.HUD_CARD_R * s, Style.HUD_PANEL);
-        drawCardHeader(gg, "keyboard", "Keybinds", s);
+        FrostHudStyle.panel(gg, w, d.h, s);
+        drawCardHeader(gg, "keyboard", "Hotkeys", s);
 
-        float rowH = Style.HUD_ROW_H * s;
-        float ry = Style.HUD_HEADER_H * s;
+        float rowH = FrostHudStyle.HUD_ROW_H * s;
+        float ry = FrostHudStyle.HUD_HEADER_H * s;
         for (Module module : d.bound) {
             boolean enabled = module.isEnabled();
             if (enabled) {
-                Render2D.round(gg, Style.HUD_PAD * s,
-                        ry + (rowH - Style.HUD_STUB_H * s) / 2.0f,
-                        Style.HUD_STUB_W * s, Style.HUD_STUB_H * s, 1.0f * s,
-                        Style.accent());
+                Render2D.round(gg, FrostHudStyle.HUD_PAD * s,
+                        ry + (rowH - FrostHudStyle.HUD_STUB_H * s) / 2.0f,
+                        FrostHudStyle.HUD_STUB_W * s, FrostHudStyle.HUD_STUB_H * s, 1.0f * s,
+                        FrostHudStyle.accent());
             }
-            body.draw(gg, module.name(), 23.0f * s,
+            body.draw(gg, module.name(), 19.0f * s,
                     body.centeredBaseline(ry, rowH),
-                    enabled ? Style.WHITE : Style.WHITE_45);
+                    enabled ? FrostHudStyle.TEXT : FrostHudStyle.MUTED);
 
-            String key = module.keyLabel();
-            float badgeW = label.width(key) + Style.HUD_BADGE_PAD * 2.0f * s;
-            float bx = w - Style.HUD_PAD * s - badgeW;
-            float by = ry + (rowH - Style.HUD_BADGE_H * s) / 2.0f;
-            Render2D.round(gg, bx, by, badgeW, Style.HUD_BADGE_H * s,
-                    Style.HUD_BADGE_R * s,
-                    enabled ? Render2D.withAlpha(Style.accent(), 0.22f) : Style.WHITE_04);
+            String key = "[" + module.keyLabel() + "]";
+            float badgeW = label.width(key) + FrostHudStyle.HUD_BADGE_PAD * 2.0f * s;
+            float bx = w - FrostHudStyle.HUD_PAD * s - badgeW;
+            float by = ry + (rowH - FrostHudStyle.HUD_BADGE_H * s) / 2.0f;
+            Render2D.round(gg, bx, by, badgeW, FrostHudStyle.HUD_BADGE_H * s,
+                    FrostHudStyle.HUD_BADGE_R * s,
+                    enabled ? Render2D.withAlpha(FrostHudStyle.accent(), 0.22f) : 0x163F5E71);
             label.drawCentered(gg, key, bx + badgeW / 2.0f,
-                    label.centeredBaseline(by, Style.HUD_BADGE_H * s),
-                    enabled ? Style.WHITE : Style.WHITE_45);
+                    label.centeredBaseline(by, FrostHudStyle.HUD_BADGE_H * s),
+                    enabled ? FrostHudStyle.TEXT : FrostHudStyle.MUTED);
             ry += rowH;
         }
     }
 
     private static void drawCardHeader(GuiGraphicsExtractor gg, String icon,
                                        String titleText, float s) {
-        float iconS = Style.HUD_ICON * s;
-        Render2D.icon(gg, icon, Style.HUD_ICON_X * s, Style.HUD_ICON_Y * s,
-                iconS, iconS, Style.WHITE_45);
-        sTitle(s).draw(gg, titleText, Style.HUD_TITLE_X * s,
-                Style.HUD_TITLE_BASELINE * s, Style.WHITE);
+        float iconS = FrostHudStyle.HUD_ICON * s;
+        Render2D.icon(gg, icon, FrostHudStyle.HUD_ICON_X * s, FrostHudStyle.HUD_ICON_Y * s,
+                iconS, iconS, FrostHudStyle.MUTED);
+        sTitle(s).draw(gg, titleText, FrostHudStyle.HUD_TITLE_X * s,
+                sTitle(s).centeredBaseline(0, FrostHudStyle.HUD_HEADER_H * s), FrostHudStyle.TEXT);
     }
 
     // ---------------- эффекты ----------------
@@ -737,19 +708,19 @@ public final class InterfaceHud {
         HFont label = sLabel(s);
 
         float rowH = 22.0f * s;
-        float headerW = Style.HUD_TITLE_X * s + title.width("Effects") + Style.HUD_PAD * s;
+        float headerW = FrostHudStyle.HUD_TITLE_X * s + title.width("Effects") + FrostHudStyle.HUD_PAD * s;
         float rowsW = 0.0f;
         int count = Math.min(8, effects.size());
         for (int i = 0; i < count; i++) {
             MobEffectInstance instance = effects.get(i);
-            float rowW = Style.HUD_PAD * s + 14.0f * s + 6.0f * s
+            float rowW = FrostHudStyle.HUD_PAD * s + 14.0f * s + 6.0f * s
                     + body.width(effectName(instance))
                     + 8.0f * s + label.width(formatDuration(instance.getDuration()))
-                    + Style.HUD_PAD * s;
+                    + FrostHudStyle.HUD_PAD * s;
             rowsW = Math.max(rowsW, rowW);
         }
-        float w = Math.max(Style.HUD_MIN_W * s, Math.max(headerW, rowsW));
-        float h = Style.HUD_HEADER_H * s + count * rowH + Style.HUD_BOTTOM_PAD * s;
+        float w = Math.max(FrostHudStyle.HUD_MIN_W * s, Math.max(headerW, rowsW));
+        float h = FrostHudStyle.HUD_HEADER_H * s + count * rowH + FrostHudStyle.HUD_BOTTOM_PAD * s;
         return new FxData(w, h, effects.subList(0, count));
     }
 
@@ -761,29 +732,29 @@ public final class InterfaceHud {
 
         float rowH = 22.0f * s;
         float iconS = 14.0f * s;
-        Render2D.round(gg, 0, 0, d.w, d.h, Style.HUD_CARD_R * s, Style.HUD_PANEL);
-        Render2D.texture(gg, TexCache.flask((int) (Style.HUD_ICON * s)),
-                Style.HUD_ICON_X * s, Style.HUD_ICON_Y * s,
-                Style.HUD_ICON * s, Style.HUD_ICON * s, Style.WHITE_45);
-        title.draw(gg, "Effects", Style.HUD_TITLE_X * s,
-                Style.HUD_TITLE_BASELINE * s, Style.WHITE);
+        FrostHudStyle.panel(gg, d.w, d.h, s);
+        Render2D.texture(gg, TexCache.flask((int) (FrostHudStyle.HUD_ICON * s)),
+                FrostHudStyle.HUD_ICON_X * s, FrostHudStyle.HUD_ICON_Y * s,
+                FrostHudStyle.HUD_ICON * s, FrostHudStyle.HUD_ICON * s, FrostHudStyle.MUTED);
+        title.draw(gg, "Effects", FrostHudStyle.HUD_TITLE_X * s,
+                title.centeredBaseline(0, FrostHudStyle.HUD_HEADER_H * s), FrostHudStyle.TEXT);
 
         RenderPipeline pipeline = RenderPipelines.GUI_TEXTURED;
-        float ry = Style.HUD_HEADER_H * s;
+        float ry = FrostHudStyle.HUD_HEADER_H * s;
         for (MobEffectInstance instance : d.shown) {
             Holder<MobEffect> holder = instance.getEffect();
 
             float spriteY = ry + (rowH - iconS) / 2.0f;
             gg.blitSprite(pipeline, Hud.getMobEffectSprite(holder),
-                    (int) (Style.HUD_PAD * s), (int) spriteY,
+                    (int) (FrostHudStyle.HUD_PAD * s), (int) spriteY,
                     (int) iconS, (int) iconS);
 
             float baseline = body.centeredBaseline(ry, rowH);
-            body.draw(gg, effectName(instance), Style.HUD_PAD * s + 20.0f * s,
-                    baseline, Style.WHITE);
+            body.draw(gg, effectName(instance), FrostHudStyle.HUD_PAD * s + 20.0f * s,
+                    baseline, FrostHudStyle.TEXT);
             label.drawRight(gg, formatDuration(instance.getDuration()),
-                    d.w - Style.HUD_PAD * s, label.centeredBaseline(ry, rowH),
-                    Style.WHITE_45);
+                    d.w - FrostHudStyle.HUD_PAD * s, label.centeredBaseline(ry, rowH),
+                    FrostHudStyle.MUTED);
             ry += rowH;
         }
     }
@@ -887,9 +858,9 @@ public final class InterfaceHud {
         if (selected) {
             Render2D.round(gg, x - 2.0f * s, y - 2.0f * s,
                     slot + 4.0f * s, slot + 4.0f * s, 8.0f * s,
-                    Render2D.withAlpha(Style.accent(), 0.9f));
+                    Render2D.withAlpha(FrostHudStyle.accent(), 0.9f));
         }
-        Render2D.round(gg, x, y, slot, slot, 6.0f * s, Style.HUD_PANEL);
+        Render2D.round(gg, x, y, slot, slot, 6.0f * s, FrostHudStyle.HUD_PANEL);
         if (stack.isEmpty()) {
             return;
         }
@@ -956,7 +927,7 @@ public final class InterfaceHud {
         float pad = 6.0f * s;
         float slot = 20.0f * s;
         float gap = 4.0f * s;
-        Render2D.round(gg, 0, 0, d.w, d.h, 10.0f * s, Style.HUD_PANEL);
+        FrostHudStyle.panel(gg, d.w, d.h, s);
         Minecraft mc = Minecraft.getInstance();
         HFont pct = sLabel(s * 0.7f);
         for (int i = 0; i < 4; i++) {
@@ -998,157 +969,56 @@ public final class InterfaceHud {
 
     // ---------------- цель ----------------
 
-    private static final class TargetData implements Sized {
-        final float w;
-        final float h;
-        final LivingEntity target;
-        final String name;
-        final float hpFrac;
-        final float abFrac;
-        final String hpText;
-        final List<ItemStack> armor;
-        final ItemStack mainHand;
-        final ItemStack offHand;
+    private record TargetData(float w, float h, LivingEntity target, String name,
+                              float hpFrac, float abFrac, String hpText, String distance) implements Sized {}
 
-        TargetData(float w, float h, LivingEntity target, String name,
-                   float hpFrac, float abFrac, String hpText,
-                   List<ItemStack> armor, ItemStack mainHand, ItemStack offHand) {
-            this.w = w;
-            this.h = h;
-            this.target = target;
-            this.name = name;
-            this.hpFrac = hpFrac;
-            this.abFrac = abFrac;
-            this.hpText = hpText;
-            this.armor = armor;
-            this.mainHand = mainHand;
-            this.offHand = offHand;
-        }
-
-        @Override
-        public float w() {
-            return this.w;
-        }
-
-        @Override
-        public float h() {
-            return this.h;
-        }
-    }
-
-    /** Цель: сначала таргет ауры, иначе то, на что смотрим. null — нет цели. */
     private static TargetData measureTarget(float s) {
         Minecraft mc = Minecraft.getInstance();
         LivingEntity t = resolveTarget(mc);
-        if (t == null) {
-            return null;
-        }
+        if (t == null) return null;
         float maxHp = Math.max(1.0f, t.getMaxHealth());
-        float hpFrac = Mth.clamp(t.getHealth() / maxHp, 0.0f, 1.0f);
-        float abFrac = Mth.clamp(t.getAbsorptionAmount() / maxHp, 0.0f, 1.0f - hpFrac);
-        String hpText = String.valueOf((int) Math.ceil(t.getHealth() + t.getAbsorptionAmount()));
-
-        HFont title = sTitle(s);
-        String name = title.trim(t.getName().getString(), 140.0f * s);
-
-        float pad = 8.0f * s;
-        float head = 34.0f * s;
-        float nameX = pad + head + 8.0f * s;
-        float row2Y = pad + 22.0f * s;
-        float icon = 18.0f * s;
-        float gap = 3.0f * s;
-        float armorW = 4.0f * icon + 3.0f * gap;
-        float pctH = 9.0f * s;
-        float handsX = nameX + armorW + 10.0f * s;
-        float handsW = 2.0f * icon + gap;
-        float leftW = Math.max(handsX + handsW, nameX + title.width(name) + 8.0f * s);
-        float circleD = 38.0f * s;
-        float circleGap = 12.0f * s;
-        float w = leftW + circleGap + circleD + pad;
-        float row2Bottom = row2Y + icon + gap + pctH;
-        float h = Math.max(pad + head, row2Bottom) + pad;
-
-        return new TargetData(w, h, t, name, hpFrac, abFrac, hpText,
-                armorPieces(t), t.getMainHandItem(), t.getOffhandItem());
+        float hp = Mth.clamp(t.getHealth() / maxHp, 0, 1);
+        float absorption = Mth.clamp(t.getAbsorptionAmount() / maxHp, 0, 1 - hp);
+        String name = sTitle(s).trim(t.getName().getString(), 108 * s);
+        String hpText = String.format(Locale.ROOT, "%.1f HP", t.getHealth() + t.getAbsorptionAmount());
+        String distance = String.format(Locale.ROOT, "%.1f m", t.distanceTo(mc.player));
+        float w = Math.max(196 * s, 48 * s + sTitle(s).width(name)
+                + 12 * s + sLabel(s).width(hpText) + 8 * s);
+        return new TargetData(w, 49 * s, t, name, hp, absorption, hpText, distance);
     }
 
     private static void drawTarget(GuiGraphicsExtractor gg, float s, TargetData d) {
-        Render2D.round(gg, 0, 0, d.w, d.h, 10.0f * s, Style.HUD_PANEL);
+        FrostHudStyle.panel(gg, d.w(), d.h(), s);
         Minecraft mc = Minecraft.getInstance();
-
-        float pad = 8.0f * s;
-        float head = 34.0f * s;
-
-        // Голова цели: предмет PLAYER_HEAD с её профилем (настоящий скин).
-        ItemStack headStack = headStack(d.target, mc);
+        float pad = 7 * s, head = 34 * s, nameX = 48 * s;
+        Render2D.round(gg, pad, pad, head, head, 5 * s,
+                Render2D.withAlpha(FrostHudStyle.accent(), 0.15f));
+        ItemStack headStack = headStack(d.target(), mc);
         if (!headStack.isEmpty()) {
-            float hs = head / 16.0f;
             Render2D.pushTranslate(gg, pad, pad);
-            Render2D.pushScale(gg, 0.0f, 0.0f, hs);
+            Render2D.pushScale(gg, 0, 0, head / 16.0f);
             gg.item(mc.player, headStack, 0, 0, 0);
             Render2D.popTransform(gg);
             Render2D.popTransform(gg);
         } else {
-            drawAvatar(gg, d.name, pad, pad, head, s);
+            drawAvatar(gg, d.name(), pad, pad, head, s);
         }
-
-        // Ник.
-        HFont title = sTitle(s);
-        float nameX = pad + head + 8.0f * s;
-        title.draw(gg, d.name, nameX, pad + 2.0f * s, Style.WHITE);
-
-        // Броня с процентами + руки.
-        float row2Y = pad + 22.0f * s;
-        float icon = 18.0f * s;
-        float gap = 3.0f * s;
-        HFont pct = sLabel(s * 0.7f);
-        for (int i = 0; i < 4; i++) {
-            float x = nameX + i * (icon + gap);
-            ItemStack stack = d.armor.get(i);
-            drawSlot(gg, mc, stack, x, row2Y, icon, s, false);
-            String p = durabilityPct(stack);
-            if (p != null) {
-                float tw = pct.width(p);
-                pct.draw(gg, p, x + (icon - tw) / 2.0f, row2Y + icon + gap,
-                        durabilityColor(stack));
-            }
-        }
-        float handsX = nameX + 4.0f * icon + 3.0f * gap + 10.0f * s;
-        drawSlot(gg, mc, d.mainHand, handsX, row2Y, icon, s, false);
-        drawSlot(gg, mc, d.offHand, handsX + icon + gap, row2Y, icon, s, false);
-
-        // Круг ХП справа: гладкие дуги (фон, золото абсорбции, хп).
-        float circleD = 38.0f * s;
-        float circleX = d.w - pad - circleD;
-        float circleY = (d.h - circleD) / 2.0f;
-        float circleCx = circleX + circleD / 2.0f;
-        hpArc(gg, circleX, circleY, circleD, 1.0f, false, 0xFF2A2929);
-        float total = Math.min(1.0f, d.hpFrac + d.abFrac);
-        hpArc(gg, circleX, circleY, circleD, total, true, 0xFFFFC94D);
-        hpArc(gg, circleX, circleY, circleD, d.hpFrac, true, hpColor(d.hpFrac));
-        HFont hpFont = sTitle(s * 1.1f);
-        hpFont.drawCentered(gg, d.hpText, circleCx,
-                hpFont.centeredBaseline(circleY, circleD), Style.WHITE);
-    }
-
-    /**
-     * Гладкая дуга ХП: сглаженная текстура из TexCache, тинтится в цвет.
-     * x/y/d — квадрат, в который вписана дуга.
-     */
-    private static void hpArc(GuiGraphicsExtractor gg, float x, float y, float d,
-                              float frac, boolean round, int argb) {
-        if (frac <= 0.0f) {
-            return;
-        }
-        Identifier id = TexCache.arc(128, 14.0f, frac, round);
-        if (id == null) {
-            return;
-        }
-        Render2D.texture(gg, id, x, y, d, d, argb);
+        sTitle(s).draw(gg, d.name(), nameX, sTitle(s).centeredBaseline(5 * s, 15 * s), FrostHudStyle.TEXT);
+        sLabel(s).drawRight(gg, d.hpText(), d.w() - pad,
+                sLabel(s).centeredBaseline(5 * s, 15 * s), FrostHudStyle.TEXT);
+        float barW = d.w() - nameX - pad;
+        Render2D.round(gg, nameX, 24 * s, barW, 4 * s, 2 * s, 0xFF303D48);
+        float hpW = barW * d.hpFrac();
+        if (hpW > 0) Render2D.round(gg, nameX, 24 * s, hpW, 4 * s, 2 * s, hpColor(d.hpFrac()));
+        float abW = barW * d.abFrac();
+        if (abW > 0) Render2D.round(gg, nameX + hpW, 24 * s, abW, 4 * s, 2 * s, 0xFFFFD279);
+        sLabel(s).draw(gg, d.distance(), nameX, sLabel(s).centeredBaseline(31 * s, 12 * s), FrostHudStyle.MUTED);
+        sLabel(s).drawRight(gg, "TARGET", d.w() - pad,
+                sLabel(s).centeredBaseline(31 * s, 12 * s), FrostHudStyle.MUTED);
     }
 
     private static int hpColor(float frac) {
-        return frac > 0.6f ? 0xFF4ADE80 : frac > 0.3f ? 0xFFFACC15 : 0xFFF87171;
+        return frac > 0.6f ? FrostHudStyle.accent() : frac > 0.3f ? 0xFFFACC15 : 0xFFF87171;
     }
 
     /** Голова игрока как предмет (скин подтягивается из профиля). */
@@ -1175,7 +1045,7 @@ public final class InterfaceHud {
         String letter = name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase();
         HFont f = sTitle(s * 1.2f);
         f.drawCentered(gg, letter, x + size / 2.0f,
-                f.centeredBaseline(y, size), Style.WHITE);
+                f.centeredBaseline(y, size), FrostHudStyle.TEXT);
     }
 
     private static LivingEntity resolveTarget(Minecraft mc) {
@@ -1222,6 +1092,156 @@ public final class InterfaceHud {
         return best;
     }
 
+    // ---------------- telemetry / active modules / notifications ----------------
+
+    private record StatsData(float w, float h, String latency, String totems,
+                             String speed, float pingW, float totemW) implements Sized {}
+
+    private static StatsData measureStats(float s) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return null;
+        int count = 0;
+        Inventory inv = mc.player.getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack stack = inv.getItem(i);
+            if (stack.is(Items.TOTEM_OF_UNDYING)) count += stack.getCount();
+        }
+        int latencyMs = ping();
+        String latency = latencyMs < 0 ? "— ms" : latencyMs + " ms";
+        String totems = Integer.toString(count);
+        Vec3 motion = mc.player.getDeltaMovement();
+        String speed = String.format(Locale.ROOT, "%.1f BPS", Math.hypot(motion.x, motion.z) * 20);
+        float pingW = sLabel(s).width(latency) + 30 * s;
+        float totemW = sLabel(s).width(totems) + 32 * s;
+        float w = Math.max(pingW + 5 * s + totemW, sLabel(s).width(speed) + 34 * s);
+        return new StatsData(w, 49 * s, latency, totems, speed, pingW, totemW);
+    }
+
+    private static void drawStats(GuiGraphicsExtractor gg, float s, StatsData d) {
+        float h = 22 * s;
+        FrostHudStyle.panel(gg, d.pingW(), h, s);
+        Render2D.icon(gg, "ping", 7 * s, 6 * s, 10 * s, 10 * s, FrostHudStyle.accent());
+        sLabel(s).draw(gg, d.latency(), 22 * s, sLabel(s).centeredBaseline(0, h), FrostHudStyle.TEXT);
+        float tx = d.pingW() + 5 * s;
+        Render2D.pushTranslate(gg, tx, 0);
+        FrostHudStyle.panel(gg, d.totemW(), h, s);
+        Render2D.pushTranslate(gg, 5 * s, 3 * s);
+        Render2D.pushScale(gg, 0, 0, s);
+        Minecraft mc = Minecraft.getInstance();
+        gg.item(mc.player, new ItemStack(Items.TOTEM_OF_UNDYING), 0, 0, 0);
+        Render2D.popTransform(gg);
+        Render2D.popTransform(gg);
+        sLabel(s).draw(gg, d.totems(), 24 * s, sLabel(s).centeredBaseline(0, h), FrostHudStyle.TEXT);
+        Render2D.popTransform(gg);
+        Render2D.pushTranslate(gg, 0, 27 * s);
+        float speedW = sLabel(s).width(d.speed()) + 34 * s;
+        FrostHudStyle.panel(gg, speedW, h, s);
+        Render2D.circle(gg, 8 * s, 9 * s, 4 * s, FrostHudStyle.accent());
+        sLabel(s).draw(gg, d.speed(), 20 * s, sLabel(s).centeredBaseline(0, h), FrostHudStyle.TEXT);
+        Render2D.popTransform(gg);
+    }
+
+    private record ModulesData(float w, float h, List<String> names) implements Sized {}
+
+    private static ModulesData measureArrayList(float s, Map<HudLayout.Element, float[]> placed) {
+        List<String> names = new ArrayList<>();
+        for (Module module : ModuleManager.all()) {
+            if (module.isEnabled() && module != Interface.instance()) names.add(module.name());
+        }
+        if (names.isEmpty()) return null;
+        HFont font = sBody(s);
+        names.sort(Comparator.<String>comparingDouble(font::width).reversed().thenComparing(n -> n));
+        // Keep the list inside the viewport; +N represents modules beyond the visible rows.
+        HudLayout.Entry entry = HudLayout.get(HudLayout.Element.ARRAYLIST);
+        float top = entry.positioned() ? entry.y : below(placed, HudLayout.Element.STATS,
+                below(placed, HudLayout.Element.KEYBINDS,
+                        below(placed, HudLayout.Element.WATERMARK, FrostHudStyle.HUD_MARGIN)));
+        int limit = HudGeometry.visibleRows(Render2D.screenHeight(), top, 18 * s, 10);
+        if (limit == 0) return null;
+        if (names.size() > limit) {
+            int hidden = names.size() - limit + 1;
+            names = new ArrayList<>(names.subList(0, limit - 1));
+            names.add("+" + hidden + " modules");
+        }
+        float w = 0;
+        for (String name : names) w = Math.max(w, font.width(name) + 21 * s);
+        return new ModulesData(w, (names.size() * 18 - 2) * s, names);
+    }
+
+    private static void drawArrayList(GuiGraphicsExtractor gg, float s, ModulesData d) {
+        HFont font = sBody(s);
+        float y = 0;
+        for (String name : d.names()) {
+            float w = font.width(name) + 21 * s;
+            Render2D.pushTranslate(gg, 0, y);
+            FrostHudStyle.panel(gg, w, 16 * s, s);
+            Render2D.round(gg, 6 * s, 5 * s, 2 * s, 6 * s, s, FrostHudStyle.accent());
+            font.draw(gg, name, 12 * s, font.centeredBaseline(0, 16 * s), FrostHudStyle.TEXT);
+            Render2D.popTransform(gg);
+            y += 18 * s;
+        }
+    }
+
+    private record Notice(String name, boolean enabled, long at) {}
+    private record NoticesData(float w, float h, List<Notice> notices) implements Sized {}
+    private static final Map<Module, Boolean> MODULE_STATES = new java.util.IdentityHashMap<>();
+    private static final List<Notice> NOTICES = new ArrayList<>();
+    private static Object noticeWorld;
+
+    /** Observe existing module state; do not change toggle behavior or persist events. */
+    private static void tickNotices() {
+        Object world = Minecraft.getInstance().level;
+        if (world != noticeWorld) {
+            noticeWorld = world;
+            MODULE_STATES.clear();
+            NOTICES.clear();
+        }
+        long now = System.nanoTime();
+        NOTICES.removeIf(n -> now - n.at() > 3_000_000_000L);
+        for (Module module : ModuleManager.all()) {
+            Boolean was = MODULE_STATES.put(module, module.isEnabled());
+            if (Interface.showNotifications() && was != null && was != module.isEnabled()
+                    && module != Interface.instance()) {
+                NOTICES.add(new Notice(module.name(), module.isEnabled(), now));
+            }
+        }
+        while (NOTICES.size() > 3) NOTICES.remove(0);
+        if (!Interface.showNotifications()) NOTICES.clear();
+    }
+
+    private static NoticesData measureNotices(float s) {
+        if (NOTICES.isEmpty()) return null;
+        float w = 148 * s;
+        for (Notice n : NOTICES) w = Math.max(w, sLabel(s).width(noticeText(n)) + 36 * s);
+        return new NoticesData(w, (NOTICES.size() * 27 - 4) * s, List.copyOf(NOTICES));
+    }
+
+    private static String noticeText(Notice n) {
+        return n.name() + (n.enabled() ? " enabled" : " disabled");
+    }
+
+    private static void drawNotices(GuiGraphicsExtractor gg, float s, NoticesData d) {
+        float y = 0;
+        long now = System.nanoTime();
+        for (Notice n : d.notices()) {
+            float life = Mth.clamp((now - n.at()) / 3_000_000_000.0f, 0, 1);
+            float alpha = Math.min(1, (1 - life) * 6);
+            Render2D.pushTranslate(gg, 0, y);
+            Render2D.pushAlpha(alpha);
+            FrostHudStyle.panel(gg, d.w(), 23 * s, s);
+            int color = n.enabled() ? FrostHudStyle.accent() : FrostHudStyle.MUTED;
+            Render2D.round(gg, 7 * s, 8 * s, 13 * s, 7 * s, 3.5f * s,
+                    Render2D.withAlpha(color, 0.25f));
+            Render2D.circle(gg, (n.enabled() ? 14 : 8) * s, 9 * s, 5 * s, color);
+            sLabel(s).draw(gg, noticeText(n), 27 * s,
+                    sLabel(s).centeredBaseline(0, 23 * s), FrostHudStyle.TEXT);
+            Render2D.round(gg, 7 * s, 20 * s, (d.w() - 14 * s) * (1 - life), s, 0, color);
+            Render2D.popAlpha();
+            Render2D.popTransform(gg);
+            y += 27 * s;
+        }
+    }
+
     // ---------------- медиа 2D ----------------
 
     /**
@@ -1253,6 +1273,6 @@ public final class InterfaceHud {
         }
         MediaClip clip = MediaManager.get(Interface.mediaFile());
         MediaClip.Frame frame = clip.frameAt(System.currentTimeMillis());
-        Render2D.texture(gg, frame.texture(), b[0], b[1], b[2], b[3], Style.WHITE);
+        Render2D.texture(gg, frame.texture(), b[0], b[1], b[2], b[3], FrostHudStyle.TEXT);
     }
 }
