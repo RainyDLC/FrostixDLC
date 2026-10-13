@@ -91,15 +91,6 @@ public final class NeuroStore {
         }
         root.add("inputs", ins);
         root.add("outputs", outs);
-        JsonArray hps = new JsonArray();
-        for (float[] hp : dataset.hitPoints()) {
-            JsonArray p = new JsonArray();
-            for (float v : hp) {
-                p.add(v);
-            }
-            hps.add(p);
-        }
-        root.add("hit_points", hps);
         Files.writeString(datasetPath(dataset.name()), GSON.toJson(root),
                 StandardCharsets.UTF_8);
     }
