@@ -9,23 +9,13 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        void: "#0e0718",
-        abyss: "#160b26",
-        panel: "#1c1033",
-        cream: "#eeede7",
-        muted: "#a894c4",
-        violet: "#9565ff",
-        grape: "#6d2d93",
-        lilac: "#b48eda",
-        rosepink: "#fea6d0",
-        mint: "#7bf583",
-      },
-      fontFamily: {
-        display: ['"Golos Text"', "Inter", "system-ui", "sans-serif"],
-        mono2: ['"JetBrains Mono"', "ui-monospace", "monospace"],
+        void: "#05080f",
+        abyss: "#09101d",
+        panel: "#0f1b2e",
       },
     },
   },
   plugins: [],
 };
+
 export default config;
