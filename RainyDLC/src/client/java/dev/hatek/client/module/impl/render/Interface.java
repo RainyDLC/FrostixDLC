@@ -12,7 +12,7 @@ import dev.hatek.client.module.setting.TextSetting;
  * Модуль "Interface": HUD клиента.
  * Ватермарка, кейбинды, активные эффекты и кастомный хотбар.
  * Элементы двигаются ЛКМ и масштабируются колесом прямо в игре,
- * когда открыт чат или другой экран (курсор свободен).
+ * только когда открыт чат.
  */
 public final class Interface extends Module {
     private static Interface instance;
@@ -27,6 +27,16 @@ public final class Interface extends Module {
     private final SliderSetting hotbarSize = new SliderSetting("Hotbar Size", 1.0, 0.5, 2.0, 0.05);
     private final BoolSetting armorHud = new BoolSetting("Armor HUD", true);
     private final BoolSetting targetHud = new BoolSetting("Target HUD", true);
+    private final BoolSetting arrayList = new BoolSetting("ArrayList", true);
+    private final BoolSetting staff = new BoolSetting("StaffList", true);
+    private final BoolSetting cooldowns = new BoolSetting("CoolDowns", true);
+    private final BoolSetting notifications = new BoolSetting("Notifications", true);
+    private final BoolSetting ticks = new BoolSetting("Ticks", false);
+    private final BoolSetting ping = new BoolSetting("Ping", false);
+    private final BoolSetting fps = new BoolSetting("FPS", false);
+    private final BoolSetting bps = new BoolSetting("BPS", false);
+    private final BoolSetting xyz = new BoolSetting("XYZ", false);
+    private final BoolSetting totems = new BoolSetting("TotemCounter", true);
     private final BoolSetting media2d = new BoolSetting("Media 2D", false);
     private final TextSetting mediaFile = new TextSetting("Media File", "logo.gif", "logo.gif");
     private final SliderSetting mediaSize = new SliderSetting("Media Size", 64, 16, 256, 8);
@@ -49,7 +59,8 @@ public final class Interface extends Module {
                 this.hideVanilla,
                 this.hotbarSize,
                 this.armorHud,
-                this.targetHud,
+                this.targetHud, this.arrayList, this.staff, this.cooldowns, this.notifications,
+                this.ticks, this.ping, this.fps, this.bps, this.xyz, this.totems,
                 this.media2d,
                 this.mediaFile,
                 this.mediaSize,
@@ -59,7 +70,19 @@ public final class Interface extends Module {
                 this.media3dFile,
                 this.media3dSize,
                 this.media3dHeight);
+        enabled(true);
         InterfaceHud.init();
+    }
+
+    public static boolean showExtra(dev.hatek.client.module.impl.render.interf.HudLayout.Element element) {
+        Interface m=instance; if(m==null || !m.isEnabled()) return false;
+        return switch(element) {
+            case ARRAYLIST -> m.arrayList.value(); case STAFF -> m.staff.value();
+            case COOLDOWNS -> m.cooldowns.value(); case NOTIFICATIONS -> m.notifications.value();
+            case TICKS -> m.ticks.value(); case PING -> m.ping.value(); case FPS -> m.fps.value();
+            case BPS -> m.bps.value(); case XYZ -> m.xyz.value(); case TOTEMS -> m.totems.value();
+            default -> false;
+        };
     }
 
     public static Interface instance() {

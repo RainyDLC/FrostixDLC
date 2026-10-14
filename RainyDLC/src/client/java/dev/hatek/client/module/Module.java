@@ -93,6 +93,7 @@ public class Module {
 
     public void toggle() {
         this.enabled = !this.enabled;
+        dev.hatek.client.module.impl.render.interf.quick.QuickNotifications.post(this.name,this.enabled);
         if (this.enabled) {
             onEnable();
         } else {

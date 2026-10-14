@@ -16,6 +16,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class ChamsShaderCacheMixin {
     @Inject(method = "getShaderSource", at = @At("HEAD"), cancellable = true)
     private void hatek$embeddedChamsShader(Identifier id, ShaderType type, CallbackInfoReturnable<String> cir) {
+        if(type == ShaderType.FRAGMENT) {
+            if("hatek_client:core/quick_msdf".equals(id.toString())) {
+                cir.setReturnValue(dev.hatek.client.module.impl.render.interf.quick.QuickShaderSources.MSDF); return;
+            }
+            if("hatek_client:core/quick_blur".equals(id.toString())) {
+                cir.setReturnValue(dev.hatek.client.module.impl.render.interf.quick.QuickShaderSources.BLUR); return;
+            }
+        }
         if (ChamsShaderSources.SHADER_ID.equals(id.toString())) {
             cir.setReturnValue(type == ShaderType.VERTEX
                     ? ChamsShaderSources.VERTEX : ChamsShaderSources.FRAGMENT);

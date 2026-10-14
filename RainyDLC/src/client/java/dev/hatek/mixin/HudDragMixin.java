@@ -6,6 +6,8 @@ import dev.hatek.client.module.impl.render.interf.InterfaceHud;
 import dev.hatek.client.ui.render.Render2D;
 import dev.hatek.client.ui.screen.ClickGuiScreen;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.ChatScreen;
+import dev.hatek.client.module.impl.render.interf.quick.QuickElementMenu;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.input.MouseButtonInfo;
 import org.lwjgl.glfw.GLFW;
@@ -15,8 +17,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Перетаскивание HUD прямо в игре: когда открыт чат, инвентарь или другой
- * игровой экран (курсор свободен), ЛКМ по элементу HUD хватает его,
+ * Перетаскивание Quick HUD только в открытом чате: ЛКМ по элементу хватает его,
  * колесо мыши меняет размер. Клик поглощается, чтобы экран под ним
  * не реагировал. Без подсказок, без кнопок, без ALT.
  */
@@ -25,7 +26,12 @@ public class HudDragMixin {
     @Inject(method = "onButton", at = @At("HEAD"), cancellable = true)
     private void hatek$hudDragButton(long window, MouseButtonInfo buttonInfo, int action,
                                      CallbackInfo ci) {
-        if (buttonInfo.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || !shouldHandle()) {
+        if (action == GLFW.GLFW_RELEASE) InterfaceHud.stopDrag();
+        if (!shouldHandle()) { QuickElementMenu.close(); return; }
+        if (QuickElementMenu.mouseButton(Render2D.mouseX(),Render2D.mouseY(),buttonInfo.button(),action)) {
+            ci.cancel(); return;
+        }
+        if (buttonInfo.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             return;
         }
         if (action == GLFW.GLFW_PRESS) {
@@ -43,6 +49,7 @@ public class HudDragMixin {
         if (yOffset == 0.0 || !shouldHandle()) {
             return;
         }
+        if (QuickElementMenu.open()) { ci.cancel(); return; }
         InterfaceHud.Hit hit = InterfaceHud.hitTest(Render2D.mouseX(), Render2D.mouseY());
         if (hit != null) {
             InterfaceHud.resizeHit(hit, yOffset > 0 ? 1.1f : 1.0f / 1.1f);
@@ -52,7 +59,7 @@ public class HudDragMixin {
     }
 
     /**
-     * Курсор свободен (открыт игровой экран), модуль включён,
+     * Открыт чат, модуль включён,
      * в игре. Наш ClickGUI исключён — там HUD не трогаем.
      */
     private static boolean shouldHandle() {
@@ -67,6 +74,6 @@ public class HudDragMixin {
         if (mc.gui.screen() instanceof ClickGuiScreen) {
             return false;
         }
-        return mc.gui.screen() != null;
+        return mc.gui.screen() instanceof ChatScreen;
     }
 }

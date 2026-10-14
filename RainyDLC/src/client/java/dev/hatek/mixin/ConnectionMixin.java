@@ -35,5 +35,6 @@ public class ConnectionMixin {
     )
     private void hatek$onReceive(ChannelHandlerContext ctx, Packet<?> packet, CallbackInfo ci) {
         LagGuard.onPacketReceived(packet);
+        dev.hatek.client.module.impl.render.interf.quick.QuickTelemetry.packet(packet);
     }
 }

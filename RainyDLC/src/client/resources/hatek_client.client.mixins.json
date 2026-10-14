@@ -36,7 +36,10 @@
     "accessor.BossHealthOverlayAccessor",
     "KillEffectWorldMixin",
     "KillEffectLivingMixin",
-    "KillEffectPacketMixin"
+    "KillEffectPacketMixin",
+    "QuickCooldownsMixin",
+    "QuickItemOpacityCaptureMixin",
+    "QuickItemOpacityRenderMixin"
   ],
   "injectors": {
     "defaultRequire": 1

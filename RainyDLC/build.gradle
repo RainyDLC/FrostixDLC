@@ -146,3 +146,19 @@ tasks.register('blackHoleBufferRegression', JavaExec) {
     classpath = files(vfxTestClasses) + sourceSets.client.runtimeClasspath
     mainClass = 'dev.hatek.client.ambience.blackhole.BlackHoleBufferRegression'
 }
+
+// Quick HUD font metrics, embedded byte integrity, opacity and pipeline bindings (headless).
+def quickHudTestClasses = layout.buildDirectory.dir('classes/quickHudRegression')
+tasks.register('compileQuickHudRegression', JavaCompile) {
+    dependsOn tasks.named('compileClientJava')
+    source file('../tests/QuickHudRegression.java')
+    classpath = sourceSets.client.runtimeClasspath
+    destinationDirectory = quickHudTestClasses
+    javaCompiler = tasks.named('compileClientJava', JavaCompile).flatMap { it.javaCompiler }
+    options.encoding = 'UTF-8'
+}
+tasks.register('quickHudRegression', JavaExec) {
+    dependsOn tasks.named('compileQuickHudRegression')
+    classpath = files(quickHudTestClasses) + sourceSets.client.runtimeClasspath
+    mainClass = 'dev.hatek.client.module.impl.render.interf.quick.QuickHudRegression'
+}
