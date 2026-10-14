@@ -156,7 +156,7 @@ public final class InterfaceHud {
         int sh = Render2D.screenHeight();
         putBound(out, HudLayout.Element.WATERMARK, Interface.showWatermark(), sw, sh,
                 InterfaceHud::measureWatermark);
-        putBound(out, HudLayout.Element.HOTKEYS, Interface.showHOTKEYS(), sw, sh,
+        putBound(out, HudLayout.Element.KEYBINDS, Interface.showKeybinds(), sw, sh,
                 InterfaceHud::measureHOTKEYS);
         putBound(out, HudLayout.Element.EFFECTS, Interface.showEffects(), sw, sh,
                 InterfaceHud::measureEffects);
@@ -326,7 +326,7 @@ public final class InterfaceHud {
         Render2D.begin(gg);
         place(gg, HudLayout.Element.WATERMARK, Interface.showWatermark(), sw, sh,
                 InterfaceHud::measureWatermark, InterfaceHud::drawWatermark);
-        place(gg, HudLayout.Element.HOTKEYS, Interface.showHOTKEYS(), sw, sh,
+        place(gg, HudLayout.Element.KEYBINDS, Interface.showKeybinds(), sw, sh,
                 InterfaceHud::measureHOTKEYS, InterfaceHud::drawHOTKEYS);
         place(gg, HudLayout.Element.EFFECTS, Interface.showEffects(), sw, sh,
                 InterfaceHud::measureEffects, InterfaceHud::drawEffects);
@@ -445,10 +445,10 @@ public final class InterfaceHud {
                 }
                 return new float[]{x, y};
             }
-            case HOTKEYS:
+            case KEYBINDS:
                 return new float[]{sw - w - m, m};
             case EFFECTS: {
-                float[] kb = BOUNDS.get(HudLayout.Element.HOTKEYS);
+                float[] kb = BOUNDS.get(HudLayout.Element.KEYBINDS);
                 float top = (kb != null) ? kb[1] + kb[3] + 8.0f : m;
                 return new float[]{sw - w - m, top};
             }
