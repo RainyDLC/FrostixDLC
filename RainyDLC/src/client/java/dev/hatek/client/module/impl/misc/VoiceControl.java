@@ -100,7 +100,12 @@ public final class VoiceControl extends Module {
         }
 
         String heard;
-        while ((heard = VoiceEngine.poll()) != null) {
+        for (String phrase : VoiceEngine.drain()) {
+            if (Jarvis.active() && VoiceCommands.isJarvisPhrase(phrase)) {
+                VoiceEngine.requeue(phrase);
+                continue;
+            }
+            heard = phrase;
             String reply = VoiceCommands.handle(heard);
             if (this.echo.value()) {
                 say("§8услышал: §7" + heard);

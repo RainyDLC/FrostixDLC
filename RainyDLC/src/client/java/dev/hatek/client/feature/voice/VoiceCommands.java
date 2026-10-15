@@ -230,46 +230,47 @@ public final class VoiceCommands {
         return best;
     }
 
-    private static String power(List<String> words, Boolean on) {
+    private static Result power(List<String> words, Boolean on) {
         words.remove(0);
         Module module = findModule(String.join(" ", words));
         if (module == null) {
-            return "Не нашёл модуль: " + String.join(" ", words);
+            return new Result(false, "Не нашёл модуль: " + String.join(" ", words));
         }
         boolean wanted = on == null ? !module.isEnabled() : on;
         if (module.isEnabled() == wanted) {
-            return module.name() + " уже " + (wanted ? "включён" : "выключен");
+            return new Result(false, module.name() + " уже " + (wanted ? "включён" : "выключен"));
         }
         module.setEnabled(wanted);
-        return module.name() + (wanted ? " включён" : " выключен");
+        return new Result(true, module.name() + (wanted ? " включён" : " выключен"));
     }
 
-    private static String setting(List<String> words) {
+    private static Result setting(List<String> words) {
         words.remove(0);
         words.remove("у");
 
         Module module = findModuleIn(words);
         if (module == null) {
-            return "Не нашёл модуль в: " + String.join(" ", words);
+            return new Result(false, "Не нашёл модуль в: " + String.join(" ", words));
         }
         Setting setting = findSetting(module, words);
         if (setting == null) {
-            return "Не нашёл настройку у " + module.name();
+            return new Result(false, "Не нашёл настройку у " + module.name());
         }
 
         String tail = String.join(" ", words);
         if (setting instanceof SliderSetting slider) {
             Double value = number(words);
             if (value == null) {
-                return "Не расслышал число для " + setting.name();
+                return new Result(false, "Не расслышал число для " + setting.name());
             }
             slider.value(value);
-            return module.name() + ": " + setting.name() + " = " + trim(slider.value());
+            return new Result(true, module.name() + ": " + setting.name() + " = " + trim(slider.value()));
         }
         if (setting instanceof BoolSetting bool) {
             boolean wanted = !containsAny(List.of(tail.split(" ")), OFF);
             bool.value(wanted);
-            return module.name() + ": " + setting.name() + " " + (wanted ? "вкл" : "выкл");
+            return new Result(true, module.name() + ": " + setting.name() + " "
+                    + (wanted ? "вкл" : "выкл"));
         }
         if (setting instanceof ModeSetting mode) {
             String best = null;
@@ -282,26 +283,26 @@ public final class VoiceCommands {
                 }
             }
             if (best == null || bestScore < 0.45) {
-                return "Не понял режим для " + setting.name();
+                return new Result(false, "Не понял режим для " + setting.name());
             }
             mode.value(best);
-            return module.name() + ": " + setting.name() + " = " + best;
+            return new Result(true, module.name() + ": " + setting.name() + " = " + best);
         }
         if (setting instanceof MultiSetting) {
-            return setting.name() + " голосом не меняется - это список галок";
+            return new Result(false, setting.name() + " голосом не меняется - это список галок");
         }
-        return "Настройка " + setting.name() + " голосом не поддерживается";
+        return new Result(false, "Настройка " + setting.name() + " голосом не поддерживается");
     }
 
-    private static String nickname(List<String> words) {
+    private static Result nickname(List<String> words) {
         if (!AccountManager.canSwitch()) {
-            return "Ник меняется только вне игры";
+            return new Result(false, "Ник меняется только вне игры");
         }
         int at = indexOfAny(words, NICK);
         List<String> tail = new ArrayList<>(words.subList(Math.min(at + 1, words.size()), words.size()));
         tail.remove("на");
         if (tail.isEmpty()) {
-            return "На какой ник?";
+            return new Result(false, "На какой ник?");
         }
         String spoken = String.join(" ", tail);
 
@@ -317,17 +318,19 @@ public final class VoiceCommands {
             }
         }
         if (best != null && bestScore >= 0.5) {
-            return AccountManager.login(best) ? "Ник: " + best.name() : "Не удалось сменить ник";
+            return AccountManager.login(best)
+                    ? new Result(true, "Ник: " + best.name())
+                    : new Result(false, "Не удалось сменить ник");
         }
 
         String made = translit(spoken.replace(" ", ""));
         if (!Account.valid(made)) {
-            return "Ник \"" + spoken + "\" не подходит - добавь его в Accounts руками";
+            return new Result(false, "Ник \"" + spoken + "\" не подходит - добавь его в Accounts руками");
         }
         Account account = AccountManager.add(made);
         return account != null && AccountManager.login(account)
-                ? "Ник: " + account.name()
-                : "Не удалось сменить ник";
+                ? new Result(true, "Ник: " + account.name())
+                : new Result(false, "Не удалось сменить ник");
     }
 
     private static Module findModule(String phrase) {
@@ -451,15 +454,15 @@ public final class VoiceCommands {
         wakeRequired = value;
     }
 
-    private static String afterWake(String phrase) {
+    private static String afterWake(String phrase, String[] wake) {
         if (!wakeRequired) {
             return phrase;
         }
         String[] words = phrase.split(" ");
         int limit = Math.min(3, words.length);
         for (int i = 0; i < limit; i++) {
-            for (String wake : WAKE) {
-                if (similarity(wake, words[i]) >= 0.66) {
+            for (String word : wake) {
+                if (similarity(word, words[i]) >= 0.66) {
                     StringBuilder rest = new StringBuilder();
                     for (int j = i + 1; j < words.length; j++) {
                         rest.append(words[j]).append(' ');
@@ -569,5 +572,23 @@ public final class VoiceCommands {
 
     public static boolean inMenu() {
         return Minecraft.getInstance().level == null;
+    }
+
+    /** Действия Джарвиса с интерфейсом (выполняются в клиентском тике). */
+    private static final class JarvisActions {
+        static void openGui() {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.gui != null) {
+                mc.gui.setScreen(new dev.hatek.client.ui.screen.ClickGuiScreen());
+            }
+        }
+
+        static void closeGui() {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.gui != null
+                    && mc.gui.screen() instanceof dev.hatek.client.ui.screen.ClickGuiScreen) {
+                mc.gui.setScreen(null);
+            }
+        }
     }
 }

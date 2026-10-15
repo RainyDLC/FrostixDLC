@@ -6,6 +6,7 @@ import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.combat.AutoMace;
 import dev.hatek.client.module.impl.movement.AutoSprint;
 import dev.hatek.client.module.impl.misc.VoiceControl;
+import dev.hatek.client.module.impl.misc.Jarvis;
 import dev.hatek.client.module.impl.player.NoFall;
 import dev.hatek.client.module.impl.player.NoJumpDelay;
 import dev.hatek.client.module.impl.render.ClickGui;
@@ -110,6 +111,8 @@ public final class ModuleManager {
         MODULES.add(new Cosmetics().enabled(true).expanded(true));
 
         MODULES.add(new VoiceControl());
+
+        MODULES.add(new Jarvis());
 
     }
 }
