@@ -66,7 +66,8 @@ public final class AutoMace extends Module {
     private final ModeSetting mode = new ModeSetting("Mode", 0, LEGIT, PACKET);
     private final MultiSetting targets = new MultiSetting("Targets",
             List.of(PLAYERS, NAKED, MOBS, ANIMALS, FRIENDS), PLAYERS, NAKED, MOBS);
-    private final SliderSetting range = new SliderSetting("Range", 3.2, 3.0, 6.0, 0.1);
+    private final SliderSetting range = new SliderSetting("Range", 3.2, 2.5, 6.0, 0.1);
+    private final SliderSetting height = new SliderSetting("Height", 3.0, 1.0, 6.0, 0.1);
     private final BoolSetting aim = new BoolSetting("Aim", true);
     private final BoolSetting waitCrit = new BoolSetting("Wait Crit", true);
     private final BoolSetting smashOnly = new BoolSetting("Only Smash", false);
@@ -84,7 +85,7 @@ public final class AutoMace extends Module {
     public AutoMace() {
         super("AutoMace", "Hits with mace, throws wind charge under you", Category.COMBAT);
         instance = this;
-        with(this.mode, this.targets, this.range, this.aim, this.waitCrit, this.smashOnly,
+        with(this.mode, this.targets, this.range, this.height, this.aim, this.waitCrit, this.smashOnly,
                 this.throughWalls, this.windKey, this.autoWind, this.windFromInventory,
                 this.windCooldown);
     }
@@ -376,7 +377,10 @@ public final class AutoMace extends Module {
         if (!this.throughWalls.value() && !mc.player.hasLineOfSight(entity)) {
             return false;
         }
-        return strictDistance(mc, entity) <= this.range.value();
+        if (strictDistance(mc, entity) > this.range.value()) {
+            return false;
+        }
+        return verticalDistance(mc, entity) <= this.height.value();
     }
 
     private static double strictDistance(Minecraft mc, LivingEntity entity) {
@@ -386,6 +390,13 @@ public final class AutoMace extends Module {
         double dy = Mth.clamp(eye.y, box.minY, box.maxY) - eye.y;
         double dz = Mth.clamp(eye.z, box.minZ, box.maxZ) - eye.z;
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    /** Вертикальный разрыв до цели (0 — на одном уровне с глазами). */
+    private static double verticalDistance(Minecraft mc, LivingEntity entity) {
+        Vec3 eye = mc.player.getEyePosition();
+        AABB box = entity.getBoundingBox();
+        return Math.abs(Mth.clamp(eye.y, box.minY, box.maxY) - eye.y);
     }
 
     private static float[] aimAt(LocalPlayer self, LivingEntity target) {
