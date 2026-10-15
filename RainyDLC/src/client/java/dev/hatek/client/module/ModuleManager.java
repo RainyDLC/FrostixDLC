@@ -12,8 +12,10 @@ import dev.hatek.client.module.impl.render.Ambience;
 import dev.hatek.client.module.impl.render.Chams;
 import dev.hatek.client.module.impl.render.KillEffect;
 import dev.hatek.client.module.impl.render.Cosmetics;
+import dev.hatek.client.module.impl.render.HitParticles;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.client.module.impl.render.NoRender;
+import dev.hatek.client.module.impl.render.WorldParticles;
 import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.ButtonSetting;
 import dev.hatek.client.module.setting.ColorSetting;
@@ -93,6 +95,10 @@ public final class ModuleManager {
         MODULES.add(new Chams().expanded(true));
 
         MODULES.add(new KillEffect().expanded(true));
+
+        MODULES.add(new HitParticles().expanded(true));
+
+        MODULES.add(new WorldParticles().expanded(true));
 
         MODULES.add(new Interface().expanded(true));
 

@@ -37,6 +37,8 @@
     "KillEffectWorldMixin",
     "KillEffectLivingMixin",
     "KillEffectPacketMixin",
+    "ParticlesWorldMixin",
+    "ParticlesAttackMixin",
     "QuickCooldownsMixin",
     "QuickItemOpacityCaptureMixin",
     "QuickItemOpacityRenderMixin"
