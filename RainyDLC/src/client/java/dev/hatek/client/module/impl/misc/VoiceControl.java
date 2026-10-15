@@ -139,7 +139,7 @@ public final class VoiceControl extends Module {
         Minecraft mc = mc();
         if (mc.level != null && mc.gui != null) {
             mc.gui.chatListener().handleSystemMessage(
-                    Component.literal("§8[§fHatek§8] §7" + text), false);
+                    Component.literal("§8[§fRainyDLC§8] §7" + text), false);
             return;
         }
         if (mc.gui != null) {

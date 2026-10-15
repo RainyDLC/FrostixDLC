@@ -61,7 +61,7 @@ public final class ChatCommands {
             }
             case "dir" -> {
                 ConfigManager.openFolder();
-                tell("Папка открыта — кинь туда .json из браузера и напиши §f.cfg load <имя>");
+                tell("Папка открыта — кинь туда .json и напиши §f.cfg load <имя>");
             }
             case "delete" -> {
                 if (arg.isBlank()) {
@@ -111,7 +111,7 @@ public final class ChatCommands {
         Minecraft mc = Minecraft.getInstance();
         if (mc.gui != null) {
             mc.gui.chatListener().handleSystemMessage(
-                    Component.literal("§8[§fHatek§8] §7" + text), false);
+                    Component.literal("§8[§fRainyDLC§8] §7" + text), false);
         }
     }
 }
