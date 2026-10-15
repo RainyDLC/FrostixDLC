@@ -8,6 +8,7 @@ import dev.hatek.client.module.setting.ColorSetting;
 import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.SliderSetting;
 import dev.hatek.client.render.particles.Particle;
+import dev.hatek.client.render.particles.ParticleTextures;
 import dev.hatek.client.render.particles.ParticleCollision;
 import dev.hatek.client.render.particles.ParticleColors;
 import dev.hatek.client.render.particles.ParticleRenderer;
@@ -114,6 +115,7 @@ public final class HitParticles extends Module {
         if (m == null || !m.isEnabled() || m.system.isEmpty()) {
             return;
         }
+        ParticleTextures.ensureRegistered();
         if (collector instanceof OrderedSubmitNodeCollector ordered) {
             m.render(stack, state, ordered);
         }
