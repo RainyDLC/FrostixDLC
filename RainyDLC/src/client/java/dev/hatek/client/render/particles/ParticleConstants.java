@@ -19,6 +19,7 @@ public final class ParticleConstants {
     public static final String TEXTURE_SNOWFLAKE = "Снежинка";
     public static final String TEXTURE_STAR = "Звезда";
     public static final String TEXTURE_TRIANGLE = "Треугольник";
+    public static final String TEXTURE_DIAMOND = "Ромбики";
 
     public static final ParticleTexture[] TEXTURES = {
             particle(TEXTURE_CROSS, "cross.png"),
@@ -32,6 +33,7 @@ public final class ParticleConstants {
             particle(TEXTURE_SNOWFLAKE, "snowflake.png"),
             particle(TEXTURE_STAR, "star.png"),
             particle(TEXTURE_TRIANGLE, "triangle.png"),
+            particle(TEXTURE_DIAMOND, "diamond.png"),
     };
 
     /** 1×1 белая текстура для неоновых штрихов (DashLineRenderer). */

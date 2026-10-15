@@ -14,7 +14,7 @@ public final class ParticleTexturePicker {
 
     private static final String[] MODE_OPTIONS = {
             SHOW_ALL, "Точка", "Звезда", "Молния", "Крест", "Корона",
-            "Сердце", "Линия", "Ромб", "Доллар", "Снежинка", "Треугольник"
+            "Сердце", "Линия", "Ромб", "Ромбики", "Доллар", "Снежинка", "Треугольник"
     };
 
     private ParticleTexturePicker() {
