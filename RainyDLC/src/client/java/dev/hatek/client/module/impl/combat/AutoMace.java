@@ -70,7 +70,7 @@ public final class AutoMace extends Module {
     private final SliderSetting height = new SliderSetting("Height", 3.0, 1.0, 6.0, 0.1);
     private final BoolSetting aim = new BoolSetting("Aim", true);
     private final BoolSetting waitCrit = new BoolSetting("Wait Crit", true);
-    private final BoolSetting smashOnly = new BoolSetting("Only Smash", false);
+    private final SliderSetting minFall = new SliderSetting("Min Fall", 1.5, 0.0, 3.0, 0.1);
     private final BoolSetting throughWalls = new BoolSetting("Through Walls", false);
     private final BindSetting windKey = new BindSetting("Wind Key");
     private final BoolSetting autoWind = new BoolSetting("Auto Wind", false);
@@ -85,7 +85,7 @@ public final class AutoMace extends Module {
     public AutoMace() {
         super("AutoMace", "Hits with mace, throws wind charge under you", Category.COMBAT);
         instance = this;
-        with(this.mode, this.targets, this.range, this.height, this.aim, this.waitCrit, this.smashOnly,
+        with(this.mode, this.targets, this.range, this.height, this.aim, this.waitCrit, this.minFall,
                 this.throughWalls, this.windKey, this.autoWind, this.windFromInventory,
                 this.windCooldown);
     }
@@ -250,11 +250,12 @@ public final class AutoMace extends Module {
         if (self.onGround()) {
             return;
         }
-        // Ждём настоящий крит-момент: падение без блокеров (вода, паутина-эффекты, полёт).
-        if (this.waitCrit.value() && !critMoment(self)) {
+        // Порог падения: в обычном прыжке (падение < ~1.25) ударов нет.
+        if (self.fallDistance < (float) this.minFall.value()) {
             return;
         }
-        if (this.smashOnly.value() && !(self.fallDistance > SMASH_FALL)) {
+        // Ждём настоящий крит-момент: падение без блокеров (вода, эффекты, полёт).
+        if (this.waitCrit.value() && !critMoment(self)) {
             return;
         }
         if (self.getAttackStrengthScale(0.5F) < CHARGE_NEED) {
