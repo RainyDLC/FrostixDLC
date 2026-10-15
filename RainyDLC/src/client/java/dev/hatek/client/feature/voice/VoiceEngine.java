@@ -3,6 +3,7 @@ package dev.hatek.client.feature.voice;
 import io.github.givimad.whisperjni.WhisperContext;
 import io.github.givimad.whisperjni.WhisperFullParams;
 import io.github.givimad.whisperjni.WhisperJNI;
+import net.minecraft.client.Minecraft;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
@@ -90,6 +91,65 @@ public final class VoiceEngine {
 
     public static String poll() {
         return HEARD.poll();
+    }
+
+    /**
+     * Ищет модель whisper: сначала указанный путь, потом одноимённые
+     * tiny/base/small в той же папке, в папке hatek-voice игры и в
+     * ~/whisper.cpp/models. Возвращает null, если ничего нет.
+     */
+    public static Path resolveModel(String configured) {
+        if (configured != null && !configured.isBlank()) {
+            Path direct = Path.of(configured.trim());
+            if (Files.isRegularFile(direct)) {
+                return direct;
+            }
+        }
+        List<String> names = new ArrayList<>();
+        String file = null;
+        try {
+            Path direct = Path.of(configured == null ? "" : configured.trim());
+            if (direct.getFileName() != null) {
+                file = direct.getFileName().toString();
+            }
+        } catch (Throwable ignored) {
+        }
+        if (file != null && !file.isBlank()) {
+            names.add(file);
+        }
+        for (String fallback : List.of("ggml-tiny.bin", "ggml-base.bin", "ggml-small.bin")) {
+            if (!names.contains(fallback)) {
+                names.add(fallback);
+            }
+        }
+        List<Path> dirs = new ArrayList<>();
+        try {
+            Path direct = Path.of(configured == null ? "" : configured.trim());
+            if (direct.getParent() != null) {
+                dirs.add(direct.getParent());
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            dirs.add(Minecraft.getInstance().gameDirectory.toPath().resolve("hatek-voice"));
+        } catch (Throwable ignored) {
+        }
+        try {
+            dirs.add(Path.of(System.getProperty("user.home"), "whisper.cpp", "models"));
+        } catch (Throwable ignored) {
+        }
+        for (Path dir : dirs) {
+            for (String name : names) {
+                try {
+                    Path candidate = dir.resolve(name);
+                    if (Files.isRegularFile(candidate)) {
+                        return candidate;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+        return null;
     }
 
     /** Забирает все услышанные фразы (для нескольких потребителей). */

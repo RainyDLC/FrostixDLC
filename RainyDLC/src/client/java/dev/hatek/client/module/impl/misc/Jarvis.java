@@ -41,6 +41,7 @@ public final class Jarvis extends Module {
 
     private String lastStatus = "";
     private boolean announced;
+    private boolean started;
 
     public Jarvis() {
         super("Jarvis", "Голосовой помощник: «Джарвис, открой гуи»", Category.MISC);
@@ -100,17 +101,20 @@ public final class Jarvis extends Module {
 
     @Override
     protected void onEnable() {
-        String path = this.model.value().isBlank() ? DEFAULT_MODEL : this.model.value().trim();
-        if (!Files.isRegularFile(Path.of(path))) {
-            say("Модель не найдена: " + path);
+        Path model = VoiceEngine.resolveModel(
+                this.model.value().isBlank() ? DEFAULT_MODEL : this.model.value());
+        if (model == null) {
+            say("Модель не найдена. Скачай ggml-base.bin: huggingface.co/ggerganov/whisper.cpp — "
+                    + "и укажи путь в Model, или положи в папку hatek-voice в .minecraft");
             setEnabled(false);
             return;
         }
         VoiceEngine.sensitivity((float) this.sensitivity.value());
-        VoiceEngine.start(path, micChoice());
+        VoiceEngine.start(model.toString(), micChoice());
         this.lastStatus = "";
         this.announced = false;
-        say("Загружаю модель...");
+        this.started = true;
+        say("Загружаю модель: " + model.getFileName());
     }
 
     @Override
@@ -119,7 +123,10 @@ public final class Jarvis extends Module {
             VoiceEngine.stop();
         }
         JarvisSpeech.stop();
-        say("Джарвис отключён");
+        if (this.started) {
+            this.started = false;
+            say("Джарвис отключён");
+        }
     }
 
     private static boolean otherVoiceRunning() {
