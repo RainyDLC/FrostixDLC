@@ -7,50 +7,47 @@ import dev.hatek.client.module.setting.BoolSetting;
 import dev.hatek.client.module.setting.ColorSetting;
 import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.SliderSetting;
-import dev.hatek.client.render.particles.FadeParticle;
+import dev.hatek.client.render.particles.Particle;
 import dev.hatek.client.render.particles.ParticleCollision;
 import dev.hatek.client.render.particles.ParticleColors;
 import dev.hatek.client.render.particles.ParticleRenderer;
+import dev.hatek.client.render.particles.ParticleSystem;
 import dev.hatek.client.render.particles.ParticleTexturePicker;
-import dev.hatek.client.render.particles.dashlines.DashLineField;
-import dev.hatek.client.render.particles.dashlines.DashLineRenderer;
+import dev.hatek.client.render.particles.WorldParticleUtil;
+import dev.hatek.client.render.particles.speedlines.SpeedLineField;
+import dev.hatek.client.render.particles.speedlines.SpeedLineRenderer;
 import dev.hatek.client.ui.Style;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
-import net.minecraft.core.BlockPos;
-import net.minecraft.util.Mth;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
 /**
  * Частицы вокруг игрока («Частицы») или неоновые штрихи скорости («Штрихи»).
- * Порт rtx.kimiko WorldParticles под FrostixDLC.
+ * Чистая реализация с нуля (не порт декомпила).
  *
- * Отличия от оригинала (см. PORT_NOTES.md):
- * - события kimiko заменены на onClientTick() и хук ParticlesWorldMixin
- *   (TAIL LevelRenderer.submitEntities);
- * - SeparatorSetting в hatek нет — разделители опущены;
- * - visibleWhen-условия опущены (в hatek Setting нет такого API);
- * - «Клиент»-цвет = Style.accent();
- * - isInPlayerView использует player.getLookAngle() вместо pitch+cameraYaw;
- * - интерполяция renderPos — partialTicks=1.0 (в хуке submitEntities partial tick недоступен).
+ * «Количество» — целевое число живых частиц вокруг игрока (доспавн каждый тик).
+ * «Время жизни» — сколько миллисекунд живёт каждая частица (передаётся в Particle).
  */
 public final class WorldParticles extends Module {
     private static final int MAX_PARTICLES = 1500;
+    /** Сколько частиц доспавнить за тик максимум (без шипов). */
+    private static final int SPAWN_BUDGET = 6;
 
     private static final String MODE_PARTICLES = "Частицы";
     private static final String MODE_DASH = "Штрихи";
 
     private static WorldParticles instance;
 
+    private final SliderSetting count;
+    private final SliderSetting lifetime;
     private final ModeSetting mode;
     private final SliderSetting dashCount;
     private final SliderSetting dashLength;
@@ -65,10 +62,8 @@ public final class WorldParticles extends Module {
     private final ModeSetting display;
     private final SliderSetting size;
     private final BoolSetting scaleWithAlpha;
-    private final SliderSetting count;
     private final SliderSetting range;
     private final SliderSetting rangeY;
-    private final SliderSetting lifetime;
     private final SliderSetting motionPower;
     private final SliderSetting gravity;
     private final SliderSetting inclineX;
@@ -79,17 +74,19 @@ public final class WorldParticles extends Module {
     private final ColorSetting customColor;
     private final ColorSetting customSecondColor;
 
-    private final List<FadeParticle> particles = new ArrayList<>();
-    private final Random random = new Random();
+    private final ParticleSystem system = new ParticleSystem();
     private final ParticleRenderer renderer = new ParticleRenderer();
-    private final DashLineField dashField = new DashLineField();
-    private final DashLineRenderer dashRenderer = new DashLineRenderer();
+    private final SpeedLineField dashField = new SpeedLineField();
+    private final SpeedLineRenderer dashRenderer = new SpeedLineRenderer();
+    private final Random random = new Random();
     private long lastFrameNanos;
 
     public WorldParticles() {
         super("WorldParticles", "Частицы и неоновые штрихи вокруг игрока", Category.RENDER);
         instance = this;
 
+        this.count = new SliderSetting("Количество", 15.0, 1.0, 60.0, 1.0);
+        this.lifetime = new SliderSetting("Время жизни", 800.0, 150.0, 1500.0, 10.0);
         this.mode = new ModeSetting("Режим", 0, MODE_PARTICLES, MODE_DASH);
         this.dashCount = new SliderSetting("Плотность", 70.0, 10.0, 220.0, 5.0);
         this.dashLength = new SliderSetting("Длина", 100.0, 25.0, 300.0, 5.0);
@@ -104,10 +101,8 @@ public final class WorldParticles extends Module {
         this.display = new ModeSetting("Отображать", 0, ParticleTexturePicker.modeOptions());
         this.size = new SliderSetting("Размер", 150.0, 100.0, 200.0, 10.0);
         this.scaleWithAlpha = new BoolSetting("Скейл", true);
-        this.count = new SliderSetting("Количество", 15.0, 1.0, 60.0, 1.0);
         this.range = new SliderSetting("Радиус спавна", 50.0, 10.0, 50.0, 1.0);
         this.rangeY = new SliderSetting("Высота спавна", 30.0, 0.05, 30.0, 0.05);
-        this.lifetime = new SliderSetting("Время жизни", 800.0, 150.0, 1500.0, 10.0);
         this.motionPower = new SliderSetting("Сила движения", 1.0, 0.1, 2.0, 0.1);
         this.gravity = new SliderSetting("Сила гравитации", 0.0, -10.0, 10.0, 1.0);
         this.inclineX = new SliderSetting("Наклон X", 0.0, -17.5, 17.5, 0.5);
@@ -120,10 +115,10 @@ public final class WorldParticles extends Module {
         this.customSecondColor = new ColorSetting("Цвет 2",
                 ParticleColors.lerpColor(0xFFFFFFFF, 0x4B101010, 0.7f));
 
-        with(mode,
+        with(count, lifetime, mode,
                 dashCount, dashLength, dashThickness, dashSpeed, dashRadius,
                 dashSpread, dashOpacity, dashGlow, dashMotionOnly,
-                display, size, scaleWithAlpha, count, range, rangeY, lifetime,
+                display, size, scaleWithAlpha, range, rangeY,
                 motionPower, gravity, inclineX, inclineZ, collideMode,
                 colorMode, useSecondColor, customColor, customSecondColor);
     }
@@ -149,14 +144,14 @@ public final class WorldParticles extends Module {
 
     @Override
     protected void onEnable() {
-        this.particles.clear();
+        this.system.clear();
         this.dashField.clear();
         this.lastFrameNanos = 0L;
     }
 
     @Override
     protected void onDisable() {
-        this.particles.clear();
+        this.system.clear();
         this.dashField.clear();
         this.lastFrameNanos = 0L;
     }
@@ -165,120 +160,111 @@ public final class WorldParticles extends Module {
     public void onClientTick() {
         Minecraft mc = Minecraft.getInstance();
         if (this.mode.is(MODE_DASH)) {
-            this.particles.clear();
+            this.system.clear();
             return;
         }
-        this.dashField.clear();
         Player player = mc.player;
         if (mc.level == null || player == null) {
-            this.particles.clear();
+            this.system.clear();
             return;
         }
-        long now = System.currentTimeMillis();
-        this.particles.removeIf(p -> p.isDead(now));
-        float power = (float) this.motionPower.value();
-        float gravityPerTick = (float) (this.gravity.value() / 80.0 * 0.05 * power);
-        float collisionGravity = Mth.clamp((float) (this.gravity.value() / 10.0), 0.0f, 1.0f);
-        String collide = this.collideMode.value();
-        float yaw = player.getYRot();
-        double xY = Math.sin(Math.toRadians(yaw));
-        double zY = -Math.cos(Math.toRadians(yaw));
-        double xX = -Math.sin(Math.toRadians(yaw + 90.0));
-        double zX = Math.cos(Math.toRadians(yaw + 90.0));
-        double addX = (xY * this.inclineZ.value() / 50.0 + xX * this.inclineX.value() / 50.0) * 0.05 * power;
-        double addZ = (zY * this.inclineZ.value() / 50.0 + zX * this.inclineX.value() / 50.0) * 0.05 * power;
-        for (FadeParticle particle : this.particles) {
-            stepParticle(mc, particle, power, addX, gravityPerTick, addZ, collide, collisionGravity);
-        }
-        spawnParticles(mc, player);
-    }
-
-    private static void stepParticle(Minecraft mc, FadeParticle particle, float power,
-                                     double addX, double gravityPerTick, double addZ,
-                                     String collide, float collisionGravity) {
-        particle.beginStep();
-        if (!particle.holdCollide) {
-            particle.posX += particle.motionX * power;
-            particle.posY += particle.motionY * power;
-            particle.posZ += particle.motionZ * power;
-            particle.motionX += addX;
-            particle.motionY += gravityPerTick;
-            particle.motionZ += addZ;
-        }
-        particle.motionY -= 6.0E-4;
-        boolean cancelMove = ParticleCollision.apply(mc, particle, collide, collisionGravity);
-        if (!cancelMove) {
-            particle.posX += particle.motionX;
-            particle.posY += particle.motionY;
-            particle.posZ += particle.motionZ;
-        }
-    }
-
-    private void spawnParticles(Minecraft mc, Player player) {
-        int attempts = (int) this.count.value();
-        float rangeValue = (float) this.range.value();
-        float rangeYValue = Math.max(0.55f, (float) this.rangeY.value());
-        float lifetimeValue = (float) this.lifetime.value();
-        for (int i = 0; i < attempts && this.particles.size() < MAX_PARTICLES; i++) {
-            double offsetX = randomRange(-rangeValue, rangeValue);
-            double offsetZ = randomRange(-rangeValue, rangeValue);
-            double offsetY = randomRange(0.5, rangeYValue);
-            Vec3 pos = player.position().add(offsetX, offsetY, offsetZ);
-            if (!mc.level.getBlockState(BlockPos.containing(pos)).isAir() || !isInPlayerView(mc, player, pos)) {
-                continue;
+        // Наклон — постоянное ускорение дрейфа.
+        double power = this.motionPower.value();
+        double ax = this.inclineX.value() * 0.0002 * power;
+        double az = this.inclineZ.value() * 0.0002 * power;
+        if (ax != 0.0 || az != 0.0) {
+            for (Particle p : this.system.particles()) {
+                if (!p.stuck) {
+                    p.vx += ax;
+                    p.vz += az;
+                }
             }
-            Vec3 motion = new Vec3(randomRange(-0.04, 0.04), randomRange(0.0, 0.05), randomRange(-0.04, 0.04));
-            float gradientT = attempts <= 1 ? 0.0f : (float) i / (attempts - 1);
-            this.particles.add(new FadeParticle(pos, motion, (float) randomRange(0.0, 180.0),
-                    lifetimeValue, ParticleTexturePicker.pick(this.display, this.random), gradientT));
+        }
+        this.system.tick(mc, this.gravity.value() * 0.0006, this.collideMode.value());
+        // Доспавн до целевого «Количества» живых частиц.
+        int target = (int) Math.round(this.count.value());
+        int budget = Math.min(SPAWN_BUDGET, target - this.system.size());
+        for (int i = 0; i < budget; i++) {
+            spawnAmbient(mc, player, power);
         }
     }
 
-    private static boolean isInPlayerView(Minecraft mc, Player player, Vec3 pos) {
-        Vec3 view = player.getLookAngle();
-        Vec3 to = pos.subtract(player.position()).normalize();
-        return view.x * to.x + view.y * to.y + view.z * to.z > 0.1;
+    /** Одна фоновая частица: «Время жизни» применяется здесь, при создании. */
+    private void spawnAmbient(Minecraft mc, Player player, double power) {
+        float rangeValue = (float) this.range.value();
+        float heightValue = Math.max(0.55f, (float) this.rangeY.value());
+        float lifeMs = (float) this.lifetime.value();
+        double x = player.getX() + (this.random.nextDouble() * 2.0 - 1.0) * rangeValue;
+        double y = player.getY() + 0.5 + this.random.nextDouble() * heightValue;
+        double z = player.getZ() + (this.random.nextDouble() * 2.0 - 1.0) * rangeValue;
+        if (WorldParticleUtil.isSolidCollisionBlock(mc, x, y, z)) {
+            return;
+        }
+        Vec3 pos = new Vec3(x, y, z);
+        if (!inView(player, pos)) {
+            return;
+        }
+        double vx = (this.random.nextDouble() * 2.0 - 1.0) * 0.03 * power;
+        double vy = this.random.nextDouble() * 0.04 * power;
+        double vz = (this.random.nextDouble() * 2.0 - 1.0) * 0.03 * power;
+        Identifier texture = ParticleTexturePicker.pick(this.display, this.random);
+        this.system.add(new Particle(
+                x, y, z, vx, vy, vz,
+                System.currentTimeMillis(), lifeMs,
+                (float) (this.size.value() * 0.012f),
+                (float) (this.random.nextDouble() * 180.0),
+                (float) (this.random.nextDouble() * 4.0 - 2.0),
+                texture, this.random.nextFloat(), 0.0f));
+    }
+
+    /** Точка впереди игрока (в конусе взгляда). */
+    private static boolean inView(Player player, Vec3 pos) {
+        Vec3 look = player.getLookAngle();
+        Vec3 to = pos.subtract(player.position());
+        double len = Math.sqrt(to.x * to.x + to.y * to.y + to.z * to.z);
+        if (len < 1.0E-6) {
+            return true;
+        }
+        double dot = (look.x * to.x + look.y * to.y + look.z * to.z) / len;
+        return dot > 0.1;
     }
 
     private void renderParticles(PoseStack stack, LevelRenderState state, OrderedSubmitNodeCollector ordered) {
-        if (this.particles.isEmpty()) {
+        if (this.system.isEmpty()) {
             return;
         }
         Vec3 cameraPos = state.cameraRenderState.pos;
         Quaternionf camOrientation = state.cameraRenderState.orientation;
         Vector3f forward = new Vector3f(0.0f, 0.0f, -1.0f).rotate(camOrientation);
         long now = System.currentTimeMillis();
-        float worldSize = (float) (this.size.value() * 0.012f);
         boolean scaleAlpha = this.scaleWithAlpha.value();
         this.renderer.clear();
-        for (FadeParticle particle : this.particles) {
-            float alpha = particle.alpha01(now);
+        for (Particle p : this.system.particles()) {
+            float alpha = p.alpha(now);
             if (alpha <= 0.004f) {
                 continue;
             }
-            Vec3 renderPos = particle.renderPos(1.0f);
-            double toX = renderPos.x - cameraPos.x;
-            double toY = renderPos.y - cameraPos.y;
-            double toZ = renderPos.z - cameraPos.z;
-            if (toX * forward.x() + toY * forward.y() + toZ * forward.z() < -worldSize * 2.0f) {
+            double relX = p.x - cameraPos.x;
+            double relY = p.y - cameraPos.y;
+            double relZ = p.z - cameraPos.z;
+            if (relX * forward.x() + relY * forward.y() + relZ * forward.z() < -p.size) {
                 continue;
             }
-            int color = particleColor(particle, alpha);
-            float renderSize = scaleAlpha ? worldSize * alpha : worldSize;
-            this.renderer.drawTexture(particle.texture, renderPos, renderSize,
-                    particle.rotationDeg, color, true);
+            float drawSize = scaleAlpha ? p.size * (0.35f + 0.65f * alpha) : p.size;
+            this.renderer.drawTexture(p.texture, new Vec3(p.x, p.y, p.z),
+                    drawSize, p.rotationDeg, particleColor(p, alpha), true);
         }
         this.renderer.flush(stack, ordered, cameraPos, camOrientation);
     }
 
     private void renderDashLines(PoseStack stack, LevelRenderState state, OrderedSubmitNodeCollector ordered) {
         long now = System.nanoTime();
-        float frameSeconds = this.lastFrameNanos == 0L ? 0.0f : (now - this.lastFrameNanos) / 1.0E9f;
+        float dtSeconds = this.lastFrameNanos == 0L ? 0.0f : (now - this.lastFrameNanos) / 1.0E9f;
         this.lastFrameNanos = now;
         Minecraft mc = Minecraft.getInstance();
         Vec3 cameraPos = state.cameraRenderState.pos;
-        this.dashField.update(mc, cameraPos, frameSeconds,
-                (int) this.dashCount.value(),
+        this.dashField.update(mc, cameraPos, dtSeconds,
+                (int) Math.round(this.dashCount.value()),
                 (float) this.dashRadius.value(),
                 (float) (this.dashLength.value() / 100.0),
                 (float) (this.dashThickness.value() / 100.0),
@@ -307,27 +293,23 @@ public final class WorldParticles extends Module {
         return this.customSecondColor.value() | 0xFF000000;
     }
 
-    private int particleColor(FadeParticle particle, float alpha) {
-        int index = (int) (particle.gradientT * 360.0f);
+    private int particleColor(Particle p, float alpha) {
+        int index = (int) (p.tintSeed * 360.0f);
         if (this.colorMode.is(ParticleColors.RAINBOW)) {
             return ParticleColors.rainbow(8, index, 1.0f, 1.0f, alpha);
         }
-        int firstColor;
-        int secondColor;
+        int first;
+        int second;
         if (this.colorMode.is(ParticleColors.CLIENT)) {
-            firstColor = Style.accent() | 0xFF000000;
-            secondColor = firstColor;
+            first = Style.accent() | 0xFF000000;
+            second = first;
         } else {
-            firstColor = this.customColor.value();
-            secondColor = this.useSecondColor.value() ? this.customSecondColor.value() : this.customColor.value();
+            first = this.customColor.value();
+            second = this.useSecondColor.value() ? this.customSecondColor.value() : this.customColor.value();
         }
-        if (firstColor == secondColor) {
-            return ParticleColors.multAlpha(firstColor, alpha);
+        if (first == second) {
+            return ParticleColors.multAlpha(first, alpha);
         }
-        return ParticleColors.multAlpha(ParticleColors.fade(8, index, firstColor, secondColor), alpha);
-    }
-
-    private double randomRange(double min, double max) {
-        return min + this.random.nextDouble() * (max - min);
+        return ParticleColors.multAlpha(ParticleColors.fade(8, index, first, second), alpha);
     }
 }

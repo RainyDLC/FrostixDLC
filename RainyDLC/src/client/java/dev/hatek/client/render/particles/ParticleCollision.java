@@ -4,10 +4,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 
 /**
- * Поведение частиц при столкновении с блоками. Порт rtx.kimiko ParticleCollision,
- * переписан чистым Java (без Kotlin/декомпила).
- *
- * @return true — движение в этом тике отменено (позицию не сдвигать).
+ * Столкновения частиц с блоками: движение проверяется по осям отдельно,
+ * при ударе применяется поведение выбранного режима.
+ * Чистая реализация с нуля.
  */
 public final class ParticleCollision {
     public static final String RICOCHET = "Отскок";
@@ -26,107 +25,153 @@ public final class ParticleCollision {
             IGNORE, STUCK, FATAL, SLIDE, SLIDE_SLOW
     };
 
-    private static final double SPEED_LIMIT = 5.0;
+    /** Предел скорости, блоков/тик (защита от туннелирования сквозь блоки). */
+    private static final double SPEED_LIMIT = 3.0;
+    /** Ниже этой скорости отскок считается остановкой. */
+    private static final double REST_SPEED = 0.012;
 
     private ParticleCollision() {
     }
 
-    public static boolean apply(Minecraft mc, FadeParticle particle, String mode, float gravityValue) {
-        boolean cancelMove = false;
-        if (!IGNORE.equals(mode)) {
-            if (FATAL.equals(mode) || STUCK.equals(mode)) {
-                if (particle.holdCollide || collidesX(mc, particle) || collidesY(mc, particle) || collidesZ(mc, particle)) {
-                    particle.motionX = 0.0;
-                    particle.motionY = 0.0;
-                    particle.motionZ = 0.0;
-                    particle.holdCollide = true;
-                    if (FATAL.equals(mode)) {
-                        particle.dead = true;
-                    }
-                    cancelMove = true;
+    /**
+     * Один шаг физики: гравитация, закручивание, движение по осям с коллизиями.
+     *
+     * @param gravityPerTick ускорение свободного падения, блоков/тик^2 (может быть отрицательным)
+     */
+    public static void step(Minecraft mc, Particle p, double gravityPerTick, String mode) {
+        if (p.dead || p.stuck) {
+            return;
+        }
+        p.markPrev();
+
+        if (p.swirl != 0.0f) {
+            double cos = Math.cos(p.swirl);
+            double sin = Math.sin(p.swirl);
+            double vx = p.vx * cos - p.vz * sin;
+            double vz = p.vx * sin + p.vz * cos;
+            p.vx = vx;
+            p.vz = vz;
+        }
+
+        p.vy -= gravityPerTick;
+        clampSpeed(p);
+
+        if (IGNORE.equals(mode)) {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.z += p.vz;
+            return;
+        }
+
+        moveAxis(mc, p, mode, 0);
+        if (p.dead || p.stuck) {
+            return;
+        }
+        moveAxis(mc, p, mode, 1);
+        if (p.dead || p.stuck) {
+            return;
+        }
+        moveAxis(mc, p, mode, 2);
+    }
+
+    /** Движение вдоль одной оси (0=X, 1=Y, 2=Z) с проверкой блока назначения. */
+    private static void moveAxis(Minecraft mc, Particle p, String mode, int axis) {
+        double nx = p.x;
+        double ny = p.y;
+        double nz = p.z;
+        if (axis == 0) {
+            nx += p.vx;
+        } else if (axis == 1) {
+            ny += p.vy;
+        } else {
+            nz += p.vz;
+        }
+        if (!WorldParticleUtil.isSolidCollisionBlock(mc, nx, ny, nz)) {
+            p.x = nx;
+            p.y = ny;
+            p.z = nz;
+            return;
+        }
+        onImpact(p, mode, axis);
+    }
+
+    /** Реакция на удар о блок вдоль оси. */
+    private static void onImpact(Particle p, String mode, int axis) {
+        if (STUCK.equals(mode)) {
+            p.vx = 0.0;
+            p.vy = 0.0;
+            p.vz = 0.0;
+            p.stuck = true;
+            return;
+        }
+        if (FATAL.equals(mode)) {
+            p.dead = true;
+            return;
+        }
+        if (SLIDE.equals(mode) || SLIDE_SLOW.equals(mode)) {
+            setAxis(p, axis, 0.0);
+            if (SLIDE_SLOW.equals(mode)) {
+                // Гасим касательную скорость — «медленное» скольжение.
+                if (axis != 0) {
+                    p.vx *= 0.9;
                 }
-            } else {
-                boolean ricochet = isRicochet(mode);
-                double jumpMul = jumpMultiplier(mode);
-                double slideMul = ricochet ? 1.0 : (SLIDE_SLOW.equals(mode) ? 0.875 : 1.0);
-                boolean anyCollide = false;
-                if (particle.holdCollide || collidesY(mc, particle)) {
-                    if (particle.motionY != 0.0) {
-                        particle.motionY = ricochet
-                                ? -particle.motionY * jumpMul / (Math.max(gravityValue, 0.0) + 1.0)
-                                    * Math.min(Math.abs(particle.motionY) / 0.2, 1.0)
-                                : 0.0;
-                        if (ricochet && particle.motionY > 0.0 && particle.motionY < 0.02) {
-                            particle.motionY = 0.0;
-                        }
-                    }
-                    if (!ricochet) {
-                        particle.motionX *= slideMul;
-                        particle.motionZ *= slideMul;
-                    }
-                    anyCollide = true;
+                if (axis != 1) {
+                    p.vy *= 0.9;
                 }
-                if (particle.holdCollide || collidesX(mc, particle)) {
-                    particle.motionX = ricochet ? -particle.motionX * jumpMul : 0.0;
-                    if (!ricochet) {
-                        particle.motionZ *= slideMul;
-                    }
-                    anyCollide = true;
-                }
-                if (particle.holdCollide || collidesZ(mc, particle)) {
-                    particle.motionZ = ricochet ? -particle.motionZ * jumpMul : 0.0;
-                    if (!ricochet) {
-                        particle.motionX *= slideMul;
-                    }
-                    anyCollide = true;
-                }
-                if (anyCollide) {
-                    double speedNow = Math.sqrt(particle.motionX * particle.motionX
-                            + particle.motionY * particle.motionY
-                            + particle.motionZ * particle.motionZ);
-                    particle.holdCollide = speedNow < 0.008;
+                if (axis != 2) {
+                    p.vz *= 0.9;
                 }
             }
+            return;
         }
-        particle.motionX = Mth.clamp((float) particle.motionX, (float) -SPEED_LIMIT, (float) SPEED_LIMIT);
-        particle.motionY = Mth.clamp((float) particle.motionY, (float) -SPEED_LIMIT, (float) SPEED_LIMIT);
-        particle.motionZ = Mth.clamp((float) particle.motionZ, (float) -SPEED_LIMIT, (float) SPEED_LIMIT);
-        return cancelMove;
+        // Отскоки: отражаем компоненту с коэффициентом реституции.
+        double restitution = restitution(mode);
+        double v = -getAxis(p, axis) * restitution;
+        if (Math.abs(v) < REST_SPEED) {
+            v = 0.0;
+        }
+        setAxis(p, axis, v);
     }
 
-    private static boolean isRicochet(String mode) {
-        return RICOCHET.equals(mode) || STRONG_RICOCHET.equals(mode) || VERY_STRONG_RICOCHET.equals(mode)
-                || WEAK_RICOCHET.equals(mode) || VERY_WEAK_RICOCHET.equals(mode);
-    }
-
-    private static double jumpMultiplier(String mode) {
-        if (VERY_WEAK_RICOCHET.equals(mode)) {
-            return 0.5;
-        }
-        if (WEAK_RICOCHET.equals(mode)) {
-            return 0.75;
+    private static double restitution(String mode) {
+        if (VERY_STRONG_RICOCHET.equals(mode)) {
+            return 1.0;
         }
         if (STRONG_RICOCHET.equals(mode)) {
-            return 1.5;
+            return 0.85;
         }
-        if (VERY_STRONG_RICOCHET.equals(mode)) {
-            return 2.0;
+        if (WEAK_RICOCHET.equals(mode)) {
+            return 0.4;
         }
-        return 1.0;
+        if (VERY_WEAK_RICOCHET.equals(mode)) {
+            return 0.2;
+        }
+        return 0.65; // RICOCHET
     }
 
-    private static boolean collidesX(Minecraft mc, FadeParticle particle) {
-        return WorldParticleUtil.isSolidCollisionBlock(mc,
-                particle.posX + particle.motionX, particle.posY, particle.posZ);
+    private static double getAxis(Particle p, int axis) {
+        if (axis == 0) {
+            return p.vx;
+        }
+        if (axis == 1) {
+            return p.vy;
+        }
+        return p.vz;
     }
 
-    private static boolean collidesY(Minecraft mc, FadeParticle particle) {
-        return WorldParticleUtil.isSolidCollisionBlock(mc,
-                particle.posX, particle.posY + particle.motionY, particle.posZ);
+    private static void setAxis(Particle p, int axis, double v) {
+        if (axis == 0) {
+            p.vx = v;
+        } else if (axis == 1) {
+            p.vy = v;
+        } else {
+            p.vz = v;
+        }
     }
 
-    private static boolean collidesZ(Minecraft mc, FadeParticle particle) {
-        return WorldParticleUtil.isSolidCollisionBlock(mc,
-                particle.posX, particle.posY, particle.posZ + particle.motionZ);
+    private static void clampSpeed(Particle p) {
+        p.vx = Mth.clamp(p.vx, -SPEED_LIMIT, SPEED_LIMIT);
+        p.vy = Mth.clamp(p.vy, -SPEED_LIMIT, SPEED_LIMIT);
+        p.vz = Mth.clamp(p.vz, -SPEED_LIMIT, SPEED_LIMIT);
     }
 }
