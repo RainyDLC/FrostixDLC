@@ -1,6 +1,7 @@
 package dev.hatek;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import dev.hatek.client.feature.config.ConfigManager;
 import dev.hatek.client.ui.screen.AccountsScreen;
 import dev.hatek.client.ui.screen.ClickGuiScreen;
 import dev.hatek.mixin.accessor.ScreenInvoker;
@@ -8,6 +9,7 @@ import dev.hatek.client.module.Module;
 import dev.hatek.client.module.ModuleManager;
 import dev.hatek.client.module.impl.misc.VoiceControl;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -37,6 +39,11 @@ public class HatekClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
         ScreenEvents.AFTER_INIT.register(this::onScreenInit);
+
+        // Настройки переживают перезаход: грузим автосейв прошлого запуска,
+        // при выходе пишем текущий.
+        ConfigManager.loadAutosave();
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> ConfigManager.save(ConfigManager.AUTOSAVE));
     }
 
     private void onScreenInit(Minecraft mc, net.minecraft.client.gui.screens.Screen screen,

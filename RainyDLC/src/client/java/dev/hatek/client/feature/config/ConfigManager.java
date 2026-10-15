@@ -32,6 +32,9 @@ public final class ConfigManager {
     private static boolean scanned;
     private static String loadedName;
 
+    /** Имя автосейва, который грузится при старте и пишется при выходе. */
+    public static final String AUTOSAVE = "autosave";
+
     private ConfigManager() {
     }
 
@@ -45,6 +48,35 @@ public final class ConfigManager {
 
     public static String loadedName() {
         return loadedName;
+    }
+
+    public static void clearLoaded() {
+        loadedName = null;
+    }
+
+    public static ConfigEntry byName(String name) {
+        if (name == null) {
+            return null;
+        }
+        String wanted = name.strip();
+        for (ConfigEntry entry : all()) {
+            if (entry.name().equalsIgnoreCase(wanted)) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    /** Грузит автосейв прошлого запуска, если он есть. */
+    public static void loadAutosave() {
+        try {
+            Path file = configs().resolve(AUTOSAVE + ".json");
+            if (!Files.isRegularFile(file)) {
+                return;
+            }
+            load(new ConfigEntry(AUTOSAVE, "client", DATE.format(lastModified(file)), file, false));
+        } catch (Exception ignored) {
+        }
     }
 
     public static List<ConfigEntry> all() {

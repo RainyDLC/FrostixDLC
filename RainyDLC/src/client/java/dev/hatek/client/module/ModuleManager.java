@@ -24,14 +24,21 @@ import dev.hatek.client.module.setting.ColorSetting;
 import dev.hatek.client.module.setting.ModeSetting;
 import dev.hatek.client.module.setting.MultiSetting;
 import dev.hatek.client.module.setting.SliderSetting;
+import dev.hatek.client.module.setting.Setting;
 import dev.hatek.client.module.setting.TextSetting;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class ModuleManager {
     private static final List<Module> MODULES = new ArrayList<>();
+
+    private static final Map<Module, Boolean> DEFAULT_ENABLED = new IdentityHashMap<>();
+    private static final Map<Module, Integer> DEFAULT_KEYS = new IdentityHashMap<>();
+    private static final Map<Setting, String> DEFAULT_SETTINGS = new IdentityHashMap<>();
 
     private ModuleManager() {
     }
@@ -59,6 +66,27 @@ public final class ModuleManager {
                 module.onClientTick();
             }
         }
+    }
+
+    /** Сброс всех модулей, биндов и настроек до заводских (момент регистрации). */
+    public static void resetDefaults() {
+        for (Module module : all()) {
+            Boolean enabled = DEFAULT_ENABLED.get(module);
+            if (enabled != null && module.isEnabled() != enabled) {
+                module.toggle();
+            }
+            Integer key = DEFAULT_KEYS.get(module);
+            if (key != null) {
+                module.keybind(key);
+            }
+            for (Setting setting : module.settings()) {
+                String value = DEFAULT_SETTINGS.get(setting);
+                if (value != null) {
+                    setting.deserialize(value);
+                }
+            }
+        }
+        dev.hatek.client.feature.config.ConfigManager.clearLoaded();
     }
 
     public static boolean onKey(int key) {
@@ -114,5 +142,12 @@ public final class ModuleManager {
 
         MODULES.add(new Jarvis());
 
+        for (Module module : MODULES) {
+            DEFAULT_ENABLED.put(module, module.isEnabled());
+            DEFAULT_KEYS.put(module, module.keyCode());
+            for (Setting setting : module.settings()) {
+                DEFAULT_SETTINGS.put(setting, setting.serialize());
+            }
+        }
     }
 }
