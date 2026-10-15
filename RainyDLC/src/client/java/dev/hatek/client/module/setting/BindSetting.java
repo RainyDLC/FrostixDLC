@@ -6,52 +6,56 @@ import dev.hatek.client.ui.render.Anim;
 import dev.hatek.client.ui.render.Fonts;
 import dev.hatek.client.ui.render.HFont;
 import dev.hatek.client.ui.render.Render2D;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.Locale;
-
 /**
- * Бинд клавиши внутри модуля (например, для ручного броска виндчарда в AutoMace).
- * Левый клик — слушать следующую клавишу, правый — очистить.
+ * Бинд клавиши или кнопки мыши внутри модуля (например, для ручного броска виндчарда).
+ * Левый клик — слушать следующий ввод, правый — очистить.
+ * Боковые кнопки мыши (Mouse 4/5) тоже ловятся.
  */
 public final class BindSetting extends Setting {
     private static final float ICON_GAP = 6.0f;
 
-    private int key;
+    private InputConstants.Type type = InputConstants.Type.KEYSYM;
+    private int code = GLFW.GLFW_KEY_UNKNOWN;
+
     private boolean binding;
 
     private final Anim hoverAnim = new Anim(0.0f, 18.0f);
     private final Anim pressAnim = new Anim(0.0f, 9.0f);
 
     public BindSetting(String name) {
-        this(name, GLFW.GLFW_KEY_UNKNOWN);
-    }
-
-    public BindSetting(String name, int key) {
         super(name);
-        this.key = key;
     }
 
-    public int key() {
-        return this.key;
-    }
-
-    public void key(int value) {
-        this.key = value;
+    public BindSetting(String name, InputConstants.Type type, int code) {
+        super(name);
+        this.type = type;
+        this.code = code;
     }
 
     public boolean bound() {
-        return this.key != GLFW.GLFW_KEY_UNKNOWN;
+        return this.code != GLFW.GLFW_KEY_UNKNOWN;
     }
 
     public String keyLabel() {
-        if (this.key == GLFW.GLFW_KEY_UNKNOWN) {
+        if (!bound()) {
             return "-";
         }
-        String name = InputConstants.Type.KEYSYM.getOrCreate(this.key).getDisplayName().getString();
-        return name.length() > 3 ? name.substring(0, 3).toUpperCase(Locale.ROOT)
-                : name.toUpperCase(Locale.ROOT);
+        return this.type.getOrCreate(this.code).getDisplayName().getString();
+    }
+
+    /** Нажат ли забинженный ввод прямо сейчас (клавиатура или мышь). */
+    public boolean isDown(Minecraft mc) {
+        if (!bound() || mc == null || mc.getWindow() == null) {
+            return false;
+        }
+        if (this.type == InputConstants.Type.MOUSE) {
+            return GLFW.glfwGetMouseButton(mc.getWindow().handle(), this.code) == GLFW.GLFW_PRESS;
+        }
+        return InputConstants.isKeyDown(mc.getWindow(), this.code);
     }
 
     @Override
@@ -106,12 +110,19 @@ public final class BindSetting extends Setting {
             return false;
         }
         if (button == 0) {
+            // Левый клик только входит в режим ожидания, сам биндом не становится.
             this.binding = true;
             this.pressAnim.snap(1.0f);
             return true;
         }
         if (button == 1) {
-            this.key = GLFW.GLFW_KEY_UNKNOWN;
+            clear();
+            return true;
+        }
+        // Любая другая кнопка мыши (включая Mouse 4/5) — только в режиме ожидания.
+        if (this.binding) {
+            this.type = InputConstants.Type.MOUSE;
+            this.code = button;
             this.binding = false;
             return true;
         }
@@ -124,22 +135,44 @@ public final class BindSetting extends Setting {
             return false;
         }
         this.binding = false;
-        this.key = key == GLFW.GLFW_KEY_ESCAPE ? GLFW.GLFW_KEY_UNKNOWN : key;
+        if (key == GLFW.GLFW_KEY_ESCAPE) {
+            clear();
+            return true;
+        }
+        this.type = InputConstants.Type.KEYSYM;
+        this.code = key;
         return true;
+    }
+
+    private void clear() {
+        this.type = InputConstants.Type.KEYSYM;
+        this.code = GLFW.GLFW_KEY_UNKNOWN;
+        this.binding = false;
     }
 
     @Override
     public String serialize() {
-        return String.valueOf(this.key);
+        return this.type.name() + ":" + this.code;
     }
 
     @Override
     public void deserialize(String raw) {
-        try {
-            this.key = Integer.parseInt(raw);
-        } catch (NumberFormatException ignored) {
-            this.key = GLFW.GLFW_KEY_UNKNOWN;
+        clear();
+        if (raw == null || raw.isBlank()) {
+            return;
         }
-        this.binding = false;
+        int split = raw.indexOf(':');
+        try {
+            if (split < 0) {
+                // Старый формат — голый код клавиши.
+                this.code = Integer.parseInt(raw.trim());
+                this.type = InputConstants.Type.KEYSYM;
+            } else {
+                this.type = InputConstants.Type.valueOf(raw.substring(0, split).trim());
+                this.code = Integer.parseInt(raw.substring(split + 1).trim());
+            }
+        } catch (IllegalArgumentException ignored) {
+            clear();
+        }
     }
 }

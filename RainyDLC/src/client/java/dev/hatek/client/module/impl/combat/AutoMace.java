@@ -14,6 +14,7 @@ import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.Animal;
@@ -36,7 +37,11 @@ import java.util.List;
  * <p>Легитный: visibly берёт булаву в руку (остаётся в руке) и бьёт.
  * Пакетный: тихо свапает булаву из хотбара пакетами под каждый удар и возвращает слот.</p>
  *
- * <p>Заряд ветра: бинд (Wind Key) бросает виндчард строго под себя. Ищет в хотбаре,
+ * <p>Бьёт только в воздухе: на земле модуль ждёт. С включённым Wait Crit удар
+ * откладывается до настоящего крит-момента (падение, без воды/эффектов/полёта).</p>
+ *
+ * <p>Заряд ветра: бинд (Wind Key, клавиша или кнопка мыши) бросает виндчард
+ * строго под себя. Ищет в хотбаре,
  * при включённом Wind From Inventory подтягивает из инвентаря шифт-кликом.</p>
  */
 public final class AutoMace extends Module {
@@ -63,6 +68,7 @@ public final class AutoMace extends Module {
             List.of(PLAYERS, NAKED, MOBS, ANIMALS, FRIENDS), PLAYERS, NAKED, MOBS);
     private final SliderSetting range = new SliderSetting("Range", 3.2, 3.0, 6.0, 0.1);
     private final BoolSetting aim = new BoolSetting("Aim", true);
+    private final BoolSetting waitCrit = new BoolSetting("Wait Crit", true);
     private final BoolSetting smashOnly = new BoolSetting("Only Smash", false);
     private final BoolSetting throughWalls = new BoolSetting("Through Walls", false);
     private final BindSetting windKey = new BindSetting("Wind Key");
@@ -78,8 +84,9 @@ public final class AutoMace extends Module {
     public AutoMace() {
         super("AutoMace", "Hits with mace, throws wind charge under you", Category.COMBAT);
         instance = this;
-        with(this.mode, this.targets, this.range, this.aim, this.smashOnly, this.throughWalls,
-                this.windKey, this.autoWind, this.windFromInventory, this.windCooldown);
+        with(this.mode, this.targets, this.range, this.aim, this.waitCrit, this.smashOnly,
+                this.throughWalls, this.windKey, this.autoWind, this.windFromInventory,
+                this.windCooldown);
     }
 
     public static AutoMace instance() {
@@ -145,7 +152,7 @@ public final class AutoMace extends Module {
             this.windWasDown = false;
             return;
         }
-        boolean down = InputConstants.isKeyDown(mc.getWindow(), this.windKey.key());
+        boolean down = this.windKey.isDown(mc);
         if (down && !this.windWasDown) {
             useWind(mc);
         }
@@ -238,7 +245,15 @@ public final class AutoMace extends Module {
         if (self.isUsingItem() || self.isBlocking()) {
             return;
         }
-        if (this.smashOnly.value() && !(self.fallDistance > SMASH_FALL && !self.onGround())) {
+        // Только воздух: на земле модуль ждёт, а не бьёт.
+        if (self.onGround()) {
+            return;
+        }
+        // Ждём настоящий крит-момент: падение без блокеров (вода, паутина-эффекты, полёт).
+        if (this.waitCrit.value() && !critMoment(self)) {
+            return;
+        }
+        if (this.smashOnly.value() && !(self.fallDistance > SMASH_FALL)) {
             return;
         }
         if (self.getAttackStrengthScale(0.5F) < CHARGE_NEED) {
@@ -288,6 +303,20 @@ public final class AutoMace extends Module {
             }
         }
         return -1;
+    }
+
+    /** Крит-момент по ванильной логике: падение (fallDistance > 0) без блокеров крита. */
+    private static boolean critMoment(LocalPlayer self) {
+        return self.fallDistance > 0.0F
+                && !self.onClimbable()
+                && !self.isInWater()
+                && !self.isInLava()
+                && !self.isPassenger()
+                && !self.isFallFlying()
+                && !self.hasEffect(MobEffects.BLINDNESS)
+                && !self.hasEffect(MobEffects.SLOW_FALLING)
+                && !self.hasEffect(MobEffects.LEVITATION)
+                && !self.getAbilities().flying;
     }
 
     private void sendCarried(Minecraft mc, int slot) {
