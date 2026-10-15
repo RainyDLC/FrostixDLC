@@ -14,22 +14,36 @@ public final class ModeSetting extends Setting {
     private static final int OPTION_H = 24;
     private static final int LIST_GAP = 4;
 
-    private final List<String> options;
+    private List<String> options;
     private int index;
 
     private boolean open;
     private final Anim openAnim = new Anim(0.0f, 15.0f);
     private final Anim hoverAnim = new Anim(0.0f, 18.0f);
     private final Anim chevronAnim = new Anim(0.0f, 16.0f);
-    private final List<Anim> optionAnims = new ArrayList<>();
+    private List<Anim> optionAnims = new ArrayList<>();
 
     public ModeSetting(String name, int index, String... options) {
         super(name);
-        this.options = List.of(options);
+        setOptions(List.of(options));
         this.index = Math.floorMod(index, Math.max(1, this.options.size()));
+    }
+
+    /** Заменяет список опций (например, список устройств). Выбор сохраняется, если есть. */
+    public void setOptions(List<String> options) {
+        String current = this.options == null || this.options.isEmpty()
+                ? null : this.options.get(Math.min(this.index, this.options.size() - 1));
+        this.options = List.copyOf(options);
+        this.optionAnims = new ArrayList<>();
         for (int i = 0; i < this.options.size(); i++) {
             this.optionAnims.add(new Anim(0.0f, 18.0f));
         }
+        if (this.options.isEmpty()) {
+            this.index = 0;
+            return;
+        }
+        int found = current == null ? -1 : this.options.indexOf(current);
+        this.index = found >= 0 ? found : 0;
     }
 
     public String value() {

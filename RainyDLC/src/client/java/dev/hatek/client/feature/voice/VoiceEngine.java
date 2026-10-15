@@ -92,6 +92,30 @@ public final class VoiceEngine {
         return HEARD.poll();
     }
 
+    /** Забирает все услышанные фразы (для нескольких потребителей). */
+    public static java.util.List<String> drain() {
+        java.util.List<String> out = new ArrayList<>();
+        String heard;
+        while ((heard = HEARD.poll()) != null) {
+            out.add(heard);
+        }
+        return out;
+    }
+
+    /** Вернуть фразу в очередь (например, для другого ассистента). */
+    public static void requeue(String heard) {
+        if (heard != null) {
+            HEARD.offer(heard);
+        }
+    }
+
+    private static volatile boolean deafened;
+
+    /** Пока true — захват сбрасывается (Джарвис говорит сам, себя не слушаем). */
+    public static void deafened(boolean value) {
+        deafened = value;
+    }
+
     public static List<String> devices() {
         List<String> names = new ArrayList<>();
         AudioFormat format = new AudioFormat(SAMPLE_RATE, 16, 1, true, false);
@@ -230,6 +254,15 @@ public final class VoiceEngine {
         while (RUNNING.get()) {
             int read = line.read(raw, 0, raw.length);
             if (read < raw.length) {
+                continue;
+            }
+            if (deafened) {
+                capturing = false;
+                speaking = false;
+                phraseLength = 0;
+                prerollHeld = 0;
+                loudRun = 0;
+                quietRun = 0;
                 continue;
             }
             float[] frame = toFloat(raw, read);

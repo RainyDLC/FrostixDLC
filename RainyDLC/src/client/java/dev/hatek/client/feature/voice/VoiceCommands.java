@@ -21,6 +21,9 @@ public final class VoiceCommands {
     private static final String[] WAKE = {"хатек", "хатэк", "хайтек", "патек", "чатек", "хатик",
             "hatek", "хатека", "хате"};
 
+    private static final String[] JARVIS_WAKE = {"джарвис", "джарвиса", "джарвису", "джарвисом",
+            "джарвисе", "джарвиз", "jarvis", "джарвис"};
+
     private static final String[] ON = {"включи", "включить", "вруби", "врубить", "врубай",
             "запусти", "активируй", "подключи", "on", "enable"};
     private static final String[] OFF = {"выключи", "выключить", "выруби", "вырубить", "вырубай",
@@ -29,6 +32,14 @@ public final class VoiceCommands {
     private static final String[] SET = {"поставь", "поменяй", "измени", "сделай", "установи",
             "задай", "смени", "выстави"};
     private static final String[] NICK = {"ник", "никнейм", "имя", "аккаунт", "ника", "ником"};
+
+    private static final String[] OPEN = {"открой", "открыть", "покажи", "показать", "откройся"};
+    private static final String[] CLOSE = {"закрой", "закрыть", "убери", "скрой", "закройся"};
+    private static final String[] GUI = {"гуи", "gui", "меню", "интерфейс", "кликгуи"};
+
+    private static final String[] ACK = {"Слушаюсь, сэр", "Слушаюсь", "Выполняю, сэр",
+            "Как скажете, сэр"};
+    private static int ackAt;
 
     private static final Map<String, String[]> MODULE_WORDS = new LinkedHashMap<>();
 
@@ -66,6 +77,10 @@ public final class VoiceCommands {
         MODULE_WORDS.put("Watermark", new String[]{"вотермарк", "лого", "логотип"});
         MODULE_WORDS.put("Notifications", new String[]{"уведомления", "оповещения"});
         MODULE_WORDS.put("DiscordRPC", new String[]{"дискорд"});
+        MODULE_WORDS.put("AutoMace", new String[]{"автомейс", "авто мейс", "мейс", "булава",
+                "булаву", "булавой"});
+        MODULE_WORDS.put("Jarvis", new String[]{"джарвис", "jarvis"});
+        MODULE_WORDS.put("VoiceControl", new String[]{"голос", "войс", "голосовое"});
 
         SETTING_WORDS.put("Attack Range", new String[]{"радиус", "дальность", "радиус атаки", "дистанция"});
         SETTING_WORDS.put("Detect Range", new String[]{"обнаружение", "детект", "радиус обнаружения"});
@@ -102,19 +117,88 @@ public final class VoiceCommands {
     }
 
     public static String handle(String heard) {
+        Result result = handleResult(heard, WAKE);
+        return result == null ? null : result.text();
+    }
+
+    public static String handle(String heard, String[] wake) {
+        Result result = handleResult(heard, wake);
+        return result == null ? null : result.text();
+    }
+
+    /** Результат команды: текст в чат и был ли приказ выполнен. */
+    public record Result(boolean ok, String text) {
+    }
+
+    /** Ответ Джарвиса: текст в чат, фраза голосом и действие. */
+    public record JarvisResult(String chat, String say, Runnable action) {
+    }
+
+    public static boolean isHatekPhrase(String heard) {
+        return afterWake(normalise(heard), WAKE) != null;
+    }
+
+    public static boolean isJarvisPhrase(String heard) {
+        return afterWake(normalise(heard), JARVIS_WAKE) != null;
+    }
+
+    private static String ack() {
+        String out = ACK[ackAt % ACK.length];
+        ackAt++;
+        return out;
+    }
+
+    /** Разбор приказа Джарвису («Джарвис, открой гуи»). */
+    public static JarvisResult handleJarvis(String heard) {
         String phrase = normalise(heard);
         if (phrase.isEmpty()) {
             return null;
         }
-        String rest = afterWake(phrase);
+        String rest = afterWake(phrase, JARVIS_WAKE);
         if (rest == null) {
             return null;
         }
         if (rest.isBlank()) {
-            return "Слушаю";
+            return new JarvisResult("Слушаю, сэр", "Слушаю, сэр", null);
         }
 
         List<String> words = new ArrayList<>(List.of(rest.split(" ")));
+        if (containsAny(words, GUI)) {
+            if (containsAny(words, OPEN)) {
+                return new JarvisResult("Открываю гуи", ack(), JarvisActions::openGui);
+            }
+            if (containsAny(words, CLOSE)) {
+                return new JarvisResult("Закрываю гуи", ack(), JarvisActions::closeGui);
+            }
+        }
+
+        Result result = dispatch(words);
+        if (result == null) {
+            return new JarvisResult("Не понял: " + rest, "Не понял", null);
+        }
+        return new JarvisResult(result.text(), result.ok() ? ack() : result.text(), null);
+    }
+
+    private static Result handleResult(String heard, String[] wake) {
+        String phrase = normalise(heard);
+        if (phrase.isEmpty()) {
+            return null;
+        }
+        String rest = afterWake(phrase, wake);
+        if (rest == null) {
+            return null;
+        }
+        if (rest.isBlank()) {
+            return new Result(true, "Слушаю");
+        }
+
+        List<String> words = new ArrayList<>(List.of(rest.split(" ")));
+        Result result = dispatch(words);
+        return result == null ? new Result(false, "Не понял: " + rest) : result;
+    }
+
+    /** Возвращает null, если первый глагол не распознан. */
+    private static Result dispatch(List<String> words) {
         String verb = words.get(0);
 
         double onScore = best(verb, ON);
@@ -124,7 +208,7 @@ public final class VoiceCommands {
         double top = Math.max(Math.max(onScore, offScore), Math.max(toggleScore, setScore));
 
         if (top < 0.75) {
-            return "Не понял: " + rest;
+            return null;
         }
         if (setScore == top) {
             return containsAny(words, NICK) ? nickname(words) : setting(words);
