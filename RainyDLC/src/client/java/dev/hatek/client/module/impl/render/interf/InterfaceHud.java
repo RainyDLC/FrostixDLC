@@ -31,7 +31,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.PlayerTeam;
-import org.joml.Vector2f;
 import org.lwjgl.glfw.GLFW;
 
 import java.time.LocalTime;
@@ -404,17 +403,9 @@ public final class InterfaceHud {
             placed.add(new Placed(el, pos[0], pos[1], data, s));
         }
 
-        boolean noScreen = mc.gui.screen() == null;
-        boolean blurred = false;
-        if (!placed.isEmpty() && Interface.hudBlur() && noScreen) {
-            try {
-                mc.gameRenderer.processBlurEffect();
-                blurred = LiquidBackdrop.frostReady();
-            } catch (Throwable ignored) {
-            }
-        }
-        if (blurred) {
-            restoreSharpExcept(gg, placed);
+        if (!placed.isEmpty()) {
+            // Свежий снимок мира для стекла — берём сами, не зависим от тайминга миксина.
+            LiquidBackdrop.onGuiRender();
         }
 
         Render2D.begin(gg);
@@ -455,16 +446,19 @@ public final class InterfaceHud {
     }
 
     /**
-     * Стеклянная карточка в абсолютных координатах: снимок мира, затемнение,
+     * Стеклянная карточка в абсолютных координатах: матовый снимок мира
+     * (блюр зашит в шейдер, fullscreen-прохода нет), затемнение,
      * рамка и верхний блик — как панели ClickGUI.
      */
     private static void glassCard(GuiGraphicsExtractor gg, float x, float y, float w, float h, float s) {
         float r = RADIUS * s;
         Render2D.round(gg, x, y, w, h, r, BORDER);
         float inset = Math.max(1.0f, s * 0.5f);
-        Identifier tex = frostTexture();
-        if (tex != null) {
-            snapshot(gg, tex, x + inset, y + inset, w - inset * 2, h - inset * 2, r);
+        if (Interface.hudBlur()) {
+            Identifier tex = frostTexture();
+            if (tex != null) {
+                snapshot(gg, tex, x + inset, y + inset, w - inset * 2, h - inset * 2, r);
+            }
         }
         Render2D.round(gg, x + inset, y + inset, w - inset * 2, h - inset * 2,
                 Math.max(0.5f, r - inset), SHADE);
@@ -493,67 +487,6 @@ public final class InterfaceHud {
                     Math.round(bw), -band, tw, th,
                     Render2D.withAlpha(0xFFFFFFFF, Render2D.alpha()));
         }
-    }
-
-    /** Возвращает чёткий мир везде, кроме стеклянных карточек. */
-    private static void restoreSharpExcept(GuiGraphicsExtractor gg, List<Placed> placed) {
-        if (!LiquidBackdrop.sharpReady()) {
-            return;
-        }
-        float sw = Render2D.screenWidth(), sh = Render2D.screenHeight();
-        List<float[]> rects = new ArrayList<>();
-        for (Placed p : placed) {
-            rects.add(new float[]{p.x, p.y, p.x + p.data.w(), p.y + p.data.h()});
-        }
-        List<Float> edges = new ArrayList<>();
-        edges.add(0.0f);
-        edges.add((float) sh);
-        for (float[] rc : rects) {
-            edges.add(Mth.clamp(rc[1], 0.0f, (float) sh));
-            edges.add(Mth.clamp(rc[3], 0.0f, (float) sh));
-        }
-        edges.sort(Float::compare);
-        float prev = -1.0f;
-        for (float edge : edges) {
-            if (edge <= prev) {
-                continue;
-            }
-            if (prev >= 0.0f && edge > prev) {
-                restoreBand(gg, prev, edge, rects, sw);
-            }
-            prev = edge;
-        }
-    }
-
-    private static void restoreBand(GuiGraphicsExtractor gg, float y0, float y1,
-                                    List<float[]> rects, float sw) {
-        List<float[]> spans = new ArrayList<>();
-        for (float[] rc : rects) {
-            if (rc[1] < y1 && rc[3] > y0) {
-                spans.add(new float[]{Math.max(0.0f, rc[0]), Math.min(sw, rc[2])});
-            }
-        }
-        spans.sort(Comparator.comparingDouble(a -> a[0]));
-        float cursor = 0.0f;
-        for (float[] span : spans) {
-            if (span[0] > cursor) {
-                blitSharp(gg, cursor, y0, span[0] - cursor, y1 - y0);
-            }
-            cursor = Math.max(cursor, span[1]);
-        }
-        if (cursor < sw) {
-            blitSharp(gg, cursor, y0, sw - cursor, y1 - y0);
-        }
-    }
-
-    private static void blitSharp(GuiGraphicsExtractor gg, float x, float y, float w, float h) {
-        if (w <= 0 || h <= 0) {
-            return;
-        }
-        int tw = LiquidBackdrop.width(), th = LiquidBackdrop.height();
-        gg.blit(QuickPipelines.BLUR, LiquidBackdrop.SHARP,
-                Math.round(x), Math.round(y), x, th - y, Math.round(w), Math.round(h),
-                Math.round(w), Math.round(-h), tw, th, 0xFFFFFFFF);
     }
 
     private static void drawGlass(GuiGraphicsExtractor gg, float x, float y, float w, float h, float s) {
