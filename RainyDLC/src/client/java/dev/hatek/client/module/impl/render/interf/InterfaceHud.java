@@ -8,6 +8,7 @@ import dev.hatek.client.module.impl.combat.AttackAura;
 import dev.hatek.client.module.impl.render.Interface;
 import dev.hatek.client.module.impl.render.interf.quick.*;
 import dev.hatek.client.ui.Style;
+import dev.hatek.client.ui.render.LiquidBackdrop;
 import dev.hatek.client.ui.render.Render2D;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.Minecraft;
@@ -37,10 +38,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * HUD RainyDLC «Stripe» — плоский терминальный дизайн с нуля.
- * Никакого блюра и стекла: сплошные панели, острые углы,
- * акцентная полоса слева, верхние регистры заголовков,
- * сегментные бары, текстовый ArrayList без подложек.
+ * HUD RainyDLC «Velvet» — матовое стекло, мягкие тени, спокойная типографика.
+ * Полупрозрачные панели со снимком мира, тонкая рамка, верхний блик,
+ * заголовки с разрядкой, глянцевые бары, пилюли вместо голого текста.
  */
 public final class InterfaceHud {
     private static boolean hooked, screenOpen;
@@ -55,18 +55,19 @@ public final class InterfaceHud {
     private static float grabX, grabY;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
 
-    // ---------- токены «Stripe» ----------
-    private static final float PAD = 6.0f;
-    private static final float HEADER_H = 14.0f;
-    private static final float ROW_H = 12.0f;
-    private static final float STRIPE = 2.0f;
-    private static final int FILL = 0xE90D0D10;
-    private static final int FILL_SOFT = 0xE0121215;
-    private static final int LINE = 0x24FFFFFF;
+    // ---------- токены «Velvet» ----------
+    private static final float PAD = 7.0f;
+    private static final float HEADER_H = 16.0f;
+    private static final float ROW_H = 13.0f;
+    private static final int SHADE = 0xC8101014;
+    private static final int BORDER = 0x2BFFFFFF;
+    private static final int SHEEN = 0x14FFFFFF;
     private static final int HAIR = 0x1CFFFFFF;
-    private static final int GREY = 0xFFB9B9C2;
-    private static final int DIM = 0xFF7E7E88;
-    private static final int DARK = 0xFF1A1A1F;
+    private static final int GREY = 0xFFC6C6CF;
+    private static final int DIM = 0xFF8E8E99;
+    private static final int DARK = 0xFF17171C;
+    private static final int TRACK = 0xFF26262D;
+    private static final int GOLD = 0xFFFFD45F;
 
     private interface Sized {
         float w();
@@ -98,7 +99,8 @@ public final class InterfaceHud {
     private record PillData(float w, float h, String label, String text, ItemStack item) implements Sized {
     }
 
-    private record WatermarkData(float w, float h, String nick, String fps, String time, String ping) implements Sized {
+    private record WatermarkData(float w, float h, String nick, String fps, String time, String ping,
+                                 int pingColor) implements Sized {
     }
 
     private record ArmorData(float w, float h, List<ItemStack> items, boolean vertical) implements Sized {
@@ -342,7 +344,7 @@ public final class InterfaceHud {
     }
 
     private static QuickFont fTitle(float s) {
-        return QuickFont.of("bold", 8.0f * s);
+        return QuickFont.of("bold", 7.5f * s);
     }
 
     private static QuickFont fBody(float s) {
@@ -384,6 +386,7 @@ public final class InterfaceHud {
             moveHit(dragHit, (float) Render2D.mouseX() - grabX, (float) Render2D.mouseY() - grabY);
         }
         BOUNDS.clear();
+        LiquidBackdrop.request();
 
         List<Placed> placed = new ArrayList<>();
         for (var el : HudLayout.Element.values()) {
@@ -401,15 +404,19 @@ public final class InterfaceHud {
             placed.add(new Placed(el, pos[0], pos[1], data, s));
         }
 
+        if (!placed.isEmpty()) {
+            LiquidBackdrop.onGuiRender();
+        }
+
         Render2D.begin(gg);
         try {
             for (Placed p : placed) {
                 var entry = HudLayout.get(p.el);
                 Render2D.pushAlpha(entry.opacity);
                 try {
-                    // ArrayList — голый текст без подложки, остальное — плоская панель.
-                    if (p.el != HudLayout.Element.ARRAYLIST) {
-                        drawFlat(gg, p.x, p.y, p.data.w(), p.data.h(), p.s);
+                    // Пилюли ArrayList и тосты рисуют собственное стекло.
+                    if (p.el != HudLayout.Element.ARRAYLIST && p.el != HudLayout.Element.NOTIFICATIONS) {
+                        glass(gg, p.x, p.y, p.data.w(), p.data.h(), p.s);
                     }
                     Render2D.pushTranslate(gg, p.x, p.y);
                     try {
@@ -418,9 +425,9 @@ public final class InterfaceHud {
                         Render2D.popTransform(gg);
                     }
                     if (editing() && dragHit != null && dragHit.element == p.el) {
-                        Render2D.rect(gg, p.x, p.y, p.data.w(), Math.max(1, p.s * 0.75f), Style.accent());
-                        Render2D.rect(gg, p.x, p.y + p.data.h() - p.s * 0.75f, p.data.w(),
-                                Math.max(1, p.s * 0.75f), Style.accent());
+                        float r = 9 * p.s;
+                        Render2D.round(gg, p.x, p.y, p.data.w(), p.data.h(), r,
+                                Render2D.withAlpha(Style.accent(), 0.35f));
                     }
                 } finally {
                     Render2D.popAlpha();
@@ -433,36 +440,126 @@ public final class InterfaceHud {
         }
     }
 
-    // ---------- плоская панель ----------
+    // ---------- стекло ----------
+
+    private static Identifier frostTexture() {
+        if (LiquidBackdrop.frostReady()) {
+            return LiquidBackdrop.FROST;
+        }
+        if (LiquidBackdrop.sharpReady()) {
+            return LiquidBackdrop.SHARP;
+        }
+        return null;
+    }
 
     /**
-     * Сплошной прямоугольник + рамка 1px + акцентная полоса слева.
-     * Углы острые, никакого блюра — полная противоположность стеклу.
+     * Панель «Velvet»: мягкая тень, тонкая рамка, матовый снимок мира,
+     * затемнение и верхний блик. Радиус 9 — единый для всех панелей.
      */
-    private static void drawFlat(GuiGraphicsExtractor gg, float x, float y, float w, float h, float s) {
-        Render2D.rect(gg, x, y, w, h, FILL);
-        Render2D.rect(gg, x, y, w, Math.max(1, s * 0.5f), LINE);
-        Render2D.rect(gg, x, y + h - Math.max(1, s * 0.5f), w, Math.max(1, s * 0.5f), LINE);
-        Render2D.rect(gg, x, y, Math.max(1, s * 0.5f), h, LINE);
-        Render2D.rect(gg, x + w - Math.max(1, s * 0.5f), y, Math.max(1, s * 0.5f), h, LINE);
-        Render2D.rect(gg, x, y, STRIPE * s, h, Style.accent());
-    }
-
-    private static void header(GuiGraphicsExtractor gg, String title, int count, float w, float s) {
-        String upper = title.toUpperCase(Locale.ROOT);
-        fMicro(s).draw(gg, upper, (PAD + STRIPE) * s, fMicro(s).centeredBaseline(0, HEADER_H * s), GREY);
-        fMicro(s).drawRight(gg, String.format(Locale.ROOT, "%02d", count), w - PAD * s,
-                fMicro(s).centeredBaseline(0, HEADER_H * s), Style.accent());
-        Render2D.rect(gg, (PAD + STRIPE) * s, HEADER_H * s, w - (PAD + STRIPE + PAD) * s,
-                Math.max(1, s * 0.5f), HAIR);
-    }
-
-    private static void dottedLine(GuiGraphicsExtractor gg, float x, float y, float w, float s) {
-        float step = 3.0f * s;
-        float dot = 1.0f * s;
-        for (float dx = 0; dx < w; dx += step) {
-            Render2D.rect(gg, x + dx, y, Math.min(dot, w - dx), Math.max(1, s * 0.5f), HAIR);
+    private static void glass(GuiGraphicsExtractor gg, float x, float y, float w, float h, float s) {
+        float r = 9.0f * s;
+        Render2D.round(gg, x, y + 2.5f * s, w, h, r, 0x38000000);
+        Render2D.round(gg, x, y + 5.0f * s, w, h, r, 0x1C000000);
+        Render2D.round(gg, x, y, w, h, r, BORDER);
+        float inset = Math.max(1.0f, s * 0.5f);
+        if (Interface.hudBlur()) {
+            Identifier tex = frostTexture();
+            if (tex != null) {
+                snapshot(gg, tex, x + inset, y + inset, w - inset * 2, h - inset * 2, r - inset);
+            }
         }
+        Render2D.round(gg, x + inset, y + inset, w - inset * 2, h - inset * 2,
+                Math.max(1.0f, r - inset), SHADE);
+        Render2D.round(gg, x + inset + 1, y + inset + 1, w - (inset + 1) * 2,
+                Math.max(1.0f, s), s * 0.5f, SHEEN);
+    }
+
+    /** Прямоугольник снимка 1:1 (те же единицы, что позиции HUD). */
+    private static void snapshot(GuiGraphicsExtractor gg, Identifier tex,
+                                 float x, float y, float w, float h, float r) {
+        int tw = LiquidBackdrop.width(), th = LiquidBackdrop.height();
+        if (tw <= 0 || th <= 0 || w <= 0 || h <= 0) {
+            return;
+        }
+        int rows = Math.max(1, Math.round(Math.max(2.0f, r / 3.0f)));
+        int height = Math.max(1, Math.round(h));
+        for (int yy = 0; yy < height; yy += rows) {
+            int band = Math.min(rows, height - yy);
+            float cy = yy + band / 2.0f;
+            float dy = cy < r ? r - cy : cy > h - r ? cy - (h - r) : 0.0f;
+            float inset = dy > 0.0f ? r - (float) Math.sqrt(Math.max(0.0f, r * r - dy * dy)) : 0.0f;
+            float bx = x + inset;
+            float bw = Math.max(1.0f, w - inset * 2.0f);
+            gg.blit(QuickPipelines.BLUR, tex, Math.round(bx), Math.round(y + yy),
+                    bx, th - (y + yy), Math.round(bw), band,
+                    Math.round(bw), -band, tw, th,
+                    Render2D.withAlpha(0xFFFFFFFF, Render2D.alpha()));
+        }
+    }
+
+    // ---------- типографика ----------
+
+    private static float textShadow(GuiGraphicsExtractor gg, QuickFont f, String text,
+                                    float x, float baseline, int color, float s) {
+        f.draw(gg, text, x + 0.5f * s, baseline + 0.5f * s, 0x80000000);
+        return f.draw(gg, text, x, baseline, color);
+    }
+
+    /** Текст с разрядкой для микро-заголовков. */
+    private static float tracked(GuiGraphicsExtractor gg, QuickFont f, String text,
+                                 float x, float baseline, int color, float tracking) {
+        if (text == null) {
+            return x;
+        }
+        for (int code : text.codePoints().toArray()) {
+            String ch = new String(Character.toChars(code));
+            f.draw(gg, ch, x, baseline, color);
+            x += f.width(ch) + (" ".equals(ch) ? 0 : tracking);
+        }
+        return x;
+    }
+
+    private static float trackedWidth(QuickFont f, String text, float tracking) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        int glyphs = 0;
+        for (int i = 0; i < text.length();) {
+            int code = text.codePointAt(i);
+            if (code != ' ') {
+                glyphs++;
+            }
+            i += Character.charCount(code);
+        }
+        return f.width(text) + tracking * Math.max(0, glyphs - 1);
+    }
+
+    /** Заголовок панели: разрядка + счётчик + градиентная акцентная линия. */
+    private static void header(GuiGraphicsExtractor gg, String title, int count, float w, float s) {
+        QuickFont micro = fMicro(s);
+        float tracking = 0.9f * s;
+        tracked(gg, micro, title.toUpperCase(Locale.ROOT), PAD * s,
+                micro.centeredBaseline(0, HEADER_H * s), DIM, tracking);
+        String num = String.format(Locale.ROOT, "%02d", count);
+        micro.drawRight(gg, num, w - PAD * s, micro.centeredBaseline(0, HEADER_H * s), Style.accent());
+        gradientLine(gg, PAD * s, HEADER_H * s, w * 0.45f, s);
+    }
+
+    /** Горизонтальная линия: акцент → прозрачность. */
+    private static void gradientLine(GuiGraphicsExtractor gg, float x, float y, float w, float s) {
+        int steps = Math.max(4, Math.min(48, Math.round(w / (2 * s))));
+        for (int i = 0; i < steps; i++) {
+            float t0 = i / (float) steps;
+            float t1 = (i + 1) / (float) steps;
+            int c = Render2D.withAlpha(Style.accent(), (1 - t0) * 0.55f);
+            Render2D.rect(gg, x + w * t0, y, Math.max(1, w * (t1 - t0) + 0.5f),
+                    Math.max(1, s * 0.75f), c);
+        }
+    }
+
+    /** Точка-разделитель. */
+    private static void dot(GuiGraphicsExtractor gg, float cx, float cy, float d, int color) {
+        Render2D.circle(gg, cx - d / 2, cy - d / 2, d, color);
     }
 
     // ---------- measure / draw ----------
@@ -498,7 +595,7 @@ public final class InterfaceHud {
             case ARMOR -> drawArmor(gg, s, (ArmorData) data);
             case KEYBINDS, EFFECTS, STAFF, COOLDOWNS ->
                     drawTable(gg, s, (ListData) data);
-            case ARRAYLIST -> drawArrayLines(gg, s, (ListData) data);
+            case ARRAYLIST -> drawArrayPills(gg, s, (ListData) data);
             case NOTIFICATIONS -> drawToasts(gg, s, (ListData) data);
             default -> drawPill(gg, s, (PillData) data);
         }
@@ -513,44 +610,51 @@ public final class InterfaceHud {
         String time = LocalTime.now().format(CLOCK);
         PlayerInfo info = mc.getConnection() == null ? null
                 : mc.getConnection().getPlayerInfo(mc.player.getUUID());
-        String ping = (info == null ? 0 : info.getLatency()) + " MS";
-        float w = (PAD + STRIPE) * s + fTitle(s).width("RAINY") + 3 * s
-                + fMicro(s).width("DLC") + 8 * s;
-        w += fBody(s).width(nick) + 8 * s;
-        w += fSmall(s).width(fps) + 8 * s;
-        w += fSmall(s).width(time) + 8 * s;
-        w += fSmall(s).width(ping) + PAD * s;
-        return new WatermarkData(w, 20 * s, nick, fps, time, ping);
+        int latency = info == null ? 0 : info.getLatency();
+        int pingColor = latency < 60 ? 0xFF4ADE80 : latency < 140 ? GOLD : 0xFFF87171;
+        float w = PAD * s + 13 * s;
+        w += fTitle(s).width("Rainy") + 4 * s + fMicro(s).width("DLC") + 9 * s;
+        w += fBody(s).width(nick) + 17 * s;
+        w += fSmall(s).width(fps) + 17 * s;
+        w += fSmall(s).width(time) + 17 * s;
+        w += 4 * s + fSmall(s).width(latency + " ms") + PAD * s;
+        return new WatermarkData(w, 23 * s, nick, fps, time, latency + " ms", pingColor);
     }
 
     private static void drawWatermark(GuiGraphicsExtractor gg, float s, WatermarkData d) {
-        float x = (PAD + STRIPE) * s;
-        float mid = fTitle(s).centeredBaseline(0, d.h);
-        // Логотип: квадрат + RAINY жирно + DLC микро-акцентом.
-        Render2D.rect(gg, x, (d.h - 10 * s) / 2, 10 * s, 10 * s, Style.accent());
-        fMicro(s).drawCentered(gg, "R", x + 5 * s, fMicro(s).visualBaseline("R", (d.h - 10 * s) / 2, 10 * s), 0xFF101014);
-        x += 13 * s;
-        x = fTitle(s).draw(gg, "RAINY", x, mid, Style.WHITE);
-        x = fMicro(s).draw(gg, "DLC", x + 3 * s, fMicro(s).centeredBaseline(0, d.h), Style.accent());
+        float x = PAD * s;
+        float cy = d.h / 2;
+        // Логотип: скруглённый квадрат с глянцем.
+        float logo = 13 * s;
+        float ly = (d.h - logo) / 2;
+        Render2D.round(gg, x, ly, logo, logo, 4 * s, Style.accent());
+        Render2D.round(gg, x + 1, ly + 1, logo - 2, (logo - 2) / 2, 3 * s,
+                Render2D.withAlpha(0xFFFFFFFF, 0.22f));
+        fTitle(s).drawCentered(gg, "R", x + logo / 2,
+                fTitle(s).visualBaseline("R", ly, logo), 0xFF101014);
+        x += logo + 5 * s;
+        float base = fTitle(s).centeredBaseline(0, d.h);
+        x = fTitle(s).draw(gg, "Rainy", x, base, Style.WHITE);
+        x = fMicro(s).draw(gg, "DLC", x + 4 * s, fMicro(s).centeredBaseline(0, d.h) - 2 * s,
+                Style.accent());
+        x += 9 * s;
+        x = statDot(gg, x, cy, s);
+        x = textShadow(gg, fBody(s), d.nick, x, fBody(s).centeredBaseline(0, d.h), GREY, s);
         x += 8 * s;
-        x = divider(gg, x, d.h, s);
-        x = fBody(s).draw(gg, d.nick, x, fBody(s).centeredBaseline(0, d.h), GREY);
-        x += 5 * s;
-        x = divider(gg, x, d.h, s);
-        x = fSmall(s).draw(gg, d.fps, x, fSmall(s).centeredBaseline(0, d.h), Style.WHITE);
-        x += 5 * s;
-        x = divider(gg, x, d.h, s);
-        x = fSmall(s).draw(gg, d.time, x, fSmall(s).centeredBaseline(0, d.h), DIM);
-        x += 5 * s;
-        x = divider(gg, x, d.h, s);
-        fSmall(s).draw(gg, d.ping, x, fSmall(s).centeredBaseline(0, d.h), Style.accent());
-        // Нижняя акцентная черта на треть ширины — подпись стиля.
-        Render2D.rect(gg, 0, d.h - Math.max(1, s * 0.75f), d.w * 0.38f, Math.max(1, s * 0.75f), Style.accent());
+        x = statDot(gg, x, cy, s);
+        x = textShadow(gg, fSmall(s), d.fps, x, fSmall(s).centeredBaseline(0, d.h), Style.WHITE, s);
+        x += 8 * s;
+        x = statDot(gg, x, cy, s);
+        x = textShadow(gg, fSmall(s), d.time, x, fSmall(s).centeredBaseline(0, d.h), DIM, s);
+        x += 8 * s;
+        x = statDot(gg, x, cy, s);
+        dot(gg, x + 2 * s, cy, 4 * s, Render2D.withAlpha(d.pingColor, 0.9f));
+        textShadow(gg, fSmall(s), d.ping, x + 6 * s, fSmall(s).centeredBaseline(0, d.h), GREY, s);
     }
 
-    private static float divider(GuiGraphicsExtractor gg, float x, float h, float s) {
-        Render2D.rect(gg, x, h * 0.28f, Math.max(1, s * 0.5f), h * 0.44f, HAIR);
-        return x + 5 * s;
+    private static float statDot(GuiGraphicsExtractor gg, float x, float cy, float s) {
+        dot(gg, x + 1.5f * s, cy, 2.5f * s, 0xFF4A4A55);
+        return x + 8 * s;
     }
 
     // ---------- строки ----------
@@ -559,11 +663,11 @@ public final class InterfaceHud {
         List<Row> rows = new ArrayList<>();
         for (Module m : ModuleManager.all()) {
             if (m.isEnabled() && m.keyCode() != GLFW.GLFW_KEY_UNKNOWN) {
-                rows.add(new Row(m.name(), m.name().toUpperCase(Locale.ROOT), m.keyLabel(), "", null));
+                rows.add(new Row(m.name(), m.name(), m.keyLabel(), "", null));
             }
         }
         if (rows.isEmpty() && editing()) {
-            rows.add(new Row("preview", "INTERFACE", "RSHIFT", "", null));
+            rows.add(new Row("preview", "Interface", "RSHIFT", "", null));
         }
         return rows;
     }
@@ -575,11 +679,11 @@ public final class InterfaceHud {
                 continue;
             }
             String roman = ampRoman(e.getAmplifier());
-            String name = (effectBaseName(e) + (roman == null ? "" : " " + roman)).toUpperCase(Locale.ROOT);
+            String name = effectBaseName(e) + (roman == null ? "" : " " + roman);
             rows.add(new Row(e.getEffect().value().getDescriptionId(), name, formatDuration(e.getDuration()), "", e));
         }
         if (rows.isEmpty() && editing()) {
-            rows.add(new Row("preview", "SPEED II", "1:30", "", null));
+            rows.add(new Row("preview", "Speed II", "1:30", "", null));
         }
         return rows;
     }
@@ -603,17 +707,17 @@ public final class InterfaceHud {
                 PlayerInfo info = mc.getConnection().getPlayerInfo(name);
                 long since = STAFF_SINCE.computeIfAbsent(name, k -> System.nanoTime());
                 long seconds = (System.nanoTime() - since) / 1000000000L;
-                String status = info == null ? "VANISH"
+                String status = info == null ? "Vanish"
                         : info.getGameMode() == GameType.SPECTATOR ? "GM3" : "";
-                rows.add(new Row(name, name.toUpperCase(Locale.ROOT),
+                rows.add(new Row(name, name,
                         (status.isEmpty() ? "" : status + " ")
                                 + String.format(Locale.ROOT, "%02d:%02d", seconds / 60, seconds % 60),
-                        "", info));
+                        status.isEmpty() ? "" : "!", info));
             }
         }
         STAFF_SINCE.keySet().retainAll(present);
         if (rows.isEmpty() && editing()) {
-            rows.add(new Row("preview", "MODERATOR", "00:00", "", null));
+            rows.add(new Row("preview", "Moderator", "00:00", "", null));
         }
         return rows;
     }
@@ -632,14 +736,13 @@ public final class InterfaceHud {
                         break;
                     }
                 }
-                String name = item.isEmpty() ? kv.getKey().getPath()
-                        : item.getHoverName().getString();
-                rows.add(new Row(kv.getKey().toString(), name.toUpperCase(Locale.ROOT),
+                String name = item.isEmpty() ? kv.getKey().getPath() : item.getHoverName().getString();
+                rows.add(new Row(kv.getKey().toString(), name,
                         String.format(Locale.ROOT, "%.1fs", kv.getValue() / 20f), "", item));
             }
         }
         if (rows.isEmpty() && editing()) {
-            rows.add(new Row("preview", "ENDER PEARL", "12.4s", "", new ItemStack(Items.ENDER_PEARL)));
+            rows.add(new Row("preview", "Ender Pearl", "12.4s", "", new ItemStack(Items.ENDER_PEARL)));
         }
         return rows;
     }
@@ -648,12 +751,12 @@ public final class InterfaceHud {
         List<Row> rows = new ArrayList<>();
         for (Module m : ModuleManager.all()) {
             if (m.isEnabled() && !(m instanceof Interface)) {
-                rows.add(new Row(m.name(), m.name().toUpperCase(Locale.ROOT), "", "", null));
+                rows.add(new Row(m.name(), m.name(), "", "", null));
             }
         }
         rows.sort(Comparator.comparingDouble((Row r) -> fBody(s).width(r.left)).reversed());
         if (rows.isEmpty() && editing()) {
-            rows.add(new Row("preview", "INTERFACE", "", "", null));
+            rows.add(new Row("preview", "Interface", "", "", null));
         }
         return rows;
     }
@@ -661,11 +764,10 @@ public final class InterfaceHud {
     private static List<Row> notificationRows() {
         List<Row> rows = new ArrayList<>();
         for (var n : QuickNotifications.current()) {
-            rows.add(new Row("notice-" + n.created(), n.text().toUpperCase(Locale.ROOT), "",
-                    n.enabled() ? "ON" : "OFF", null));
+            rows.add(new Row("notice-" + n.created(), n.text(), "", n.enabled() ? "+" : "–", null));
         }
         if (rows.isEmpty() && editing()) {
-            rows.add(new Row("preview", "ПРИМЕР УВЕДОМЛЕНИЯ", "", "ON", null));
+            rows.add(new Row("preview", "Пример уведомления", "", "+", null));
         }
         return rows;
     }
@@ -697,33 +799,35 @@ public final class InterfaceHud {
         if (rows.isEmpty() && !editing()) {
             return null;
         }
-        float rowH = (el == HudLayout.Element.NOTIFICATIONS ? 16 : bare ? 13 : ROW_H) * s;
+        float rowH = (el == HudLayout.Element.NOTIFICATIONS ? 19 : bare ? 15 : ROW_H) * s;
+        float gap = (el == HudLayout.Element.ARRAYLIST ? 3 : el == HudLayout.Element.NOTIFICATIONS ? 4 : 0) * s;
         float w;
         float h;
-        if (el == HudLayout.Element.ARRAYLIST) {
-            w = 60 * s;
+        if (bare) {
+            w = 64 * s;
             for (var a : rows) {
-                w = Math.max(w, fBody(s).width(a.row.left) + 12 * s);
+                float rw = PAD * 2 * s + fBody(s).width(a.row.left) + 10 * s;
+                if (el == HudLayout.Element.NOTIFICATIONS) {
+                    rw += 14 * s;
+                }
+                w = Math.max(w, rw);
             }
-            h = rows.size() * rowH + 2 * s;
-        } else if (el == HudLayout.Element.NOTIFICATIONS) {
-            w = 120 * s;
-            for (var a : rows) {
-                w = Math.max(w, (PAD + STRIPE) * s + fSmall(s).width(a.row.left)
-                        + fMicro(s).width(a.row.icon) + 14 * s);
-            }
-            h = rows.size() * (rowH + 2 * s) + 4 * s;
+            h = rows.size() * (rowH + gap) - gap + 2 * s;
         } else {
-            w = 96 * s;
-            h = HEADER_H * s + PAD * s;
+            w = 104 * s;
+            h = HEADER_H * s + PAD * 0.5f * s;
             for (var a : rows) {
                 Row row = a.row;
                 boolean sprite = row.sprite != null;
-                float rw = (PAD + STRIPE + (sprite ? 16 : 0)) * s + fBody(s).width(row.left)
-                        + fBody(s).width(row.right) + (row.right.isEmpty() ? 0 : 10 * s);
-                w = Math.max(w, rw + PAD * s);
+                float rw = PAD * 2 * s + (sprite ? 15 : 0) * s + fBody(s).width(row.left)
+                        + fBody(s).width(row.right) + (row.right.isEmpty() ? 0 : 12 * s);
+                if ("Binds".equals(title)) {
+                    rw += 6 * s;
+                }
+                w = Math.max(w, rw);
                 h += rowH * a.alpha;
             }
+            h += PAD * 0.5f * s;
         }
         if (state.w == 0 || Math.abs(s - state.scale) > 0.01f) {
             state.w = w;
@@ -738,52 +842,58 @@ public final class InterfaceHud {
         return new ListData(state.w, Math.max(1, state.h), title, rows);
     }
 
-    /** Плоская таблица: заголовок, пунктирная строка-разделитель под каждой строкой. */
+    /** Таблица: заголовок с разрядкой, строки с иконками, чипы кейбиндов. */
     private static void drawTable(GuiGraphicsExtractor gg, float s, ListData d) {
         header(gg, d.title, d.rows.size(), d.w, s);
-        float y = HEADER_H * s + PAD * 0.5f * s;
+        float y = HEADER_H * s + 1.5f * s;
         Render2D.pushClip(gg, 0, HEADER_H * s, d.w, d.h - HEADER_H * s);
         try {
             for (var a : d.rows) {
                 Row row = a.row;
                 Render2D.pushAlpha(a.alpha);
                 Render2D.pushTranslate(gg, a.slide, 0);
-                float x = (PAD + STRIPE) * s;
+                float x = PAD * s;
                 if (row.sprite instanceof MobEffectInstance effect) {
+                    float icon = 10 * s;
+                    Render2D.round(gg, x, y + (ROW_H * s - icon) / 2, icon, icon, 3 * s, DARK);
                     gg.blitSprite(RenderPipelines.GUI_TEXTURED,
                             Hud.getMobEffectSprite(effect.getEffect()),
-                            Math.round(x), Math.round(y + s),
-                            Math.round(9 * s), Math.round(9 * s),
+                            Math.round(x + s), Math.round(y + (ROW_H * s - icon) / 2 + s),
+                            Math.round(icon - 2 * s), Math.round(icon - 2 * s),
                             Render2D.withAlpha(0xFFFFFFFF, Render2D.alpha()));
-                    x += 13 * s;
+                    x += 15 * s;
                 } else if (row.sprite instanceof PlayerInfo player) {
-                    drawHead(gg, player, x, y + 1.5f * s, 8 * s);
-                    x += 12 * s;
+                    drawHead(gg, player, x, y + (ROW_H * s - 9 * s) / 2, 9 * s, 3 * s);
+                    if (!row.icon.isEmpty()) {
+                        dot(gg, x + 9 * s + 2.5f * s, y + ROW_H * s / 2, 3 * s, 0xFFF87171);
+                    }
+                    x += 15 * s;
                 } else if (row.sprite instanceof ItemStack stack && !stack.isEmpty()) {
-                    item(gg, stack, x, y, 10 * s);
-                    x += 14 * s;
+                    Render2D.round(gg, x, y + (ROW_H * s - 11 * s) / 2, 11 * s, 11 * s, 3 * s, DARK);
+                    item(gg, stack, x + s, y + (ROW_H * s - 11 * s) / 2 + s, 9 * s);
+                    x += 15 * s;
                 }
-                // Тень под текстом для читаемости поверх мира.
-                fBody(s).draw(gg, row.left, x + s * 0.5f, fBody(s).centeredBaseline(y, ROW_H * s) + s * 0.5f, 0x90000000);
-                fBody(s).draw(gg, row.left, x, fBody(s).centeredBaseline(y, ROW_H * s), Style.WHITE);
+                float mid = fBody(s).centeredBaseline(y, ROW_H * s);
+                textShadow(gg, fBody(s), row.left, x, mid, Style.WHITE, s);
                 if (!row.right.isEmpty()) {
-                    int color = row.sprite instanceof MobEffectInstance effect
-                            && effect.getDuration() >= 0 && effect.getDuration() < 200
-                            ? 0xFFEB3C46 : DIM;
-                    // Кейбинды — квадратный тэг справа.
-                    if ("BINDS".equalsIgnoreCase(d.title)) {
-                        float bw = fMicro(s).width(row.right) + 8 * s;
-                        Render2D.rect(gg, d.w - PAD * s - bw, y + (ROW_H * s - 9 * s) / 2, bw, 9 * s, DARK);
-                        Render2D.rect(gg, d.w - PAD * s - bw, y + (ROW_H * s - 9 * s) / 2, bw,
-                                Math.max(1, s * 0.5f), Style.accent());
+                    if ("Binds".equals(d.title)) {
+                        float bw = fMicro(s).width(row.right) + 9 * s;
+                        float by = y + (ROW_H * s - 10 * s) / 2;
+                        Render2D.round(gg, d.w - PAD * s - bw, by, bw, 10 * s, 3.5f * s, DARK);
+                        Render2D.round(gg, d.w - PAD * s - bw, by, bw, 10 * s, 3.5f * s,
+                                Render2D.withAlpha(Style.accent(), 0.35f));
                         fMicro(s).drawCentered(gg, row.right, d.w - PAD * s - bw / 2,
-                                fMicro(s).centeredBaseline(y + (ROW_H * s - 9 * s) / 2, 9 * s), Style.accent());
+                                fMicro(s).centeredBaseline(by, 10 * s), Style.accent());
                     } else {
-                        fBody(s).drawRight(gg, row.right, d.w - PAD * s,
-                                fBody(s).centeredBaseline(y, ROW_H * s), color);
+                        int color = row.sprite instanceof MobEffectInstance effect
+                                && effect.getDuration() >= 0 && effect.getDuration() < 200
+                                ? 0xFFEB3C46 : GREY;
+                        if (el_isCooldown(d)) {
+                            color = Style.accent();
+                        }
+                        fBody(s).drawRight(gg, row.right, d.w - PAD * s, mid, color);
                     }
                 }
-                dottedLine(gg, x, y + ROW_H * s - 1, d.w - x - PAD * s, s);
                 Render2D.popTransform(gg);
                 Render2D.popAlpha();
                 y += ROW_H * s * a.alpha;
@@ -793,52 +903,86 @@ public final class InterfaceHud {
         }
     }
 
-    /** ArrayList: голый терминальный текст, справа акцентный тик, без подложек. */
-    private static void drawArrayLines(GuiGraphicsExtractor gg, float s, ListData d) {
-        float rowH = 13 * s;
-        float y = 0;
-        boolean right = BOUNDS.get(HudLayout.Element.ARRAYLIST)[0] > Render2D.screenWidth() / 2f;
-        Render2D.pushClip(gg, -PAD * s, -PAD * s, d.w + PAD * 2 * s, d.h + PAD * 2 * s);
-        try {
-            for (var a : d.rows) {
-                Row row = a.row;
-                Render2D.pushAlpha(a.alpha);
-                float slide = a.slide * (right ? -1 : 1);
-                Render2D.pushTranslate(gg, slide, 0);
-                float tw = fBody(s).width(row.left);
-                float tx = right ? d.w - tw - 6 * s : 6 * s;
-                // Тень + сам текст + тик сбоку.
-                fBody(s).draw(gg, row.left, tx + s * 0.5f, fBody(s).centeredBaseline(y, rowH) + s * 0.5f, 0x90000000);
-                fBody(s).draw(gg, row.left, tx, fBody(s).centeredBaseline(y, rowH), Style.WHITE);
-                float tickX = right ? d.w - 2 * s : tx - 4 * s;
-                Render2D.rect(gg, tickX, y + 2 * s, 2 * s, rowH - 4 * s, Style.accent());
-                Render2D.popTransform(gg);
-                Render2D.popAlpha();
-                y += rowH * a.alpha;
-            }
-        } finally {
-            Render2D.popClip(gg);
-        }
+    private static boolean el_isCooldown(ListData d) {
+        return "Cooldowns".equals(d.title);
     }
 
-    /** Уведомления: плоские тосты с цветной полосой слева. */
-    private static void drawToasts(GuiGraphicsExtractor gg, float s, ListData d) {
-        float rowH = 16 * s;
-        float y = 2 * s;
+    /** ArrayList: стеклянные пилюли с акцентным краем и тенью. */
+    private static void drawArrayPills(GuiGraphicsExtractor gg, float s, ListData d) {
+        float rowH = 15 * s;
+        float gap = 3 * s;
+        float y = s;
+        boolean right = BOUNDS.get(HudLayout.Element.ARRAYLIST)[0] > Render2D.screenWidth() / 2f;
         for (var a : d.rows) {
             Row row = a.row;
             Render2D.pushAlpha(a.alpha);
-            Render2D.pushTranslate(gg, a.slide, 0);
-            boolean on = !"OFF".equals(row.icon);
-            Render2D.rect(gg, 0, y, d.w, rowH, FILL_SOFT);
-            Render2D.rect(gg, 0, y, STRIPE * s, rowH, on ? 0xFF4ADE80 : 0xFFF87171);
-            fMicro(s).draw(gg, row.icon, (PAD + STRIPE) * s,
-                    fMicro(s).centeredBaseline(y, rowH), on ? 0xFF4ADE80 : 0xFFF87171);
-            fSmall(s).draw(gg, row.left, (PAD + STRIPE) * s + fMicro(s).width(row.icon) + 5 * s,
-                    fSmall(s).centeredBaseline(y, rowH), Style.WHITE);
+            float slide = a.slide * (right ? -1 : 1);
+            Render2D.pushTranslate(gg, slide, y);
+            float tw = fBody(s).width(row.left);
+            float pw = tw + PAD * 2 * s + 3 * s;
+            float px = right ? d.w - pw : 0;
+            float r = 5.5f * s;
+            Render2D.round(gg, px, 1.5f * s, pw, rowH, r, 0x30000000);
+            Render2D.round(gg, px, 0, pw, rowH, r, BORDER);
+            float inset = Math.max(1.0f, s * 0.5f);
+            if (Interface.hudBlur()) {
+                Identifier tex = frostTexture();
+                if (tex != null) {
+                    Render2D.pushClip(gg, px, y, pw, rowH);
+                    snapshot(gg, tex, px + inset, inset, pw - inset * 2, rowH - inset * 2, r - inset);
+                    Render2D.popClip(gg);
+                }
+            }
+            Render2D.round(gg, px + inset, inset, pw - inset * 2, rowH - inset * 2,
+                    Math.max(1.0f, r - inset), SHADE);
+            // Акцентный край со стороны экрана.
+            float edgeX = right ? px + pw - 2.5f * s : px;
+            Render2D.round(gg, edgeX, 3 * s, 2.5f * s, rowH - 6 * s, s, Style.accent());
+            float tx = right ? px + PAD * s : px + PAD * s + 1 * s;
+            textShadow(gg, fBody(s), row.left, tx,
+                    fBody(s).centeredBaseline(0, rowH), Style.WHITE, s);
             Render2D.popTransform(gg);
             Render2D.popAlpha();
-            y += (rowH + 2 * s) * a.alpha;
+            y += (rowH + gap) * a.alpha;
+        }
+    }
+
+    /** Уведомления: стеклянные тосты с иконкой-знаком. */
+    private static void drawToasts(GuiGraphicsExtractor gg, float s, ListData d) {
+        float rowH = 19 * s;
+        float gap = 4 * s;
+        float y = s;
+        for (var a : d.rows) {
+            Row row = a.row;
+            Render2D.pushAlpha(a.alpha);
+            Render2D.pushTranslate(gg, a.slide, y);
+            int tint = "+".equals(row.icon) ? 0xFF4ADE80 : 0xFFF87171;
+            float r = 6 * s;
+            Render2D.round(gg, 0, 1.5f * s, d.w, rowH, r, 0x30000000);
+            Render2D.round(gg, 0, 0, d.w, rowH, r, BORDER);
+            float inset = Math.max(1.0f, s * 0.5f);
+            if (Interface.hudBlur()) {
+                Identifier tex = frostTexture();
+                if (tex != null) {
+                    Render2D.pushClip(gg, 0, y, d.w, rowH);
+                    snapshot(gg, tex, inset, inset, d.w - inset * 2, rowH - inset * 2, r - inset);
+                    Render2D.popClip(gg);
+                }
+            }
+            Render2D.round(gg, inset, inset, d.w - inset * 2, rowH - inset * 2,
+                    Math.max(1.0f, r - inset), SHADE);
+            float badge = 12 * s;
+            float bx = PAD * s;
+            float by = (rowH - badge) / 2;
+            Render2D.round(gg, bx, by, badge, badge, 4 * s, Render2D.withAlpha(tint, 0.16f));
+            Render2D.round(gg, bx, by, badge, badge, 4 * s, Render2D.withAlpha(tint, 0.5f));
+            fBody(s).drawCentered(gg, row.icon, bx + badge / 2,
+                    fBody(s).centeredBaseline(by, badge), tint);
+            textShadow(gg, fSmall(s), row.left, bx + badge + 5 * s,
+                    fSmall(s).centeredBaseline(0, rowH), Style.WHITE, s);
+            Render2D.popTransform(gg);
+            Render2D.popAlpha();
+            y += (rowH + gap) * a.alpha;
         }
     }
 
@@ -851,13 +995,13 @@ public final class InterfaceHud {
         ItemStack item = ItemStack.EMPTY;
         switch (el) {
             case TICKS -> {
-                label = "TICKS";
+                label = "Ticks";
                 text = String.format(Locale.ROOT, "%.2f", mc.hasSingleplayerServer() ? 20 : QuickTelemetry.tps());
             }
             case PING -> {
                 PlayerInfo info = mc.getConnection() == null ? null
                         : mc.getConnection().getPlayerInfo(mc.player.getUUID());
-                label = "PING";
+                label = "Ping";
                 text = String.valueOf(info == null ? 0 : info.getLatency());
             }
             case FPS -> {
@@ -871,7 +1015,7 @@ public final class InterfaceHud {
             }
             case XYZ -> {
                 label = "XYZ";
-                text = String.format(Locale.ROOT, "%.1f / %.1f / %.1f",
+                text = String.format(Locale.ROOT, "%.1f  %.1f  %.1f",
                         mc.player.getX(), mc.player.getY(), mc.player.getZ());
             }
             case TOTEMS -> {
@@ -882,7 +1026,7 @@ public final class InterfaceHud {
                         count += stack.getCount();
                     }
                 }
-                label = "TOTEMS";
+                label = "Totems";
                 text = String.valueOf(count);
                 item = new ItemStack(Items.TOTEM_OF_UNDYING);
             }
@@ -890,18 +1034,21 @@ public final class InterfaceHud {
                 return null;
             }
         }
-        float w = (PAD + STRIPE) * s + fMicro(s).width(label) + 5 * s
-                + fBody(s).width(text) + (item.isEmpty() ? 0 : 15 * s) + PAD * s;
-        return new PillData(w, 15 * s, label, text, item);
+        float w = PAD * s + 4 * s + trackedWidth(fMicro(s), label.toUpperCase(Locale.ROOT), 0.7f * s)
+                + 6 * s + fBody(s).width(text) + (item.isEmpty() ? 0 : 15 * s) + PAD * s;
+        return new PillData(w, 17 * s, label, text, item);
     }
 
     private static void drawPill(GuiGraphicsExtractor gg, float s, PillData d) {
-        float x = (PAD + STRIPE) * s;
-        float mid = fBody(s).centeredBaseline(0, d.h);
-        x = fMicro(s).draw(gg, d.label, x, fMicro(s).centeredBaseline(0, d.h), Style.accent());
-        x = fBody(s).draw(gg, d.text, x + 5 * s, mid, Style.WHITE);
+        float x = PAD * s;
+        dot(gg, x + 2 * s, d.h / 2, 4 * s, Style.accent());
+        x += 7 * s;
+        x = tracked(gg, fMicro(s), d.label.toUpperCase(Locale.ROOT), x,
+                fMicro(s).centeredBaseline(0, d.h), DIM, 0.7f * s);
+        x = textShadow(gg, fBody(s), d.text, x + 6 * s, fBody(s).centeredBaseline(0, d.h), Style.WHITE, s);
         if (!d.item.isEmpty()) {
-            item(gg, d.item, x + 5 * s, (d.h - 11 * s) / 2, 11 * s);
+            Render2D.round(gg, x + 5 * s, (d.h - 12 * s) / 2, 12 * s, 12 * s, 3.5f * s, DARK);
+            item(gg, d.item, x + 6 * s, (d.h - 12 * s) / 2 + s, 10 * s);
         }
     }
 
@@ -916,34 +1063,43 @@ public final class InterfaceHud {
         if (items.stream().allMatch(ItemStack::isEmpty) && !editing()) {
             return null;
         }
-        float cell = 19 * s;
-        float gap = 2 * s;
-        float bar = 5 * s;
+        float cell = 21 * s;
+        float gap = 3 * s;
         HudLayout.Entry entry = HudLayout.get(HudLayout.Element.ARMOR);
-        float x = entry.positioned() ? entry.x : (Render2D.screenWidth() - (cell * 6 + gap * 5)) / 2;
-        boolean vertical = x < cell * 6 + 8 * s || x > Render2D.screenWidth() - cell * 6 - 8 * s;
+        float probe = entry.positioned() ? entry.x : Render2D.screenWidth() / 2f;
+        boolean vertical = probe < (cell * 6 + gap * 5) + 10 * s
+                || probe > Render2D.screenWidth() - (cell * 6 + gap * 5) - 10 * s;
         if (vertical) {
-            return new ArmorData(cell + PAD * s, cell * 6 + gap * 5 + bar + PAD * s, items, true);
+            return new ArmorData(PAD * 2 * s + cell, PAD * 2 * s + cell * 6 + gap * 5, items, true);
         }
-        return new ArmorData(cell * 6 + gap * 5 + PAD * 2 * s, cell + bar + PAD * s, items, false);
+        return new ArmorData(PAD * 2 * s + cell * 6 + gap * 5, PAD * 2 * s + cell, items, false);
     }
 
     private static void drawArmor(GuiGraphicsExtractor gg, float s, ArmorData d) {
-        float cell = 19 * s;
-        float gap = 2 * s;
+        float cell = 21 * s;
+        float gap = 3 * s;
         for (int i = 0; i < d.items.size(); i++) {
-            float x = (PAD + STRIPE) * s + (d.vertical ? 0 : i * (cell + gap));
-            float y = PAD * s * 0.5f + (d.vertical ? i * (cell + gap) : 0);
+            float x = PAD * s + (d.vertical ? 0 : i * (cell + gap));
+            float y = PAD * s + (d.vertical ? i * (cell + gap) : 0);
             ItemStack item = d.items.get(i);
-            Render2D.rect(gg, x, y, cell, cell, DARK);
-            Render2D.rect(gg, x, y, cell, Math.max(1, s * 0.5f), HAIR);
-            item(gg, item, x + 3 * s, y + 3 * s, cell - 6 * s);
-            if (item.isDamageableItem()) {
-                float f = durabilityFrac(item);
-                Render2D.rect(gg, x, y + cell + 2 * s, cell, 2 * s, 0xFF2A2A30);
-                Render2D.rect(gg, x, y + cell + 2 * s, cell * f, 2 * s, durabilityColor(item));
-            } else if (!item.isEmpty()) {
-                Render2D.rect(gg, x, y + cell + 2 * s, cell, 2 * s, Style.accent());
+            Render2D.round(gg, x, y, cell, cell, 5 * s, DARK);
+            Render2D.round(gg, x, y, cell, cell, 5 * s, HAIR);
+            Render2D.round(gg, x + 1, y + 1, cell - 2, (cell - 2) / 2, 4 * s,
+                    Render2D.withAlpha(0xFFFFFFFF, 0.05f));
+            item(gg, item, x + 3.5f * s, y + 3.5f * s, cell - 7 * s);
+            if (!item.isEmpty()) {
+                int count = item.getCount();
+                if (count > 1) {
+                    fMicro(s).drawRight(gg, String.valueOf(count), x + cell - 2.5f * s,
+                            y + cell - 1.5f * s, GREY);
+                }
+                if (item.isDamageableItem()) {
+                    float f = durabilityFrac(item);
+                    float bw = cell - 7 * s;
+                    Render2D.round(gg, x + 3.5f * s, y + cell - 4.5f * s, bw, 2 * s, s, TRACK);
+                    Render2D.round(gg, x + 3.5f * s, y + cell - 4.5f * s,
+                            Math.max(2 * s, bw * f), 2 * s, s, durabilityColor(item));
+                }
             }
         }
     }
@@ -965,8 +1121,8 @@ public final class InterfaceHud {
             return null;
         }
         float max = Math.max(1, t.getMaxHealth());
-        return new TargetData(150 * s, 40 * s, t,
-                QuickFont.of("bold", 7.0f * s).trim(t.getName().getString(), 70 * s),
+        return new TargetData(164 * s, 48 * s, t,
+                QuickFont.of("bold", 7.0f * s).trim(t.getName().getString(), 78 * s),
                 String.format(Locale.ROOT, "%.1f", t.getHealth() + t.getAbsorptionAmount()),
                 mc.player.distanceTo(t),
                 Mth.clamp(t.getHealth() / max, 0, 1),
@@ -982,59 +1138,60 @@ public final class InterfaceHud {
         healthAnimation += (d.health - healthAnimation) * (1 - (float) Math.exp(-18 * delta));
         damageAnimation += (d.health - damageAnimation) * (1 - (float) Math.exp(-5 * delta));
         Minecraft mc = Minecraft.getInstance();
-        float inner = (PAD + STRIPE) * s;
-        // Верхняя акцентная линия = доля здоровья.
-        Render2D.rect(gg, 0, 0, d.w * Mth.clamp(healthAnimation, 0, 1), Math.max(1, s), Style.accent());
-        // Портрет: острый квадрат с рамкой.
+        float x0 = PAD * s;
+        float avatar = 32 * s;
+        float ay = (d.h - avatar) / 2;
+        // Аватар со скруглением и рамкой по состоянию здоровья.
+        int ring = d.health > 0.5f ? Style.accent() : d.health > 0.25f ? GOLD : 0xFFF87171;
         PlayerInfo info = d.target instanceof Player player && mc.getConnection() != null
                 ? mc.getConnection().getPlayerInfo(player.getUUID()) : null;
-        float avatar = 28 * s;
         if (info != null) {
-            drawHead(gg, info, inner, 6 * s, avatar);
+            drawHead(gg, info, x0, ay, avatar, 6 * s);
         } else {
-            Render2D.rect(gg, inner, 6 * s, avatar, avatar, DARK);
+            Render2D.round(gg, x0, ay, avatar, avatar, 6 * s, DARK);
             fTitle(s).drawCentered(gg, d.name.isEmpty() ? "?" : d.name.substring(0, 1),
-                    inner + avatar / 2, fTitle(s).visualBaseline("H", 6 * s, avatar), Style.accent());
+                    x0 + avatar / 2, fTitle(s).visualBaseline("H", ay, avatar), Style.accent());
         }
-        Render2D.rect(gg, inner, 6 * s, avatar, Math.max(1, s * 0.5f), LINE);
-        Render2D.rect(gg, inner, 6 * s + avatar, avatar, Math.max(1, s * 0.5f), LINE);
-        float x = inner + avatar + 5 * s;
+        Render2D.round(gg, x0, ay, avatar, avatar, 6 * s, Render2D.withAlpha(ring, 0.55f));
+        float x = x0 + avatar + 6 * s;
         float w = d.w - x - PAD * s;
-        // Имя + HP цифрой справа.
-        fTitle(s).draw(gg, d.name.toUpperCase(Locale.ROOT), x, 11 * s, Style.WHITE);
-        fBody(s).drawRight(gg, d.hp + " HP", d.w - PAD * s, 11 * s, Style.accent());
-        // Сегментный бар: 10 делений с зазорами + белый гост урона.
-        int segs = 10;
-        float gap = 1.5f * s;
-        float segW = (w - gap * (segs - 1)) / segs;
-        float barY = 17 * s;
-        float barH = 5 * s;
-        int filled = Math.round(healthAnimation * segs);
-        int ghost = Math.round(damageAnimation * segs);
-        for (int i = 0; i < segs; i++) {
-            float sx = x + i * (segW + gap);
-            int c = 0xFF2A2A30;
-            if (i < filled) {
-                c = Style.accent();
-            } else if (i < ghost) {
-                c = 0xBFFFFFFF;
-            }
-            Render2D.rect(gg, sx, barY, segW, barH, c);
-        }
+        // Имя + HP.
+        textShadow(gg, fTitle(s), d.name, x, 13.5f * s, Style.WHITE, s);
+        fBody(s).drawRight(gg, d.hp, d.w - PAD * s, 13.5f * s, Style.accent());
+        // Глянцевый бар: трек, гост урона, заливка, блик.
+        float barY = 20 * s;
+        float barH = 6 * s;
+        float barR = 3 * s;
+        Render2D.round(gg, x, barY, w, barH, barR, TRACK);
+        Render2D.round(gg, x, barY, w * Mth.clamp(damageAnimation, 0, 1), barH, barR,
+                Render2D.withAlpha(0xFFFFFFFF, 0.4f));
+        Render2D.round(gg, x, barY, w * Mth.clamp(healthAnimation, 0, 1), barH, barR, ring);
+        Render2D.pushClip(gg, x, barY, w * Mth.clamp(healthAnimation, 0, 1), barH / 2);
+        Render2D.round(gg, x, barY, w * Mth.clamp(healthAnimation, 0, 1), barH, barR,
+                Render2D.withAlpha(0xFFFFFFFF, 0.28f));
+        Render2D.popClip(gg);
         if (d.absorption > 0) {
-            fMicro(s).draw(gg, "+" + String.format(Locale.ROOT, "%.0f ABS", d.target.getAbsorptionAmount()),
-                    x, 28.5f * s, 0xFFFFD45F);
-        } else {
-            fSmall(s).draw(gg, String.format(Locale.ROOT, "%.1f M", d.dist), x, 28.5f * s, DIM);
+            Render2D.round(gg, x, barY - 2.5f * s, w * Math.min(1, d.absorption), 1.5f * s,
+                    s * 0.75f, GOLD);
         }
-        String held = d.target.getMainHandItem().isEmpty() ? "NO ITEM"
-                : d.target.getMainHandItem().getHoverName().getString().toUpperCase(Locale.ROOT);
-        fMicro(s).drawRight(gg, QuickFont.of("bold", 7.0f * s).trim(held, 52 * s),
-                d.w - PAD * s - 12 * s, 28.5f * s, GREY);
-        item(gg, d.target.getMainHandItem(), d.w - PAD * s - 9 * s, 24 * s, 9 * s);
+        // Низ: дистанция с точкой + предмет в ячейке.
+        float by = 33.5f * s;
+        dot(gg, x + 2 * s, by - 2 * s, 3.5f * s, 0xFF4ADE80);
+        textShadow(gg, fSmall(s), String.format(Locale.ROOT, "%.1f m", d.dist),
+                x + 6 * s, by, GREY, s);
+        String held = d.target.getMainHandItem().isEmpty() ? "Empty hand"
+                : d.target.getMainHandItem().getHoverName().getString();
+        held = QuickFont.of("medium", 6.0f * s).trim(held, 56 * s);
+        fSmall(s).drawRight(gg, held, d.w - PAD * s - 13 * s, by, DIM);
+        Render2D.round(gg, d.w - PAD * s - 11 * s, by - 8 * s, 11 * s, 11 * s, 3 * s, DARK);
+        Render2D.round(gg, d.w - PAD * s - 11 * s, by - 8 * s, 11 * s, 11 * s, 3 * s, HAIR);
+        item(gg, d.target.getMainHandItem(), d.w - PAD * s - 10 * s, by - 7 * s, 9 * s);
+        // Тонкая акцентная линия снизу панели.
+        gradientLine(gg, x0, d.h - PAD * 0.5f * s, (d.w - x0 - PAD * s) * 0.5f, s);
     }
 
-    private static void drawHead(GuiGraphicsExtractor gg, PlayerInfo info, float x, float y, float d) {
+    private static void drawHead(GuiGraphicsExtractor gg, PlayerInfo info, float x, float y, float d, float r) {
+        Render2D.pushClip(gg, x, y, d, d);
         Identifier id = info.getSkin().body().texturePath();
         int px = Math.round(x), py = Math.round(y), size = Math.round(d);
         int color = Render2D.withAlpha(0xFFFFFFFF, Render2D.alpha());
@@ -1042,6 +1199,7 @@ public final class InterfaceHud {
         if (info.showHat()) {
             gg.blit(RenderPipelines.GUI_TEXTURED, id, px, py, 40, 8, size, size, 8, 8, 64, 64, color);
         }
+        Render2D.popClip(gg);
     }
 
     private static void item(GuiGraphicsExtractor gg, ItemStack stack, float x, float y, float d) {
@@ -1075,7 +1233,7 @@ public final class InterfaceHud {
     private static int durabilityColor(ItemStack stack) {
         int max = stack.getMaxDamage();
         float f = max <= 0 ? 1.0f : (max - stack.getDamageValue()) / (float) max;
-        return f > 0.6f ? 0xFF4ADE80 : f > 0.3f ? 0xFFFACC15 : 0xFFF87171;
+        return f > 0.6f ? 0xFF4ADE80 : f > 0.3f ? GOLD : 0xFFF87171;
     }
 
     // ---------- эффекты: имена ----------
@@ -1124,10 +1282,11 @@ public final class InterfaceHud {
 
     private static HbData measureHotbar(float scale) {
         float s = scale * (float) Interface.hotbarSize();
-        float slot = 22.0f * s;
-        float gap = 2.0f * s;
+        float slot = 24.0f * s;
+        float gap = 3.0f * s;
         float extra = Minecraft.getInstance().player.getOffhandItem().isEmpty() ? 0 : slot + 6 * s;
-        return new HbData(slot * 9.0f + gap * 8.0f + extra, slot + 4 * s, s);
+        return new HbData(PAD * 2 * s + slot * 9.0f + gap * 8.0f + extra,
+                PAD * 2 * s + slot + 2 * s, s);
     }
 
     private static void drawHotbar(GuiGraphicsExtractor gg, float s, HbData data) {
@@ -1136,36 +1295,36 @@ public final class InterfaceHud {
             return;
         }
         Inventory inv = mc.player.getInventory();
-        float slot = 22.0f * s;
-        float gap = 2.0f * s;
-        float y = 2 * s;
+        float slot = 24.0f * s;
+        float gap = 3.0f * s;
+        float y = PAD * s;
         float off = mc.player.getOffhandItem().isEmpty() ? 0 : slot + 6 * s;
         for (int i = 0; i < 9; i++) {
-            float sx = off + i * (slot + gap);
+            float sx = PAD * s + off + i * (slot + gap);
             boolean selected = i == inv.getSelectedSlot();
-            Render2D.rect(gg, sx, y, slot, slot, selected ? 0xFF111114 : 0xB00B0B0D);
-            Render2D.rect(gg, sx, y, slot, Math.max(1, s * 0.5f), selected ? Style.WHITE : LINE);
-            Render2D.rect(gg, sx, y + slot - Math.max(1, s * 0.5f), slot, Math.max(1, s * 0.5f),
-                    selected ? Style.WHITE : LINE);
-            Render2D.rect(gg, sx, y, Math.max(1, s * 0.5f), slot, selected ? Style.WHITE : LINE);
-            Render2D.rect(gg, sx + slot - Math.max(1, s * 0.5f), y, Math.max(1, s * 0.5f), slot,
-                    selected ? Style.WHITE : LINE);
             if (selected) {
-                Render2D.rect(gg, sx, y - 2 * s, slot, 2 * s, Style.accent());
+                Render2D.round(gg, sx - s, y - s, slot + 2 * s, slot + 2 * s, 7 * s,
+                        Render2D.withAlpha(Style.accent(), 0.22f));
             }
-            // Номер слота в углу — терминальная деталь.
-            fMicro(s).draw(gg, String.valueOf(i + 1), sx + 2 * s, y + 6 * s, DIM);
-            item(gg, inv.getItem(i), sx + 3 * s, y + 3 * s, slot - 6 * s);
+            Render2D.round(gg, sx, y, slot, slot, 6 * s, selected ? 0xFF1B1B21 : 0xB0121216);
+            Render2D.round(gg, sx, y, slot, slot, 6 * s,
+                    selected ? Style.accent() : Render2D.withAlpha(0xFFFFFFFF, 0.10f));
+            Render2D.round(gg, sx + 1, y + 1, slot - 2, (slot - 2) / 2, 5 * s,
+                    Render2D.withAlpha(0xFFFFFFFF, selected ? 0.08f : 0.04f));
+            fMicro(s).draw(gg, String.valueOf(i + 1), sx + 3 * s, y + 7.5f * s,
+                    selected ? Style.accent() : DIM);
+            item(gg, inv.getItem(i), sx + 4 * s, y + 4 * s, slot - 8 * s);
             if (selected) {
-                Render2D.rect(gg, sx + 3 * s, y + slot - 3 * s, slot - 6 * s, 2 * s, Style.accent());
+                Render2D.round(gg, sx + 5 * s, y + slot - 3.5f * s, slot - 10 * s, 2 * s,
+                        s, Style.accent());
             }
         }
         ItemStack offhand = mc.player.getOffhandItem();
         if (!offhand.isEmpty()) {
-            Render2D.rect(gg, 0, y, slot, slot, 0xB00B0B0D);
-            Render2D.rect(gg, 0, y, slot, Math.max(1, s * 0.5f), LINE);
-            Render2D.rect(gg, 0, y + slot - Math.max(1, s * 0.5f), slot, Math.max(1, s * 0.5f), LINE);
-            item(gg, offhand, 3 * s, y + 3 * s, slot - 6 * s);
+            Render2D.round(gg, PAD * s, y, slot, slot, 6 * s, 0xB0121216);
+            Render2D.round(gg, PAD * s, y, slot, slot, 6 * s,
+                    Render2D.withAlpha(0xFFFFFFFF, 0.10f));
+            item(gg, offhand, PAD * s + 4 * s, y + 4 * s, slot - 8 * s);
         }
     }
 
